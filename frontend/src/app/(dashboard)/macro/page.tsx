@@ -175,16 +175,21 @@ export default function MacroPage() {
               <Metric
                 key={item.key}
                 label={
-                  <span className="flex flex-wrap items-center gap-1">
-                    {item.name}
-                    {item.note && <SourceBadge>{item.note}</SourceBadge>}
-                    <SessionBadge
-                      market={item.market}
-                      now={now}
-                      krOfficial={krOfficial}
-                      lastTs={item.lastTs}
-                      collectedAt={data?.collectedAtKst}
-                    />
+                  // 이름과 배지를 한 줄에 두면 이름이 긴 카드(엔/원 100엔당)만 배지가
+                  // 다음 줄로 밀려, 같은 줄 카드끼리 값의 높이가 어긋났습니다.
+                  // 모든 카드를 "이름 줄 + 배지 줄"로 같은 구조로 둡니다.
+                  <span className="flex flex-col gap-1">
+                    <span>{item.name}</span>
+                    <span className="flex min-h-5 flex-wrap items-center gap-1">
+                      {item.note && <SourceBadge>{item.note}</SourceBadge>}
+                      <SessionBadge
+                        market={item.market}
+                        now={now}
+                        krOfficial={krOfficial}
+                        lastTs={item.lastTs}
+                        collectedAt={data?.collectedAtKst}
+                      />
+                    </span>
                   </span>
                 }
                 value={item.status === "fail" ? "수집 실패" : item.priceStr ?? EMPTY}
