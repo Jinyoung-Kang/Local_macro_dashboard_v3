@@ -107,6 +107,7 @@ web/         HTTP 경계.
 | `FxIndex` | 기준일 100 재기준화, 날짜 합집합 |
 | `SupplyConsensus` | 외국인·기관 상위 목록 교집합 |
 | `KrFundamentals` | 부채비율·증가율(적자 구간은 전환 여부)·영업이익률·ROE, 공식 시가총액과 합친 PER·PBR |
+| `InvestorFlows` | 투자자별 매매 누적(null은 건너뛰고 일수 보고)·연속 순매수 일수·기관 세부·외국인 보유율 변화·현물/선물 방향 동조 |
 | `Verification` | 교차 검증 판정 |
 | `Json` | 저장본 JSON을 null 안전하게 읽기 |
 

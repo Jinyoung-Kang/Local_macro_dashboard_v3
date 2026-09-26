@@ -1,0 +1,165 @@
+{
+ "result": {
+  "nextUntil": "2026-09-19",
+  "records": [
+   {
+    "date": "2026-09-25",
+    "updatedAt": "2026-09-25T15:31:00+09:00",
+    "foreigner": {
+     "buyVolume": "8412300",
+     "sellVolume": "8120450",
+     "netBuyVolume": "291850"
+    },
+    "institution": {
+     "buyVolume": "1953200",
+     "sellVolume": "1915300",
+     "netBuyVolume": "37900",
+     "breakdown": null
+    },
+    "individual": null,
+    "otherCorporation": null,
+    "foreignerHolding": null,
+    "cfd": null
+   },
+   {
+    "date": "2026-09-24",
+    "updatedAt": "2026-09-25T08:30:00+09:00",
+    "foreigner": {
+     "buyVolume": "7000000",
+     "sellVolume": "6500000",
+     "netBuyVolume": "500000"
+    },
+    "institution": {
+     "buyVolume": "14250",
+     "sellVolume": "11150",
+     "netBuyVolume": "3100",
+     "breakdown": {
+      "bank": {
+       "buyVolume": "100",
+       "sellVolume": "200",
+       "netBuyVolume": "-100"
+      },
+      "financialInvestment": {
+       "buyVolume": "9000",
+       "sellVolume": "7000",
+       "netBuyVolume": "2000"
+      },
+      "insurance": {
+       "buyVolume": "500",
+       "sellVolume": "600",
+       "netBuyVolume": "-100"
+      },
+      "otherFinancialInstitution": {
+       "buyVolume": "50",
+       "sellVolume": "50",
+       "netBuyVolume": "0"
+      },
+      "pensionFund": {
+       "buyVolume": "3000",
+       "sellVolume": "1000",
+       "netBuyVolume": "2000"
+      },
+      "privateEquityFund": {
+       "buyVolume": "400",
+       "sellVolume": "800",
+       "netBuyVolume": "-400"
+      },
+      "trust": {
+       "buyVolume": "1200",
+       "sellVolume": "1500",
+       "netBuyVolume": "-300"
+      }
+     }
+    },
+    "individual": {
+     "buyVolume": "5000000",
+     "sellVolume": "5600000",
+     "netBuyVolume": "-600000"
+    },
+    "otherCorporation": {
+     "buyVolume": "10000",
+     "sellVolume": "20000",
+     "netBuyVolume": "-10000"
+    },
+    "foreignerHolding": {
+     "holdingQuantity": "3012456789",
+     "holdingRate": "0.5089",
+     "limitQuantity": "5919637922"
+    },
+    "cfd": {
+     "buyBalanceQuantity": "1250000",
+     "buyBalanceRate": "0.0002",
+     "sellBalanceQuantity": "890000",
+     "sellBalanceRate": "0.0001"
+    }
+   },
+   {
+    "date": "2026-09-23",
+    "updatedAt": "2026-09-24T08:30:00+09:00",
+    "foreigner": {
+     "buyVolume": "6000000",
+     "sellVolume": "6400000",
+     "netBuyVolume": "-400000"
+    },
+    "institution": {
+     "buyVolume": "14250",
+     "sellVolume": "11150",
+     "netBuyVolume": "3100",
+     "breakdown": {
+      "bank": {
+       "buyVolume": "100",
+       "sellVolume": "200",
+       "netBuyVolume": "-100"
+      },
+      "financialInvestment": {
+       "buyVolume": "9000",
+       "sellVolume": "7000",
+       "netBuyVolume": "2000"
+      },
+      "insurance": {
+       "buyVolume": "500",
+       "sellVolume": "600",
+       "netBuyVolume": "-100"
+      },
+      "otherFinancialInstitution": {
+       "buyVolume": "50",
+       "sellVolume": "50",
+       "netBuyVolume": "0"
+      },
+      "pensionFund": {
+       "buyVolume": "3000",
+       "sellVolume": "1000",
+       "netBuyVolume": "2000"
+      },
+      "privateEquityFund": {
+       "buyVolume": "400",
+       "sellVolume": "800",
+       "netBuyVolume": "-400"
+      },
+      "trust": {
+       "buyVolume": "1200",
+       "sellVolume": "1500",
+       "netBuyVolume": "-300"
+      }
+     }
+    },
+    "individual": {
+     "buyVolume": "5200000",
+     "sellVolume": "4900000",
+     "netBuyVolume": "300000"
+    },
+    "otherCorporation": {
+     "buyVolume": "10000",
+     "sellVolume": "10000",
+     "netBuyVolume": "0"
+    },
+    "foreignerHolding": {
+     "holdingQuantity": "3010000000",
+     "holdingRate": "0.5085",
+     "limitQuantity": "5919637922"
+    },
+    "cfd": null
+   }
+  ]
+ }
+}

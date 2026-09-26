@@ -189,6 +189,39 @@ public class StoreRepository {
         return out;
     }
 
+    /**
+     * 여러 개체의 최근 기록을 개체별로 묶어 읽습니다 (최신 날짜가 앞).
+     *
+     * <p>기본키 (dataset, obs_date, entity)의 앞 두 열로 날짜 범위를 좁힌 뒤 개체를 거릅니다.
+     * 종목 수십 개 × 수십 일이라 한 번의 쿼리로 끝납니다.
+     *
+     * @param entities 개체 키 (호출하는 쪽이 형식을 검증해서 넘길 것)
+     * @param since    이 날짜 이후 기록만 (inclusive)
+     * @return entity → 기록 목록(각 payload에 {@code obsDate} 추가). 기록이 없는 개체는 키가 없습니다
+     */
+    public Map<String, List<JsonNode>> readObservationSeries(String dataset, Collection<String> entities,
+                                                             LocalDate since) {
+        Map<String, List<JsonNode>> out = new LinkedHashMap<>();
+        if (entities.isEmpty()) {
+            return out;
+        }
+        String placeholders = String.join(",", Collections.nCopies(entities.size(), "?"));
+        List<Object> params = new ArrayList<>(List.of(dataset, java.sql.Date.valueOf(since)));
+        params.addAll(entities);
+        jdbc.query("SELECT entity, obs_date, payload FROM observations WHERE dataset = ? AND obs_date >= ? "
+                        + "AND entity IN (" + placeholders + ") ORDER BY entity, obs_date DESC",
+                (RowCallbackHandler) rs -> {
+                    JsonNode node = parseJson(rs.getString("payload"));
+                    if (node != null && node.isObject()) {
+                        ((com.fasterxml.jackson.databind.node.ObjectNode) node)
+                                .put("obsDate", rs.getDate("obs_date").toLocalDate().toString());
+                        out.computeIfAbsent(rs.getString("entity"), key -> new ArrayList<>()).add(node);
+                    }
+                },
+                params.toArray());
+        return out;
+    }
+
     /** 그 데이터셋의 가장 최근 obs_date. 없으면 null. */
     public LocalDate latestObservationDate(String dataset) {
         java.sql.Date date = jdbc.queryForObject(

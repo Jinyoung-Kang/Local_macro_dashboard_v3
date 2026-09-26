@@ -28,6 +28,8 @@ public final class Datasets {
     public static final String SNAP_DART_FUNDAMENTALS = "kr.dart_fundamentals";
     /** 금융위 시세 최신 기준일·시장 합계. 종목별 값은 {@link #OBS_FSC_PRICE}. */
     public static final String SNAP_FSC_PRICES_META = "kr.fsc_prices_meta";
+    /** 코스피·코스닥 투자자별 매매대금 (토스증권 공식, 일별). */
+    public static final String SNAP_TOSS_MARKET_FLOWS = "kr.toss_market_flows";
 
     /** 변동성 지수는 가장 긴 기간으로 한 번 저장하고 짧은 기간은 잘라 씁니다. */
     public static final String VOLATILITY_STORE_PERIOD = "5y";
@@ -75,6 +77,8 @@ public final class Datasets {
     public static final String OBS_FSC_PRICE = "fsc_price";
     /** 시장별 합계 시가총액·거래대금 (series = "KOSPI.marketCap" 등). */
     public static final String TS_FSC_MARKET = "fsc_market";
+    /** 종목별 일별 투자자 매매동향 (토스증권 공식, entity = 종목코드). */
+    public static final String OBS_TOSS_STOCK_FLOW = "toss_stock_flow";
 
     // ------------------------------------------------------------- 신선도(초)
     /** 장중 시세성 데이터 (수집 주기 5분의 3배). */

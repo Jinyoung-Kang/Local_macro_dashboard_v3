@@ -66,6 +66,7 @@ class ApiIntegrationTest {
     void setUp() {
         guardAgainstRealDatabase();
         jdbc.execute("DELETE FROM snapshots");
+        jdbc.update("DELETE FROM observations WHERE dataset = ?", Datasets.OBS_TOSS_STOCK_FLOW);
         sessionCookie = login("test-password");
     }
 
@@ -111,12 +112,47 @@ class ApiIntegrationTest {
     void emptyStoreDoesNotBreakScreens() {
         for (String path : List.of(
                 "/api/macro/overview", "/api/liquidity", "/api/sector/rotation",
-                "/api/krx/futures", "/api/cot/overview")) {
+                "/api/krx/futures", "/api/cot/overview",
+                "/api/kr/investor-flows", "/api/krx/spot-futures", "/api/kr/stock-flows?codes=005930")) {
             JsonNode body = authorizedGet(path);
             assertThat(body.path("available").asBoolean(true))
                     .as("%s는 저장본이 없을 때 available=false여야 합니다", path)
                     .isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("종목 수급: 요청한 종목의 최근 기록만 날짜 역순으로 읽어 요약한다")
+    void stockFlowsReadsRecentSeriesOnly() {
+        java.time.LocalDate today = com.macrodash.Kst.today();
+        insertFlow("005930", today, 300);
+        insertFlow("005930", today.minusDays(1), -100);
+        insertFlow("005930", today.minusDays(60), 99999);   // 조회 범위(45일) 밖
+        insertFlow("000660", today, 5);                     // 요청하지 않은 종목
+
+        JsonNode body = authorizedGet("/api/kr/stock-flows?codes=005930,035420,bad");
+        JsonNode stocks = body.path("stocks");
+
+        assertThat(stocks).hasSize(2);   // 형식이 틀린 코드는 무시
+        JsonNode samsung = stocks.get(0);
+        assertThat(samsung.path("available").asBoolean()).isTrue();
+        assertThat(samsung.path("records").asInt()).isEqualTo(2);
+        assertThat(samsung.path("latestDate").asText()).isEqualTo(today.toString());
+        JsonNode foreigner = samsung.path("investors").get(0);
+        assertThat(foreigner.path("net5").path("sum").asLong()).isEqualTo(200);
+        assertThat(foreigner.path("streak").asInt()).isEqualTo(1);
+        assertThat(stocks.get(1).path("available").asBoolean(true)).isFalse();
+    }
+
+    private void insertFlow(String code, java.time.LocalDate date, long foreignerNet) {
+        String payload = """
+                {"code":"%s","date":"%s","updatedAt":"%sT18:10:00+09:00",
+                 "investors":{"foreigner":{"buy":null,"sell":null,"net":%d},"institution":null,
+                              "individual":null,"otherCorporation":null},
+                 "breakdown":null,"foreignerHoldingRate":null}
+                """.formatted(code, date, date, foreignerNet);
+        jdbc.update("INSERT INTO observations (dataset, obs_date, entity, payload) VALUES (?, ?, ?, ?::jsonb)",
+                Datasets.OBS_TOSS_STOCK_FLOW, java.sql.Date.valueOf(date), code, payload);
     }
 
     @Test

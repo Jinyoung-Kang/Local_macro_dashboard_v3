@@ -20,6 +20,7 @@ app/tasks.py
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 import traceback
@@ -43,6 +44,7 @@ from .services import (
     scraper as scraper_service,
     sec13f as sec_service,
     sector as sector_service,
+    toss as toss_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -716,6 +718,114 @@ def task_dart_fundamentals() -> str:
             + (f" · DART 대상 아님 {len(unmapped)}" if unmapped else "") + _reason_suffix(reasons))
 
 
+# ==============================================================================
+# 토스증권 — 투자자별 매매 (공식 Open API)
+# ==============================================================================
+TOSS_MARKET_DAYS = 30         # 시장 합계: 20거래일 누적 + 여유
+TOSS_STOCK_DAYS = 20          # 종목: 5·20일 누적, 연속 순매수 일수
+TOSS_STOCK_LIMIT = 40         # 한 번에 받을 종목 수 (= 호출 수)
+# 이 그룹(STOCK_TRADING_TREND)의 초당 한도는 공개된 표에서 확인하지 못했습니다.
+# 다른 그룹은 초당 1~10회라, 한 번에 몰아 부르지 않고 간격을 둡니다.
+TOSS_STOCK_SPACING = 0.3
+TOSS_STOCK_RETENTION_DAYS = 400
+_KR_CODE = re.compile(r"^[0-9A-Z]{6}$")
+
+
+def task_toss_market_flows() -> str:
+    """
+    🏦 코스피·코스닥 전체의 투자자별 매매대금 (원, 일별 최근 30거래일).
+
+    레이더(시장 전체 수급)와 국내 파생(현물·선물 수급 동조)이 함께 씁니다.
+    한 시장이 실패하면 그 시장만 이전 저장본을 유지합니다.
+    """
+    fetched: dict[str, dict] = {}
+    reasons: list[str] = []
+    for symbol in toss_service.MARKET_SYMBOLS:
+        try:
+            records = toss_service.fetch_market_investor_trading(symbol, TOSS_MARKET_DAYS)
+        except toss_service.TossMissingKey as exc:
+            raise EmptyResult(f"{exc} — 토스 수급 기능이 꺼져 있습니다") from None
+        except toss_service.TossError as exc:
+            reasons.append(f"{symbol}: {exc}")
+            continue
+        if records:
+            fetched[symbol] = {"records": records}
+
+    if not fetched:
+        raise EmptyResult(f"0/{len(toss_service.MARKET_SYMBOLS)} 시장 — 기존 저장본 유지" + _reason_suffix(reasons))
+
+    previous = store.read_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS)
+    markets = dict(((previous.payload or {}).get("markets") or {}) if previous else {})
+    markets.update(fetched)
+    store.put_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS, {
+        "source": "토스증권 Open API — 시장 지표 투자자별 매매대금",
+        "unit": "KRW",
+        "markets": markets,
+    })
+    return f"{len(fetched)}/{len(toss_service.MARKET_SYMBOLS)} 시장" + _reason_suffix(reasons)
+
+
+def _toss_universe() -> list[str]:
+    """지금 레이더 화면에 걸린 종목을 먼저, 그다음 최근 10일 레이더에 자주 오른 종목."""
+    codes: list[str] = []
+    for market, investor, trade_type, interval in RADAR_COMBINATIONS:
+        snap = store.read_snapshot(catalog.snap_radar_scanner(market, investor, trade_type, interval))
+        for row in ((snap.payload or {}).get("rows") or []) if snap else []:
+            code = str(row.get("code") or "")
+            if _KR_CODE.match(code) and code not in codes:
+                codes.append(code)
+    since = (datetime.now(KST).date() - timedelta(days=10)).isoformat()
+    for code in store.recent_observation_codes(catalog.OBS_RADAR, since, TOSS_STOCK_LIMIT):
+        if _KR_CODE.match(code) and code not in codes:
+            codes.append(code)
+    return codes[:TOSS_STOCK_LIMIT]
+
+
+def task_toss_stock_flows() -> str:
+    """
+    🔁 레이더 종목의 일별 투자자 매매동향 (주, 최근 20거래일) — 수급이 며칠째 이어지는지.
+
+    날짜별 기록을 observations에 쌓습니다(entity = 종목코드). 같은 날짜를 다시 받으면
+    덮어쓰므로, 장중 잠정치가 저녁 확정치로 자연스럽게 바뀝니다.
+    403(허용 IP 문제)이면 남은 종목도 같은 답을 받으므로 즉시 멈춥니다.
+    """
+    universe = _toss_universe()
+    if not universe:
+        raise EmptyResult("대상 종목이 없습니다 — 수급 레이더(radar_rankings)가 먼저 쌓여야 합니다")
+
+    by_date: dict[str, list[dict]] = {}
+    fetched = 0
+    reasons: list[str] = []
+    for index, code in enumerate(universe):
+        if index:
+            time.sleep(TOSS_STOCK_SPACING)
+        try:
+            records = toss_service.fetch_stock_investor_trading(code, TOSS_STOCK_DAYS)
+        except toss_service.TossMissingKey as exc:
+            raise EmptyResult(f"{exc} — 토스 수급 기능이 꺼져 있습니다") from None
+        except toss_service.TossForbidden as exc:
+            reasons.append(str(exc))
+            break
+        except toss_service.TossError as exc:
+            reasons.append(f"{code}: {exc}")
+            continue
+        for record in records:
+            if record.get("date"):
+                by_date.setdefault(record["date"], []).append({**record, "code": code})
+        fetched += 1
+
+    if not fetched:
+        raise EmptyResult(f"0/{len(universe)} 종목 — 기존 저장본 유지" + _reason_suffix(reasons))
+
+    saved = sum(
+        store.put_observations(catalog.OBS_TOSS_STOCK_FLOW, obs_date, rows, entity_key="code")
+        for obs_date, rows in by_date.items()
+    )
+    cutoff = (datetime.now(KST).date() - timedelta(days=TOSS_STOCK_RETENTION_DAYS)).isoformat()
+    store.delete_observations_before(catalog.OBS_TOSS_STOCK_FLOW, cutoff)
+    return f"{fetched}/{len(universe)} 종목 · {saved}건" + _reason_suffix(reasons)
+
+
 def _apply_bond_override(payload: dict) -> dict:
     """
     미국채 카드를 TradingView Scanner의 실제 수익률로 보정합니다.
@@ -952,6 +1062,8 @@ ALL_TASKS: tuple[Task, ...] = (
     Task("cot_history", "slow", task_cot_history, "CFTC COT (주 1회 발표)"),
     Task("daum_futures_trend", "slow", task_daum_futures_trend, "Daum 선물 투자주체별 수급"),
     Task("fsc_prices", "slow", task_fsc_prices, "국내 공식 일별 시세 (금융위)"),
+    Task("toss_market_flows", "slow", task_toss_market_flows, "코스피·코스닥 투자자별 매매대금 (토스증권)"),
+    Task("toss_stock_flows", "slow", task_toss_stock_flows, "레이더 종목 투자자별 매매동향 (토스증권)"),
     Task("sec_13f", "weekly", task_sec_13f, "SEC 13F 기관 포트폴리오 (분기 공시)"),
     Task("kr_holidays", "weekly", task_kr_holidays, "한국 공휴일 (천문연 특일정보)"),
     Task("dart_fundamentals", "weekly", task_dart_fundamentals, "국내 종목 재무 (DART 사업보고서)"),

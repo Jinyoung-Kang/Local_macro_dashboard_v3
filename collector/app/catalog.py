@@ -26,6 +26,7 @@ SNAP_KR_HOLIDAYS = "calendar.kr_holidays"       # 한국 공휴일 (천문연 �
 SNAP_DART_CORP_CODES = "kr.dart_corp_codes"     # DART 고유번호 ↔ 종목코드 (상장사만)
 SNAP_DART_FUNDAMENTALS = "kr.dart_fundamentals" # DART 사업보고서 주요계정 (수급 레이더 종목)
 SNAP_FSC_PRICES_META = "kr.fsc_prices_meta"     # 금융위 시세 최신 기준일·시장 합계 (종목별 값은 observations)
+SNAP_TOSS_MARKET_FLOWS = "kr.toss_market_flows" # 코스피·코스닥 투자자별 매매대금 (토스증권 공식, 일별)
 
 # 변동성 지수(^VIX / ^MOVE)는 가장 긴 기간으로 한 번 저장하고, 짧은 기간
 # 요청은 잘라 씁니다 (13F에서 q1을 q8에서 유도하는 것과 같은 방식).
@@ -82,6 +83,7 @@ OBS_RADAR = "radar_ranking"     # 날짜별 수급 상위 종목 (과거 조회 
 RETIRED_OBSERVATION_DATASETS = ("molit_apt",)
 OBS_FSC_PRICE = "fsc_price"     # 금융위 공식 일별 시세 (entity = 6자리 종목코드)
 TS_FSC_MARKET = "fsc_market"    # 시장별 합계 시가총액·거래대금 (series = "KOSPI.marketCap" 등)
+OBS_TOSS_STOCK_FLOW = "toss_stock_flow"  # 종목별 일별 투자자 매매동향 (토스증권 공식, entity = 종목코드)
 
 
 # ==============================================================================

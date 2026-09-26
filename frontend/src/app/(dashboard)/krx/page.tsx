@@ -14,6 +14,7 @@ import {
 import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatKrw, formatNumber, formatPercent, formatSigned } from "@/lib/format";
 import type { InvestorTrendResponse, KrMarketTotalsResponse, KrxFuturesResponse } from "@/lib/types";
+import { SpotFuturesCard } from "./SpotFuturesCard";
 
 /**
  * 🇰🇷 국내 파생 & 투기세력 (KRX).
@@ -243,6 +244,9 @@ export default function KrxPage() {
           </>
         )}
       </Card>
+
+      {/* 선물 수급만 보면 "헤지인지 방향성 베팅인지"를 알 수 없습니다. 같은 투자자의 현물 수급과 나란히 */}
+      <SpotFuturesCard />
 
       <Card
         title="⚡ 장중 수급 가속도 (최근 30분)"

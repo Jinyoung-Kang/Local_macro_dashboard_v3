@@ -124,6 +124,16 @@
 | `GET /api/analytics/correlation?x=&y=&window=60&years=3&mode=change` | 롤링 상관계수 + 산점도. `mode=level`에는 허위 상관 경고가 붙습니다 |
 | `GET /api/analytics/regime?years=5` | 4국면 판정 + 근거 신호 + 주간 이력·구간 |
 
+### 🏦 투자자별 매매 (토스증권 공식)
+
+| 경로 | 설명 |
+|---|---|
+| `GET /api/kr/investor-flows` | 코스피·코스닥 전체 투자자별 매매대금(원) — 최근일·5일·20일 누적, 연속 일수, 기관 7세부, 20일 계열 |
+| `GET /api/kr/stock-flows?codes=005930,000660` | 종목별 투자자 매매동향(주, 20거래일) — 누적·연속 일수·연기금·외국인 보유율 변화. 최대 60개, 형식이 틀린 코드는 무시 |
+| `GET /api/krx/spot-futures` | 코스피 현물(토스, 원) × KOSPI200 선물(Daum, 계약) 투자자별 **방향** 비교. 기준일이 다르면 당일 판정 안 함 |
+
+누적 값은 `{sum, days, window}`입니다. `days < window`면 값이 없는 날(당일 잠정치의 null)을 건너뛴 것입니다.
+
 ### 📋 전체 원본 데이터
 
 | 경로 | 설명 |

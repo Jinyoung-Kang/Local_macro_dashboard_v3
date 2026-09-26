@@ -1,0 +1,107 @@
+{
+ "result": {
+  "nextUntil": "2026-09-22",
+  "records": [
+   {
+    "date": "2026-09-25",
+    "updatedAt": "2026-09-25T15:40:00+09:00",
+    "foreigner": {
+     "buyAmount": "5200000000000",
+     "sellAmount": "5000000000000"
+    },
+    "individual": {
+     "buyAmount": "4000000000000",
+     "sellAmount": "4300000000000"
+    },
+    "otherCorporation": {
+     "buyAmount": "150000000000",
+     "sellAmount": "100000000000"
+    },
+    "institution": {
+     "buyAmount": "142500000000",
+     "sellAmount": "111500000000",
+     "breakdown": {
+      "bank": {
+       "buyAmount": "1000000000",
+       "sellAmount": "2000000000"
+      },
+      "financialInvestment": {
+       "buyAmount": "90000000000",
+       "sellAmount": "70000000000"
+      },
+      "insurance": {
+       "buyAmount": "5000000000",
+       "sellAmount": "6000000000"
+      },
+      "otherFinancialInstitution": {
+       "buyAmount": "500000000",
+       "sellAmount": "500000000"
+      },
+      "pensionFund": {
+       "buyAmount": "30000000000",
+       "sellAmount": "10000000000"
+      },
+      "privateEquityFund": {
+       "buyAmount": "4000000000",
+       "sellAmount": "8000000000"
+      },
+      "trust": {
+       "buyAmount": "12000000000",
+       "sellAmount": "15000000000"
+      }
+     }
+    }
+   },
+   {
+    "date": "2026-09-23",
+    "updatedAt": "2026-09-23T18:10:00+09:00",
+    "foreigner": {
+     "buyAmount": "4800000000000",
+     "sellAmount": "5100000000000"
+    },
+    "individual": {
+     "buyAmount": "4500000000000",
+     "sellAmount": "4200000000000"
+    },
+    "otherCorporation": {
+     "buyAmount": "100000000000",
+     "sellAmount": "120000000000"
+    },
+    "institution": {
+     "buyAmount": "111500000000",
+     "sellAmount": "142500000000",
+     "breakdown": {
+      "bank": {
+       "buyAmount": "2000000000",
+       "sellAmount": "1000000000"
+      },
+      "financialInvestment": {
+       "buyAmount": "70000000000",
+       "sellAmount": "90000000000"
+      },
+      "insurance": {
+       "buyAmount": "6000000000",
+       "sellAmount": "5000000000"
+      },
+      "otherFinancialInstitution": {
+       "buyAmount": "500000000",
+       "sellAmount": "500000000"
+      },
+      "pensionFund": {
+       "buyAmount": "10000000000",
+       "sellAmount": "30000000000"
+      },
+      "privateEquityFund": {
+       "buyAmount": "8000000000",
+       "sellAmount": "4000000000"
+      },
+      "trust": {
+       "buyAmount": "15000000000",
+       "sellAmount": "12000000000"
+      }
+     }
+    }
+   }
+  ]
+ }
+}

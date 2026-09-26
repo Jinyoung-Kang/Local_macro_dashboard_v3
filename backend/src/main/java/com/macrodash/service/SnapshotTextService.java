@@ -36,11 +36,12 @@ public class SnapshotTextService {
     private final KrxService krx;
     private final RadarService radar;
     private final Sec13FService sec13f;
+    private final KrFlowsService flows;
 
     public SnapshotTextService(MacroService macro, LiquidityService liquidity,
                                SectorService sector, CotService cot,
                                KrxService krx, RadarService radar,
-                               Sec13FService sec13f) {
+                               Sec13FService sec13f, KrFlowsService flows) {
         this.macro = macro;
         this.liquidity = liquidity;
         this.sector = sector;
@@ -48,6 +49,7 @@ public class SnapshotTextService {
         this.krx = krx;
         this.radar = radar;
         this.sec13f = sec13f;
+        this.flows = flows;
     }
 
     /** 전체 대시보드 원본 텍스트. */
@@ -464,7 +466,49 @@ public class SnapshotTextService {
                 }
             }
         }
+        appendMarketFlows(lines);
         lines.add("");
+    }
+
+    /**
+     * 🏦 시장 전체 투자자별 매매대금 (토스증권 공식) — 레이더 순위가 "종목"이라면 이것은 "시장 전체의 방향".
+     *
+     * <p>값이 없는 날(null)은 누적에서 빠지고, 그 사실을 일수로 함께 적습니다.
+     */
+    @SuppressWarnings("unchecked")
+    private void appendMarketFlows(List<String> lines) {
+        Map<String, Object> result = flows.marketFlows();
+        lines.add("### 시장 전체 투자자별 순매수 대금 (토스증권 공식, 원)");
+        if (!Boolean.TRUE.equals(result.get("available"))) {
+            lines.add("- 데이터 없음");
+            return;
+        }
+        Map<String, Object> markets = (Map<String, Object>) result.get("markets");
+        for (Map.Entry<String, Object> entry : markets.entrySet()) {
+            Map<String, Object> summary = (Map<String, Object>) entry.getValue();
+            lines.add("%s — 기준일 %s%s".formatted(entry.getKey(), summary.get("latestDate"),
+                    Boolean.TRUE.equals(summary.get("provisional")) ? " (장중 잠정치)" : ""));
+            for (Map<String, Object> row : (List<Map<String, Object>>) summary.get("investors")) {
+                lines.add("- %s: 최근일 %s · 5일 %s · 20일 %s".formatted(
+                        row.get("label"), eok(row.get("latest")),
+                        eokWindow(row.get("net5")), eokWindow(row.get("net20"))));
+            }
+        }
+    }
+
+    private static String eok(Object won) {
+        return won instanceof Number number ? "%+,.0f억".formatted(number.doubleValue() / 1e8) : "데이터 없음";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String eokWindow(Object window) {
+        if (!(window instanceof Map<?, ?> map)) {
+            return "데이터 없음";
+        }
+        Map<String, Object> w = (Map<String, Object>) map;
+        String text = eok(w.get("sum"));
+        return ((Number) w.get("days")).intValue() < ((Number) w.get("window")).intValue() && w.get("sum") != null
+                ? text + "(" + w.get("days") + "일)" : text;
     }
 
     /**

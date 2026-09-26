@@ -110,6 +110,28 @@ export function formatKrw(value: number | null | undefined): string {
   return formatKoreanScale(value, "원");
 }
 
+/** 순매수처럼 부호가 뜻을 갖는 원화 금액. 양수에 +를 붙입니다(예: "+1,234억 원"). */
+export function formatSignedKrw(value: number | null | undefined): string {
+  const text = formatKrw(value);
+  return value !== null && value !== undefined && value > 0 && text !== EMPTY ? `+${text}` : text;
+}
+
+/**
+ * 주식 수(순매수 거래량 등). 만 주 단위로 줄이고 부호를 붙입니다.
+ *
+ * @returns 예: `"+29.2만 주"`, `"-1,250 주"`, 값이 없으면 `"—"`
+ */
+export function formatShares(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return EMPTY;
+  }
+  const magnitude = Math.abs(value);
+  const sign = value > 0 ? "+" : "";
+  if (magnitude >= 1e8) return `${sign}${formatNumber(value / 1e8, 2)}억 주`;
+  if (magnitude >= 1e4) return `${sign}${formatNumber(value / 1e4, 1)}만 주`;
+  return `${sign}${formatNumber(value, 0)} 주`;
+}
+
 /**
  * 조(1e12)·억(1e8)·만(1e4) 단위 공통 규칙.
  *

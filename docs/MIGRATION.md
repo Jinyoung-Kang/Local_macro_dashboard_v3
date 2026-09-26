@@ -152,4 +152,4 @@ psql "$DATABASE_URL" -c "\copy observations(dataset, obs_date, entity, payload, 
 | 13F 종목명 → 티커 매핑 | `collector/app/equities.py` · 수집 태스크 `equity_history` |
 | 전체 원본 데이터 복사 | `service/SnapshotTextService.java` |
 
-수집 태스크는 `fx_history`·`equity_history` 둘이 늘어 13개가 됐고, 이후 국내 공공 API 태스크 셋(`kr_holidays`·`fsc_prices`·`dart_fundamentals`, [DATA_SOURCES.md](DATA_SOURCES.md) 7절)이 더해져 **16개**입니다.
+수집 태스크는 `fx_history`·`equity_history` 둘이 늘어 13개가 됐고, 이후 국내 공공 API 태스크 셋(`kr_holidays`·`fsc_prices`·`dart_fundamentals`, [DATA_SOURCES.md](DATA_SOURCES.md) 7절)이 더해져 16개, 토스증권 투자자별 매매 둘(`toss_market_flows`·`toss_stock_flows`)이 더해져 **18개**입니다.

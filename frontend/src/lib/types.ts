@@ -890,3 +890,80 @@ export interface StatusIssuesResponse {
   missing: string[];
   text: string;
 }
+
+// ---------------------------------------------------------------- 투자자별 매매 (토스증권 공식)
+/** 최근 N개 기록의 순매수 합. 값이 있는 날만 더하며 days가 그 일수입니다(null은 "모름"). */
+export interface FlowWindow {
+  sum: number | null;
+  days: number;
+  window: number;
+}
+
+export interface FlowRow {
+  key: string;
+  label: string;
+  latest: number | null;
+  net5: FlowWindow;
+  net20: FlowWindow;
+  /** +n: n일째 순매수, −n: n일째 순매도, 0: 모름·0 (기관 세부에는 없음) */
+  streak?: number;
+}
+
+export interface FlowSummary {
+  records: number;
+  latestDate?: string;
+  latestUpdatedAt?: string;
+  /** 최신 기록이 오늘 — 장 종료 전까지 바뀔 수 있는 잠정치 */
+  provisional?: boolean;
+  investors?: FlowRow[];
+  breakdown?: FlowRow[];
+  foreignerHolding?: { ratePct: number; date: string; changePp: number | null; fromDate: string | null };
+  series?: { date: string; foreigner: number | null; institution: number | null; individual: number | null }[];
+}
+
+export interface MarketFlowsResponse {
+  available: boolean;
+  message?: string;
+  unit?: string;
+  source?: string;
+  note?: string;
+  markets?: Record<string, FlowSummary>;
+  collectedAtKst?: string;
+  ageSeconds?: number | null;
+}
+
+export interface StockFlowsResponse {
+  available: boolean;
+  message?: string;
+  unit?: string;
+  source?: string;
+  note?: string;
+  stocks: (FlowSummary & { code: string; available: boolean })[];
+}
+
+export interface SpotFuturesRow {
+  key: string;
+  label: string;
+  spotToday: number | null;
+  spot5: number | null;
+  spot20: number | null;
+  futuresToday: number | null;
+  futures5: number | null;
+  futures20: number | null;
+  verdictToday: string;
+  verdict5: string;
+  verdict20: string;
+}
+
+export interface SpotFuturesResponse {
+  available: boolean;
+  message?: string;
+  spotDate?: string | null;
+  futuresDate?: string | null;
+  sameDay?: boolean;
+  rows?: SpotFuturesRow[];
+  spotSource?: string;
+  futuresSource?: string;
+  collectedAtKst?: string;
+  ageSeconds?: number | null;
+}

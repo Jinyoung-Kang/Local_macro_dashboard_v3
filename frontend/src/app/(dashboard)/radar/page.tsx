@@ -15,6 +15,7 @@ import {
   Table,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { MarketFlowsPanel, StockFlowsPanel } from "./FlowPanels";
 import { deltaColor, EMPTY, formatKrw, formatNumber, formatPercent } from "@/lib/format";
 import type {
   DiagnosticsResponse,
@@ -149,6 +150,9 @@ export default function RadarPage() {
         )}
       </Card>
 
+      {/* 종목 랭킹을 보기 전에 시장 전체의 방향부터 — 선택한 시장을 따릅니다 */}
+      <MarketFlowsPanel market={market} />
+
       {loading && !data && <Loading label="수급 데이터를 불러오는 중…" />}
       {error && <ErrorState message={error} onRetry={reload} />}
 
@@ -235,6 +239,11 @@ export default function RadarPage() {
             />
           </Card>
         </>
+      )}
+
+      {/* 랭킹 종목이 "오늘만" 산 것인지 며칠째인지 — 토스증권 공식 종목별 매매동향 */}
+      {data?.available && (data.rows?.length ?? 0) > 0 && (
+        <StockFlowsPanel rows={(data.rows ?? []).map((row) => ({ code: row.code, name: row.name }))} />
       )}
 
       {data?.available && (data.rows?.length ?? 0) > 0 && (
