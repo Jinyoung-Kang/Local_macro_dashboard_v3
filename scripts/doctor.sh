@@ -58,6 +58,10 @@ else
       problem "make up"
     fi
   done
+  # 백엔드·화면이 꺼져 있다면 가장 흔한 원인은 포트 충돌입니다(compose는 한 줄만 남김).
+  if ! printf '%s\n' "$RUNNING" | grep -qx backend || ! printf '%s\n' "$RUNNING" | grep -qx frontend; then
+    bash scripts/ports.sh check 2>&1 | sed '1d; s/^/  /' || true
+  fi
 fi
 
 # ==============================================================================

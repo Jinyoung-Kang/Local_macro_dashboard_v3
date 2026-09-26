@@ -67,7 +67,12 @@ version: ## 지금 체크아웃된 코드의 브랜치·커밋과 원격 대비 
 
 up: ## 전체 스택 기동 (최초 빌드는 5~10분)
 	@test -f .env || (echo "⚠️  .env가 없습니다. 먼저 'make setup'을 실행하세요." && exit 1)
+	@# 포트가 겹치면 compose는 나머지를 다 띄운 뒤 백엔드만 실패시켜, 화면이 백엔드
+	@# 없이 멈춥니다. 누가 포트를 잡았는지 먼저 확인하고 겹치면 시작하지 않습니다.
+	@bash scripts/ports.sh check
 	$(COMPOSE) up -d --build
+	@echo ""
+	@bash scripts/ports.sh wait
 	@echo ""
 	@echo "  화면    : http://localhost:$(FRONTEND_PORT)"
 	@echo "  API     : http://localhost:$(BACKEND_PORT)/api/health"

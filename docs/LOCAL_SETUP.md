@@ -427,13 +427,14 @@ make db-test           # 테스트 전용 DB 준비 (위 명령들이 자동으�
 | `git clone` 후 폴더 이름이 `Local_macro_dashboard_v2` | clone 뒤에 목적지 경로를 지정하지 않았습니다. `mv Local_macro_dashboard_v2 Local-macro-dashboard-v2` |
 | `Cannot connect to the Docker daemon` | Docker Desktop이 꺼져 있습니다. `open -a Docker` 후 30초 |
 | 포트 5432 충돌 | 맥에 PostgreSQL이 이미 돌고 있습니다. `.env`의 `DATABASE_PORT=5433`으로 바꾸고 `make up` |
-| 포트 3000 충돌 | 다른 개발 서버가 씁니다. `.env`에서 `FRONTEND_PORT=3001`, `NEXT_PUBLIC_API_BASE`는 그대로, `FRONTEND_ORIGIN=http://localhost:3001` |
+| 포트 3000 충돌 | 다른 개발 서버가 씁니다. `.env`에서 `FRONTEND_PORT=3001`. `FRONTEND_ORIGIN`을 `.env`에 직접 적어 두셨다면 `http://localhost:3001`로 함께 고치거나 그 줄을 지우세요(지우면 포트를 따라감) |
+| `Bind for 127.0.0.1:8080 failed: port is already allocated` | 8080을 **다른 컨테이너**가 잡고 있습니다(다른 프로젝트, IDE에서 띄운 Spring Boot 등). 나머지는 다 떠서 화면은 "백엔드 API에 연결하지 못했습니다"만 보입니다. `bash scripts/ports.sh check`가 누가 잡았는지 보여 줍니다 → `docker stop <이름>`, 또는 `.env`에서 `BACKEND_PORT=18080` 후 `make up`. 잡은 컨테이너가 없는데도 이 오류가 나면 Docker Desktop을 재시작하세요 |
 | 로그인은 되는데 화면이 계속 401 | `127.0.0.1`로 접속했는데 `FRONTEND_ORIGIN`은 `localhost`입니다(또는 반대). 브라우저는 둘을 **다른 오리진**으로 보고 쿠키를 막습니다. 주소를 하나로 통일하세요 |
 | 화면은 뜨는데 전부 "데이터 없음" | 아직 수집을 하지 않았습니다. `make collect` |
 | `make collect`가 "수집기에 연결하지 못했습니다" | `make logs S=collector`로 기동 여부 확인 |
 | 백엔드 빌드가 메모리 부족으로 죽음 | Docker Desktop 메모리를 4GB 이상으로 올리세요 |
 | 수집은 성공인데 숫자가 이상함 | `🗄️ 데이터 저장소 상태 → 교차 검증`을 돌려 보세요. 비공식 소스(Daum·Naver·TradingView)의 구조 변경을 먼저 의심합니다 |
-| 포트를 바꿨는데 화면이 API를 못 찾음 | `NEXT_PUBLIC_API_BASE`는 **빌드 시점**에 번들에 들어갑니다. 바꾼 뒤 `make up`(재빌드)이 필요합니다 |
+| 포트를 바꿨는데 화면이 API를 못 찾음 | `NEXT_PUBLIC_API_BASE`는 **빌드 시점**에 번들에 들어갑니다. 바꾼 뒤 `make up`(재빌드)이 필요합니다. `.env`에 `NEXT_PUBLIC_API_BASE`를 직접 적어 두었다면 `BACKEND_PORT`와 어긋나지 않았는지 보세요 — `make up`이 기동 전에 검사합니다 |
 | `make setup`이 포트 4개를 전부 "사용 중"이라고 함 | **이미 `make up`으로 이 프로젝트가 떠 있는 상태입니다.** 정상입니다. 최신 버전은 "이 프로젝트의 컨테이너가 사용 중 (정상)"으로 구분해 표시합니다 |
 | 휴대폰 등 다른 기기에서 화면이 안 열림 | `.env`의 `WEB_BIND_HOST`가 `127.0.0.1`이면 이 맥에서만 열립니다. `0.0.0.0`으로 바꾸고 `make up`. `APP_PASSWORD`는 반드시 기본값이 아니어야 합니다 |
 | 다른 기기에서 DB(5432)·수집기(8000)에 붙지 못함 | 의도된 제한입니다. 이 둘은 로그인이 없어 `127.0.0.1`에만 열립니다 ([PRINCIPLES.md](PRINCIPLES.md)) |

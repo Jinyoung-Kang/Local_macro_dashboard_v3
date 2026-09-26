@@ -104,7 +104,9 @@ services:
       DASHBOARD_READ_MODE: "${DASHBOARD_READ_MODE:-auto}"
       APP_PASSWORD: "${APP_PASSWORD:-admin1234@}"
       JWT_SECRET: "${JWT_SECRET:-change-me-please-change-me-please-32b}"
-      FRONTEND_ORIGIN: "${FRONTEND_ORIGIN:-http://localhost:3000}"
+      # 비워 두면 FRONTEND_PORT를 따라갑니다. 예전에는 3000으로 고정이라 포트만 바꾸면
+      # 로그인(CORS)이 조용히 막혔습니다.
+      FRONTEND_ORIGIN: "${FRONTEND_ORIGIN:-http://localhost:${FRONTEND_PORT:-3000}}"
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
       AI_TIMEOUT_SECONDS: "${AI_TIMEOUT_SECONDS:-240}"
       # .env.example에 적혀 있었지만 전달되지 않아 값을 바꿔도 무시되던 두 항목
@@ -127,14 +129,15 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_BASE: "${NEXT_PUBLIC_API_BASE:-http://localhost:8080}"
+        # 비워 두면 BACKEND_PORT를 따라갑니다(8080이 막혀 포트를 바꿀 때 한 곳만 고치면 됨).
+        NEXT_PUBLIC_API_BASE: "${NEXT_PUBLIC_API_BASE:-http://localhost:${BACKEND_PORT:-8080}}"
         # 'make up'이 현재 브랜치@커밋을 넣어 줍니다. 직접 docker compose로
         # 띄우면 비어 있고, 그때는 화면에 버전이 표시되지 않습니다.
         NEXT_PUBLIC_APP_VERSION: "${APP_VERSION:-}"
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_BASE: "${NEXT_PUBLIC_API_BASE:-http://localhost:8080}"
+      NEXT_PUBLIC_API_BASE: "${NEXT_PUBLIC_API_BASE:-http://localhost:${BACKEND_PORT:-8080}}"
     ports:
       - "${WEB_BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
 

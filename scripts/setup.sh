@@ -233,7 +233,8 @@ check_port 8000 "수집기"     "COLLECTOR_PORT"
 check_port 5432 "PostgreSQL" "DATABASE_PORT"
 
 if [ "$CONFLICT" -eq 1 ]; then
-  note "포트를 바꾼 뒤에는 FRONTEND_ORIGIN·NEXT_PUBLIC_API_BASE도 함께 맞춰야 합니다."
+  note "FRONTEND_ORIGIN·NEXT_PUBLIC_API_BASE를 .env에 직접 적어 두셨다면 새 포트로 함께 고치세요"
+  note "(두 줄을 지우면 포트를 자동으로 따라갑니다)."
 fi
 
 # ==============================================================================

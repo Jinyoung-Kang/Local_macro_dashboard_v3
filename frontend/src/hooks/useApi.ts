@@ -28,8 +28,15 @@ interface State<T> {
  * - 사이드바의 "데이터 수동 새로고침"이 끝나면 공용 신호가 바뀌어 이 훅을 쓰는
  *   모든 화면이 스스로 다시 읽습니다.
  * - 401이면 `unauthorized`가 서고 `data`는 null이 됩니다.
+ * - `options.timeoutMs`를 주면 그 시간 안에 응답이 없을 때 오류로 끝냅니다.
+ *   주지 않으면 기다립니다(외부 API를 부르는 진단 화면은 오래 걸리는 게 정상).
  */
-export function useApi<T>(path: string | null, refreshMs = 0) {
+export function useApi<T>(
+  path: string | null,
+  refreshMs = 0,
+  options: { timeoutMs?: number } = {},
+) {
+  const timeoutMs = options.timeoutMs ?? 0;
   const { token } = useRefreshSignal();
   const [state, setState] = useState<State<T>>({
     data: null,
@@ -54,7 +61,7 @@ export function useApi<T>(path: string | null, refreshMs = 0) {
     setState((previous) => ({ ...previous, loading: true, error: null }));
 
     try {
-      const data = await apiGet<T>(path, controller.signal);
+      const data = await apiGet<T>(path, controller.signal, timeoutMs);
       setState({ data, loading: false, error: null, unauthorized: false, loadedAt: new Date() });
     } catch (error) {
       if (controller.signal.aborted) {
@@ -75,7 +82,7 @@ export function useApi<T>(path: string | null, refreshMs = 0) {
     // token은 값 자체를 쓰지 않습니다. 바뀌면 load가 새로 만들어지고,
     // 아래 effect가 다시 돌아 화면이 갱신됩니다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, token]);
+  }, [path, token, timeoutMs]);
 
   useEffect(() => {
     void load();
