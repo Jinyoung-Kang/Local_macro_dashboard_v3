@@ -32,7 +32,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
-from . import catalog, migrations, settings
+from . import catalog, logredact, migrations, settings
 
 logger = logging.getLogger(__name__)
 
@@ -422,8 +422,23 @@ def finish_run(
             "UPDATE collector_runs SET finished_at = now(), status = %s, "
             "ok_count = %s, fail_count = %s, detail = %s, heartbeat_at = now() "
             "WHERE id = %s",
-            (status, ok_count, fail_count, (detail or "")[:2000] or None, run_id),
+            (status, ok_count, fail_count, _safe_detail(detail, 2000), run_id),
         )
+
+
+def _safe_detail(detail: str | None, limit: int) -> str | None:
+    """
+    실행 기록에 남길 실패 사유 — 비밀값을 가리고 길이를 자릅니다.
+
+    사유는 예외 문구 그대로라 요청 URL(쿼리의 API 키)이 섞일 수 있고, 상태 화면에 나가
+    복사됩니다. 로그만 가리던 것을 저장할 때도 가립니다.
+    """
+    return (_redacted(detail) or "")[:limit] or None
+
+
+def _redacted(detail: str | None) -> str | None:
+    """가리기 전에 저장된 옛 기록을 내보낼 때 씁니다 (길이는 그대로)."""
+    return logredact.redact(detail) if detail else detail
 
 
 def record_task_run(
@@ -446,7 +461,7 @@ def record_task_run(
                 (
                     run_id, task, speed, status,
                     started_at.astimezone(timezone.utc),
-                    duration_ms, (detail or "")[:1000] or None,
+                    duration_ms, _safe_detail(detail, 1000),
                 ),
             )
     except psycopg.Error as exc:
@@ -673,7 +688,7 @@ def _serialize_run(run: dict | None) -> dict | None:
         "status": out.get("status"),
         "okCount": out.get("ok_count"),
         "failCount": out.get("fail_count"),
-        "detail": out.get("detail"),
+        "detail": _redacted(out.get("detail")),
         "pid": out.get("pid"),
         "host": out.get("host"),
         "groupName": out.get("group_name"),
@@ -688,7 +703,7 @@ def _serialize_task(task: dict) -> dict:
         "status": task.get("status"),
         "startedAt": started.isoformat() if isinstance(started, datetime) else started,
         "durationMs": task.get("duration_ms"),
-        "detail": task.get("detail"),
+        "detail": _redacted(task.get("detail")),
         "runId": task.get("run_id"),
     }
 

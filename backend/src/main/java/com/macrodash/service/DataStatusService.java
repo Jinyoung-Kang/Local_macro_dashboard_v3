@@ -1,6 +1,7 @@
 package com.macrodash.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.macrodash.analytics.Json;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
@@ -8,6 +9,7 @@ import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.Params;
+import com.macrodash.support.SecretRedactor;
 import com.macrodash.support.UpstreamUnavailableException;
 import org.springframework.stereotype.Service;
 
@@ -56,9 +58,9 @@ public class DataStatusService {
             out.put("keys", payload.get("keys"));
             out.put("intervals", payload.get("intervals"));
             out.put("missingDatasets", payload.get("missingDatasets"));
-            out.put("lastRun", payload.get("lastRun"));
+            out.put("lastRun", redactDetails(payload.get("lastRun")));
             out.put("lastRunStatus", Json.asText(payload, "lastRunStatus"));
-            out.put("taskSummary", payload.get("taskSummary"));
+            out.put("taskSummary", redactDetails(payload.get("taskSummary")));
             out.put("timeseriesRows", Json.asDouble(payload, "timeseriesRows"));
             out.put("observationRows", Json.asDouble(payload, "observationRows"));
         } else {
@@ -66,8 +68,8 @@ public class DataStatusService {
             out.put("collectorReachable", false);
             out.put("message",
                     "수집기에 연결하지 못했습니다. 아래 정보는 데이터베이스에서 직접 읽은 값입니다.");
-            out.put("lastRun", repository.readLastRun().orElse(null));
-            out.put("taskSummary", repository.readTaskSummary());
+            out.put("lastRun", repository.readLastRun().map(DataStatusService::redactDetail).orElse(null));
+            out.put("taskSummary", redactDetails(repository.readTaskSummary()));
             out.put("timeseriesRows", repository.countTimeseries());
             out.put("observationRows", repository.countObservations());
         }
@@ -150,9 +152,45 @@ public class DataStatusService {
         int rows = Params.clamp(limit, 1, MAX_HISTORY_ROWS);
         Optional<JsonNode> payload = collector.taskHistory(task, rows);
         if (payload.isPresent()) {
-            return Map.of("history", payload.get().get("history"));
+            return Map.of("history", redactDetails(payload.get().get("history")));
         }
-        return Map.of("history", repository.readTaskHistory(task, rows));
+        return Map.of("history", redactDetails(repository.readTaskHistory(task, rows)));
+    }
+
+    // ------------------------------------------------------------ 실패 사유의 비밀값 가림
+    // 사유는 예외 문구 그대로라 요청 URL(쿼리의 API 키)이 섞일 수 있고, 화면에 나가 복사됩니다.
+    // 수집기도 저장·응답 전에 가리지만, 수집기가 죽어 DB에서 바로 읽는 경로와 가리기 전에
+    // 저장된 기록이 있어 내보내기 직전에 한 번 더 거릅니다(오류 모음은 StatusIssues가 가림).
+
+    private static List<Map<String, Object>> redactDetails(List<Map<String, Object>> rows) {
+        rows.forEach(DataStatusService::redactDetail);
+        return rows;
+    }
+
+    private static Map<String, Object> redactDetail(Map<String, Object> row) {
+        if (row.get("detail") instanceof String detail) {
+            String redacted = SecretRedactor.redact(detail);
+            if (!redacted.equals(detail)) {     // 가릴 것이 있을 때만 바꿉니다
+                row.put("detail", redacted);
+            }
+        }
+        return row;
+    }
+
+    /** 수집기 응답(객체 하나 또는 배열)의 detail. 응답을 파싱한 사본이라 그 자리에서 바꿉니다. */
+    private static JsonNode redactDetails(JsonNode node) {
+        if (node != null && node.isArray()) {
+            node.forEach(DataStatusService::redactDetailNode);
+        } else if (node != null) {
+            redactDetailNode(node);
+        }
+        return node;
+    }
+
+    private static void redactDetailNode(JsonNode node) {
+        if (node instanceof ObjectNode object && object.path("detail").isTextual()) {
+            object.put("detail", SecretRedactor.redact(object.path("detail").asText()));
+        }
     }
 
     /** 수동 새로고침: 기준 시각을 갱신하고, auto 모드면 fast 작업을 함께 돌립니다. */

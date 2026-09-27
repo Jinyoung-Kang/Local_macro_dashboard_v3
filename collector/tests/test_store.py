@@ -164,6 +164,34 @@ def test_startup_cleanup_keeps_live_runs_of_other_processes(store):
     assert store.read_last_run()["status"] == "running"
 
 
+def test_run_details_are_redacted_when_stored_and_served(store):
+    """
+    SEC-05. 실패 사유(detail)는 상태 화면에 그대로 나가고 복사됩니다. 로그에서만 가리던
+    비밀값을 저장할 때도 가리고, 예전에 가리지 않고 저장된 기록은 내보낼 때 가립니다.
+    """
+    leaked = "HTTPError: 500 for url: https://apis.data.go.kr/x?serviceKey=SECRET123&pageNo=1"
+    run_id = store.start_run("slow")
+    store.record_task_run(run_id, "fsc_prices", speed="slow", status="error",
+                          started_at=datetime.now(timezone.utc), duration_ms=1, detail=leaked)
+    store.finish_run(run_id, status="fail", fail_count=1, detail="fsc_prices: " + leaked)
+    with store.connection() as conn:
+        stored = [row["detail"] for row in conn.execute(
+            "SELECT detail FROM collector_task_runs UNION ALL SELECT detail FROM collector_runs")]
+        # 수정 전에 저장된 기록 흉내 (가리지 않은 원문)
+        conn.execute(
+            "INSERT INTO collector_task_runs (task, status, detail) VALUES ('kr_holidays', 'error', %s)",
+            (leaked,),
+        )
+    assert len(stored) == 2
+    assert all("SECRET123" not in text and "serviceKey=***redacted***" in text for text in stored)
+
+    stats = store.store_stats()
+    served = [task["detail"] for task in stats["taskSummary"]] + [stats["lastRun"]["detail"]]
+    served += [store._serialize_task(row)["detail"] for row in store.read_task_history(limit=10)]
+    assert len(served) == 5
+    assert all("SECRET123" not in text for text in served)
+
+
 def test_refresh_request_moves_forward(store):
     first = store.request_refresh()
     second = store.request_refresh()
