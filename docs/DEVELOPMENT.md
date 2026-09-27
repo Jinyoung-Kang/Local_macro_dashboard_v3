@@ -43,7 +43,7 @@ make logs S=backend
 make test              # 세 가지 전부
 make test-collector    # pytest
 make test-backend      # JUnit (실제 PostgreSQL 사용)
-make test-frontend     # 자가검증 + 린트 + 빌드(타입 검사)
+make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(타입 검사)
 ```
 
 ### ⚠️ 테스트는 전용 DB에서 돕니다
@@ -61,6 +61,10 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 백엔드에는 `guardAgainstRealDatabase()`가 있어 DB 이름이 `_test`로 끝나지 않으면
 테스트가 스스로 멈춥니다.
 
+화면 테스트는 두 가지입니다. 순수 함수는 `src/lib/__checks__/*.check.mts`(`npm run check`,
+추가 도구 없음), React로 렌더링해야 확인되는 훅은 `src/**/__tests__/*.test.ts`
+(`npm test`, vitest + Testing Library + jsdom — 개발 의존성이라 운영 이미지에는 없습니다).
+
 ### 테스트가 고정하는 것
 
 단순 커버리지가 아니라 **한 번씩 틀렸던 규칙**을 고정합니다.
@@ -73,8 +77,10 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 | `SectorSeriesAlignmentTest` | 날짜와 종가 배열이 한 칸씩 밀리는 것 |
 | `KstTest` | 서버 시간대(UTC) 때문에 날짜가 하루 어긋나는 것 |
 | `StoreReaderNonBlockingTest` | 화면이 수집을 기다리게 되는 것 |
+| `RouteInventoryTest` | 컨트롤러를 옮기다 경로가 빠지는 것, API.md와 실제 경로가 어긋나는 것 |
 | `test_equities.py` | 모르는 종목 이름에 엉뚱한 티커가 붙는 것 |
 | `marketCalendar.check.mts` | 공휴일과 거래소 휴장일을 혼동하는 것 |
+| `useApi.test.ts` | 자동 갱신 한 번 실패로 화면이 비는 것, 수동 새로고침이 세션 확인까지 다시 돌려 화면 상태가 초기화되는 것, 늦게 온 이전 응답이 화면을 되돌리는 것 |
 
 ---
 
@@ -118,7 +124,7 @@ public final class MyMath {
 }
 ```
 
-### ④ 응답 조립 — `backend/.../service/` + `web/DashboardController.java`
+### ④ 응답 조립 — `backend/.../service/` + `web/` 메뉴별 컨트롤러
 
 `Datasets.java`에 ②에서 정한 이름을 **똑같이** 적습니다.
 
@@ -135,6 +141,12 @@ public static final String SNAP_MY_THING = "domain.my_thing";
 ```java
 snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
 ```
+
+엔드포인트는 메뉴에 맞는 컨트롤러에 붙입니다(`MacroController`·`InstitutionController`·
+`PositioningController`·`AnalyticsController`·`StatusController`, 출처가 따로인 것은
+`FlowsController`·`PublicDataController`·`TossController`). 경로를 추가하면
+`RouteInventoryTest`의 목록과 [API.md](API.md) 표에도 적어야 빌드가 통과합니다.
+컨트롤러 하나가 서비스를 5개보다 많이 받으면 같은 테스트가 실패하니, 그때는 나눕니다.
 
 ### ⑤ 화면 — `frontend/src/app/(dashboard)/…`
 
@@ -169,6 +181,17 @@ snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
   않습니다.**
 - 추정치·대용값은 `isEstimated` / `isProxy` 플래그를 함께 내려보냅니다.
 - 금액은 조·억 단위로 통일합니다 (`lib/format.ts`, `SnapshotTextService`).
+
+### 파일이 커질 때
+
+- 한꺼번에 나누지 않고, **고치러 들어간 파일**에서 그 부분만 떼어 냅니다. 옮길 때는
+  동작을 바꾸지 않습니다(옮기는 커밋과 고치는 커밋을 나눕니다).
+- 화면: 메뉴 페이지의 섹션은 같은 폴더의 파일로 둡니다 — 예: `macro/SpreadSection.tsx`,
+  `radar/FlowPanels.tsx`. `page.tsx`에는 데이터 조회와 배치만 남깁니다.
+- 수집기: 태스크가 부르는 가공 단계는 별도 모듈로 둡니다 — 예: `macro_cards.py`
+  (매크로 카드 보정). `tasks.py`에는 "받아서 저장"만 남깁니다.
+- 아직 큰 파일(600줄 이상): `tasks.py`, `lib/types.ts`, `services/radar.py`, `store.py`,
+  `components/charts.tsx`, `radar/page.tsx`. 다음에 손댈 때 같은 방식으로 나눕니다.
 
 자세한 규칙은 [PRINCIPLES.md](PRINCIPLES.md)에 있습니다.
 
