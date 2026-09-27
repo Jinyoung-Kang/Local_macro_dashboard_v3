@@ -60,6 +60,9 @@ class ApiIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    com.macrodash.store.StoreRepository repository;
+
     private String sessionCookie;
 
     @BeforeEach
@@ -426,6 +429,36 @@ class ApiIntegrationTest {
                 """.formatted(code, code, netAmountEok, investor, entity);
         jdbc.update("INSERT INTO observations (dataset, obs_date, entity, payload) VALUES (?, ?, ?, ?::jsonb)",
                 Datasets.OBS_RADAR, java.sql.Date.valueOf(date), entity, payload);
+    }
+
+    @Test
+    @DisplayName("태스크별 최근 실행: 태스크마다 마지막에 기록한 1건을 이름 순으로 준다")
+    void taskSummaryIsLastRecordedRowPerTask() {
+        // 쿼리를 DISTINCT ON(전체 정렬)에서 태스크별 인덱스 첫 행 조회로 바꿨으므로 결과를 고정합니다.
+        String prefix = "it_summary_";
+        jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+        try {
+            insertTaskRun(prefix + "radar", "ok", "2026-09-01T00:00:00Z");
+            insertTaskRun(prefix + "fx", "error", "2026-09-01T00:05:00Z");
+            insertTaskRun(prefix + "radar", "error", "2026-09-01T00:10:00Z");
+            insertTaskRun(prefix + "fx", "ok", "2026-09-01T00:01:00Z");    // 시작은 더 이르지만 나중에 기록
+            insertTaskRun(prefix + "cot", "empty", "2026-09-01T00:03:00Z");
+
+            List<Map<String, Object>> mine = repository.readTaskSummary().stream()
+                    .filter(row -> String.valueOf(row.get("task")).startsWith(prefix))
+                    .toList();
+            assertThat(mine).extracting(row -> row.get("task") + "=" + row.get("status"))
+                    .containsExactly(prefix + "cot=empty", prefix + "fx=ok", prefix + "radar=error");
+            assertThat(mine.get(0).keySet()).containsExactly(
+                    "task", "speed", "status", "started_at", "duration_ms", "detail", "run_id");
+        } finally {
+            jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+        }
+    }
+
+    private void insertTaskRun(String task, String status, String startedAt) {
+        jdbc.update("INSERT INTO collector_task_runs (task, speed, status, started_at, duration_ms) "
+                + "VALUES (?, 'fast', ?, ?::timestamptz, 1)", task, status, startedAt);
     }
 
     @Test

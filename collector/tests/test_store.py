@@ -187,6 +187,39 @@ def test_task_summary_hides_removed_tasks(store):
     assert {row["task"] for row in store.read_task_summary()} == {"kr_holidays", "seoul_apartments"}
 
 
+def test_task_summary_is_last_recorded_row_per_task_in_name_order(store):
+    """
+    태스크마다 마지막에 기록한 1건을 태스크 이름 순으로 돌려줍니다 (PERF-03).
+
+    실행 기록 전체를 훑던 DISTINCT ON을 태스크별 인덱스 첫 행 조회로 바꿨으므로,
+    결과가 예전과 같은지(최신 기준 = 기록 순서, 이름 순, 같은 컬럼) 고정해 둡니다.
+    """
+    run_id = store.start_run("fast")
+    base = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    for task, status, minutes in (
+        ("radar_rankings", "ok", 0),
+        ("fx_history", "error", 5),
+        ("radar_rankings", "error", 10),
+        ("fx_history", "ok", 1),         # 시작 시각은 더 이르지만 나중에 기록 → 이것이 최신
+        ("cot_history", "empty", 3),
+    ):
+        store.record_task_run(
+            run_id, task, speed="fast", status=status,
+            started_at=base + timedelta(minutes=minutes), duration_ms=1, detail=None,
+        )
+
+    everything = store.read_task_summary()
+    assert [(row["task"], row["status"]) for row in everything] == [
+        ("cot_history", "empty"), ("fx_history", "ok"), ("radar_rankings", "error"),
+    ]
+    assert list(everything[0]) == ["task", "speed", "status", "started_at", "duration_ms", "detail", "run_id"]
+
+    # 한 번도 돌지 않은 이름은 행이 없고, 같은 이름을 두 번 줘도 한 행입니다.
+    named = store.read_task_summary(["radar_rankings", "never_ran", "fx_history", "fx_history"])
+    assert [(row["task"], row["status"]) for row in named] == [("fx_history", "ok"), ("radar_rankings", "error")]
+    assert store.read_task_summary([]) == []
+
+
 def test_purge_retired_datasets(store):
     store.put_observations("molit_apt", "2026-08-01", [{"lawd": "11680"}], entity_key="lawd")
     store.put_observations(catalog.OBS_RADAR, "2026-09-23", [{"code": "005930"}], entity_key="code")
