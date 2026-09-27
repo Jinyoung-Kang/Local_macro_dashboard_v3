@@ -1,6 +1,6 @@
 """
 tests/test_bond_override.py
-국채 카드 보정(_apply_bond_override) 회귀 테스트.
+국채 카드 보정(macro_cards.apply_bond_override) 회귀 테스트.
 
 고정하는 규칙
   1. 보정한 수익률은 화면 카드와 스프레드 계산용 rates에 **함께** 반영된다.
@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import pytest
 
-from app import indicators, tasks
+from app import indicators, macro_cards
 
 
 @pytest.fixture()
 def no_snapshot(monkeypatch):
     """저장본이 없다고 보게 만들어, 보정이 스크래핑 결과만 쓰게 합니다."""
-    monkeypatch.setattr(tasks.store, "read_snapshot", lambda *_args, **_kw: None)
+    monkeypatch.setattr(macro_cards.store, "read_snapshot", lambda *_args, **_kw: None)
 
 
 def _payload() -> dict:
@@ -55,10 +55,10 @@ def _scraped(**overrides) -> dict:
 
 def test_every_bond_key_reaches_rates(no_snapshot, monkeypatch):
     monkeypatch.setattr(
-        tasks.scraper_service, "collect_scraped_markets", lambda: _scraped()
+        macro_cards.scraper_service, "collect_scraped_markets", lambda: _scraped()
     )
 
-    result = tasks._apply_bond_override(_payload())
+    result = macro_cards.apply_bond_override(_payload())
 
     # 카드 값이 선물 가격(101.5)이 아니라 실제 수익률로 바뀌어야 합니다.
     cards = {item["key"]: item for item in result["categories"][0]["items"]}
@@ -73,12 +73,12 @@ def test_every_bond_key_reaches_rates(no_snapshot, monkeypatch):
 def test_failed_scrape_leaves_key_out_of_rates(no_snapshot, monkeypatch):
     """보정에 실패한 만기는 rates에 넣지 않습니다(옛 값으로 위장 금지)."""
     monkeypatch.setattr(
-        tasks.scraper_service,
+        macro_cards.scraper_service,
         "collect_scraped_markets",
         lambda: _scraped(us30y={"status": "fail", "price": None}),
     )
 
-    result = tasks._apply_bond_override(_payload())
+    result = macro_cards.apply_bond_override(_payload())
 
     assert "us30y" not in result.get("rates", {})
     assert set(result["rates"]) == {"us02y", "us10y"}

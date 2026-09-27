@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import catalog, tasks
+from app import catalog, macro_cards, tasks
 
 
 def test_empty_result_is_counted_as_failure(store, monkeypatch):
@@ -217,7 +217,7 @@ def test_futures_cards_carry_collection_time_and_market(store):
         {"key": "hsi_fut", **_ok(24520.0, 24500.0)},
     ]})
 
-    items = tasks._inject_scraped_indices(_asia_payload())["categories"][0]["items"]
+    items = macro_cards.inject_scraped_indices(_asia_payload())["categories"][0]["items"]
     by_key = {item["key"]: item for item in items}
 
     assert set(by_key) == {"kospi200_night_scraped", "nikkei_fut_scraped", "hsi_fut_scraped"}
@@ -238,7 +238,7 @@ def test_failed_futures_fall_back_to_index_with_honest_name(store):
         {"key": "hsi_fut", "status": "fail", "price": None, "provider": "TradingView Scanner"},
     ]})
 
-    items = tasks._inject_scraped_indices(_asia_payload())["categories"][0]["items"]
+    items = macro_cards.inject_scraped_indices(_asia_payload())["categories"][0]["items"]
     by_key = {item["key"]: item for item in items}
 
     nikkei = by_key["nikkei_fut_scraped"]

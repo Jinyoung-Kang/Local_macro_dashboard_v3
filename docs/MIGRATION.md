@@ -38,7 +38,7 @@ Python 단일 Streamlit 앱, 약 23,700줄)의 각 파일이 v2 어디로 갔는
 | `services/consensus_service.py` | `backend/.../service/Sec13FService.java#consensus` |
 | `services/cot_service.py` | 수집: `collector/app/services/cot.py` / 요약: `backend/.../service/CotService.java` |
 | `services/market_scraper_service.py` | `collector/app/services/scraper.py` (HTML 정규식 → JSON 엔드포인트) |
-| `services/night_futures_scraper_service.py`, `foreign_index_futures_scraper_service.py` | `collector/app/services/scraper.py` + `tasks.py#_inject_scraped_indices` |
+| `services/night_futures_scraper_service.py`, `foreign_index_futures_scraper_service.py` | `collector/app/services/scraper.py` + `macro_cards.py#inject_scraped_indices` |
 | `services/kis_service.py` | `collector/app/services/kis.py` |
 | `services/ls_service.py` | `collector/app/services/ls.py` |
 | `services/toss_service.py` | `collector/app/services/toss.py` |
@@ -130,7 +130,7 @@ psql "$DATABASE_URL" -c "\copy observations(dataset, obs_date, entity, payload, 
 | 구버전 | v2 | 비고 |
 |---|---|---|
 | `services/night_futures_scraper_service.py`<br>코스피200 야간선물 (CME 연계) | `services/scraper.py`의 `kospi200_night` | **한동안 빠져 있었습니다.** 구버전은 TradingView HTML 정규식 → Investing.com → KODEX 프록시 순서였습니다. v2는 앞 두 단계를 Symbol Scanner JSON 하나로 바꾸고, 마지막 KODEX 프록시는 그대로 살렸습니다(반드시 추정치 표시) |
-| `services/foreign_index_futures_scraper_service.py`<br>닛케이225·항셍 선물 | `tasks.py`의 `_inject_scraped_indices` | Symbol Scanner JSON으로 대체 |
+| `services/foreign_index_futures_scraper_service.py`<br>닛케이225·항셍 선물 | `macro_cards.py`의 `inject_scraped_indices` | Symbol Scanner JSON으로 대체 |
 | `services/browser_pool.py`<br>헤드리스 Chromium 렌더링 | 없음 (의도적) | Naver iframe은 서버가 완성된 HTML을 줍니다. 브라우저 의존성을 없애 이미지가 가벼워집니다. 다만 Naver가 비면 원인을 구분해 보여 줍니다 — "표가 없습니다"(차단·JS 요구)면 이 판단을 다시 봐야 한다는 신호입니다 |
 | `services/kis_websocket_service.py` | 없음 (의도적) | 구버전에서도 어디에서도 호출되지 않는 죽은 코드였습니다 |
 

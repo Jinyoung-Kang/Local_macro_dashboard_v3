@@ -84,7 +84,7 @@ SCRAPER_MARKETS = [
     # 닛케이225·항셍 **선물**(최근월 연결). 예전에는 "선물" 카드가 위의 지수
     # 심볼(TVC:NI225·TVC:HSI)을 그대로 썼습니다 — 이름은 선물인데 값은 지수였고,
     # 지수 카드와 소수점까지 같은 값이 나란히 떴습니다. 선물 조회에 실패하면
-    # 카드가 지수 값으로 내려가되 이름에 그 사실을 적습니다(tasks._inject_scraped_indices).
+    # 카드가 지수 값으로 내려가되 이름에 그 사실을 적습니다(macro_cards.inject_scraped_indices).
     {"key": "nikkei_fut", "name": "닛케이225 선물", "kind": "tradingview_symbol",
      "symbol": "OSE:NK2251!", "provider": "TradingView Scanner", "unit": "pt",
      "url": "https://www.tradingview.com/symbols/OSE-NK2251!/"},
