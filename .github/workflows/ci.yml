@@ -37,13 +37,20 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: collector/requirements.txt
+          cache-dependency-path: |
+            collector/requirements.txt
+            collector/requirements-dev.txt
 
       - name: 의존성 설치
         working-directory: collector
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      # 로컬에서 쓰는 린터(ruff, requirements-dev.txt에 버전 고정)를 CI에서도 돌립니다.
+      - name: 린트 (ruff)
+        working-directory: collector
+        run: ruff check app tests
 
       - name: 스키마 적용 (번호 순서)
         env:
@@ -121,6 +128,11 @@ jobs:
       - name: 의존성 설치
         working-directory: frontend
         run: npm ci
+
+      # 시장 달력·표기·실행 대기 등 화면 로직 자가 검증 (src/lib/__checks__)
+      - name: 자가 검증
+        working-directory: frontend
+        run: npm run check
 
       - name: 린트
         working-directory: frontend
