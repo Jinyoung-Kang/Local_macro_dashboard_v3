@@ -1,17 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiGet, UnauthorizedError } from "@/lib/api";
+import { apiGetShared, UnauthorizedError } from "@/lib/api";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
 
 interface State<T> {
   data: T | null;
+  /** data를 받아 온 경로. 경로가 바뀐 뒤의 실패에 이전 경로의 값을 남기지 않으려고 씁니다. */
+  dataPath: string | null;
   loading: boolean;
+  /** 보여 줄 값이 없을 때의 오류. 화면은 이것이 있으면 오류 화면을 그립니다. */
   error: string | null;
+  /** 값은 있는데 다시 읽기가 실패했을 때의 오류. 값은 그대로 두고 이것만 채웁니다. */
+  refreshError: string | null;
   unauthorized: boolean;
   /** 이 브라우저가 마지막으로 응답을 받은 시각. 자동 갱신이 돌고 있는지 화면에 보이려고 씁니다. */
   loadedAt: Date | null;
 }
+
+const EMPTY_STATE = {
+  data: null,
+  dataPath: null,
+  loading: false,
+  error: null,
+  refreshError: null,
+  unauthorized: false,
+  loadedAt: null,
+} as const;
 
 /**
  * 백엔드 GET 요청 훅.
@@ -21,8 +36,12 @@ interface State<T> {
  * @returns `{ data, loading, error, unauthorized, loadedAt, reload }`
  *
  * 알아 둘 것
- * - 경로가 바뀌면 **이전 요청을 취소**합니다. 느린 응답이 나중에 도착해 화면을
- *   되돌리는 문제를 막습니다.
+ * - 경로가 바뀌면 **이전 요청의 결과를 버립니다**. 느린 응답이 나중에 도착해 화면을
+ *   되돌리는 문제를 막습니다. 같은 경로를 동시에 읽는 다른 컴포넌트가 있으면 요청은
+ *   한 번만 나가고 결과를 함께 씁니다(lib/sharedRequest).
+ * - 이미 값이 있는데 다시 읽기가 실패하면 **값을 지우지 않습니다**. 자동 갱신 중 한 번의
+ *   일시 오류로 화면 전체가 오류 화면으로 바뀌던 문제가 있었습니다. 실패는
+ *   `refreshError`로 알리고, 값의 수집 시각은 화면의 신선도 배지가 이미 보여 줍니다.
  * - 자동 갱신은 **탭을 보고 있을 때만** 돕니다. 숨으면 멈추고, 돌아오면 즉시 한 번
  *   읽고 다시 겁니다.
  * - 사이드바의 "데이터 수동 새로고침"이 끝나면 공용 신호가 바뀌어 이 훅을 쓰는
@@ -30,27 +49,25 @@ interface State<T> {
  * - 401이면 `unauthorized`가 서고 `data`는 null이 됩니다.
  * - `options.timeoutMs`를 주면 그 시간 안에 응답이 없을 때 오류로 끝냅니다.
  *   주지 않으면 기다립니다(외부 API를 부르는 진단 화면은 오래 걸리는 게 정상).
+ * - `options.followRefresh: false`면 수동 새로고침 신호에 반응하지 않습니다. 세션 확인이
+ *   그렇습니다 — 새로고침마다 세션을 다시 확인하면 레이아웃이 "세션을 확인하는 중…"으로
+ *   바뀌며 화면 전체가 다시 그려지고, 고른 옵션 같은 화면 상태가 초기화됐습니다.
  */
 export function useApi<T>(
   path: string | null,
   refreshMs = 0,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; followRefresh?: boolean } = {},
 ) {
   const timeoutMs = options.timeoutMs ?? 0;
   const { token } = useRefreshSignal();
-  const [state, setState] = useState<State<T>>({
-    data: null,
-    loading: Boolean(path),
-    error: null,
-    unauthorized: false,
-    loadedAt: null,
-  });
+  const refreshToken = options.followRefresh === false ? 0 : token;
+  const [state, setState] = useState<State<T>>({ ...EMPTY_STATE, loading: Boolean(path) });
 
   const controllerRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
     if (!path) {
-      setState({ data: null, loading: false, error: null, unauthorized: false, loadedAt: null });
+      setState({ ...EMPTY_STATE });
       return;
     }
 
@@ -61,28 +78,30 @@ export function useApi<T>(
     setState((previous) => ({ ...previous, loading: true, error: null }));
 
     try {
-      const data = await apiGet<T>(path, controller.signal, timeoutMs);
-      setState({ data, loading: false, error: null, unauthorized: false, loadedAt: new Date() });
+      const data = await apiGetShared<T>(path, timeoutMs);
+      if (controller.signal.aborted) {
+        return;   // 그 사이 경로가 바뀌었거나 화면을 떠났습니다
+      }
+      setState({ ...EMPTY_STATE, data, dataPath: path, loadedAt: new Date() });
     } catch (error) {
       if (controller.signal.aborted) {
         return;
       }
       if (error instanceof UnauthorizedError) {
-        setState({ data: null, loading: false, error: null, unauthorized: true, loadedAt: null });
+        setState({ ...EMPTY_STATE, unauthorized: true });
         return;
       }
-      setState({
-        data: null,
-        loading: false,
-        error: error instanceof Error ? error.message : "알 수 없는 오류",
-        unauthorized: false,
-        loadedAt: null,
-      });
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      setState((previous) =>
+        previous.data !== null && previous.dataPath === path
+          ? { ...previous, loading: false, error: null, refreshError: message }
+          : { ...EMPTY_STATE, error: message },
+      );
     }
-    // token은 값 자체를 쓰지 않습니다. 바뀌면 load가 새로 만들어지고,
+    // refreshToken은 값 자체를 쓰지 않습니다. 바뀌면 load가 새로 만들어지고,
     // 아래 effect가 다시 돌아 화면이 갱신됩니다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, token, timeoutMs]);
+  }, [path, refreshToken, timeoutMs]);
 
   useEffect(() => {
     void load();

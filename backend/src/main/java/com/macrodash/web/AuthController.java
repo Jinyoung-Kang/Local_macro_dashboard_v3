@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -76,9 +78,21 @@ public class AuthController {
                 .body(Map.of("ok", true));
     }
 
+    /**
+     * 세션 확인.
+     *
+     * <p>로그인돼 있으면 읽기 모드도 함께 줍니다. 화면(사이드바)은 이 값 하나를 보여 주려고
+     * 페이지를 열 때마다 무거운 {@code /api/status}(수집기 상태 + DB 집계)를 불렀습니다.
+     */
     @GetMapping("/session")
     public Map<String, Object> session(HttpServletRequest request) {
-        return Map.of("authenticated", authService.isValid(readToken(request)));
+        boolean authenticated = authService.isValid(readToken(request));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("authenticated", authenticated);
+        if (authenticated) {
+            out.put("readMode", properties.resolvedReadMode().name().toLowerCase(Locale.ROOT));
+        }
+        return out;
     }
 
     @PostMapping("/logout")

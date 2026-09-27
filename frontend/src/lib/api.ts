@@ -6,6 +6,8 @@
  * (토큰을 localStorage에 두지 않습니다 — XSS로 새어 나갈 수 있습니다.)
  */
 
+import { createSharedFetcher } from "./sharedRequest.ts";
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
 
@@ -120,6 +122,21 @@ export function apiGet<T>(path: string, signal?: AbortSignal, timeoutMs = 0): Pr
   return request<T>(path, { method: "GET", signal }, timeoutMs);
 }
 
+const sharedGet = createSharedFetcher<unknown>((key) => {
+  const separator = key.indexOf("|");
+  return apiGet(key.slice(separator + 1), undefined, Number(key.slice(0, separator)));
+});
+
+/**
+ * 진행 중인 같은 GET이 있으면 그 결과를 함께 씁니다(lib/sharedRequest 설명 참고).
+ *
+ * 취소 신호를 받지 않습니다 — 요청은 다른 쪽을 위해 끝까지 갑니다. 받는 쪽이 자기
+ * 취소 여부를 보고 결과를 버리세요(useApi가 그렇게 합니다).
+ */
+export function apiGetShared<T>(path: string, timeoutMs = 0): Promise<T> {
+  return sharedGet(`${timeoutMs}|${path}`) as Promise<T>;
+}
+
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return request<T>(path, {
     method: "POST",
@@ -143,5 +160,5 @@ export function query(params: Record<string, string | number | boolean | undefin
 export const auth = {
   login: (password: string) => apiPost<{ ok: boolean }>("/api/auth/login", { password }),
   logout: () => apiPost<{ ok: boolean }>("/api/auth/logout"),
-  session: () => apiGet<{ authenticated: boolean }>("/api/auth/session"),
+  session: () => apiGet<{ authenticated: boolean; readMode?: string }>("/api/auth/session"),
 };
