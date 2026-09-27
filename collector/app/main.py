@@ -396,12 +396,19 @@ def verification_readings(
         "keys": {
             "krx": bool(settings.krx_key()),
             "kis": kis_service.has_credentials(),
+            "toss": toss_service.has_credentials(),
         },
         "kisFutures": kis_service.fetch_kospi200_futures(),
         "kisIndex": kis_service.fetch_index_close(),
         "krxIndex": _krx_index_reading(),
         "yfinanceIndex": _yfinance_index_reading(),
         "rankingTop": top_row,
+        # 토스증권 공식 — 코스피 종합지수·환율 (KOSPI200은 토스 심볼 카탈로그에 없습니다)
+        "tossKospi": toss_service.verification_reading(
+            lambda: toss_service.fetch_index_daily_close("KOSPI"), "코스피 일봉"),
+        "kisKospi": kis_service.fetch_index_close(kis_service.INDEX_CODE_KOSPI),
+        "yfinanceKospi": _yfinance_index_reading("^KS11"),
+        "tossUsdKrw": toss_service.verification_reading(toss_service.fetch_usdkrw_mid, "환율"),
     }
 
 
@@ -428,15 +435,15 @@ def _krx_index_reading() -> dict:
     return {"ok": False, "value": None, "detail": "최근 7일 안에 확정 지수가 없습니다."}
 
 
-def _yfinance_index_reading() -> dict:
+def _yfinance_index_reading(ticker: str = "^KS200") -> dict:
     """제3의 참고 출처. 공식은 아니지만 두 공식 출처가 갈릴 때 표를 던집니다."""
-    payload = market_service.collect_ticker("^KS200", "5d")
+    payload = market_service.collect_ticker(ticker, "5d")
     points = [p for p in payload.get("points", []) if p.get("close")]
     if not points:
         return {
             "ok": False,
             "value": None,
-            "detail": f"^KS200 조회 실패{_reason(payload)}",
+            "detail": f"{ticker} 조회 실패{_reason(payload)}",
         }
 
     last = points[-1]
@@ -445,7 +452,7 @@ def _yfinance_index_reading() -> dict:
         "ok": True,
         "value": float(last["close"]),
         "asOf": as_of,
-        "detail": f"^KS200 (참고{', 기준일 ' + as_of if as_of else ''})",
+        "detail": f"{ticker} (참고{', 기준일 ' + as_of if as_of else ''})",
     }
 
 

@@ -2,6 +2,7 @@ package com.macrodash.service;
 
 import com.macrodash.Kst;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.macrodash.analytics.FlowIntegrity;
 import com.macrodash.analytics.Json;
 import com.macrodash.analytics.Verification;
 import com.macrodash.collector.CollectorClient;
@@ -18,7 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 🔍 데이터 교차 검증 (KRX · KIS).
+ * 🔍 데이터 교차 검증 (KRX · KIS · 토스증권).
  *
  * <p>이 프로젝트는 공식 API와 비공식 스크래핑을 섞어 씁니다. 비공식 소스는
  * 페이지 구조가 바뀌면 조용히 틀린 값을 주기 시작하고, 화면만 봐서는 알아챌
@@ -32,7 +33,13 @@ import java.util.Optional;
  *   <tr><td>선물 등락률</td><td>종가 계산값</td><td>KRX 보고값</td><td>장 마감 후</td></tr>
  *   <tr><td>KOSPI200 현물</td><td>KRX</td><td>KIS · yfinance</td><td>장 마감 후</td></tr>
  *   <tr><td>수급 1위 종목</td><td>KIS 가집계</td><td>Daum(화면이 쓰는 값)</td><td>정규장 중</td></tr>
+ *   <tr><td>코스피 종합지수</td><td>토스 일봉 종가</td><td>KIS · yfinance ^KS11</td><td>장 마감 후</td></tr>
+ *   <tr><td>원/달러 환율</td><td>Yahoo(화면이 쓰는 값)</td><td>토스 매매기준율</td><td>항상</td></tr>
+ *   <tr><td>토스 수급 정합성</td><td>매수 합계</td><td>매도 합계 (같은 응답 안)</td><td>항상 (확정 기록)</td></tr>
  * </table>
+ *
+ * <p>토스 심볼 카탈로그에는 KOSPI200·선물이 없어서 토스는 기존 KOSPI200 항목에 끼지
+ * 못합니다. 대신 토스가 주는 코스피 종합지수·환율로 별도 항목을 만듭니다.
  *
  * <p><b>시간 조건이 항목마다 반대인 이유</b> — KRX는 일별 확정 종가를, KIS는
  * 현재가를 줍니다. 장중에 비교하면 항상 다르므로 시세 대조는 마감 후에만 합니다.
@@ -44,6 +51,11 @@ public class VerificationService {
 
     private final StoreReader store;
     private final CollectorClient collector;
+
+    /** 원/달러: Yahoo는 역외 시세, 토스는 은행 매매기준율이라 둘이 늘 조금 다릅니다. */
+    static final double TOLERANCE_FX_PCT = 0.5;
+    /** 화면 저장본이 이보다 오래됐으면 지금 환율과 비교하지 않습니다. */
+    static final long FX_MAX_AGE_SECONDS = 60 * 60;
 
     public VerificationService(StoreReader store, CollectorClient collector) {
         this.store = store;
@@ -64,6 +76,7 @@ public class VerificationService {
         JsonNode keys = Json.child(payload, "keys");
         boolean hasKrx = Json.asBoolean(keys, "krx");
         boolean hasKis = Json.asBoolean(keys, "kis");
+        boolean hasToss = Json.asBoolean(keys, "toss");
 
         List<Verification.Result> results = new ArrayList<>();
         Verification.Gate settled = Verification.settledGate(now);
@@ -86,6 +99,20 @@ public class VerificationService {
 
         results.add(compareRankingTop(payload, now));
 
+        // 토스증권 공식 — 키가 없으면 "확인 못 함"으로 남깁니다(일치로 위장하지 않음).
+        String noToss = "토스 키(TOSS_CLIENT_ID/SECRET)가 없어 이 항목은 대조하지 않습니다.";
+        if (!hasToss) {
+            results.add(Verification.skipped(KOSPI_NAME, noToss));
+            results.add(Verification.skipped(FX_NAME, noToss));
+            results.add(Verification.skipped(FlowIntegrity.NAME, noToss));
+        } else {
+            results.add(settled.allowed()
+                    ? compareKospi(payload)
+                    : Verification.skipped(KOSPI_NAME, settled.reason()));
+            results.add(compareUsdKrw(payload));
+            results.add(compareTossFlows());
+        }
+
         Verification.Report report = Verification.Report.of(now.toString(), results);
 
         Map<String, Object> out = new LinkedHashMap<>();
@@ -96,10 +123,10 @@ public class VerificationService {
         out.put("mismatchCount", report.mismatchCount());
         out.put("errorCount", report.errorCount());
         out.put("skippedCount", report.skippedCount());
-        out.put("keys", Map.of("krx", hasKrx, "kis", hasKis));
+        out.put("keys", Map.of("krx", hasKrx, "kis", hasKis, "toss", hasToss));
         out.put("results", report.results().stream().map(this::toMap).toList());
         // 종료 코드 의미를 그대로 유지합니다: 0 불일치 없음 / 1 불일치 발견 / 2 검증 불가
-        out.put("exitCode", (!hasKrx && !hasKis) ? 2 : (report.mismatchCount() > 0 ? 1 : 0));
+        out.put("exitCode", (!hasKrx && !hasKis && !hasToss) ? 2 : (report.mismatchCount() > 0 ? 1 : 0));
         return out;
     }
 
@@ -262,6 +289,91 @@ public class VerificationService {
         return new Verification.Result(name, Verification.MISMATCH, readings, null, null,
                 "1위 종목이 다릅니다. KIS='%s' / Daum='%s'. 가집계 시점 차이일 수도 있으나, "
                         .formatted(kisTop, daumTop) + "Daum 파싱이 깨졌을 가능성을 먼저 확인하세요.");
+    }
+
+    static final String KOSPI_NAME = "코스피 종합지수 종가 (토스 · KIS · yfinance)";
+    static final String FX_NAME = "원/달러 환율 (화면 값 vs 토스 매매기준율)";
+
+    /** 코스피 종합지수: 토스 일봉 종가 vs KIS 현재가 vs yfinance ^KS11. 마감 후에만. */
+    private Verification.Result compareKospi(JsonNode payload) {
+        List<Verification.Reading> readings = List.of(
+                readingFrom(Json.child(payload, "tossKospi"), "토스증권 (공식)"),
+                readingFrom(Json.child(payload, "kisKospi"), "KIS Open API"),
+                readingFrom(Json.child(payload, "yfinanceKospi"), "yfinance ^KS11"));
+        String newest = null;
+        for (String key : List.of("tossKospi", "yfinanceKospi")) {
+            String asOf = Json.asText(Json.child(payload, key), "asOf");
+            if (asOf != null && !asOf.isBlank() && (newest == null || asOf.compareTo(newest) > 0)) {
+                newest = asOf;
+            }
+        }
+        return Verification.compare(KOSPI_NAME, readings, Verification.TOLERANCE_PRICE_PCT, null, newest);
+    }
+
+    /**
+     * 원/달러: 매크로 화면 카드(Yahoo KRW=X 저장본) vs 토스 매매기준율(지금).
+     *
+     * <p>토스의 {@code rate}는 스프레드가 붙은 매수 환율이라 쓰지 않고 {@code midRate}를
+     * 씁니다. 화면 저장본이 1시간보다 오래됐으면 "지금" 환율과 시점이 달라 비교하지 않습니다.
+     */
+    private Verification.Result compareUsdKrw(JsonNode payload) {
+        Verification.Reading screen = storedMacroReading("usdkrw", "Yahoo KRW=X (화면이 쓰는 값)");
+        Verification.Reading toss = readingFrom(Json.child(payload, "tossUsdKrw"), "토스증권 매매기준율 (공식)");
+        if (screen.ok() && toss.ok()) {
+            Optional<Snapshot> snapshot = store.readStored(Datasets.SNAP_MACRO_COLLECTED);
+            long age = snapshot.map(Snapshot::ageSeconds).orElse(Long.MAX_VALUE);
+            if (age > FX_MAX_AGE_SECONDS) {
+                return new Verification.Result(FX_NAME, Verification.SKIPPED, List.of(screen, toss),
+                        TOLERANCE_FX_PCT, null,
+                        "화면 저장본이 %d분 전 값이라 지금 환율과 시점이 다릅니다. 매크로 화면을 새로고침한 뒤 다시 실행하세요."
+                                .formatted(age / 60));
+            }
+        }
+        Verification.Result result = Verification.compare(
+                FX_NAME, List.of(screen, toss), TOLERANCE_FX_PCT, null);
+        if (Verification.MATCH.equals(result.verdict())) {
+            return new Verification.Result(result.name(), result.verdict(), result.readings(),
+                    result.tolerancePct(), result.diffPct(),
+                    "Yahoo는 역외 시세, 토스는 은행 매매기준율이라 몇 원 차이는 정상입니다.");
+        }
+        return result;
+    }
+
+    /** 토스 투자자별 매매대금이 스펙의 등식(매수 합계 = 매도 합계 등)을 지키는지. */
+    private Verification.Result compareTossFlows() {
+        Optional<Snapshot> snapshot = store.readStored(Datasets.SNAP_TOSS_MARKET_FLOWS);
+        if (snapshot.isEmpty() || snapshot.get().payload() == null) {
+            return new Verification.Result(FlowIntegrity.NAME, Verification.ERROR, List.of(), null, null,
+                    "토스 수급 저장본이 없습니다 — 🗄️ 데이터 저장소 상태에서 toss_market_flows를 실행하세요.");
+        }
+        JsonNode markets = snapshot.get().payload().path("markets");
+        Map<String, List<JsonNode>> byMarket = new LinkedHashMap<>();
+        for (String market : List.of("KOSPI", "KOSDAQ")) {
+            byMarket.put(market, Json.array(markets.path(market), "records"));
+        }
+        return FlowIntegrity.check(byMarket);
+    }
+
+    /** 매크로 저장본(화면이 쓰는 값)의 카드 현재가. */
+    private Verification.Reading storedMacroReading(String key, String source) {
+        Optional<Snapshot> snapshot = store.readStored(Datasets.SNAP_MACRO_COLLECTED);
+        if (snapshot.isEmpty() || snapshot.get().payload() == null) {
+            return Verification.Reading.failed(source, "매크로 저장본이 비어 있습니다");
+        }
+        for (JsonNode category : Json.array(snapshot.get().payload(), "categories")) {
+            for (JsonNode item : Json.array(category, "items")) {
+                if (!key.equals(Json.asText(item, "key"))) {
+                    continue;
+                }
+                Double price = Json.asDouble(item, "price");
+                if (price == null || "fail".equals(Json.asText(item, "status"))) {
+                    return Verification.Reading.failed(source, "카드 수집 실패");
+                }
+                String lastTs = Json.asText(item, "lastTs");
+                return new Verification.Reading(source, true, price, lastTs == null ? "" : lastTs);
+            }
+        }
+        return Verification.Reading.failed(source, "저장본에 " + key + " 카드가 없습니다");
     }
 
     private Verification.Reading rankingReading(JsonNode node, String source) {

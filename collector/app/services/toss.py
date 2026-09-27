@@ -404,6 +404,62 @@ def fetch_stock_infos(codes: list[str]) -> dict[str, dict]:
     }
 
 
+# ==============================================================================
+# 교차 검증용 읽기 — 판정은 백엔드(VerificationService)가 합니다
+# ==============================================================================
+def verification_reading(fetch, label: str) -> dict:
+    """
+    검증용 읽기 한 건을 ``{ok, value, asOf, detail}``로 감쌉니다.
+
+    키가 없거나 호출이 실패하면 ok=False와 사유를 돌려줍니다. 예외를 올리지 않는 이유는
+    한 출처의 실패가 다른 항목의 대조까지 막으면 안 되기 때문입니다.
+    """
+    if not has_credentials():
+        return {"ok": False, "value": None, "detail": "TOSS_CLIENT_ID / TOSS_CLIENT_SECRET이 없습니다."}
+    try:
+        return fetch()
+    except TossError as exc:
+        return {"ok": False, "value": None, "detail": f"{label} — {exc}"[:300]}
+    except Exception as exc:  # noqa: BLE001 — 예상 못 한 응답 형식
+        return {"ok": False, "value": None, "detail": f"{label} — 응답 해석 실패: {type(exc).__name__}"}
+
+
+def fetch_index_daily_close(symbol: str = "KOSPI") -> dict:
+    """
+    시장 지표(코스피·코스닥) 일봉의 최신 종가.
+
+    캔들은 최신순이고 ``timestamp``는 봉 시작 시각이라, 앞 10자리가 곧 기준 거래일입니다.
+    장중에는 첫 봉이 아직 닫히지 않은 당일 봉입니다 — 그래서 백엔드는 장 마감 후에만 대조합니다.
+    """
+    result = api_get(f"/api/v1/market-indicators/{symbol}/candles", {"interval": "1d", "count": 2}) or {}
+    candles = [c for c in (result.get("candles") or []) if isinstance(c, dict)]
+    if not candles:
+        return {"ok": False, "value": None, "detail": "응답에 일봉이 없습니다"}
+    value = _float(candles[0].get("closePrice"))
+    as_of = str(candles[0].get("timestamp") or "")[:10] or None
+    if value is None:
+        return {"ok": False, "value": None, "detail": "응답에 종가(closePrice)가 없습니다"}
+    return {"ok": True, "value": value, "asOf": as_of, "detail": f"{symbol} 일봉 · 기준일 {as_of}"}
+
+
+def fetch_usdkrw_mid() -> dict:
+    """
+    원/달러 매매기준율(midRate).
+
+    ``rate``는 매수 환율(스프레드 포함)이라 시장 시세와 비교하면 늘 높게 나옵니다.
+    그래서 은행 간 중간값인 ``midRate``를 씁니다.
+    """
+    result = api_get("/api/v1/exchange-rate", {"baseCurrency": "USD", "quoteCurrency": "KRW"}) or {}
+    value = _float(result.get("midRate"))
+    if value is None:
+        return {"ok": False, "value": None, "detail": "응답에 매매기준율(midRate)이 없습니다"}
+    valid_from = str(result.get("validFrom") or "")
+    return {
+        "ok": True, "value": value,
+        "detail": f"매매기준율 · {valid_from[:16].replace('T', ' ')}" if valid_from else "매매기준율",
+    }
+
+
 def test_connection_flows() -> dict:
     """
     수급 레이더 진단용 — 화면이 쓰는 투자자별 매매 경로를 실제로 한 번 부릅니다.

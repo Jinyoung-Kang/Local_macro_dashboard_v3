@@ -319,3 +319,59 @@ def test_toss_ranking_without_snapshot_explains_why(store):
     from app.services import radar
     assert radar.fetch_toss_ranking("KOSPI", "외국인", "순매수", 30) == []
     assert radar._TOSS_LAST_REASON["value"]
+
+
+# ------------------------------------------------------------------ 교차 검증용 읽기
+def test_index_daily_close_uses_newest_candle_and_date(monkeypatch):
+    monkeypatch.setattr(toss, "api_get", lambda path, params=None, timeout=10.0: {
+        "candles": [
+            {"timestamp": "2026-09-23T09:00:00+09:00", "closePrice": "3456.78"},
+            {"timestamp": "2026-09-22T09:00:00+09:00", "closePrice": "3400.00"},
+        ],
+    })
+    reading = toss.fetch_index_daily_close("KOSPI")
+    assert reading["ok"] is True
+    assert reading["value"] == 3456.78
+    assert reading["asOf"] == "2026-09-23"
+
+
+def test_usdkrw_uses_mid_rate_not_buy_rate(monkeypatch):
+    monkeypatch.setattr(toss, "api_get", lambda path, params=None, timeout=10.0: {
+        "rate": "1380.5", "midRate": "1375", "validFrom": "2026-09-23T15:30:00+09:00",
+    })
+    reading = toss.fetch_usdkrw_mid()
+    assert reading["ok"] is True
+    assert reading["value"] == 1375.0  # 스프레드가 붙은 rate(1380.5)가 아님
+
+
+def test_verification_reading_never_raises(monkeypatch):
+    monkeypatch.setattr(toss, "has_credentials", lambda: True)
+
+    def boom():
+        raise toss.TossForbidden("403")
+
+    reading = toss.verification_reading(boom, "환율")
+    assert reading["ok"] is False
+    assert "403" in reading["detail"]
+
+
+def test_verification_reading_without_keys(monkeypatch):
+    monkeypatch.setattr(toss, "has_credentials", lambda: False)
+    reading = toss.verification_reading(lambda: {"ok": True, "value": 1.0}, "환율")
+    assert reading["ok"] is False
+    assert "TOSS_CLIENT_ID" in reading["detail"]
+
+
+def test_market_fixture_honors_spec_identities():
+    """스펙: 4개 분류 매수 합계 = 매도 합계, 기관 합계 = 세부 7개 합. 테스트 입력도 이 등식을 지킵니다."""
+    for rec in _fixture("market_investor_trading_kospi.json")["result"]["records"]:
+        record = toss.normalize_market_record(rec)
+        sides = [record["investors"][key] for key in toss.INVESTORS]
+        if any(side is None or side["buy"] is None or side["sell"] is None for side in sides):
+            continue  # 잠정치
+        assert sum(s["buy"] for s in sides) == sum(s["sell"] for s in sides)
+        if record["breakdown"]:
+            for field in ("buy", "sell"):
+                assert record["investors"]["institution"][field] == sum(
+                    part[field] for part in record["breakdown"].values()
+                )

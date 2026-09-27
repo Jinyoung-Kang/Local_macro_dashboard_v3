@@ -618,7 +618,7 @@ export interface VerificationResponse {
   mismatchCount?: number;
   errorCount?: number;
   skippedCount?: number;
-  keys?: { krx: boolean; kis: boolean };
+  keys?: { krx: boolean; kis: boolean; toss?: boolean };
   results?: VerificationResult[];
   exitCode?: number;
 }

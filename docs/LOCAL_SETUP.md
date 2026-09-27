@@ -160,7 +160,7 @@ APP_PASSWORD=원하는_비밀번호
 | `KRX_API_KEY` | <http://data.krx.co.kr> | KRX 선물이 KODEX 200 기반 **추정치** |
 | `KIS_APP_KEY` / `KIS_APP_SECRET` | <https://apiportal.koreainvestment.com> | 장중 수급 가집계·교차 검증 꺼짐 |
 | `LS_APP_KEY` / `LS_APP_SECRET` | LS증권 홈 > 매매시스템 > API | 수급 레이더의 LS 단계만 건너뜀 |
-| `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | 토스증권 Open API | 토스 테스트 메뉴 + 레이더·국내 파생의 투자자별 매매 카드가 꺼짐. 토스 개발자 콘솔의 허용 IP에 이 맥의 공인 IP 필요 |
+| `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | 토스증권 Open API | 토스 테스트 메뉴 + 레이더·국내 파생의 투자자별 매매 카드 + 교차 검증의 토스 3항목이 꺼짐. 토스 개발자 콘솔의 허용 IP에 이 맥의 공인 IP 필요 |
 | `NVIDIA_API_KEY` 등 AI 키 | <https://build.nvidia.com> 등 | AI 메뉴만 꺼짐 |
 | `SEC_USER_AGENT` | 키가 아니라 **본인 이메일** | 13F 수집만 멈춤 (나머지는 정상) |
 
