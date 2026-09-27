@@ -13,6 +13,8 @@ import com.macrodash.support.SecretRedactor;
 import com.macrodash.support.UpstreamUnavailableException;
 import org.springframework.stereotype.Service;
 
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -68,8 +70,11 @@ public class DataStatusService {
             out.put("collectorReachable", false);
             out.put("message",
                     "수집기에 연결하지 못했습니다. 아래 정보는 데이터베이스에서 직접 읽은 값입니다.");
-            out.put("lastRun", repository.readLastRun().map(DataStatusService::redactDetail).orElse(null));
-            out.put("taskSummary", redactDetails(repository.readTaskSummary()));
+            // 수집기가 주는 것과 같은 모양으로 바꿔 내보냅니다(아래 runView·taskView 설명).
+            Optional<Map<String, Object>> lastRun = repository.readLastRun();
+            out.put("lastRun", lastRun.map(DataStatusService::runView).orElse(null));
+            out.put("lastRunStatus", resolveRunStatus(lastRun.orElse(null), Instant.now()));
+            out.put("taskSummary", repository.readTaskSummary().stream().map(DataStatusService::taskView).toList());
             out.put("timeseriesRows", repository.countTimeseries());
             out.put("observationRows", repository.countObservations());
         }
@@ -154,28 +159,14 @@ public class DataStatusService {
         if (payload.isPresent()) {
             return Map.of("history", redactDetails(payload.get().get("history")));
         }
-        return Map.of("history", redactDetails(repository.readTaskHistory(task, rows)));
+        return Map.of("history",
+                repository.readTaskHistory(task, rows).stream().map(DataStatusService::taskView).toList());
     }
 
     // ------------------------------------------------------------ 실패 사유의 비밀값 가림
     // 사유는 예외 문구 그대로라 요청 URL(쿼리의 API 키)이 섞일 수 있고, 화면에 나가 복사됩니다.
     // 수집기도 저장·응답 전에 가리지만, 수집기가 죽어 DB에서 바로 읽는 경로와 가리기 전에
     // 저장된 기록이 있어 내보내기 직전에 한 번 더 거릅니다(오류 모음은 StatusIssues가 가림).
-
-    private static List<Map<String, Object>> redactDetails(List<Map<String, Object>> rows) {
-        rows.forEach(DataStatusService::redactDetail);
-        return rows;
-    }
-
-    private static Map<String, Object> redactDetail(Map<String, Object> row) {
-        if (row.get("detail") instanceof String detail) {
-            String redacted = SecretRedactor.redact(detail);
-            if (!redacted.equals(detail)) {     // 가릴 것이 있을 때만 바꿉니다
-                row.put("detail", redacted);
-            }
-        }
-        return row;
-    }
 
     /** 수집기 응답(객체 하나 또는 배열)의 detail. 응답을 파싱한 사본이라 그 자리에서 바꿉니다. */
     private static JsonNode redactDetails(JsonNode node) {
@@ -191,6 +182,82 @@ public class DataStatusService {
         if (node instanceof ObjectNode object && object.path("detail").isTextual()) {
             object.put("detail", SecretRedactor.redact(object.path("detail").asText()));
         }
+    }
+
+    // ------------------------------------------------------------ 수집기가 꺼졌을 때의 응답 모양
+    // DB에서 바로 읽은 행을 수집기 /status·/task-history와 같은 모양으로 바꿉니다
+    // (collector/app/store.py의 _serialize_run·_serialize_task — StatusShapeParityTest가 대조).
+    // 예전에는 DB 행을 그대로 내보내 started_at·ok_count 같은 이름이 나갔고, 화면이 읽지 못해
+    // "기록 없음 · 0 / 0 · NaNs"가 보였습니다(BUG-06).
+
+    /** 'running' 기록을 비정상 종료로 보는 heartbeat 공백 (수집기 store.STALE_RUN_SECONDS와 같음). */
+    static final Duration STALE_RUN = Duration.ofMinutes(30);
+
+    /** collector_runs 한 행 → 수집기 lastRun 모양. 실패 사유의 비밀값은 가립니다. */
+    static Map<String, Object> runView(Map<String, Object> row) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", row.get("id"));
+        out.put("startedAt", iso(row.get("started_at")));
+        out.put("finishedAt", iso(row.get("finished_at")));
+        out.put("heartbeatAt", iso(row.get("heartbeat_at")));
+        out.put("status", row.get("status"));
+        out.put("okCount", row.get("ok_count"));
+        out.put("failCount", row.get("fail_count"));
+        out.put("detail", redacted(row.get("detail")));
+        out.put("pid", row.get("pid"));
+        out.put("host", row.get("host"));
+        out.put("groupName", row.get("group_name"));
+        return out;
+    }
+
+    /** collector_task_runs 한 행 → 수집기 태스크 기록 모양 (요약·이력 공통). */
+    static Map<String, Object> taskView(Map<String, Object> row) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("task", row.get("task"));
+        out.put("speed", row.get("speed"));
+        out.put("status", row.get("status"));
+        out.put("startedAt", iso(row.get("started_at")));
+        out.put("durationMs", row.get("duration_ms"));
+        out.put("detail", redacted(row.get("detail")));
+        out.put("runId", row.get("run_id"));
+        return out;
+    }
+
+    /**
+     * 기록된 status를 실제 상태로 보정합니다 — 수집기 resolve_run_status와 같은 규칙.
+     *
+     * <p>'running'인데 heartbeat(없으면 시작 시각)가 30분 넘게 끊겼으면 'interrupted'.
+     * 수집기는 PID 생존도 보지만, 백엔드는 다른 컨테이너라 PID를 볼 수 없어 시각만 봅니다.
+     *
+     * @param row 가장 최근 실행 기록. 없으면 null
+     * @return none · ok · partial · fail · running · interrupted …
+     */
+    static String resolveRunStatus(Map<String, Object> row, Instant now) {
+        if (row == null) {
+            return "none";
+        }
+        Object status = row.get("status");
+        if (!"running".equals(status)) {
+            return status == null ? "?" : status.toString();
+        }
+        Object beat = row.get("heartbeat_at") != null ? row.get("heartbeat_at") : row.get("started_at");
+        if (beat instanceof Timestamp timestamp
+                && Duration.between(timestamp.toInstant(), now).compareTo(STALE_RUN) > 0) {
+            return "interrupted";
+        }
+        return "running";
+    }
+
+    /** DB 시각 → ISO-8601 (수집기 응답과 같은 형식). 화면의 formatKst가 그대로 읽습니다. */
+    private static String iso(Object value) {
+        if (value instanceof Timestamp timestamp) {
+            return timestamp.toInstant().toString();
+        }
+        return value == null ? null : value.toString();
+    }
+
+    private static Object redacted(Object detail) {
+        return detail instanceof String text ? SecretRedactor.redact(text) : detail;
     }
 
     /** 수동 새로고침: 기준 시각을 갱신하고, auto 모드면 fast 작업을 함께 돌립니다. */
@@ -294,10 +361,6 @@ public class DataStatusService {
         if (rows.isEmpty()) {
             return null;
         }
-        Object started = rows.get(0).get("started_at");
-        if (started instanceof java.sql.Timestamp timestamp) {
-            return timestamp.toInstant().toString();
-        }
-        return started == null ? null : started.toString();
+        return iso(rows.get(0).get("started_at"));
     }
 }

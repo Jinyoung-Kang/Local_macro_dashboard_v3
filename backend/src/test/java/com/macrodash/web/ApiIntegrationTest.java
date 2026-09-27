@@ -456,6 +456,54 @@ class ApiIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("수집기가 꺼져 DB에서 읽어도 상태 화면은 수집기와 같은 모양(camelCase)으로 받는다")
+    void statusFallbackUsesTheCollectorShape() {
+        // 예전에는 DB 행을 그대로 내보내(started_at·ok_count …) 화면이 "기록 없음 · 0 / 0 · NaNs"를
+        // 그렸습니다. 이 테스트의 수집기 주소(localhost:1)는 닿지 않으므로 DB 폴백 경로를 탑니다.
+        String prefix = "it_fallback_";
+        Long runId = jdbc.queryForObject(
+                "INSERT INTO collector_runs (started_at, finished_at, status, ok_count, fail_count, detail, "
+                        + "pid, host, heartbeat_at, group_name) VALUES (now() - interval '10 minutes', "
+                        + "now() - interval '9 minutes', 'partial', 17, 2, 'fsc_prices 실패', 1, 'it-host', "
+                        + "now() - interval '9 minutes', 'slow') RETURNING id", Long.class);
+        try {
+            jdbc.update("INSERT INTO collector_task_runs (run_id, task, speed, status, started_at, duration_ms, detail) "
+                    + "VALUES (?, ?, 'slow', 'ok', now() - interval '10 minutes', 1234, '12/12')", runId, prefix + "fred");
+
+            JsonNode status = authorizedGet("/api/status");
+            assertThat(status.path("collectorReachable").asBoolean(true)).isFalse();
+            assertThat(status.path("lastRunStatus").asText()).isEqualTo("partial");
+            JsonNode lastRun = status.path("lastRun");
+            assertThat(lastRun.path("id").asLong()).isEqualTo(runId);
+            assertThat(lastRun.path("okCount").asInt()).isEqualTo(17);
+            assertThat(lastRun.path("failCount").asInt()).isEqualTo(2);
+            assertThat(lastRun.path("groupName").asText()).isEqualTo("slow");
+            assertThat(java.time.Instant.parse(lastRun.path("startedAt").asText())).isNotNull();
+            assertThat(lastRun.has("ok_count") || lastRun.has("started_at")).isFalse();
+
+            JsonNode task = null;
+            for (JsonNode row : status.path("taskSummary")) {
+                if ((prefix + "fred").equals(row.path("task").asText())) {
+                    task = row;
+                }
+            }
+            assertThat(task).isNotNull();
+            assertThat(task.path("durationMs").asInt()).isEqualTo(1234);
+            assertThat(task.path("runId").asLong()).isEqualTo(runId);
+            assertThat(java.time.Instant.parse(task.path("startedAt").asText())).isNotNull();
+            assertThat(task.has("duration_ms") || task.has("started_at")).isFalse();
+
+            JsonNode history = authorizedGet("/api/status/history?task=" + prefix + "fred&limit=1").path("history");
+            assertThat(history).hasSize(1);
+            assertThat(history.get(0).path("durationMs").asInt()).isEqualTo(1234);
+            assertThat(history.get(0).has("started_at")).isFalse();
+        } finally {
+            jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+            jdbc.update("DELETE FROM collector_runs WHERE id = ?", runId);
+        }
+    }
+
     private void insertTaskRun(String task, String status, String startedAt) {
         jdbc.update("INSERT INTO collector_task_runs (task, speed, status, started_at, duration_ms) "
                 + "VALUES (?, 'fast', ?, ?::timestamptz, 1)", task, status, startedAt);

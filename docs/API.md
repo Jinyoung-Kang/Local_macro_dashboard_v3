@@ -132,7 +132,7 @@
 
 | 경로 | 설명 |
 |---|---|
-| `GET /api/status` | 수집 현황·신선도·누락 데이터셋. 실패 사유(`detail`)의 비밀값은 가려져 있습니다 |
+| `GET /api/status` | 수집 현황·신선도·누락 데이터셋. 실패 사유(`detail`)의 비밀값은 가려져 있습니다. 수집기가 꺼져 있으면 DB에서 직접 읽어 **같은 모양**으로 답합니다(`collectorReachable: false`, 키 보유·누락 목록은 빠짐) |
 | `GET /api/status/tasks` | 수집 작업 목록 |
 | `GET /api/status/history?task=&limit=40` | 태스크 실행 이력 (`limit` 1~200, 비밀값 가림) |
 | `POST /api/status/refresh?runFast=true` | 수동 새로고침 |
