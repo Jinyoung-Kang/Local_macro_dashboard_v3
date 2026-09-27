@@ -100,11 +100,29 @@ else
 fi
 
 # --- 접속 비밀번호 --------------------------------------------------------
-if grep -q '^APP_PASSWORD=admin1234@' .env 2>/dev/null; then
-  warn "APP_PASSWORD가 기본값(admin1234@)입니다"
-  note ".env에서 바꾸는 것을 권합니다. 이 값 하나가 대시보드 전체의 접근 통제입니다."
+# 비었거나 옛 공개 기본값(admin1234@)이면 무작위로 만듭니다. 이 값 하나가 대시보드 전체의
+# 접근 통제이고, 화면은 기본으로 같은 와이파이에 열립니다. 백엔드도 이 두 경우에는 로그인을
+# 받지 않습니다(실행마다 임시 비밀번호를 만들어 로그에 남김).
+if ! grep -q '^APP_PASSWORD=.' .env 2>/dev/null || grep -Eq '^APP_PASSWORD=admin1234@[[:space:]]*(#.*)?$' .env; then
+  if command -v openssl >/dev/null 2>&1; then
+    # 헷갈리는 문자(0 O 1 l I)와 기호를 빼 손으로 옮겨 적기 쉽게 합니다.
+    PASSWORD=$(openssl rand -base64 48 | tr -dc 'A-HJ-NP-Za-km-z2-9' | cut -c1-16)
+    if grep -q '^APP_PASSWORD=' .env 2>/dev/null; then
+      tmp=$(mktemp)
+      awk -v value="$PASSWORD" \
+        '/^APP_PASSWORD=/ { print "APP_PASSWORD=" value; next } { print }' .env > "$tmp"
+      mv "$tmp" .env
+    else
+      printf 'APP_PASSWORD=%s\n' "$PASSWORD" >> .env
+    fi
+    ok "APP_PASSWORD(화면 접속 비밀번호)를 무작위 값으로 만들었습니다: $PASSWORD"
+    note "화면 로그인에 씁니다. 원하는 값으로 바꾸려면 .env의 APP_PASSWORD를 고치고 'make up' 하세요."
+  else
+    warn "openssl이 없어 APP_PASSWORD를 만들지 못했습니다. .env의 APP_PASSWORD에 직접 넣으세요"
+    note "비었거나 admin1234@면 로그인이 되지 않습니다(백엔드 로그의 임시 비밀번호로만 들어갈 수 있음)."
+  fi
 else
-  ok "APP_PASSWORD가 기본값이 아닙니다"
+  ok "APP_PASSWORD가 설정돼 있습니다 (기본값 아님)"
 fi
 
 # --- API 키 현황 ----------------------------------------------------------

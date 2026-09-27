@@ -102,6 +102,27 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("로그아웃한 세션 쿠키는 만료 전이라도 다시 쓸 수 없다 (SEC-07)")
+    void loggedOutSessionCannotBeReused() {
+        // 예전에는 로그아웃이 브라우저 쿠키만 지워서, 쿠키 값을 가진 쪽은 12시간 동안 계속 쓸 수 있었습니다.
+        String stolen = login("test-password");
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, stolen);
+        assertThat(rest.exchange(url("/api/macro/overview"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        rest.exchange(url("/api/auth/logout"), HttpMethod.POST, new HttpEntity<>(null, headers), String.class);
+
+        assertThat(rest.exchange(url("/api/macro/overview"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        JsonNode session = rest.exchange(url("/api/auth/session"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), JsonNode.class).getBody();
+        assertThat(session.path("authenticated").asBoolean(true)).isFalse();
+        // 다른 세션(이 테스트의 기본 로그인)은 그대로입니다.
+        assertThat(authorizedGet("/api/auth/session").path("authenticated").asBoolean()).isTrue();
+    }
+
+    @Test
     @DisplayName("잘못된 비밀번호는 거부된다")
     void rejectsWrongPassword() {
         ResponseEntity<String> response = rest.postForEntity(

@@ -85,6 +85,71 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("비밀번호를 바꾸면 이전 비밀번호로 받은 세션은 무효가 된다 (SEC-07)")
+    void passwordChangeInvalidatesOldSessions() {
+        // 비밀번호는 .env에서 바꾸고 재시작합니다. 서명 키(JWT_SECRET)는 그대로라
+        // 예전에는 바꾸기 전에 받은 토큰이 만료(12시간)까지 계속 통했습니다.
+        String before = authService.issueToken();
+
+        AppProperties changed = new AppProperties();
+        changed.setPassword("new-password-after-change");
+        changed.setJwtSecret("test-secret-key-that-is-long-enough-32b");
+        changed.setSessionMinutes(60);
+        AuthService afterChange = new AuthService(changed);
+
+        assertThat(afterChange.isValid(before)).isFalse();
+        assertThat(afterChange.isValid(afterChange.issueToken())).isTrue();
+    }
+
+    @Test
+    @DisplayName("로그아웃한 토큰만 거부되고 다른 세션은 그대로다 (SEC-07)")
+    void revokedTokenIsRejected() {
+        String loggedOut = authService.issueToken();
+        String other = authService.issueToken();
+
+        authService.revoke(loggedOut);
+        authService.revoke(null);            // 쿠키 없이 로그아웃해도 문제없어야 합니다
+        authService.revoke("not-a-token");
+
+        assertThat(authService.isValid(loggedOut)).isFalse();
+        assertThat(authService.isValid(other)).isTrue();
+    }
+
+    @Test
+    @DisplayName("토큰에는 비밀번호도, 서명 키 없이 맞춰 볼 수 있는 단순 해시도 들어가지 않는다")
+    void tokenDoesNotCarryThePassword() {
+        String payload = new String(java.util.Base64.getUrlDecoder().decode(authService.issueToken().split("\\.")[1]),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(payload).doesNotContain("s3cret-password");
+        byte[] other = "another-secret-key-that-is-long-enough".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        // 같은 비밀번호라도 서명 키가 다르면 지문이 다릅니다(키 없이 사전 대입 불가).
+        assertThat(AuthService.passwordStamp(other, "s3cret-password"))
+                .isNotEqualTo(AuthService.passwordStamp(
+                        "test-secret-key-that-is-long-enough-32b".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "s3cret-password"));
+    }
+
+    @Test
+    @DisplayName("공개된 기본 비밀번호·빈 비밀번호로는 로그인할 수 없다 (SEC-04)")
+    void publicDefaultPasswordIsNeverAccepted() {
+        // admin1234@는 저장소·문서에 적혀 있던 값입니다. 화면은 기본으로 같은 와이파이에 열리므로
+        // 이 값이 통하면 누구나 들어올 수 있었습니다(예전에는 경고 로그만 남겼습니다).
+        for (String configured : new String[]{"admin1234@", "", "   ", null}) {
+            AppProperties p = new AppProperties();
+            p.setPassword(configured);
+            p.setJwtSecret("test-secret-key-that-is-long-enough-32b");
+            AuthService service = new AuthService(p);
+
+            assertThat(service.passwordMatches("admin1234@")).as("설정값 %s", configured).isFalse();
+            assertThat(service.passwordMatches("")).as("설정값 %s", configured).isFalse();
+            // 대신 이번 실행 동안만 쓰는 임시 비밀번호로는 들어갈 수 있습니다(로그에 한 번 표시).
+            String temporary = service.effectivePassword();
+            assertThat(temporary).hasSizeGreaterThanOrEqualTo(16);
+            assertThat(service.passwordMatches(temporary)).isTrue();
+        }
+    }
+
+    @Test
     @DisplayName("충분히 긴 설정 키는 그대로 쓴다 (재시작해도 세션 유지)")
     void strongSecretIsStable() {
         byte[] key = AuthService.signingSecret("test-secret-key-that-is-long-enough-32b");

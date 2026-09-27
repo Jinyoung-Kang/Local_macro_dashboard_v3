@@ -12,6 +12,4 @@ numpy==2.2.1
 yfinance==1.7.0
 pykrx==1.2.8
 
-# 개발/테스트
-pytest==9.1.1
-httpx==0.28.1
+# 테스트·린트 도구는 requirements-dev.txt에 있습니다(운영 이미지에 넣지 않음).

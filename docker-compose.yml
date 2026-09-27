@@ -8,7 +8,7 @@
 #   frontend  화면 (Next.js)
 #
 # 실행:  docker compose up -d --build
-# 접속:  http://localhost:3000  (기본 비밀번호 admin1234@ — .env에서 변경하세요)
+# 접속:  http://localhost:3000  (비밀번호: .env의 APP_PASSWORD — 'make setup'이 만들어 줍니다)
 #
 # [포트를 어디까지 여는가]
 # postgres·collector는 **이 맥에서만** 접근하면 됩니다(127.0.0.1 고정).
@@ -105,7 +105,8 @@ services:
       COLLECTOR_URL: http://collector:8000
       COLLECTOR_API_TOKEN: "${COLLECTOR_API_TOKEN:-}"
       DASHBOARD_READ_MODE: "${DASHBOARD_READ_MODE:-auto}"
-      APP_PASSWORD: "${APP_PASSWORD:-admin1234@}"
+      # 기본값을 두지 않습니다. 비었거나 옛 공개 기본값이면 백엔드가 로그인을 받지 않습니다.
+      APP_PASSWORD: "${APP_PASSWORD:-}"
       JWT_SECRET: "${JWT_SECRET:-change-me-please-change-me-please-32b}"
       # 비워 두면 FRONTEND_PORT를 따라갑니다. 예전에는 3000으로 고정이라 포트만 바꾸면
       # 로그인(CORS)이 조용히 막혔습니다.

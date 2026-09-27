@@ -13,10 +13,11 @@
 |---|---|---|
 | POST | `/api/auth/login` | `{"password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict). 틀리면 401, 연속 5회 실패 후 **429 + `Retry-After`**(30초부터 2배씩, 최대 15분) |
 | GET | `/api/auth/session` | `{"authenticated": bool, "readMode": "auto" \| "store_only" \| "live_only"}`. `readMode`는 로그인한 경우에만 옵니다(사이드바 표시용 — 예전에는 이 한 줄 때문에 화면이 `/api/status`를 불렀습니다) |
-| POST | `/api/auth/logout` | 쿠키 만료 |
+| POST | `/api/auth/logout` | 쿠키 만료 + 그 세션 토큰을 서버에서도 거부(만료 시각까지, 백엔드 재시작 전까지) |
 
 로그인·세션·헬스체크를 제외한 모든 `/api/**`는 유효한 세션 쿠키를 요구합니다
-(없으면 401).
+(없으면 401). `.env`의 `APP_PASSWORD`를 바꾸고 재시작하면 그전에 받은 세션은 모두 무효가
+됩니다(토큰에 비밀번호 지문이 들어 있음).
 
 ### 모든 응답에 공통인 것
 

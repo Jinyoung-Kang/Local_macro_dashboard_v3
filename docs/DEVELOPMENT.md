@@ -22,7 +22,7 @@ make dev-frontend     # 터미널 3 — 핫 리로드
 ```bash
 cd collector
 python3.11 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-dev.txt   # 운영 의존성 + 테스트·린트 도구
 ```
 
 `make`가 `collector/.venv`를 먼저 찾으므로, conda base 같은 다른 파이썬이 PATH
