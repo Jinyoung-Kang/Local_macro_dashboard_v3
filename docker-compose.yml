@@ -35,8 +35,10 @@ services:
       LANG: C.UTF-8
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # 최초 기동 시 스키마를 적용합니다(멱등).
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      # 최초 기동 시 기본 스키마(V1)만 만듭니다. 이후 버전(V2~)은 수집기가 기동할 때
+      # 번호 순서로 적용합니다(collector/app/migrations.py). 디렉터리를 통째로 넣으면
+      # 이름 순으로 실행돼 V10이 V2보다 먼저 돕니다.
+      - ./db/migrations/V1__init.sql:/docker-entrypoint-initdb.d/V1__init.sql:ro
     ports:
       - "127.0.0.1:${DATABASE_PORT:-5432}:5432"
     healthcheck:
@@ -59,7 +61,7 @@ services:
       COLLECTOR_WEEKLY_INTERVAL: "${COLLECTOR_WEEKLY_INTERVAL:-43200}"
       COLLECTOR_API_TOKEN: "${COLLECTOR_API_TOKEN:-}"
       COLLECTOR_INIT_SCHEMA: "true"
-      MACRO_SCHEMA_SQL: /app/db/migrations/V1__init.sql
+      MACRO_MIGRATIONS_DIR: /app/db/migrations
       # 외부 API 키 — 없으면 해당 기능만 비활성화됩니다.
       FRED_API_KEY: "${FRED_API_KEY:-}"
       KRX_API_KEY: "${KRX_API_KEY:-}"

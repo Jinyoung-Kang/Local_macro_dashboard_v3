@@ -44,7 +44,7 @@ def store(database_url, monkeypatch):
     with psycopg.connect(database_url, autocommit=True) as conn:
         conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
 
-    store_module.init_schema(_schema_path())
+    store_module.init_schema(_migrations_dir())
     yield store_module
 
     store_module.close_pool()
@@ -52,8 +52,6 @@ def store(database_url, monkeypatch):
         conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
 
 
-def _schema_path() -> str:
+def _migrations_dir() -> str:
     here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.normpath(
-        os.path.join(here, "..", "..", "db", "migrations", "V1__init.sql")
-    )
+    return os.path.normpath(os.path.join(here, "..", "..", "db", "migrations"))

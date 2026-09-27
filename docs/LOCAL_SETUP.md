@@ -265,7 +265,7 @@ make backup             # DB 백업 → backups/
 
 ```bash
 cd ~/Projects/Local-macro-dashboard-v2
-make infra      # postgres만 기동 (스키마도 자동 적용)
+make infra      # postgres만 기동 (기본 스키마 자동 적용, 이후 버전은 수집기가 기동할 때 적용)
 ```
 
 ```bash

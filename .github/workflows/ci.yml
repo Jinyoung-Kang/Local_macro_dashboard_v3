@@ -45,10 +45,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 스키마 적용
+      - name: 스키마 적용 (번호 순서)
         env:
           PGPASSWORD: macro
-        run: psql -h localhost -U macro -d macrodash_test -v ON_ERROR_STOP=1 -f db/migrations/V1__init.sql
+        run: |
+          for f in $(ls db/migrations/V*__*.sql | sort -t V -k 2 -n); do
+            psql -h localhost -U macro -d macrodash_test -v ON_ERROR_STOP=1 -q -f "$f"
+          done
 
       - name: 테스트
         working-directory: collector
@@ -84,10 +87,13 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: 스키마 적용
+      - name: 스키마 적용 (번호 순서)
         env:
           PGPASSWORD: macro
-        run: psql -h localhost -U macro -d macrodash_test -v ON_ERROR_STOP=1 -f db/migrations/V1__init.sql
+        run: |
+          for f in $(ls db/migrations/V*__*.sql | sort -t V -k 2 -n); do
+            psql -h localhost -U macro -d macrodash_test -v ON_ERROR_STOP=1 -q -f "$f"
+          done
 
       - name: 빌드 및 테스트
         working-directory: backend

@@ -32,7 +32,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
-from . import catalog, settings
+from . import catalog, migrations, settings
 
 logger = logging.getLogger(__name__)
 
@@ -69,56 +69,51 @@ def connection():
         yield conn
 
 
-def init_schema(sql_path: str | None = None) -> None:
+def init_schema(path: str | None = None) -> None:
     """
-    스키마를 적용합니다(멱등).
+    스키마를 최신 버전으로 맞춥니다 — db/migrations에서 아직 적용하지 않은 파일만
+    번호 순서로 적용합니다(app/migrations.py).
 
-    운영에서는 db/migrations를 Flyway 등으로 적용하지만, 로컬 개발과 테스트에서
-    수집기 단독으로 띄울 수 있어야 하므로 같은 SQL을 직접 실행할 수단을 둡니다.
+    쓰기는 수집기의 몫이라 수집기가 기동할 때 적용합니다. 백엔드는 읽기만 합니다.
+
+    :param path: 마이그레이션 디렉터리. 파일 경로를 주면 그 파일이 있는 디렉터리를 씁니다
+    :raises psycopg.Error: 적용에 실패하면 전부 되돌리고 그대로 올립니다(기동 중단)
     """
-    path = _resolve_schema_path(sql_path)
-    if path is None:
+    directory = _resolve_migrations_dir(path)
+    if directory is None:
         logger.warning(
-            "스키마 파일을 찾지 못했습니다. MACRO_SCHEMA_SQL로 경로를 지정하세요."
+            "마이그레이션 디렉터리를 찾지 못했습니다. MACRO_MIGRATIONS_DIR로 경로를 지정하세요."
         )
         return
 
-    try:
-        sql = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        logger.warning("스키마 파일을 읽지 못했습니다 (%s): %s", path, exc)
-        return
-
+    found = migrations.discover(directory)
     with connection() as conn:
-        conn.execute(sql)
-    logger.info("저장 계층 준비 완료: %s", path)
+        migrations.apply_pending(conn, found)
+    logger.info("저장 계층 준비 완료: %s (V%d까지)", directory, found[-1].version)
 
 
-def _resolve_schema_path(sql_path: str | None) -> Path | None:
+def _resolve_migrations_dir(path: str | None) -> Path | None:
     """
-    스키마 SQL의 위치를 찾습니다.
+    마이그레이션 디렉터리를 찾습니다.
 
     배포 형태마다 경로가 다릅니다.
-      - 저장소 실행 : <repo>/db/migrations/V1__init.sql
-      - 컨테이너    : /app/db/migrations/V1__init.sql (compose가 마운트)
-    명시 인자 → 환경변수 → 관례적 위치 순으로 찾고, 없으면 None을 돌려줍니다
-    (잘못된 경로를 조용히 만들어 내지 않습니다).
+      - 저장소 실행 : <repo>/db/migrations
+      - 컨테이너    : /app/db/migrations (compose가 마운트)
+    명시 인자 → MACRO_MIGRATIONS_DIR → MACRO_SCHEMA_SQL(예전 설정: V1 파일 경로) →
+    관례적 위치 순으로 찾고, 없으면 None을 돌려줍니다(잘못된 경로를 조용히 만들어 내지 않습니다).
     """
     candidates: list[Path] = []
-    if sql_path:
-        candidates.append(Path(sql_path))
-
-    env_path = os.environ.get("MACRO_SCHEMA_SQL", "").strip()
-    if env_path:
-        candidates.append(Path(env_path))
+    for value in (path, os.environ.get("MACRO_MIGRATIONS_DIR"), os.environ.get("MACRO_SCHEMA_SQL")):
+        if value and value.strip():
+            candidate = Path(value.strip())
+            candidates.append(candidate.parent if candidate.suffix == ".sql" else candidate)
 
     here = Path(__file__).resolve()
-    relative = Path("db") / "migrations" / "V1__init.sql"
     # app/ → collector/ → <repo> 순으로 거슬러 올라가며 찾습니다.
-    candidates.extend(parent / relative for parent in here.parents)
+    candidates.extend(parent / "db" / "migrations" for parent in here.parents)
 
     for candidate in candidates:
-        if candidate.is_file():
+        if candidate.is_dir() and any(candidate.glob("V*__*.sql")):
             return candidate
     return None
 
