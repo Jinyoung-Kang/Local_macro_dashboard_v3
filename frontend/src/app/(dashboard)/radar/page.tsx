@@ -637,6 +637,11 @@ function HistoryPanel({
 
   const dates = data?.dates ?? [];
   const selectedDate = date || data?.obsDate || "";
+  // 조건을 바꿔도 고른 거래일은 그대로 둡니다. 새 조건에 그날 기록이 없으면 목록(기록이 있는
+  // 날만)에 없으므로 앞에 붙입니다 — 안 붙이면 선택 상자는 다른 날을 보이는데 표는 고른 날
+  // 기준이라, 둘이 서로 다른 날을 가리켰습니다.
+  const dateOptions =
+    selectedDate && !dates.includes(selectedDate) ? [selectedDate, ...dates] : dates;
   const rows = (data?.rows ?? []).filter((row) => row.obsDate === selectedDate).slice(0, 30);
 
   return (
@@ -649,7 +654,7 @@ function HistoryPanel({
             label="거래일"
             value={selectedDate}
             onChange={setDate}
-            options={dates.map((value) => ({ value, label: value }))}
+            options={dateOptions.map((value) => ({ value, label: value }))}
           />
         ) : undefined
       }
