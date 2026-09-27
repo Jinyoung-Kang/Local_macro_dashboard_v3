@@ -85,6 +85,51 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("비밀번호를 바꾸면 이전 비밀번호로 받은 세션은 무효가 된다 (SEC-07)")
+    void passwordChangeInvalidatesOldSessions() {
+        // 비밀번호는 .env에서 바꾸고 재시작합니다. 서명 키(JWT_SECRET)는 그대로라
+        // 예전에는 바꾸기 전에 받은 토큰이 만료(12시간)까지 계속 통했습니다.
+        String before = authService.issueToken();
+
+        AppProperties changed = new AppProperties();
+        changed.setPassword("new-password-after-change");
+        changed.setJwtSecret("test-secret-key-that-is-long-enough-32b");
+        changed.setSessionMinutes(60);
+        AuthService afterChange = new AuthService(changed);
+
+        assertThat(afterChange.isValid(before)).isFalse();
+        assertThat(afterChange.isValid(afterChange.issueToken())).isTrue();
+    }
+
+    @Test
+    @DisplayName("로그아웃한 토큰만 거부되고 다른 세션은 그대로다 (SEC-07)")
+    void revokedTokenIsRejected() {
+        String loggedOut = authService.issueToken();
+        String other = authService.issueToken();
+
+        authService.revoke(loggedOut);
+        authService.revoke(null);            // 쿠키 없이 로그아웃해도 문제없어야 합니다
+        authService.revoke("not-a-token");
+
+        assertThat(authService.isValid(loggedOut)).isFalse();
+        assertThat(authService.isValid(other)).isTrue();
+    }
+
+    @Test
+    @DisplayName("토큰에는 비밀번호도, 서명 키 없이 맞춰 볼 수 있는 단순 해시도 들어가지 않는다")
+    void tokenDoesNotCarryThePassword() {
+        String payload = new String(java.util.Base64.getUrlDecoder().decode(authService.issueToken().split("\\.")[1]),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(payload).doesNotContain("s3cret-password");
+        byte[] other = "another-secret-key-that-is-long-enough".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        // 같은 비밀번호라도 서명 키가 다르면 지문이 다릅니다(키 없이 사전 대입 불가).
+        assertThat(AuthService.passwordStamp(other, "s3cret-password"))
+                .isNotEqualTo(AuthService.passwordStamp(
+                        "test-secret-key-that-is-long-enough-32b".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "s3cret-password"));
+    }
+
+    @Test
     @DisplayName("충분히 긴 설정 키는 그대로 쓴다 (재시작해도 세션 유지)")
     void strongSecretIsStable() {
         byte[] key = AuthService.signingSecret("test-secret-key-that-is-long-enough-32b");

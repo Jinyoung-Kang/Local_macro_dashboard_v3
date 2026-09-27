@@ -95,8 +95,10 @@ public class AuthController {
         return out;
     }
 
+    /** 로그아웃 — 쿠키를 지우고, 그 토큰도 서버에서 거부합니다(쿠키 값이 남아 있어도 못 씀). */
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, Object>> logout() {
+    public ResponseEntity<Map<String, Object>> logout(HttpServletRequest request) {
+        authService.revoke(readToken(request));
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, sessionCookie("", 0).toString())
                 .body(Map.of("ok", true));
