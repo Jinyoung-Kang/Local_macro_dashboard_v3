@@ -130,6 +130,26 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("공개된 기본 비밀번호·빈 비밀번호로는 로그인할 수 없다 (SEC-04)")
+    void publicDefaultPasswordIsNeverAccepted() {
+        // admin1234@는 저장소·문서에 적혀 있던 값입니다. 화면은 기본으로 같은 와이파이에 열리므로
+        // 이 값이 통하면 누구나 들어올 수 있었습니다(예전에는 경고 로그만 남겼습니다).
+        for (String configured : new String[]{"admin1234@", "", "   ", null}) {
+            AppProperties p = new AppProperties();
+            p.setPassword(configured);
+            p.setJwtSecret("test-secret-key-that-is-long-enough-32b");
+            AuthService service = new AuthService(p);
+
+            assertThat(service.passwordMatches("admin1234@")).as("설정값 %s", configured).isFalse();
+            assertThat(service.passwordMatches("")).as("설정값 %s", configured).isFalse();
+            // 대신 이번 실행 동안만 쓰는 임시 비밀번호로는 들어갈 수 있습니다(로그에 한 번 표시).
+            String temporary = service.effectivePassword();
+            assertThat(temporary).hasSizeGreaterThanOrEqualTo(16);
+            assertThat(service.passwordMatches(temporary)).isTrue();
+        }
+    }
+
+    @Test
     @DisplayName("충분히 긴 설정 키는 그대로 쓴다 (재시작해도 세션 유지)")
     void strongSecretIsStable() {
         byte[] key = AuthService.signingSecret("test-secret-key-that-is-long-enough-32b");

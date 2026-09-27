@@ -53,6 +53,8 @@ public class AuthService {
 
     private final AppProperties properties;
     private final SecretKey key;
+    /** 실제로 비교하는 비밀번호. 설정이 비었거나 공개된 기본값이면 실행마다 만든 임시 값입니다. */
+    private final String password;
     /** 현재 비밀번호의 지문. 토큰의 {@code pw} 클레임과 같아야 유효합니다. */
     private final String passwordStamp;
     /** 로그아웃한 토큰 번호(jti) → 그 토큰의 만료 시각. 만료가 지나면 지웁니다. */
@@ -61,16 +63,44 @@ public class AuthService {
     /** 저장소에 공개된 기본값들. 이 값으로 서명하면 누구나 토큰을 위조할 수 있습니다. */
     static final Set<String> KNOWN_PLACEHOLDERS = Set.of(
             "change-me-please-change-me-please-32b");
-    static final String DEFAULT_PASSWORD = "admin1234@";
+    /** 저장소·문서에 적혀 있던 옛 기본 비밀번호. 누구나 아는 값이라 로그인에 쓰지 않습니다. */
+    static final String PUBLIC_DEFAULT_PASSWORD = "admin1234@";
 
     public AuthService(AppProperties properties) {
         this.properties = properties;
         byte[] secret = signingSecret(properties.getJwtSecret());
         this.key = Keys.hmacShaKeyFor(secret);
-        this.passwordStamp = passwordStamp(secret, properties.getPassword());
-        if (DEFAULT_PASSWORD.equals(properties.getPassword())) {
-            log.warn("APP_PASSWORD가 기본값입니다. 같은 네트워크의 누구나 로그인할 수 있으니 .env에서 바꾸세요.");
+        this.password = effectivePassword(properties.getPassword());
+        this.passwordStamp = passwordStamp(secret, this.password);
+    }
+
+    /**
+     * 로그인에 쓸 비밀번호를 정합니다 (SEC-04).
+     *
+     * <p>설정이 비었거나 공개된 기본값({@value #PUBLIC_DEFAULT_PASSWORD})이면 그 값을 받지 않고,
+     * <b>이번 실행 동안만 쓰는 무작위 비밀번호</b>를 만들어 로그에 한 번 남깁니다. 예전에는 기본값을
+     * 그대로 받고 경고만 남겨, 같은 와이파이의 누구나 로그인할 수 있었습니다.
+     * 평소에는 make setup이 .env에 무작위 비밀번호를 만들어 두므로 이 경로를 타지 않습니다.
+     *
+     * @param configured APP_PASSWORD
+     * @return 비교에 쓸 비밀번호
+     */
+    static String effectivePassword(String configured) {
+        if (configured != null && !configured.isBlank() && !PUBLIC_DEFAULT_PASSWORD.equals(configured)) {
+            return configured;
         }
+        byte[] random = new byte[12];
+        new SecureRandom().nextBytes(random);
+        String temporary = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+        log.warn("APP_PASSWORD가 비었거나 공개된 기본값(admin1234@)이라 쓰지 않습니다. 이번 실행 동안만 쓰는 "
+                + "임시 비밀번호: {}  — 'make setup'이 .env에 비밀번호를 만들어 줍니다(또는 APP_PASSWORD를 "
+                + "직접 넣고 make up).", temporary);
+        return temporary;
+    }
+
+    /** 테스트용: 실제로 비교하는 비밀번호. */
+    String effectivePassword() {
+        return password;
     }
 
     /**
@@ -104,7 +134,7 @@ public class AuthService {
         }
         return MessageDigest.isEqual(
                 candidate.getBytes(StandardCharsets.UTF_8),
-                properties.getPassword().getBytes(StandardCharsets.UTF_8));
+                password.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

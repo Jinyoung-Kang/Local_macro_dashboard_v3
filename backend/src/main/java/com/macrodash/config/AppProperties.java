@@ -21,7 +21,7 @@ import java.util.Locale;
 public class AppProperties {
 
     /** 화면 접속 비밀번호. 구버전 [auth] password / APP_PASSWORD와 같은 역할입니다. */
-    private String password = "admin1234@";
+    private String password = "";
 
     /** 세션 토큰 서명 키 (HS256). 최소 32바이트. */
     private String jwtSecret = "change-me-please-change-me-please-32b";

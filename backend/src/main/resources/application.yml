@@ -39,7 +39,8 @@ management:
 
 dashboard:
   # 화면 접속 비밀번호 (구버전 [auth] password와 같은 역할)
-  password: ${APP_PASSWORD:admin1234@}
+  # 비었거나 옛 공개 기본값(admin1234@)이면 받지 않고 실행마다 임시 비밀번호를 만듭니다(로그에 표시).
+  password: ${APP_PASSWORD:}
   # 세션 토큰 서명 키 — 운영에서는 반드시 무작위 값으로 바꾸세요
   jwt-secret: ${JWT_SECRET:change-me-please-change-me-please-32b}
   session-minutes: ${SESSION_MINUTES:720}
