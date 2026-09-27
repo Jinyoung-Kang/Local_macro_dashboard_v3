@@ -4,7 +4,8 @@
 # 최초 1회 준비 스크립트 (macOS · Linux 공통).
 #
 #   1) .env 생성 (.env.example 복사)
-#   2) 세션 서명 키(JWT_SECRET) 자동 생성 — 기본 placeholder를 쓰면 안 됩니다
+#   2) 세션 서명 키(JWT_SECRET)·수집기 내부 토큰(COLLECTOR_API_TOKEN) 자동 생성
+#      — 기본 placeholder나 빈 값을 쓰면 안 됩니다. 둘 다 외부 API 키가 아닙니다
 #   3) 필수 도구 확인 (Docker / 네이티브 실행용 Java·Node·Python)
 #   4) 포트 충돌 확인 (3000 · 8080 · 8000 · 5432 · 6379)
 #
