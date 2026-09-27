@@ -12,7 +12,7 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | POST | `/api/auth/login` | `{"password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict). 틀리면 401, 연속 5회 실패 후 **429 + `Retry-After`**(30초부터 2배씩, 최대 15분) |
-| GET | `/api/auth/session` | `{"authenticated": bool, "readMode": "auto" \| "store_only" \| "live_only"}`. `readMode`는 로그인한 경우에만 옵니다(사이드바 표시용 — 예전에는 이 한 줄 때문에 화면이 `/api/status`를 불렀습니다) |
+| GET | `/api/auth/session` | `{"authenticated": bool, "readMode": "auto" \| "store_only" \| "live_only"}`. `readMode`는 로그인한 경우에만 옵니다(사이드바 표시용 — 이 한 줄 때문에 무거운 `/api/status`를 부르지 않도록 여기에 둡니다) |
 | POST | `/api/auth/logout` | 쿠키 만료 + 그 세션 토큰을 서버에서도 거부(만료 시각까지, 백엔드 재시작 전까지) |
 
 로그인·세션·헬스체크를 제외한 모든 `/api/**`는 유효한 세션 쿠키를 요구합니다
@@ -72,7 +72,7 @@
 | 500 | 예상하지 못한 오류. 원인은 백엔드 로그에만 남습니다 |
 
 범위만 벗어난 **숫자**는 오류 대신 허용 범위로 맞춥니다 — `limit`은 1~200, `years`는
-최대 100년(저장본보다 길면 결과가 같기 때문). 로그인 제한(429)만 예전 모양
+최대 100년(저장본보다 길면 결과가 같기 때문). 로그인 제한(429)만 별도 모양
 `{"ok": false, "retryAfterSeconds": n, "message": "..."}`에 `Retry-After` 헤더를 씁니다.
 
 ### 📊 매크로
@@ -116,7 +116,7 @@
 | `GET /api/radar/options` | 선택지 목록 + `supportedInvestors`(토스 폴백 저장본이 있으면 여섯, 없으면 외국인·기관) + `fallbackChain`(수집기 체인 순서) |
 | `GET /api/radar/ranking?market=&investor=&tradeType=&topN=&intervalType=` | 수급 랭킹 |
 | `GET /api/radar/consensus?market=&tradeType=&topN=&intervalType=` | 외국인·기관이 **같은 방향**으로 움직인 종목 (두 상위 N 목록의 교집합) |
-| `GET /api/radar/history?market=&investor=&tradeType=&latest=true&obsDate=` | 누적 이력. `latest=true`면 **한 거래일만** 줍니다 — `dates`(이 조건의 기록이 있는 날, 최신 순), `obsDate`(고른 날, 비우면 가장 최근), `rows`(그날 기록). 빼면 예전처럼 전 기간(`startDate`로 시작일 지정). 날짜는 `YYYY-MM-DD`, 틀리면 400 |
+| `GET /api/radar/history?market=&investor=&tradeType=&latest=true&obsDate=` | 누적 이력. `latest=true`면 **한 거래일만** 줍니다 — `dates`(이 조건의 기록이 있는 날, 최신 순), `obsDate`(고른 날, 비우면 가장 최근), `rows`(그날 기록). 빼면 전 기간(`startDate`로 시작일 지정). 날짜는 `YYYY-MM-DD`, 틀리면 400 |
 | `GET /api/radar/diagnostics` | 5개 소스 연결 진단 |
 
 ### 🇰🇷 국내 공공 API 데이터

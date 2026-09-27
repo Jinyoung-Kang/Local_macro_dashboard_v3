@@ -1,8 +1,10 @@
-# Local Macro Dashboard v2
+# Local Macro Dashboard
 
 글로벌 매크로 지표 · 연준 순유동성 · 섹터 로테이션 · CFTC COT · KRX 파생 ·
 SEC 13F · 국내 수급을 **한 화면에서** 보는 개인용 대시보드입니다.
 맥에서 Docker 한 줄로 띄웁니다.
+
+만든 사람: **강진영** · <kangjy5235@gmail.com>
 
 ```
 Next.js ──REST──▶ Spring Boot ──JDBC──▶ PostgreSQL ◀──적재── Collector (Python)
@@ -47,7 +49,7 @@ open http://localhost:3000
 
 로그인 비밀번호는 `.env`의 `APP_PASSWORD`입니다. 비어 있으면 `make setup`이 무작위
 값을 만들어 넣고 한 번 보여 줍니다. 원하는 값으로 바꿔도 됩니다(바꾼 뒤 `make up`) —
-대시보드 전체의 접근 통제가 이 한 줄입니다. 비었거나 옛 기본값(`admin1234@`)이면
+대시보드 전체의 접근 통제가 이 한 줄입니다. 비었거나 공개된 기본값(`admin1234@`)이면
 로그인이 되지 않습니다.
 
 | 주소 | 용도 |
@@ -81,9 +83,9 @@ make down            # 정지
 
 > **왜 `git pull`이 아니라 `make update`인가** — `git pull`은 *지금 체크아웃된
 > 브랜치*만 당깁니다. 새 작업이 다른 브랜치에 있으면 아무것도 받지 않고 조용히
-> 끝나고, 이어서 `make up`을 해도 옛 코드가 그대로 다시 뜹니다. "고쳤다는 기능이
-> 화면에 없는" 상황이 여기서 나옵니다. `make update`는 다른 브랜치에 새 작업이
-> 있는지까지 확인해 알려 줍니다.
+> 끝나고, 이어서 `make up`을 해도 새 작업이 빠진 코드가 그대로 다시 뜹니다.
+> "고쳤다는 기능이 화면에 없는" 상황이 여기서 나옵니다. `make update`는 다른
+> 브랜치에 새 작업이 있는지까지 확인해 알려 줍니다.
 >
 > 지금 화면이 어느 코드인지는 **화면 왼쪽 아래**(`main@1e4d3be`)와
 > `make version`에서 확인합니다.
@@ -118,7 +120,7 @@ make down            # 정지
 | 🤖 AI 종합 데이터 분석 | `/ai/report` | 수집 원본을 AI에 넘겨 리포트 생성 (7개 엔진 폴백) |
 | 🔌 외부 API 연결 테스트 | `/connections` | AI 엔진별 호출·지연시간, 토스증권 연결 진단·조회 (버튼을 눌렀을 때만 외부 호출) |
 
-> 옛 주소 `/guru`·`/ai/test`·`/toss`는 새 화면으로 자동 이동합니다(`next.config.mjs`의 redirects).
+> `/guru`·`/ai/test`·`/toss`로 들어와도 해당 메뉴(`/style`·`/connections`)로 자동 이동합니다(`next.config.mjs`의 redirects).
 
 ### 화면을 읽을 때 알아야 할 것
 
@@ -169,8 +171,8 @@ make down            # 정지
 ```
 
 ⑤가 중요합니다. **화면은 수집을 기다리지 않습니다.** 오래된 값이라도 먼저 보여
-주고 언제 받은 값인지 함께 적습니다. 예전에는 화면 한 번 여는 데 수집이 끝날
-때까지 30초씩 걸렸습니다.
+주고 언제 받은 값인지 함께 적습니다. 외부 수집에 걸리는 수십 초가 화면을 여는
+시간이 되지 않게 하기 위해서입니다.
 
 > 저장 스키마와 계층별 책임은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에
 > 자세히 있습니다.
@@ -285,8 +287,8 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 > 읽습니다. `KEY="값"`이면 따옴표까지 값이 됩니다.
 
 **DB·수집기는 이 맥에서만 열립니다.** 로그인이 없는 경로이기 때문입니다.
-화면·API만 `WEB_BIND_HOST`로 다른 기기에 열 수 있고, 그때는 `APP_PASSWORD`가
-반드시 기본값이 아니어야 합니다.
+화면·API만 `WEB_BIND_HOST`로 다른 기기에 열 수 있고, 그때는 `APP_PASSWORD`를
+추측하기 어려운 값으로 두세요.
 
 ---
 
@@ -302,7 +304,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | 화면이 전부 "데이터 없음" | 수집기가 아직 안 돌았습니다. `make collect-all` |
 | **고쳤다는 기능이 화면에 없음** | 그 코드로 빌드되지 않았습니다. 화면 왼쪽 아래 버전과 `make version`을 보세요. `git pull` 말고 `make update` |
 | 로그인 후 401 반복 | `FRONTEND_ORIGIN`과 실제 접속 주소가 다릅니다 (`localhost`와 `127.0.0.1`은 다른 오리진) |
-| **화면이 "백엔드 API에 연결하지 못했습니다"** (예전 버전은 "세션을 확인하는 중…"에서 멈춤) | 백엔드 컨테이너가 뜨지 못했습니다. 흔한 원인은 `port is already allocated` — 8080을 다른 컨테이너·프로그램이 잡고 있습니다. `make up`이 기동 전에 누가 잡았는지 알려 줍니다(`bash scripts/ports.sh check`). 끄거나 `.env`의 `BACKEND_PORT`를 바꾸세요 |
+| **화면이 "백엔드 API에 연결하지 못했습니다"** | 백엔드 컨테이너가 뜨지 못했습니다. 흔한 원인은 `port is already allocated` — 8080을 다른 컨테이너·프로그램이 잡고 있습니다. `make up`이 기동 전에 누가 잡았는지 알려 줍니다(`bash scripts/ports.sh check`). 끄거나 `.env`의 `BACKEND_PORT`를 바꾸세요 |
 
 ### 수집이 비어 있을 때
 
@@ -363,10 +365,9 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md) | **이 프로젝트가 지키는 규칙과 그 이유** — 새 기능을 붙이기 전에 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 계층 구조, 데이터 흐름, 저장 스키마 |
 | [docs/API.md](docs/API.md) | REST 엔드포인트 전체 목록 |
-| [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | 수집 태스크 11종, 소스별 폴백 체인, 한계 |
+| [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | 수집 태스크 20종, 소스별 폴백 체인, 한계 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 기여 절차, 브랜치·Git 문제 해결, 테스트 상세 |
 | [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) | 맥 설치·실행 상세, 포트 변경, launchd 상주 |
-| [docs/MIGRATION.md](docs/MIGRATION.md) | 구버전(Streamlit) → v2 파일 대응표 |
 
 ---
 
@@ -375,12 +376,20 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | 영역 | 채택 | 왜 |
 |---|---|---|
 | Frontend | TypeScript · React 18 · Next.js 15 · Tailwind · Recharts | 15개 메뉴가 서로 다른 표·차트를 쓰므로 컴포넌트 재사용이 크게 이득 |
-| Backend | Java 21 · Spring Boot 3.5 | 화면에 흩어져 있던 계산을 한 계층에 모아 타입으로 고정 |
+| Backend | Java 21 · Spring Boot 3.5 | 모든 계산을 한 계층에 모아 타입과 테스트로 고정 |
 | Store | PostgreSQL 16 | 수집기와 API가 다른 프로세스라 파일 공유 불가. JSONB로 저장해 SQL로 질의 |
-| Collector | Python 3.11 · FastAPI · pandas · yfinance · pykrx | 수집·파싱은 구버전에서 검증된 자산을 그대로 사용 |
+| Collector | Python 3.11 · FastAPI · pandas · yfinance · pykrx | 금융 데이터 수집·파싱 라이브러리 생태계 |
 | DevOps | Docker Compose · GitHub Actions | 네 프로세스를 한 명령으로, 세 언어 테스트를 매 푸시마다 |
 
 **의도적으로 쓰지 않은 것** — Kafka/CDC(하루 수천 건 규모라 브로커가 처리할
 트래픽이 없음), BigQuery/ClickHouse(전체 수십 MB), 네이티브 앱(같은 기능을 두 벌
 유지해야 함), 쿠버네티스(1인용 로컬 대시보드). 필요해지면 붙일 수 있도록 경계는
 열어 두었습니다.
+
+---
+
+## 만든 사람
+
+**강진영** · <kangjy5235@gmail.com>
+
+기획 · 아키텍처 설계 · 데이터 수집 · 백엔드 · 프런트엔드 · 운영까지 1인 개발했습니다.
