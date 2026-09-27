@@ -49,11 +49,6 @@ public class CollectorClient {
         this.client = builder.build();
     }
 
-    /** 태스크 1건을 지금 실행하고 **끝날 때까지 기다립니다**. 저장본이 아예 없을 때만 씁니다. */
-    public Optional<JsonNode> runTask(String taskName) {
-        return runTask(taskName, true);
-    }
-
     /**
      * 태스크 1건 실행.
      *

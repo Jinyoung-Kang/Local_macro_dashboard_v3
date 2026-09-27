@@ -393,6 +393,16 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("수집기가 없으면 수동 실행은 502 — 200에 ok:false로 숨기지 않는다")
+    void manualRunWithoutCollectorIsBadGateway() {
+        ResponseEntity<JsonNode> response = authorizedExchange("/api/status/run/sec_13f", HttpMethod.POST);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+        assertThat(response.getBody().path("error").asText()).isEqualTo("bad_gateway");
+        assertThat(response.getBody().path("message").asText()).contains("수집기");
+    }
+
+    @Test
     @DisplayName("없는 API·허용되지 않는 메서드도 같은 오류 형식으로 답한다")
     void unknownPathsAndMethodsUseTheSameErrorShape() {
         ResponseEntity<JsonNode> notFound = authorizedExchange("/api/does-not-exist", HttpMethod.GET);

@@ -2,6 +2,7 @@ package com.macrodash.web;
 
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.Params;
+import com.macrodash.support.UpstreamUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidRequestException.class)
     ResponseEntity<ApiError> invalidRequest(InvalidRequestException e) {
         return respond(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    /** 수집기가 필요한 작업인데 닿지 못함. 예전에는 200에 ok:false였습니다. */
+    @ExceptionHandler(UpstreamUnavailableException.class)
+    ResponseEntity<ApiError> upstreamUnavailable(UpstreamUnavailableException e) {
+        return respond(HttpStatus.BAD_GATEWAY, e.getMessage());
     }
 
     /** {@code topN=abc}처럼 숫자·불리언 자리에 다른 값이 온 경우. 자바 타입 이름은 내보내지 않습니다. */

@@ -6,7 +6,9 @@ import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
+import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.Params;
+import com.macrodash.support.UpstreamUnavailableException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -203,14 +205,61 @@ public class DataStatusService {
                 .orElseGet(() -> Map.of("tasks", List.of(), "collectorReachable", false));
     }
 
-    public Map<String, Object> runTask(String taskName) {
-        Optional<JsonNode> payload = collector.runTask(taskName);
-        if (payload.isEmpty()) {
-            return Map.of("ok", false, "message", "수집기에 연결하지 못했습니다.");
+    /**
+     * 태스크 1건의 실행을 <b>시작</b>합니다(끝날 때까지 기다리지 않습니다).
+     *
+     * <p>예전에는 끝날 때까지 기다렸는데, 수집기 대기 한도(90초)보다 오래 걸리는 태스크
+     * (13F 등)는 실제로는 수집 중인데도 "수집기에 연결하지 못했습니다"로 표시됐습니다.
+     * 이제 바로 답하고, 화면이 실행 이력을 보며 끝났는지 확인합니다.
+     *
+     * @return {@code accepted, task, baselineStartedAt} — 이보다 늦게 시작한 실행 기록이 생기면
+     *         끝난 것입니다(수집기는 태스크가 끝날 때 기록을 남깁니다). 기록이 없었으면 null
+     * @throws InvalidRequestException      수집기에 등록되지 않은 태스크
+     * @throws UpstreamUnavailableException 수집기에 닿지 못함
+     */
+    public Map<String, Object> startTask(String taskName) {
+        Optional<JsonNode> registered = collector.tasks();
+        if (registered.isEmpty()) {
+            throw new UpstreamUnavailableException("수집기에 연결하지 못했습니다. 수집기가 실행 중인지 확인하세요.");
         }
+        boolean known = Json.array(registered.get(), "tasks").stream()
+                .anyMatch(task -> taskName.equals(Json.asText(task, "name")));
+        if (!known) {
+            throw new InvalidRequestException("알 수 없는 태스크입니다: " + Params.echo(taskName));
+        }
+
+        String baseline = latestStartedAt(taskName);
+        if (collector.runTask(taskName, false).isEmpty()) {
+            throw new UpstreamUnavailableException("수집기가 실행 요청을 받지 못했습니다. 잠시 후 다시 시도하세요.");
+        }
+
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        payload.get().fields().forEachRemaining(entry -> out.put(entry.getKey(), entry.getValue()));
+        out.put("accepted", true);
+        out.put("task", taskName);
+        out.put("baselineStartedAt", baseline);
         return out;
+    }
+
+    /**
+     * 그 태스크의 가장 최근 실행 기록이 시작한 시각(ISO-8601). 기록이 없으면 null.
+     *
+     * <p>화면이 끝났는지 확인할 때 읽는 경로({@link #taskHistory})와 <b>같은 곳</b>에서 읽습니다.
+     * 다른 곳에서 읽으면 한쪽에만 있는 옛 기록을 "방금 끝난 실행"으로 착각할 수 있습니다.
+     */
+    private String latestStartedAt(String taskName) {
+        Optional<JsonNode> fromCollector = collector.taskHistory(taskName, 1);
+        if (fromCollector.isPresent()) {
+            List<JsonNode> rows = Json.array(fromCollector.get(), "history");
+            return rows.isEmpty() ? null : Json.asText(rows.get(0), "startedAt");
+        }
+        List<Map<String, Object>> rows = repository.readTaskHistory(taskName, 1);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        Object started = rows.get(0).get("started_at");
+        if (started instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toInstant().toString();
+        }
+        return started == null ? null : started.toString();
     }
 }
