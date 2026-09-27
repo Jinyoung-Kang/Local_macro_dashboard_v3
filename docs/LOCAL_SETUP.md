@@ -3,9 +3,8 @@
 이 문서는 맥에서 `~/Projects/Local-macro-dashboard-v2`에 프로젝트를 두고 쓰는
 것을 기준으로 씁니다. 다른 경로를 쓰면 아래 명령의 경로만 바꾸면 됩니다.
 
-> 구버전은 `~/Projects/macro-dashboard-v2`에서 `venv` + `streamlit run app.py`로
-> 돌렸습니다. v2는 컨테이너 네 개(화면·API·수집기·DB)라 **Docker로
-> 묶어 한 줄로 띄우는 방식**이 기본이고, Docker 없이 쓰는 경로도 함께 둡니다.
+> 컨테이너 네 개(화면·API·수집기·DB)로 이뤄져 있어 **Docker로 묶어 한 줄로
+> 띄우는 방식**이 기본이고, Docker 없이 쓰는 경로도 함께 둡니다.
 
 ---
 
@@ -91,15 +90,15 @@ make up          # 받은 코드로 다시 빌드·기동
 > **왜 `git pull`이 아닌가.** `git pull`은 *지금 체크아웃된 브랜치*만
 > 당깁니다. 이 저장소는 새 작업을 작업용 브랜치(`claude/…`)에 먼저 올리고
 > 확인이 끝나면 `main`에 합치므로, `main`에서 `git pull`을 하면 **아무것도
-> 받지 않고 조용히 끝나는** 경우가 생깁니다. 그 뒤 `make up`을 해도 예전
-> 코드가 그대로 다시 뜨고, 화면은 멀쩡해 보이는데 고친 것이 하나도 없습니다.
+> 받지 않고 조용히 끝나는** 경우가 생깁니다. 그 뒤 `make up`을 해도 새 작업이
+> 빠진 코드가 그대로 다시 뜨고, 화면은 멀쩡해 보이는데 고친 것이 하나도 없습니다.
 >
 > `make update`는 모든 브랜치 정보를 받아 온 뒤, 다른 브랜치에 더 새로운
 > 작업이 있으면 이름과 커밋 수를 찍어 줍니다. 그 브랜치로 옮기려면
 > `git checkout <브랜치 이름> && make up`입니다.
 
 **지금 돌고 있는 코드가 무엇인지**는 `make version`으로 봅니다. 화면
-**왼쪽 아래**에도 같은 값(`© 2026 Local Macro Dashboard v2 · main@1e4d3be`)이
+**왼쪽 아래**에도 같은 값(`main@1e4d3be` 같은 브랜치@커밋)이
 적혀 있으니, 고친 기능이 안 보이면 이 값부터 확인하세요.
 
 ---
@@ -115,7 +114,7 @@ make setup
 1. `.env.example`을 복사해 `.env`를 만듭니다 (이미 있으면 건드리지 않습니다)
 2. `JWT_SECRET`을 무작위 값으로 생성합니다 — 기본 placeholder를 그대로 두면
    누구나 세션 토큰을 위조할 수 있습니다
-   - `APP_PASSWORD`(화면 접속 비밀번호)가 비었거나 옛 기본값(`admin1234@`)이면 무작위
+   - `APP_PASSWORD`(화면 접속 비밀번호)가 비었거나 공개된 기본값(`admin1234@`)이면 무작위
      값을 만들어 넣고 **터미널에 한 번 보여 줍니다.** 직접 정한 값은 건드리지 않습니다
 3. `COLLECTOR_API_TOKEN`(백엔드→수집기 호출 토큰)이 비어 있으면 무작위 값으로
    채웁니다. 외부 API 키가 아니라 두 컨테이너끼리만 쓰는 값이라 따로 발급받을
@@ -183,17 +182,16 @@ APP_PASSWORD=원하는_비밀번호
 > 비어 있으면 13F 수집이 `SEC_USER_AGENT가 설정되지 않았습니다`라고 말하며
 > 멈춥니다 — 403을 받고 원인을 찾아 헤매는 것보다 낫습니다.
 
-> 구버전의 `.streamlit/secrets.toml`은 더 이상 쓰지 않습니다. 같은 값을
-> `.env`에 넣으면 됩니다. 대응표:
+> 키는 모두 `.env` 한 곳에 둡니다. 서비스별 이름:
 >
-> | 구버전 `secrets.toml` | v2 `.env` |
+> | 서비스 | `.env` 키 |
 > |---|---|
-> | `[fred] api_key` | `FRED_API_KEY` |
-> | `[krx] api_key` | `KRX_API_KEY` |
-> | `[kis] app_key` / `app_secret` | `KIS_APP_KEY` / `KIS_APP_SECRET` |
-> | `[ls] app_key` / `app_secret` | `LS_APP_KEY` / `LS_APP_SECRET` |
-> | `[toss] client_id` / `client_secret` | `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` |
-> | `[sec] user_agent` | `SEC_USER_AGENT` |
+> | FRED | `FRED_API_KEY` |
+> | KRX Open API | `KRX_API_KEY` |
+> | 한국투자증권 | `KIS_APP_KEY` / `KIS_APP_SECRET` |
+> | LS증권 | `LS_APP_KEY` / `LS_APP_SECRET` |
+> | 토스증권 | `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` |
+> | SEC EDGAR | `SEC_USER_AGENT` (본인 이메일) |
 
 ---
 
@@ -223,7 +221,7 @@ make status         # 진행 상황
 ```
 
 그 뒤로는 컨테이너 안의 스케줄러가 **5분 / 1시간 / 12시간** 주기로 알아서
-수집합니다(구버전 `collector.py --loop`과 같은 주기).
+수집합니다.
 
 ### 자주 쓰는 명령
 
@@ -322,8 +320,7 @@ make dev-frontend
 
 ### 수집기를 백그라운드 상주로 (launchd)
 
-구버전의 `collector.py --install-launchd`에 해당합니다. 맥이 켜져 있는 동안
-수집기가 계속 돌게 하려면 아래 plist를
+Docker 없이 쓸 때, 맥이 켜져 있는 동안 수집기가 계속 돌게 하려면 아래 plist를
 `~/Library/LaunchAgents/com.local.macro-dashboard.collector.plist`로 저장하고
 등록하세요.
 
