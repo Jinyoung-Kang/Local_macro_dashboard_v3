@@ -176,6 +176,17 @@ snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
 - 추정치·대용값은 `isEstimated` / `isProxy` 플래그를 함께 내려보냅니다.
 - 금액은 조·억 단위로 통일합니다 (`lib/format.ts`, `SnapshotTextService`).
 
+### 파일이 커질 때
+
+- 한꺼번에 나누지 않고, **고치러 들어간 파일**에서 그 부분만 떼어 냅니다. 옮길 때는
+  동작을 바꾸지 않습니다(옮기는 커밋과 고치는 커밋을 나눕니다).
+- 화면: 메뉴 페이지의 섹션은 같은 폴더의 파일로 둡니다 — 예: `macro/SpreadSection.tsx`,
+  `radar/FlowPanels.tsx`. `page.tsx`에는 데이터 조회와 배치만 남깁니다.
+- 수집기: 태스크가 부르는 가공 단계는 별도 모듈로 둡니다 — 예: `macro_cards.py`
+  (매크로 카드 보정). `tasks.py`에는 "받아서 저장"만 남깁니다.
+- 아직 큰 파일(600줄 이상): `tasks.py`, `lib/types.ts`, `services/radar.py`, `store.py`,
+  `components/charts.tsx`, `radar/page.tsx`. 다음에 손댈 때 같은 방식으로 나눕니다.
+
 자세한 규칙은 [PRINCIPLES.md](PRINCIPLES.md)에 있습니다.
 
 ---
