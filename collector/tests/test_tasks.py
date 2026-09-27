@@ -249,3 +249,20 @@ def test_failed_futures_fall_back_to_index_with_honest_name(store):
     # 대체할 지수도 없으면 실패 카드 — 선물 이름 그대로, 값 없음
     assert by_key["hsi_fut_scraped"]["status"] == "fail"
     assert by_key["hsi_fut_scraped"]["name"] == "항셍 선물"
+
+
+def test_run_log_retention_task_uses_configured_days(monkeypatch):
+    """실행 기록 정리는 주 단위 그룹에서 돌고, 보존 기간 설정(최소 7일)을 따릅니다 (ARC-03)."""
+    assert tasks.TASKS_BY_NAME["run_log_retention"].speed == "weekly"
+
+    calls = []
+    monkeypatch.setattr(tasks.store, "purge_run_logs",
+                        lambda days: calls.append(days) or {"taskRuns": 1234, "collectorRuns": 5})
+
+    monkeypatch.delenv("COLLECTOR_RUN_LOG_RETENTION_DAYS", raising=False)
+    assert tasks.task_run_log_retention() == "90일 지난 실행 기록 정리 — 태스크 1,234건 · 실행 5건"
+
+    for raw, expected in (("30", 30), ("1", 7), ("abc", 90)):
+        monkeypatch.setenv("COLLECTOR_RUN_LOG_RETENTION_DAYS", raw)
+        tasks.task_run_log_retention()
+        assert calls[-1] == expected, raw

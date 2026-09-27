@@ -98,6 +98,22 @@ def interval_seconds(group: str) -> int:
         return defaults[group]
 
 
+RUN_LOG_RETENTION_DAYS = 90
+
+
+def run_log_retention_days() -> int:
+    """
+    수집 실행 기록 보존 기간(일). 기본 90일, 최소 7일.
+
+    오류 모음 화면은 최근 24시간, 실행 이력 화면은 최근 200건까지만 봅니다. 잘못된 값이나
+    너무 짧은 값으로 방금 기록까지 지우지 않도록 7일 밑으로는 내리지 않습니다.
+    """
+    try:
+        return max(7, int(os.environ.get("COLLECTOR_RUN_LOG_RETENTION_DAYS", RUN_LOG_RETENTION_DAYS)))
+    except (TypeError, ValueError):
+        return RUN_LOG_RETENTION_DAYS
+
+
 # ==============================================================================
 # 외부 API 키 (없으면 빈 문자열)
 # ==============================================================================

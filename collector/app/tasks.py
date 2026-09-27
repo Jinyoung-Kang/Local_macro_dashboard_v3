@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from . import catalog, equities, http, indicators, kst, publicapi, store
+from . import catalog, equities, http, indicators, kst, publicapi, settings, store
 from .services import (
     cot as cot_service,
     dart as dart_service,
@@ -1095,6 +1095,25 @@ def _usable(item: dict | None) -> bool:
 
 
 # ==============================================================================
+# 유지보수
+# ==============================================================================
+def task_run_log_retention() -> str:
+    """
+    🧹 수집 실행 기록 정리 — 보존 기간(기본 90일)이 지난 실행 기록만 지웁니다.
+
+    실행 기록은 하루 약 1,200행씩 쌓입니다(1년이면 43만 행). 그대로 두면 DB가 커지고
+    상태 화면 조회가 느려집니다. 수집한 데이터(시계열·누적 레코드)는 지우지 않습니다.
+    기간은 COLLECTOR_RUN_LOG_RETENTION_DAYS로 바꿉니다.
+    """
+    days = settings.run_log_retention_days()
+    removed = store.purge_run_logs(days)
+    return (
+        f"{days}일 지난 실행 기록 정리 — 태스크 {removed['taskRuns']:,}건 · "
+        f"실행 {removed['collectorRuns']:,}건"
+    )
+
+
+# ==============================================================================
 # 태스크 목록 및 실행
 # ==============================================================================
 ALL_TASKS: tuple[Task, ...] = (
@@ -1117,6 +1136,7 @@ ALL_TASKS: tuple[Task, ...] = (
     Task("sec_13f", "weekly", task_sec_13f, "SEC 13F 기관 포트폴리오 (분기 공시)"),
     Task("kr_holidays", "weekly", task_kr_holidays, "한국 공휴일 (천문연 특일정보)"),
     Task("dart_fundamentals", "weekly", task_dart_fundamentals, "국내 종목 재무 (DART 사업보고서)"),
+    Task("run_log_retention", "weekly", task_run_log_retention, "수집 실행 기록 정리 (보존 기간이 지난 것만)"),
 )
 
 TASKS_BY_NAME = {task.name: task for task in ALL_TASKS}

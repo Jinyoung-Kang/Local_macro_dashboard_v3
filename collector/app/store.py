@@ -771,6 +771,37 @@ def purge_older_than(days: int) -> dict[str, int]:
     return {"timeseries": ts, "observations": ob, "collectorRuns": runs}
 
 
+def purge_run_logs(days: int) -> dict[str, int]:
+    """
+    보존 기간이 지난 수집 실행 기록(collector_task_runs · collector_runs)을 지웁니다.
+
+    실행 기록은 하루 약 1,200행씩 쌓여 DB를 키우고 상태 화면 조회를 느리게 합니다.
+    **수집한 데이터(timeseries · observations)는 건드리지 않습니다** — 외부에서 다시
+    받을 수 없는 이력이 있습니다.
+
+    기간과 무관하게 남기는 것
+      - 태스크마다 가장 최근 1건: 오래 돌지 않은 태스크도 상태 화면이 "마지막 실행"을 보여 줍니다.
+      - 최근 실행 50건: purge_older_than과 같은 규칙.
+
+    :param days: 보존 기간(일). 이보다 먼저 시작한 기록이 대상입니다
+    :returns: {"taskRuns": 지운 태스크 기록 수, "collectorRuns": 지운 실행 기록 수}
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    with connection() as conn:
+        task_runs = conn.execute(
+            "DELETE FROM collector_task_runs old WHERE old.started_at < %s "
+            "AND EXISTS (SELECT 1 FROM collector_task_runs newer "
+            "            WHERE newer.task = old.task AND newer.id > old.id)",
+            (cutoff,),
+        ).rowcount
+        runs = conn.execute(
+            "DELETE FROM collector_runs WHERE started_at < %s "
+            "AND id NOT IN (SELECT id FROM collector_runs ORDER BY id DESC LIMIT 50)",
+            (cutoff,),
+        ).rowcount
+    return {"taskRuns": task_runs, "collectorRuns": runs}
+
+
 # ==============================================================================
 # 7. 내부 헬퍼
 # ==============================================================================

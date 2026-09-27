@@ -227,3 +227,43 @@ def test_purge_retired_datasets(store):
     assert store.purge_retired_datasets() == 1
     assert store.read_observations("molit_apt") == []
     assert len(store.read_observations(catalog.OBS_RADAR)) == 1
+
+
+def test_purge_run_logs_only_touches_old_run_logs(store):
+    """
+    보존 기간이 지난 실행 기록만 지웁니다 (ARC-03). 수집한 데이터는 기간과 무관하게 남습니다.
+
+    기간과 무관하게 남기는 실행 기록
+      - 태스크마다 가장 최근 1건: 오래 돌지 않은 태스크도 상태 화면이 "마지막 실행"을 보여 줍니다.
+      - 최근 실행 50건: 수동 정리(purge_older_than)와 같은 규칙.
+    """
+    long_ago = datetime.now(timezone.utc) - timedelta(days=100)
+    with store.connection() as conn:
+        conn.execute(
+            "INSERT INTO collector_runs (started_at, status, group_name) "
+            "SELECT %s + g * interval '1 minute', 'ok', 'slow' FROM generate_series(1, 55) g",
+            (long_ago,),
+        )
+    recent_run = store.start_run("slow")
+    for task, started_at in (
+        ("fx_history", long_ago),                                      # 오래됨 + 더 최근 기록 있음 → 삭제
+        ("fx_history", datetime.now(timezone.utc) - timedelta(days=1)),
+        ("cot_history", long_ago),                                     # 오래됐지만 이 태스크의 마지막 기록 → 유지
+    ):
+        store.record_task_run(recent_run, task, speed="slow", status="ok",
+                              started_at=started_at, duration_ms=1, detail=None)
+    old_day = (long_ago - timedelta(days=300)).date().isoformat()
+    store.put_timeseries("demo", "S", [(old_day, 1.0)])
+    store.put_observations("demo_obs", old_day, [{"code": "005930"}], entity_key="code")
+
+    removed = store.purge_run_logs(90)
+
+    assert removed == {"taskRuns": 1, "collectorRuns": 6}    # 오래된 실행 55건 중 최근 50건 안에 드는 49건은 유지
+    remaining = {(row["task"], row["started_at"].date()) for row in store.read_task_history(limit=10)}
+    assert remaining == {
+        ("fx_history", (datetime.now(timezone.utc) - timedelta(days=1)).date()),
+        ("cot_history", long_ago.date()),
+    }
+    assert [row["date"] for row in store.read_timeseries("demo", "S")] == [old_day]
+    assert len(store.read_observations("demo_obs")) == 1
+    assert store.purge_run_logs(90) == {"taskRuns": 0, "collectorRuns": 0}
