@@ -495,13 +495,22 @@ def resolve_run_status(run: dict | None) -> str:
 
 
 def mark_stale_runs_interrupted() -> int:
-    """죽은 'running' 레코드를 정리합니다. 수집기 기동 시 호출합니다."""
+    """
+    죽은 'running' 레코드를 정리합니다. **수집기 기동 시에만** 호출합니다.
+
+    기동 직후에는 이 프로세스가 시작한 실행이 아직 없으므로, 같은 호스트·같은 PID로 남은
+    'running' 기록은 이전 프로세스의 것입니다. 컨테이너가 재시작되면 새 수집기도 PID 1이라
+    "살아 있는 PID"로 보여, 예전에는 heartbeat 기준(30분)이 지날 때까지 "진행 중"으로 남았습니다.
+    """
     with connection() as conn:
         rows = conn.execute(
             "SELECT * FROM collector_runs WHERE status = 'running'"
         ).fetchall()
 
-        stale = [r["id"] for r in rows if resolve_run_status(dict(r)) == "interrupted"]
+        stale = [
+            r["id"] for r in rows
+            if _left_by_previous_process(r) or resolve_run_status(dict(r)) == "interrupted"
+        ]
         if not stale:
             return 0
 
@@ -513,6 +522,12 @@ def mark_stale_runs_interrupted() -> int:
         )
     logger.info("비정상 종료된 수집 기록 %d건을 정리했습니다.", len(stale))
     return len(stale)
+
+
+def _left_by_previous_process(run: dict) -> bool:
+    """이 호스트에서 지금 프로세스와 같은 PID로 남은 기록인지 (기동 시 판정 전용)."""
+    same_host = (run.get("host") or socket.gethostname()) == socket.gethostname()
+    return same_host and run.get("pid") == os.getpid()
 
 
 def read_last_run() -> dict | None:

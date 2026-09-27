@@ -140,6 +140,30 @@ def test_mark_stale_runs_interrupted(store):
     assert store.read_last_run()["status"] == "interrupted"
 
 
+def test_restart_with_reused_pid_marks_previous_running_run_interrupted(store):
+    """
+    BUG-04. 컨테이너가 재시작되면 새 수집기도 PID 1이고 호스트 이름도 같습니다.
+    이전 프로세스가 남긴 'running' 기록이 "살아 있는 PID"로 보여, heartbeat 기준(30분)이
+    지날 때까지 "진행 중"으로 남았습니다.
+    """
+    store.start_run("fast")     # 같은 호스트·같은 PID로 남은 기록 = PID를 물려받은 재시작 직전 상태
+    assert store.resolve_run_status(store.read_last_run()) == "running"
+
+    # 기동 직후에는 이 프로세스가 시작한 실행이 없으므로 이전 프로세스의 기록입니다.
+    assert store.mark_stale_runs_interrupted() == 1
+    assert store.read_last_run()["status"] == "interrupted"
+
+
+def test_startup_cleanup_keeps_live_runs_of_other_processes(store):
+    """다른 호스트(또는 같은 호스트의 다른 살아 있는 프로세스)가 돌리는 실행은 건드리지 않습니다."""
+    run_id = store.start_run("fast")
+    with store.connection() as conn:
+        conn.execute("UPDATE collector_runs SET host = 'other-host' WHERE id = %s", (run_id,))
+
+    assert store.mark_stale_runs_interrupted() == 0
+    assert store.read_last_run()["status"] == "running"
+
+
 def test_refresh_request_moves_forward(store):
     first = store.request_refresh()
     second = store.request_refresh()
