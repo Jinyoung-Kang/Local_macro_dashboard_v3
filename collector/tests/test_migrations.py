@@ -139,3 +139,19 @@ def test_디렉터리는_인자_새_설정_예전_설정_순으로_찾는다(tmp
     monkeypatch.setenv("MACRO_MIGRATIONS_DIR", str(new_dir))
     assert store._resolve_migrations_dir(None) == new_dir
     assert store._resolve_migrations_dir(str(old_dir)) == old_dir
+
+
+def test_V2는_기본키와_겹치는_인덱스를_지우고_GIN을_레이더_행으로_좁힌다(store):
+    """PERF-05. 지운 인덱스가 되살아나거나 레이더 데이터셋 이름이 바뀌면 여기서 잡힙니다."""
+    from app import catalog
+
+    with store.connection() as conn:
+        rows = conn.execute(
+            "SELECT indexname, indexdef FROM pg_indexes "
+            "WHERE schemaname = current_schema() AND tablename IN ('observations', 'timeseries')"
+        ).fetchall()
+    indexes = {r["indexname"]: r["indexdef"] for r in rows}
+
+    assert not {"idx_timeseries_lookup", "idx_observations_lookup", "idx_observations_radar_filter"} & indexes.keys()
+    # 부분 인덱스는 조건의 데이터셋 이름이 정확히 같아야 쓰입니다.
+    assert f"WHERE (dataset = '{catalog.OBS_RADAR}'::text)" in indexes["idx_observations_radar_payload"]
