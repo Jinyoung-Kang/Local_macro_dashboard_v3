@@ -324,15 +324,7 @@ public class DashboardController {
 
     @GetMapping("/radar/options")
     public Map<String, Object> radarOptions() {
-        return Map.of(
-                "markets", RadarService.MARKETS,
-                "investors", RadarService.INVESTORS,
-                // 화면이 "지원 안 함"을 표시할 수 있도록 함께 내려보냅니다.
-                // 목록만 주면 고를 수 있는 것과 없는 것이 똑같아 보입니다.
-                "supportedInvestors", RadarService.SUPPORTED_INVESTORS,
-                "unsupportedInvestorNote", RadarService.UNSUPPORTED_INVESTOR_NOTE,
-                "tradeTypes", RadarService.TRADE_TYPES,
-                "intervals", RadarService.INTERVALS);
+        return radar.options();
     }
 
     @GetMapping("/radar/ranking")

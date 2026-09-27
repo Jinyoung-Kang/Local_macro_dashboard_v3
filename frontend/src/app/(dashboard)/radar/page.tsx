@@ -23,6 +23,7 @@ import type {
   RadarConsensusResponse,
   RadarResponse,
 } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 /**
  * 📡 외국인/기관 수급 레이더.
@@ -40,6 +41,8 @@ export default function RadarPage() {
     unsupportedInvestorNote?: string;
     tradeTypes: string[];
     intervals: string[];
+    /** 수집기의 실제 체인 순서 (백엔드가 내려줌 — 화면에 따로 적어 두면 어긋납니다) */
+    fallbackChain?: string[];
   }>("/api/radar/options");
 
   const [market, setMarket] = useState("KOSPI");
@@ -72,7 +75,7 @@ export default function RadarPage() {
         <div>
           <h1 className="text-xl font-bold text-bright">📡 외국인/기관 수급 레이더</h1>
           <p className="mt-1 text-xs text-muted">
-            폴백 체인: KIS(장중) → Daum → Naver → LS → PyKrx → 누적 이력
+            폴백 체인: {(options.data?.fallbackChain ?? ["KIS(장중)", "Daum", "Naver", "LS", "토스(공식)", "PyKrx", "누적 이력"]).join(" → ")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -148,6 +151,10 @@ export default function RadarPage() {
             {options.data?.unsupportedInvestorNote}
           </p>
         )}
+        {/* 토스 폴백으로 여섯 모두 고를 수 있을 때도, 넷은 한계가 있는 순위라 적어 둡니다 */}
+        {unsupportedInvestors.length === 0 && TOSS_ONLY.includes(investor) && options.data?.unsupportedInvestorNote && (
+          <p className="mt-3 text-[11px] text-muted">ⓘ {options.data.unsupportedInvestorNote}</p>
+        )}
       </Card>
 
       {/* 종목 랭킹을 보기 전에 시장 전체의 방향부터 — 선택한 시장을 따릅니다 */}
@@ -178,7 +185,7 @@ export default function RadarPage() {
         <>
           <Card
             title={`${investor} ${tradeType} 상위 ${data.rows?.length ?? 0}개`}
-            subtitle={data.source ?? undefined}
+            source={data.source ?? undefined}
             actions={
               data.sourceKind ? <SourceBadge>출처: {data.sourceKind}</SourceBadge> : undefined
             }
@@ -192,7 +199,7 @@ export default function RadarPage() {
             />
           </Card>
 
-          <Card title="📋 상세 목록">
+          <Card title="📋 상세 목록" source={data.source ?? undefined}>
             <Table
               rows={data.rows}
               rowKey={(row) => `${row.code}-${row.rank}`}
@@ -265,12 +272,26 @@ export default function RadarPage() {
   );
 }
 
+/** Daum이 주지 않아 토스 공식 폴백으로만 받는 투자주체. */
+const TOSS_ONLY = ["개인", "연기금", "금융투자", "투신"];
+
+/** 진단 표의 소스 이름 — 폴백 체인과 같은 이름으로. */
+const SOURCE_LABELS: Record<string, string> = {
+  kis: "KIS (장중 가집계)",
+  daum: "Daum",
+  naver: "Naver",
+  ls: "LS",
+  toss: "토스증권 (공식)",
+  pykrx: "PyKrx",
+};
+const SOURCE_ORDER = ["kis", "daum", "naver", "ls", "toss", "pykrx"];
+
 function DiagnosticsPanel() {
   const { data, loading, reload } = useApi<DiagnosticsResponse>("/api/radar/diagnostics");
 
   return (
     <Card
-      title="🔌 데이터 소스 연결 진단"
+      title="🔌 데이터 소스 연결 진단" source="각 소스를 화면이 쓰는 경로 그대로 실제 호출 (수집기)"
       subtitle="화면이 실제로 쓰는 경로를 그대로 호출합니다."
       actions={<Button onClick={reload}>다시 검사</Button>}
     >
@@ -278,10 +299,12 @@ function DiagnosticsPanel() {
       {data && !data.available && <Banner tone="warn">{data.message}</Banner>}
       {data?.sources && (
         <Table
-          rows={Object.entries(data.sources).map(([name, value]) => ({ name, ...value }))}
+          rows={Object.entries(data.sources)
+            .map(([name, value]) => ({ name, ...value }))
+            .sort((a, b) => SOURCE_ORDER.indexOf(a.name) - SOURCE_ORDER.indexOf(b.name))}
           rowKey={(row) => row.name}
           columns={[
-            { key: "name", header: "소스", render: (row) => row.name.toUpperCase() },
+            { key: "name", header: "소스 (체인 순서)", render: (row) => SOURCE_LABELS[row.name] ?? row.name.toUpperCase() },
             {
               key: "status",
               header: "상태",
@@ -340,6 +363,7 @@ function FundamentalsPanel({ codes }: { codes: string[] }) {
   return (
     <Card
       title="📑 재무·밸류에이션 체크 (DART 사업보고서 + 금융위 공식 시세)"
+      source="금융감독원 Open DART 사업보고서 주요계정 (공식) · 금융위원회 주식시세정보 (공식, 시가총액)"
       subtitle="부채비율 = 부채총계÷자본총계 · 증가율은 전년 대비 · ROE = 순이익÷기말 자본 · PER·PBR = 시가총액÷직전 사업연도 순이익·자본"
       actions={
         <Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} stale={data?.stale} />
@@ -446,7 +470,7 @@ function ConsensusPanel({
 
   return (
     <Card
-      title={`🤝 외국인·기관 공통 ${tradeType}`}
+      title={`🤝 외국인·기관 공통 ${tradeType}`} source={data?.sources?.length ? data.sources.join(" · ") : "외국인·기관 순위와 같은 출처 (위 순위 카드 참고)"}
       subtitle={data?.note}
       actions={
         <Freshness
@@ -614,7 +638,7 @@ function HistoryPanel({
 
   return (
     <Card
-      title="🗂️ 누적 수급 이력"
+      title="🗂️ 누적 수급 이력" source={SOURCES.radarHistory}
       subtitle={data?.note}
       actions={
         dates.length > 0 ? (

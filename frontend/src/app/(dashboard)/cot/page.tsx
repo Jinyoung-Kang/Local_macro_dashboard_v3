@@ -16,6 +16,7 @@ import {
 import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatNumber, formatPercent, formatSigned } from "@/lib/format";
 import type { CotAssetResponse, CotExtremesResponse, CotSummary } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 /**
  * 🏛️ 글로벌 투기세력 (CFTC COT).
@@ -61,7 +62,7 @@ export default function CotPage() {
         <Banner tone="warn">COT 저장본이 없습니다. 수집기의 slow 작업을 실행하세요.</Banner>
       )}
 
-      <Card title="자산별 요약" subtitle="스마트머니(비상업) 순포지션과 최근 변화">
+      <Card title="자산별 요약" source={SOURCES.cftc} subtitle="스마트머니(비상업) 순포지션과 최근 변화">
         {overview.loading && !overview.data && <Loading />}
         {overview.data && (
           <Table
@@ -151,7 +152,7 @@ export default function CotPage() {
       </Card>
 
       <Card
-        title="포지셔닝 추이"
+        title="포지셔닝 추이" source={SOURCES.cftc}
         actions={
           <Select
             label="자산"
@@ -260,7 +261,7 @@ function ExtremesPanel({ asset }: { asset: string }) {
 
   return (
     <Card
-      title="📉 극단 포지션 이후 성적 (백테스트)"
+      title="📉 극단 포지션 이후 성적 (백테스트)" source={SOURCES.cftcBacktest}
       subtitle={
         data?.available
           ? `백분위는 그 시점까지의 최근 ${data.lookbackWeeks}주로만 계산합니다 (미래를 보지 않습니다).`

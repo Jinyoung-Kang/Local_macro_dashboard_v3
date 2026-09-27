@@ -497,7 +497,7 @@ def diagnostics(
     x_service_token: str | None = Header(default=None),
 ) -> dict:
     """
-    5개 데이터 소스 + 토스의 연결 상태.
+    수급 레이더 폴백 체인의 소스별 연결 상태 (KIS·LS·Daum·Naver·토스·PyKrx).
 
     진단은 **화면이 실제로 쓰는 경로**를 그대로 호출합니다. 진단이 다른
     경로를 보면 "진단은 정상인데 화면은 빈" 상황을 설명할 수 없습니다.
@@ -510,6 +510,7 @@ def diagnostics(
             "ls": ls_service.test_connection(),
             "daum": radar_service.test_daum_connection(),
             "naver": radar_service.test_naver_connection(),
+            "toss": radar_service.test_toss_connection(),
             "pykrx": radar_service.test_pykrx_connection(),
         },
     }

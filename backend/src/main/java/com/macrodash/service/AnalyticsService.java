@@ -65,16 +65,16 @@ public class AnalyticsService {
         list.add(new SeriesRef("fred:NFCI", "금융상황지수 (NFCI)", "금융상황", "", "FRED (주간)"));
         list.add(new SeriesRef("fred:STLFSI4", "금융스트레스 (STLFSI4)", "금융상황", "pt", "FRED (주간)"));
         list.add(new SeriesRef("liquidity:net", "연준 순유동성", "유동성", "조 달러", "FRED 조합 (WALCL−TGA−RRP)"));
-        list.add(new SeriesRef("ticker:VIX", "CBOE VIX", "변동성", "pt", "지수 종가"));
-        list.add(new SeriesRef("etf:SPY", "S&P 500 (SPY)", "주식", "$", "ETF 종가"));
-        list.add(new SeriesRef("etf:QQQ", "나스닥 100 (QQQ)", "주식", "$", "ETF 종가"));
-        list.add(new SeriesRef("etf:IWM", "러셀 2000 (IWM)", "주식", "$", "ETF 종가"));
-        list.add(new SeriesRef("etf:TLT", "미국 장기국채 (TLT)", "채권", "$", "ETF 종가"));
-        list.add(new SeriesRef("etf:GLD", "금 (GLD)", "원자재", "$", "ETF 종가"));
-        list.add(new SeriesRef("etf:USO", "WTI 원유 (USO)", "원자재", "$", "ETF 종가"));
-        list.add(new SeriesRef("etf:UUP", "달러 인덱스 (UUP)", "통화", "$", "ETF 종가"));
-        list.add(new SeriesRef("etf:EEM", "신흥국 주식 (EEM)", "주식", "$", "ETF 종가"));
-        list.add(new SeriesRef("krx:futures", "KOSPI200 선물 종가", "국내", "pt", "KRX 일별 마감"));
+        list.add(new SeriesRef("ticker:VIX", "CBOE VIX", "변동성", "pt", "Yahoo Finance ^VIX 종가"));
+        list.add(new SeriesRef("etf:SPY", "S&P 500 (SPY)", "주식", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("etf:QQQ", "나스닥 100 (QQQ)", "주식", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("etf:IWM", "러셀 2000 (IWM)", "주식", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("etf:TLT", "미국 장기국채 (TLT)", "채권", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("etf:GLD", "금 (GLD)", "원자재", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("etf:USO", "WTI 원유 (USO)", "원자재", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("etf:UUP", "달러 인덱스 (UUP)", "통화", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("etf:EEM", "신흥국 주식 (EEM)", "주식", "$", "Yahoo Finance ETF 종가"));
+        list.add(new SeriesRef("krx:futures", "KOSPI200 선물 종가", "국내", "pt", "KRX Open API 일별 마감"));
         return list;
     }
 

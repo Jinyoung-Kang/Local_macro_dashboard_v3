@@ -14,6 +14,7 @@ import {
 import { useApi } from "@/hooks/useApi";
 import { EMPTY, formatNumber } from "@/lib/format";
 import type { RegimeResponse, RegimeSignal } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 /**
  * 🧭 시장 국면.
@@ -108,7 +109,7 @@ export default function RegimePage() {
 
       {verdict && (
         <Card
-          title="지금 국면"
+          title="지금 국면" source={SOURCES.regime}
           actions={current ? <SourceBadge>{verdict.code}</SourceBadge> : undefined}
         >
           <div
@@ -143,7 +144,7 @@ export default function RegimePage() {
       )}
 
       <Card
-        title="판정 근거"
+        title="판정 근거" source={SOURCES.regime}
         subtitle="결론에 동의하지 않아도 근거는 그대로 확인할 수 있어야 합니다."
       >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -164,7 +165,7 @@ export default function RegimePage() {
       </Card>
 
       <Card
-        title="📅 국면 이력"
+        title="📅 국면 이력" source={SOURCES.regime}
         subtitle="같은 규칙을 과거 날짜에 그대로 적용했습니다(주 단위). 회색은 판정 불가입니다."
       >
         <div className="flex h-8 w-full overflow-hidden rounded border border-border">

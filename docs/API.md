@@ -87,7 +87,7 @@
 | `GET /api/krx/oi-trend` | 미결제약정 증감 (최신·직전·변화) |
 | `GET /api/krx/investor-trend` | Daum 투자주체별 수급 (계약수) |
 | `GET /api/krx/intraday?minutes=30` | 장중 수급 가속도 |
-| `GET /api/radar/options` | 선택지 목록 |
+| `GET /api/radar/options` | 선택지 목록 + `supportedInvestors`(토스 폴백 저장본이 있으면 여섯, 없으면 외국인·기관) + `fallbackChain`(수집기 체인 순서) |
 | `GET /api/radar/ranking?market=&investor=&tradeType=&topN=&intervalType=` | 수급 랭킹 |
 | `GET /api/radar/consensus?market=&tradeType=&topN=&intervalType=` | 외국인·기관이 **같은 방향**으로 움직인 종목 (두 상위 N 목록의 교집합) |
 | `GET /api/radar/history?market=&investor=&tradeType=` | 누적 이력 |

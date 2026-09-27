@@ -2,7 +2,7 @@
 app/services/radar.py
 국내 수급 레이더 — 무중단(fail-safe) 폴백 체인.
 
-    KIS(장중 가집계) → Daum(API) → Naver(렌더링) → LS(OPEN API) → PyKrx → 누적 이력
+    KIS(장중 가집계) → Daum(API) → Naver(렌더링) → LS(OPEN API) → 토스(공식) → PyKrx → 누적 이력
 
 앞쪽이 성공하면 뒤는 호출되지 않습니다.
 
@@ -35,7 +35,7 @@ from bs4 import BeautifulSoup
 from .. import catalog, store
 from .. import kst
 from ..http import get_session
-from . import kis, ls
+from . import kis, ls, toss
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ DAUM_RANKING_URL = "https://finance.daum.net/api/trend/investor_purchase/"
 # 마지막 Naver 수집이 왜 비었는지. 진단 화면이 "빈 결과입니다"에서 끝나지
 # 않도록, 실패한 단계를 그대로 들고 있습니다.
 _NAVER_LAST_REASON: dict[str, str | None] = {"value": None}
+_TOSS_LAST_REASON: dict[str, str | None] = {"value": None}
 
 NAVER_RANKING_URL = "https://finance.naver.com/sise/sise_deal_rank_iframe.naver"
 
@@ -182,6 +183,12 @@ def collect_radar_ranking(
             rows = ls.fetch_deal_ranking(date_str, market, investor, trade_type, top_n)
             if rows:
                 return _result(rows, "ls")
+
+            # 토스는 투자자별 순위 API가 없어 "거래대금 상위 100종목 안의 순위"입니다.
+            # 시장 전체 순위를 주는 앞 단계가 모두 실패했을 때만 씁니다(저장본만 읽음, 호출 없음).
+            rows = fetch_toss_ranking(market, investor, trade_type, top_n)
+            if rows:
+                return _result(rows, "toss")
         else:
             logger.info(
                 "과거 날짜(%s) 조회: 날짜 미지원 소스를 건너뛰고 PyKrx만 사용합니다.",
@@ -263,6 +270,10 @@ def diagnose_sources(investor: str) -> list[str]:
         )
     elif naver_reason:
         reasons.append(f"Naver: {naver_reason}")
+
+    toss_reason = _TOSS_LAST_REASON["value"]
+    if toss_reason:
+        reasons.append(f"토스: {toss_reason}")
 
     if not ls.has_credentials():
         reasons.append("LS는 키가 없어 건너뜁니다 (.env의 LS_APP_KEY/SECRET)")
@@ -521,6 +532,110 @@ def fetch_naver_ranking(
         )
 
     return _rank(records, trade_type, top_n)
+
+
+# 토스 투자자 매매 레코드에서 각 투자주체가 있는 자리. 기관 세부 셋은 breakdown 안에 있습니다.
+TOSS_INVESTOR_PATHS = {
+    "외국인": ("investors", "foreigner"),
+    "기관": ("investors", "institution"),
+    "개인": ("investors", "individual"),
+    "연기금": ("breakdown", "pensionFund"),
+    "금융투자": ("breakdown", "financialInvestment"),
+    "투신": ("breakdown", "trust"),
+}
+TOSS_UNIVERSE_MAX_AGE_HOURS = 26
+
+
+def _toss_net(record: dict, investor: str) -> int | None:
+    group, key = TOSS_INVESTOR_PATHS[investor]
+    node = (record.get(group) or {}).get(key) if isinstance(record.get(group), dict) else None
+    return node.get("net") if isinstance(node, dict) else None
+
+
+def fetch_toss_ranking(market: str, investor: str, trade_type: str, top_n: int) -> list[dict]:
+    """
+    토스증권 공식 데이터로 만든 수급 순위 — **거래대금 상위 N종목 안에서만**.
+
+    저장본(``toss_radar_universe`` 태스크가 1시간마다 받음)만 읽고 외부를 부르지 않습니다.
+
+    규칙
+      - 투자주체마다 값이 있는 가장 최근 날짜를 고르고, 종목들이 가장 많이 가진 날짜 하나로
+        맞춥니다(당일 잠정치에는 개인·기관 세부가 없어 전 거래일 확정치가 됩니다).
+        날짜가 다른 종목을 한 표에 섞지 않습니다.
+      - 금액(억)은 **순매수 주식 수 × 현재가**로 추정한 값입니다. 토스 종목 매매동향은
+        거래량(주)만 주고 거래대금은 주지 않습니다.
+      - 출처 문구에 "거래대금 상위 N종목 한정"과 기준일·추정 여부를 반드시 적습니다.
+    """
+    _TOSS_LAST_REASON["value"] = None
+    if investor not in TOSS_INVESTOR_PATHS:
+        _TOSS_LAST_REASON["value"] = f"'{investor}'{_object_particle(investor)} 지원하지 않습니다"
+        return []
+    snap = store.read_snapshot(catalog.SNAP_TOSS_RADAR_UNIVERSE)
+    if not snap or not snap.payload:
+        _TOSS_LAST_REASON["value"] = (
+            "저장본이 없습니다 (toss_radar_universe 태스크 — 키 미설정이거나 아직 수집 전)"
+            if toss.has_credentials() else "키가 없어 건너뜁니다 (.env의 TOSS_CLIENT_ID/SECRET)"
+        )
+        return []
+    if snap.age_seconds > TOSS_UNIVERSE_MAX_AGE_HOURS * 3600:
+        _TOSS_LAST_REASON["value"] = f"저장본이 {int(snap.age_seconds // 3600)}시간 지나 쓰지 않습니다"
+        return []
+
+    picks: list[tuple[dict, dict, int]] = []
+    for stock in snap.payload.get("stocks") or []:
+        if stock.get("market") != market:
+            continue
+        for record in stock.get("records") or []:
+            net = _toss_net(record, investor)
+            if net is not None:
+                picks.append((stock, record, net))
+                break
+    if not picks:
+        _TOSS_LAST_REASON["value"] = f"{market} 종목에 '{investor}' 값이 없습니다"
+        return []
+
+    dates = [record.get("date") for _, record, _ in picks]
+    target = max(set(dates), key=lambda d: (dates.count(d), d or ""))
+    universe = int(snap.payload.get("universe") or 0)
+    source = (
+        f"토스증권 공식 — 거래대금 상위 {universe}종목 중 순위 (시장 전체 순위 아님) · "
+        f"{target} 기준 · 금액 = 순매수 주식 수 × 현재가 (추정)"
+    )
+    records: list[dict] = []
+    for stock, record, net in picks:
+        if record.get("date") != target or not net:
+            continue
+        if (trade_type == "순매수") != (net > 0):
+            continue
+        price = stock.get("lastPrice")
+        records.append({
+            "code": str(stock.get("code")),
+            "name": stock.get("name") or str(stock.get("code")),
+            "price": price,
+            "changePct": stock.get("changePct"),
+            "netAmountEok": round(net * price / 1e8, 1) if price else None,
+            "netVolume": net,
+            "source": source,
+            "collectedAt": kst.stamp(snap.collected_at) if snap.collected_at else None,
+        })
+    if not records:
+        _TOSS_LAST_REASON["value"] = f"{target} 기준 {trade_type} 종목이 없습니다"
+    return _rank(records, trade_type, top_n)
+
+
+def test_toss_connection() -> dict:
+    """진단 — 레이더가 쓰는 토스 경로를 실제로 부르고, 폴백 저장본의 상태도 함께 적습니다."""
+    result = toss.test_connection_flows()
+    snap = store.read_snapshot(catalog.SNAP_TOSS_RADAR_UNIVERSE)
+    if snap and snap.payload:
+        stocks = snap.payload.get("stocks") or []
+        result["message"] += (
+            f" · 폴백 저장본: 거래대금 상위 {len(stocks)}종목, "
+            f"수집 {kst.stamp(snap.collected_at) if snap.collected_at else '시각 모름'}"
+        )
+    elif result.get("ok"):
+        result["message"] += " · 폴백 저장본 없음 (toss_radar_universe 첫 실행 전)"
+    return result
 
 
 def fetch_pykrx_ranking(

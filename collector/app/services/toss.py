@@ -358,3 +358,71 @@ def fetch_stock_investor_trading(code: str, count: int = 20) -> list[dict]:
         f"/api/v1/stocks/{code}/investor-trading", {"count": min(max(count, 1), 100)},
     ) or {}
     return [normalize_stock_record(r) for r in (result.get("records") or []) if isinstance(r, dict)]
+
+
+# ==============================================================================
+# 수급 레이더 폴백용 — 거래대금 상위 종목 (공식 랭킹 + 종목 정보)
+# ==============================================================================
+def fetch_trading_amount_leaders(count: int = 100) -> list[dict]:
+    """
+    국내 시장 거래대금 상위 종목 (당일 기준, 시장 전체 집계).
+
+    토스에는 **투자자별 순매수 순위** API가 없습니다. 레이더 폴백은 이 목록을 대상 종목으로
+    삼아 종목별 투자자 매매로 순위를 매깁니다 — 그래서 "시장 전체 순위"가 아니라
+    "거래대금 상위 N종목 안의 순위"입니다.
+
+    :returns: [{code, lastPrice, changePct}] 순위 순. changeRate(소수 비율)는 %로 바꿉니다
+    """
+    result = api_get("/api/v1/rankings", {
+        "type": "MARKET_TRADING_AMOUNT", "marketCountry": "KR",
+        "duration": "1d", "count": min(max(count, 1), 100),
+    }) or {}
+    out = []
+    for row in result.get("rankings") or []:
+        if not isinstance(row, dict) or not row.get("symbol"):
+            continue
+        price = row.get("price") or {}
+        rate = _float(price.get("changeRate"))
+        out.append({
+            "code": str(row["symbol"]),
+            "lastPrice": _float(price.get("lastPrice")),
+            "changePct": round(rate * 100, 2) if rate is not None else None,
+        })
+    return out
+
+
+def fetch_stock_infos(codes: list[str]) -> dict[str, dict]:
+    """종목명·시장(KOSPI/KOSDAQ)·종목 유형. 최대 200개를 한 번에."""
+    if not codes:
+        return {}
+    result = api_get("/api/v1/stocks", {"symbols": ",".join(codes[:200])}) or []
+    return {
+        str(item.get("symbol")): {
+            "name": item.get("name"), "market": item.get("market"), "securityType": item.get("securityType"),
+        }
+        for item in result if isinstance(item, dict) and item.get("symbol")
+    }
+
+
+def test_connection_flows() -> dict:
+    """
+    수급 레이더 진단용 — 화면이 쓰는 투자자별 매매 경로를 실제로 한 번 부릅니다.
+
+    연결 테스트 메뉴의 {@link test_connection}(환율)과 달리, 레이더가 쓰는
+    ``market-indicators/KOSPI/investor-trading``을 확인합니다.
+    """
+    if not has_credentials():
+        return {"ok": False, "stage": "no_keys", "message": "[toss] TOSS_CLIENT_ID / TOSS_CLIENT_SECRET이 없습니다."}
+    try:
+        records = fetch_market_investor_trading("KOSPI", count=1)
+    except TossForbidden as exc:
+        return {"ok": False, "stage": "forbidden", "message": str(exc)}
+    except TossError as exc:
+        return {"ok": False, "stage": "http_error", "message": str(exc)}
+    if not records:
+        return {"ok": False, "stage": "empty", "message": "빈 결과입니다."}
+    latest = records[0]
+    return {
+        "ok": True, "stage": "ok",
+        "message": f"코스피 투자자별 매매대금 수신 (기준일 {latest.get('date')}, 갱신 {latest.get('updatedAt')})",
+    }

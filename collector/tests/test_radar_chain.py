@@ -2,7 +2,7 @@
 tests/test_radar_chain.py
 수급 레이더 폴백 체인 회귀 테스트.
 
-체인: KIS(장중) → Daum → Naver → LS → PyKrx → 누적 이력
+체인: KIS(장중) → Daum → Naver → LS → 토스(공식) → PyKrx → 누적 이력
 외부 네트워크를 쓰지 않습니다(각 단계를 대체합니다).
 """
 from __future__ import annotations
@@ -24,6 +24,7 @@ def silence_sources(monkeypatch):
     monkeypatch.setattr(radar, "fetch_daum_ranking", lambda *a, **k: [])
     monkeypatch.setattr(radar, "fetch_naver_ranking", lambda *a, **k: [])
     monkeypatch.setattr(radar.ls, "fetch_deal_ranking", lambda *a, **k: [])
+    monkeypatch.setattr(radar, "fetch_toss_ranking", lambda *a, **k: [])
     monkeypatch.setattr(radar, "fetch_pykrx_ranking", lambda *a, **k: [])
     monkeypatch.setattr(radar, "read_from_history", lambda *a, **k: None)
 
@@ -203,3 +204,29 @@ def test_조사가_받침에_맞게_붙는다():
     assert radar._object_particle("금융투자") == "를"   # 받침 없음
     assert radar._object_particle("연기금") == "을"     # 받침 ㅁ
     assert radar._object_particle("") == "를"
+
+
+def test_toss_runs_after_ls_and_before_pykrx(monkeypatch):
+    monkeypatch.setattr(radar, "is_regular_session", lambda now=None: False)
+    order: list[str] = []
+
+    def ls_call(*args, **kwargs):
+        order.append("ls")
+        return []
+
+    def toss_call(*args, **kwargs):
+        order.append("toss")
+        return _rows("토스증권 공식 — 거래대금 상위 100종목 중 순위")
+
+    def pykrx_call(*args, **kwargs):
+        order.append("pykrx")
+        return _rows("PyKrx")
+
+    monkeypatch.setattr(radar.ls, "fetch_deal_ranking", ls_call)
+    monkeypatch.setattr(radar, "fetch_toss_ranking", toss_call)
+    monkeypatch.setattr(radar, "fetch_pykrx_ranking", pykrx_call)
+
+    result = radar.collect_radar_ranking(datetime.now(KST).date(), investor="연기금")
+
+    assert result["sourceKind"] == "toss"
+    assert order == ["ls", "toss"], "토스가 성공하면 PyKrx는 부르지 않습니다"

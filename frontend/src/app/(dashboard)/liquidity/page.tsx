@@ -19,6 +19,7 @@ import {
   formatTrillionUsd,
 } from "@/lib/format";
 import type { LiquidityResponse } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 const PERIODS = [
   { value: "1", label: "최근 1년" },
@@ -165,7 +166,7 @@ export default function LiquidityPage() {
       )}
 
       <Card
-        title="📈 순유동성 추이"
+        title="📈 순유동성 추이" source={SOURCES.fredLiquidity}
         subtitle="단위: 조 달러 · 축은 데이터 범위에 맞춥니다 (0부터 그리면 변동이 보이지 않습니다)"
       >
         <LineSeries
@@ -184,7 +185,7 @@ export default function LiquidityPage() {
         각자 제 범위를 갖고, 시간축은 공유합니다.
       */}
       <Card
-        title="🧩 구성 항목 분해"
+        title="🧩 구성 항목 분해" source={SOURCES.fredLiquidity}
         subtitle="총자산이 늘어도 TGA·RRP가 더 늘면 시장 유동성은 줄어듭니다. 자릿수가 달라 패널과 단위를 나눕니다 (단위는 각 패널 제목 옆)."
       >
         <div className="grid gap-4 lg:grid-cols-3">

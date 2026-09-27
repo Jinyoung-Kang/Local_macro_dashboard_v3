@@ -23,6 +23,7 @@ import type {
   StatusResponse,
   VerificationResponse,
 } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 const TASK_ICONS: Record<string, string> = { ok: "✅", empty: "⚠️", error: "❌" };
 
@@ -126,7 +127,7 @@ export default function StatusPage() {
       <IssuesPanel />
 
       {data?.keys && (
-        <Card title="🔑 외부 API 키 보유 현황" subtitle="키가 없는 소스는 해당 기능만 비활성화됩니다.">
+        <Card title="🔑 외부 API 키 보유 현황" source={SOURCES.collectorKeys} subtitle="키가 없는 소스는 해당 기능만 비활성화됩니다.">
           <div className="flex flex-wrap gap-2">
             {Object.entries(data.keys).map(([name, present]) => (
               <span
@@ -145,7 +146,7 @@ export default function StatusPage() {
       )}
 
       <Card
-        title="🧩 태스크별 최근 결과"
+        title="🧩 태스크별 최근 결과" source={SOURCES.collectorRuns}
         subtitle="✅ 정상 · ⚠️ 데이터 없음(기존 저장본 유지) · ❌ 오류"
       >
         {message && <p className="mb-3 text-xs text-accent">{message}</p>}
@@ -204,7 +205,7 @@ export default function StatusPage() {
       </Card>
 
       <Card
-        title="📦 스냅샷 신선도"
+        title="📦 스냅샷 신선도" source={SOURCES.snapshots}
         subtitle="수집 시각이 오래된 저장본은 화면에서도 '오래됨'으로 표시됩니다."
       >
         <Table
@@ -250,7 +251,7 @@ export default function StatusPage() {
       </Card>
 
       <Card
-        title="🕳️ 있어야 하는데 없는 데이터셋"
+        title="🕳️ 있어야 하는데 없는 데이터셋" source={SOURCES.snapshots}
         subtitle="기대 목록과 대조해 누락을 찾습니다. 존재하는 것만 나열하면 누락을 알아챌 수 없습니다."
       >
         {(data?.missingDatasets ?? []).length === 0 ? (
@@ -292,7 +293,7 @@ function PublicApiPanel() {
 
   return (
     <Card
-      title="🔌 국내 공공 API 연결 진단"
+      title="🔌 국내 공공 API 연결 진단" source="공공데이터포털(천문연·금융위) · 금융감독원 Open DART — 실제 호출"
       subtitle="공공데이터포털(특일정보·주식시세) · Open DART — 누를 때마다 API당 1회 호출"
       actions={
         <Button onClick={() => setRunId(Date.now())} disabled={loading}>
@@ -365,7 +366,7 @@ function VerificationPanel() {
 
   return (
     <Card
-      title="🔍 데이터 교차 검증 (KRX · KIS)"
+      title="🔍 데이터 교차 검증 (KRX · KIS)" source="KRX Open API · 한국투자증권(KIS) Open API · Yahoo Finance (항목별 출처는 표 안에)"
       subtitle="같은 수치를 서로 다른 출처가 같게 말하는지 대조합니다. '확인 못 함'과 '일치'는 절대 섞지 않습니다."
       actions={
         <Button variant="primary" onClick={run} disabled={running}>
@@ -438,7 +439,7 @@ function IssuesPanel() {
 
   return (
     <Card
-      title="⚠️ 수집 오류·경고 로그"
+      title="⚠️ 수집 오류·경고 로그" source={SOURCES.collectorRuns}
       subtitle={`지금 실패 중인 태스크 · 최근 ${data?.lookbackHours ?? 24}시간 실패 이력(같은 사유는 묶음) · 누락 데이터셋`}
       actions={
         <div className="flex gap-2">

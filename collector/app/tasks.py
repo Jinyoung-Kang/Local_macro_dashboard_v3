@@ -826,6 +826,55 @@ def task_toss_stock_flows() -> str:
     return f"{fetched}/{len(universe)} 종목 · {saved}건" + _reason_suffix(reasons)
 
 
+TOSS_RADAR_UNIVERSE = 100
+
+
+def task_toss_radar_universe() -> str:
+    """
+    📡 레이더 폴백용 — 거래대금 상위 100종목의 최근 2거래일 투자자 매매 (토스증권 공식).
+
+    레이더 화면이 요청할 때마다 100번 부르면 느리고 호출 한도를 태웁니다. 1시간마다
+    한 번 받아 두고, 폴백 단계(radar.fetch_toss_ranking)는 이 저장본으로 순위만 계산합니다.
+    한 번 받은 것으로 외국인·기관·개인·연기금·금융투자·투신, 코스피·코스닥 순위를 모두 만듭니다.
+    최근 2일을 받는 이유 — 당일 잠정치에는 개인·기관 세부가 없어서 전 거래일 확정치로 대신합니다.
+    """
+    try:
+        leaders = toss_service.fetch_trading_amount_leaders(TOSS_RADAR_UNIVERSE)
+        infos = toss_service.fetch_stock_infos([row["code"] for row in leaders])
+    except toss_service.TossMissingKey as exc:
+        raise EmptyResult(f"{exc} — 토스 수급 기능이 꺼져 있습니다") from None
+    except toss_service.TossError as exc:
+        raise EmptyResult(f"거래대금 상위 목록을 받지 못했습니다 — {exc}") from None
+    if not leaders:
+        raise EmptyResult("거래대금 랭킹이 비어 있습니다 (집계 전이거나 휴장) — 기존 저장본 유지")
+
+    stocks: list[dict] = []
+    reasons: list[str] = []
+    for index, leader in enumerate(leaders):
+        if index:
+            time.sleep(TOSS_STOCK_SPACING)
+        info = infos.get(leader["code"]) or {}
+        try:
+            records = toss_service.fetch_stock_investor_trading(leader["code"], 2)
+        except toss_service.TossForbidden as exc:
+            reasons.append(str(exc))
+            break
+        except toss_service.TossError as exc:
+            reasons.append(f"{leader['code']}: {exc}")
+            continue
+        stocks.append({**leader, "name": info.get("name"), "market": info.get("market"),
+                       "securityType": info.get("securityType"), "records": records})
+
+    if not stocks:
+        raise EmptyResult(f"0/{len(leaders)} 종목 — 기존 저장본 유지" + _reason_suffix(reasons))
+    store.put_snapshot(catalog.SNAP_TOSS_RADAR_UNIVERSE, {
+        "source": "토스증권 Open API — 시장 거래대금 상위 랭킹 + 종목별 투자자 매매동향",
+        "universe": len(leaders),
+        "stocks": stocks,
+    })
+    return f"{len(stocks)}/{len(leaders)} 종목" + _reason_suffix(reasons)
+
+
 def _apply_bond_override(payload: dict) -> dict:
     """
     미국채 카드를 TradingView Scanner의 실제 수익률로 보정합니다.
@@ -1064,6 +1113,7 @@ ALL_TASKS: tuple[Task, ...] = (
     Task("fsc_prices", "slow", task_fsc_prices, "국내 공식 일별 시세 (금융위)"),
     Task("toss_market_flows", "slow", task_toss_market_flows, "코스피·코스닥 투자자별 매매대금 (토스증권)"),
     Task("toss_stock_flows", "slow", task_toss_stock_flows, "레이더 종목 투자자별 매매동향 (토스증권)"),
+    Task("toss_radar_universe", "slow", task_toss_radar_universe, "레이더 폴백 — 거래대금 상위 100종목 투자자 매매 (토스증권)"),
     Task("sec_13f", "weekly", task_sec_13f, "SEC 13F 기관 포트폴리오 (분기 공시)"),
     Task("kr_holidays", "weekly", task_kr_holidays, "한국 공휴일 (천문연 특일정보)"),
     Task("dart_fundamentals", "weekly", task_dart_fundamentals, "국내 종목 재무 (DART 사업보고서)"),

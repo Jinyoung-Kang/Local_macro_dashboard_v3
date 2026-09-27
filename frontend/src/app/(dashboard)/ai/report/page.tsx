@@ -7,6 +7,7 @@ import { useApi } from "@/hooks/useApi";
 import { apiPost } from "@/lib/api";
 import { formatKst } from "@/lib/format";
 import type { AiEngines, AiResponse, SnapshotText } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 /**
  * 🤖 AI 종합 데이터 분석 &amp; 결론 리포트.
@@ -153,7 +154,7 @@ export default function AiReportPage() {
 
       {showData && (
         <Card
-          title="📋 수집 데이터 원본 (AI 입력)"
+          title="📋 수집 데이터 원본 (AI 입력)" source={SOURCES.aiInput}
           subtitle={
             snapshot.data
               ? `${formatKst(snapshot.data.generatedAtKst)} · ${snapshot.data.chars.toLocaleString("ko-KR")}자`
@@ -175,6 +176,7 @@ export default function AiReportPage() {
       {result && (
         <Card
           title={`📄 ${result.reportType ?? "AI 리포트"}`}
+          source={`${result.provider ?? "AI"}가 대시보드 저장본을 읽고 쓴 해석 — 수치의 원래 출처는 입력 원본에 표기 · 투자 판단 근거 아님`}
           subtitle={
             result.status
               ? `${result.provider} · ${formatLatency(result.latencyMs)}${

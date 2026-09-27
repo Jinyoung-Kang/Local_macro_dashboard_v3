@@ -340,6 +340,9 @@ def _build_card(spec: dict, payload: dict | None) -> dict:
         "note": spec.get("note"),
         "market": spec.get("market"),
         "ticker": spec["ticker"],
+        # 모든 카드에 출처를 붙입니다. 미국채처럼 다른 출처로 덮어쓰는 카드는
+        # 보정 단계(tasks._apply_bond_override)가 이 값을 바꿉니다.
+        "source": f"Yahoo Finance ({spec['ticker']})",
     }
 
     points = (payload or {}).get("points") or []

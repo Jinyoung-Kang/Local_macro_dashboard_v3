@@ -23,6 +23,7 @@ import {
   formatNumber,
 } from "@/lib/format";
 import type { PortfolioResponse } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 const SERIES_COLORS = [
   "#58A6FF", "#3FB950", "#D29922", "#F85149", "#A371F7",
@@ -148,7 +149,7 @@ export default function InstitutionsPage() {
           </div>
 
           <Card
-            title="🗺️ 상위 종목 분기별 비중 히트맵"
+            title="🗺️ 상위 종목 분기별 비중 히트맵" source={SOURCES.sec13f}
             subtitle="색이 진할수록 비중이 큽니다. 어느 칸이 진해지는지만 보면 흐름이 읽힙니다."
           >
             {/*
@@ -167,7 +168,7 @@ export default function InstitutionsPage() {
           </Card>
 
           <Card
-            title="📈 상위 종목 분기별 비중 추이 (선)"
+            title="📈 상위 종목 분기별 비중 추이 (선)" source={SOURCES.sec13f}
             subtitle="같은 값을 선으로 본 것입니다. 특정 종목의 방향을 좇을 때 씁니다."
           >
             {chartSeries.length === 0 ? (
@@ -178,7 +179,7 @@ export default function InstitutionsPage() {
           </Card>
 
           <Card
-            title={`📋 보유 종목 상세 (기준일 ${data.latest?.reportDate ?? EMPTY})`}
+            title={`📋 보유 종목 상세 (기준일 ${data.latest?.reportDate ?? EMPTY})`} source={`${SOURCES.sec13f} · 원화 환산은 원/달러 최신값(Yahoo Finance)`}
             subtitle={`직전 분기 대비 액션은 비중 변화 ±0.05%p를 기준으로 분류합니다. ${usdKrw.note}`}
           >
             <Table

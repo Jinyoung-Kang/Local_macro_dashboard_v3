@@ -15,6 +15,7 @@ import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatKrw, formatNumber, formatPercent, formatSigned } from "@/lib/format";
 import type { InvestorTrendResponse, KrMarketTotalsResponse, KrxFuturesResponse } from "@/lib/types";
 import { SpotFuturesCard } from "./SpotFuturesCard";
+import { SOURCES } from "@/lib/sources";
 
 /**
  * 🇰🇷 국내 파생 & 투기세력 (KRX).
@@ -51,6 +52,8 @@ export default function KrxPage() {
   }
 
   const data = futures.data;
+  // 수집이 실패해 KODEX 200 추정치로 대체됐으면 출처도 그렇게 적습니다.
+  const krxSource = data?.isEstimated ? "KODEX 200(Yahoo Finance) 기반 추정치" : "KRX Open API (공식)";
   const latest = data?.latest;
   const rows = data?.rows ?? [];
 
@@ -83,6 +86,7 @@ export default function KrxPage() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric
               label="선물 종가"
+              source={krxSource}
               value={formatNumber(latest.futuresClose, 2)}
               delta={latest.changePct}
               deltaText={formatPercent(latest.changePct)}
@@ -95,6 +99,7 @@ export default function KrxPage() {
             />
             <Metric
               label="미결제약정 (OI)"
+              source={krxSource}
               value={formatNumber(latest.openInterest, 0)}
               delta={latest.oiChange}
               deltaText={
@@ -108,6 +113,7 @@ export default function KrxPage() {
             />
             <Metric
               label="시장 베이시스"
+              source={`${krxSource} — 선물 종가 − KOSPI200 지수`}
               value={latest.marketBasis === null ? "데이터 미제공" : formatNumber(latest.marketBasis, 2)}
               caption={latest.basisState}
               note={latest.basisNote}
@@ -115,6 +121,7 @@ export default function KrxPage() {
             />
             <Metric
               label="4대 국면 판정"
+              source="대시보드 판정 — 선물 가격 방향 × 미결제약정 증감"
               value={latest.marketPhase ?? EMPTY}
               tone={
                 latest.marketPhase?.includes("판정 불가") ? "text-muted" : "text-bright"
@@ -145,7 +152,7 @@ export default function KrxPage() {
         보였습니다). 축을 나누고, 어느 선이 어느 축인지 부제에 적습니다.
       */}
       <Card
-        title="📈 선물 종가 및 미결제약정 추이"
+        title="📈 선물 종가 및 미결제약정 추이" source={krxSource}
         subtitle="왼쪽 축: 선물 종가 · 오른쪽 축: 미결제약정(계약) — 자릿수가 달라 축을 나눠 그립니다."
       >
         <MultiLineSeries
@@ -171,7 +178,7 @@ export default function KrxPage() {
       </Card>
 
       <Card
-        title="📊 한국판 COT OI Index"
+        title="📊 한국판 COT OI Index" source={SOURCES.krxDerived}
         subtitle="최근 20거래일 미결제약정 범위 내 위치(0~100). 100에 가까울수록 포지션이 역사적 최대 수준입니다."
       >
         <LineSeries
@@ -184,9 +191,10 @@ export default function KrxPage() {
 
       <Card
         title="🧭 투자주체별 선물 수급"
+        source={trend.data?.source ?? "Daum 금융 투자주체별 매매동향 (비공식)"}
         subtitle={
           trend.data?.available
-            ? `${trend.data.unit} 기준 · 기준일 ${trend.data.dataDate ?? EMPTY} · ${trend.data.source}`
+            ? `${trend.data.unit} 기준 · 기준일 ${trend.data.dataDate ?? EMPTY}`
             : undefined
         }
         actions={trend.data?.measure ? <SourceBadge>{trend.data.measure}</SourceBadge> : undefined}
@@ -250,7 +258,8 @@ export default function KrxPage() {
 
       <Card
         title="⚡ 장중 수급 가속도 (최근 30분)"
-        subtitle="Daum 시간별 선물 수급 기반 비공식 데이터 · 장중에만 값이 있습니다."
+        subtitle="장중에만 값이 있습니다."
+        source="Daum 금융 시간별 선물 수급 (비공식)"
       >
         {intraday.data?.skipped && (
           <Banner tone="info">{intraday.data.message}</Banner>
@@ -317,6 +326,7 @@ function MarketTotalsCard() {
   return (
     <Card
       title="🏛️ 증시 규모 — 시가총액 추이·거래대금 (금융위 공식)"
+      source={data?.source ?? "금융위원회 주식시세정보 (공식)"}
       subtitle={data?.latestBasDt ? `기준일 ${data.latestBasDt} · 거래소 확정치, 다음 영업일 13시 이후 갱신` : undefined}
       actions={<Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} stale={data?.stale} />}
     >

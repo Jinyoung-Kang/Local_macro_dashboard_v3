@@ -21,7 +21,7 @@ import java.util.Optional;
 /**
  * 📡 외국인/기관 수급 레이더.
  *
- * <p>수집 순서는 수집기가 관리합니다(KIS → Daum → Naver → LS → PyKrx → 누적 이력).
+ * <p>수집 순서는 수집기가 관리합니다(KIS → Daum → Naver → LS → 토스 → PyKrx → 누적 이력).
  * 백엔드는 저장본을 읽고, 필요하면 수집을 요청하며, <b>어느 출처가 실제로
  * 성공했는지</b>와 <b>이력 대체 여부</b>를 화면에 그대로 전달합니다.
  *
@@ -53,6 +53,13 @@ public class RadarService {
     public static final String UNSUPPORTED_INVESTOR_NOTE =
             "Daum이 제공하지 않는 투자주체입니다. 이 넷을 담당하던 Naver가 페이지를 "
                     + "폐지해(HTTP 410) 현재 받을 수 있는 소스가 없습니다.";
+    /** 토스 폴백이 준비됐을 때 — 넷은 토스 공식 데이터로만 받습니다. 한계를 함께 적습니다. */
+    public static final String TOSS_ONLY_INVESTOR_NOTE =
+            "개인·연기금·금융투자·투신은 토스증권 공식 데이터로 만든 순위입니다 — 시장 전체가 아니라 "
+                    + "거래대금 상위 100종목 안의 순위이고, 금액은 순매수 주식 수 × 현재가로 추정합니다. "
+                    + "당일 잠정치에는 이 넷이 없어 전 거래일 확정치를 씁니다(1시간마다 갱신).";
+    /** 토스 폴백 저장본을 쓸 수 있는 최대 경과 시간 (수집기 radar.TOSS_UNIVERSE_MAX_AGE_HOURS와 같게). */
+    static final long TOSS_UNIVERSE_MAX_AGE_SECONDS = 26 * 60 * 60L;
     public static final List<String> TRADE_TYPES = List.of("순매수", "순매도");
     public static final List<String> INTERVALS = List.of("TODAY", "DAYS_5", "DAYS_20");
 
@@ -64,6 +71,31 @@ public class RadarService {
         this.store = store;
         this.repository = repository;
         this.collector = collector;
+    }
+
+    /**
+     * 레이더 선택지.
+     *
+     * <p>고를 수 있는 투자주체는 <b>실제로 받을 수 있는지</b>에 따라 달라집니다. 토스 폴백
+     * 저장본(거래대금 상위 100종목의 투자자 매매)이 있으면 여섯 모두, 없으면 Daum이 주는 둘만.
+     */
+    public Map<String, Object> options() {
+        boolean tossReady = repository.readSnapshot(Datasets.SNAP_TOSS_RADAR_UNIVERSE)
+                .filter(snapshot -> snapshot.payload() != null)
+                .filter(snapshot -> snapshot.isFresh(TOSS_UNIVERSE_MAX_AGE_SECONDS))
+                .isPresent();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("markets", MARKETS);
+        out.put("investors", INVESTORS);
+        // 화면이 "지원 안 함"을 표시할 수 있도록 함께 내려보냅니다.
+        out.put("supportedInvestors", tossReady ? INVESTORS : SUPPORTED_INVESTORS);
+        out.put("unsupportedInvestorNote", tossReady ? TOSS_ONLY_INVESTOR_NOTE
+                : UNSUPPORTED_INVESTOR_NOTE + " 토스증권 키(TOSS_CLIENT_ID/SECRET)가 있으면 토스 공식 데이터로 "
+                        + "거래대금 상위 100종목 안의 순위를 받을 수 있습니다(toss_radar_universe 태스크).");
+        out.put("fallbackChain", List.of("KIS(장중)", "Daum", "Naver", "LS", "토스(공식)", "PyKrx", "누적 이력"));
+        out.put("tradeTypes", TRADE_TYPES);
+        out.put("intervals", INTERVALS);
+        return out;
     }
 
     public Map<String, Object> ranking(String market, String investor, String tradeType,

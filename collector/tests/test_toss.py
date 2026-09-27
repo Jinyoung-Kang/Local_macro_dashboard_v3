@@ -267,3 +267,55 @@ def test_market_flows_without_key_is_empty_result(store, monkeypatch):
     with pytest.raises(tasks.EmptyResult) as info:
         tasks.task_toss_market_flows()
     assert "TOSS_CLIENT_ID" in str(info.value)
+
+
+# ------------------------------------------------------------------ 레이더 폴백 (DB)
+def _universe_record(date: str, foreigner, individual, pension):
+    return {
+        "date": date,
+        "investors": {
+            "foreigner": {"net": foreigner} if foreigner is not None else None,
+            "institution": {"net": 0},
+            "individual": {"net": individual} if individual is not None else None,
+            "otherCorporation": None,
+        },
+        "breakdown": {"pensionFund": {"net": pension}} if pension is not None else None,
+    }
+
+
+def _seed_universe(store):
+    store.put_snapshot(catalog.SNAP_TOSS_RADAR_UNIVERSE, {"universe": 100, "stocks": [
+        {"code": "005930", "name": "삼성전자", "market": "KOSPI", "lastPrice": 70000.0, "changePct": 1.0,
+         "records": [_universe_record("2026-09-25", 300000, None, None),       # 당일 잠정: 개인·연기금 없음
+                     _universe_record("2026-09-24", 100000, -50000, 20000)]},
+        {"code": "000660", "name": "SK하이닉스", "market": "KOSPI", "lastPrice": 200000.0, "changePct": -0.5,
+         "records": [_universe_record("2026-09-25", -10000, None, None),
+                     _universe_record("2026-09-24", 5000, 80000, -3000)]},
+        {"code": "247540", "name": "에코프로비엠", "market": "KOSDAQ", "lastPrice": 150000.0, "changePct": 2.0,
+         "records": [_universe_record("2026-09-25", 999999, None, None)]},
+    ]})
+
+
+def test_toss_ranking_uses_latest_date_with_values(store):
+    _seed_universe(store)
+    from app.services import radar
+
+    foreign = radar.fetch_toss_ranking("KOSPI", "외국인", "순매수", 30)
+    assert [row["code"] for row in foreign] == ["005930"]          # 코스닥 종목은 빠짐
+    assert foreign[0]["netAmountEok"] == pytest.approx(210.0)      # 300,000주 × 70,000원
+    assert "2026-09-25 기준" in foreign[0]["source"]
+    assert "시장 전체 순위 아님" in foreign[0]["source"]
+
+    # 개인·연기금은 당일 잠정치가 없어 전 거래일(09-24) 확정치로 — 날짜를 섞지 않습니다
+    individual = radar.fetch_toss_ranking("KOSPI", "개인", "순매수", 30)
+    assert [row["code"] for row in individual] == ["000660"]
+    assert "2026-09-24 기준" in individual[0]["source"]
+    pension_sell = radar.fetch_toss_ranking("KOSPI", "연기금", "순매도", 30)
+    assert [row["code"] for row in pension_sell] == ["000660"]
+    assert pension_sell[0]["netAmountEok"] < 0
+
+
+def test_toss_ranking_without_snapshot_explains_why(store):
+    from app.services import radar
+    assert radar.fetch_toss_ranking("KOSPI", "외국인", "순매수", 30) == []
+    assert radar._TOSS_LAST_REASON["value"]

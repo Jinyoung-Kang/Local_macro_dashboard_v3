@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Banner, Button, Card, Loading, SourceBadge } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { apiGet } from "@/lib/api";
+import { SOURCES } from "@/lib/sources";
 
 /**
  * 🔌 토스증권 — 연결 진단·조회 테스트.
@@ -40,8 +41,8 @@ export function TossSection() {
       <h2 className="text-base font-semibold text-bright">🔌 토스증권</h2>
 
       <Card
-        title="연결 상태"
-        subtitle="연결 진단 전용입니다. 대시보드 수치는 토스에서 가져오지 않습니다"
+        title="연결 상태" source={SOURCES.toss}
+        subtitle="연결 진단·조회 테스트입니다. 📡 수급 레이더(시장 전체·수급 지속성·폴백 순위)와 🇰🇷 국내 파생(현물·선물 수급 동조)도 토스 공식 데이터를 씁니다"
         actions={
           <Button onClick={() => setRunId(Date.now())} disabled={diagnostics.loading}>
             {diagnostics.loading ? "검사 중…" : "진단 실행"}
@@ -61,7 +62,7 @@ export function TossSection() {
         )}
       </Card>
 
-      <Card title="실제 데이터 조회 테스트">
+      <Card title="실제 데이터 조회 테스트" source={SOURCES.toss}>
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => call("/api/ai/toss/exchange-rate?base=USD&quote=KRW")}

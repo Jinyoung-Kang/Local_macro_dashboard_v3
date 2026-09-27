@@ -5,6 +5,7 @@ import { Banner, Button, Card, Loading, Select, SourceBadge, Table } from "@/com
 import { useApi } from "@/hooks/useApi";
 import { apiPost } from "@/lib/api";
 import type { AiEngine, AiResponse } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 const SAMPLE_PROMPTS = [
   "한국어로 한 문장만 답하십시오: 지금 연결이 정상인지 알려 주세요.",
@@ -47,7 +48,7 @@ export function AiEngineSection() {
       {engines.loading && !engines.data && <Loading />}
 
       {engines.data && (
-        <Card title="등록된 엔진" subtitle="엔진별 응답·지연시간·자동 번역 동작을 확인합니다">
+        <Card title="등록된 엔진" source={SOURCES.aiEngines} subtitle="엔진별 응답·지연시간·자동 번역 동작을 확인합니다">
           <Table
             rows={engines.data.engines}
             rowKey={(row) => row.id}
@@ -112,7 +113,7 @@ export function AiEngineSection() {
 
       {result && (
         <Card
-          title="응답"
+          title="응답" source={SOURCES.aiEngines}
           subtitle={
             result.status
               ? `${result.provider} · ${result.latencyMs}ms · ${result.pipelineStep}`

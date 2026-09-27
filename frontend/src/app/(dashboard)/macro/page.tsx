@@ -23,10 +23,12 @@ import {
   Table,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { SOURCES, uniqueSources } from "@/lib/sources";
 import { deltaColor, EMPTY, formatKst, formatNumber, formatPercent, formatSigned, statusColor } from "@/lib/format";
 import type {
   AdvancedIndicators,
   FxSeriesResponse,
+  MacroItem,
   MacroOverview,
   RiskEntry,
   RiskIndicators,
@@ -169,6 +171,7 @@ export default function MacroPage() {
           key={category.id}
           title={category.title}
           subtitle={category.note ? `데이터 지연: ${category.note}` : undefined}
+          source={uniqueSources(category.items.map((item) => itemSource(item))) || undefined}
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {category.items.map((item) => (
@@ -196,12 +199,12 @@ export default function MacroPage() {
                 delta={item.delta}
                 deltaText={item.deltaStr ?? EMPTY}
                 tone={item.status === "fail" ? "text-muted" : undefined}
+                source={itemSource(item)}
                 caption={
                   <span className="flex flex-col gap-0.5">
                     <span>직전: {item.prevStr ?? EMPTY}</span>
                     {item.lastTs && <span>{formatKst(item.lastTs)}</span>}
                     {item.prevSource && <span>전일값 출처: {item.prevSource}</span>}
-                    {item.source && <span>{item.source}</span>}
                   </span>
                 }
               />
@@ -227,6 +230,7 @@ export default function MacroPage() {
           <Card
             title="📖 장단기 금리차 해석 기준"
             subtitle="역사적 분포에 근거한 참고치이며 투자 판단의 근거가 아닙니다."
+            source={SOURCES.internalRules}
           >
             <Table
               rows={SPREAD_TABLE}
@@ -317,6 +321,7 @@ function FxCompareSection() {
   return (
     <Card
       title="💱 환율·달러인덱스 비교"
+      source={`${SOURCES.yahoo} — 매크로 카드와 같은 티커`}
       subtitle={
         mode === "index"
           ? "기준일을 100으로 맞춰 겹칩니다 — 단위가 달라도 '무엇이 더 움직였는지'를 비교할 수 있습니다."
@@ -468,6 +473,7 @@ function SpreadSection({
     <Card
       title={title}
       subtitle={subtitle}
+      source={`${SOURCES.fred} · ${SOURCES.tradingView}`}
       actions={<RangeTabs value={range} onChange={setRange} />}
     >
       {/*
@@ -614,6 +620,7 @@ function RiskSection({ risk, loading }: { risk: RiskIndicators | null; loading: 
     <Card
       title="⚡ 신용 리스크, 은행권 및 시장 변동성"
       subtitle="주식·채권 변동성, 기업 부도 위험, 단기 자금경색, 종합 금융스트레스"
+      source="FRED (공식) — 하이일드·CP·STLFSI4 · Yahoo Finance — ^VIX · MOVE는 ^TNX 변동성 기반 추정"
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {entries.map((entry) => {
@@ -635,6 +642,7 @@ function RiskSection({ risk, loading }: { risk: RiskIndicators | null; loading: 
               }
               tone={item?.available ? undefined : "text-muted"}
               caption={item?.asOf ? `기준일 ${item.asOf}` : undefined}
+              source={RISK_SOURCES[entry.key]}
               note={
                 item?.isProxy ? (
                   <span className="text-warn">
@@ -702,6 +710,7 @@ function AdvancedSection({
   return (
     <Card
       title="🧭 심화 매크로 지표"
+      source={SOURCES.fred}
       subtitle="명목금리·하이일드만으로는 보이지 않는 구조를 메우는 6종 (30Y-3M은 DGS30−DGS3MO로 계산, 나머지는 FRED 공식 시계열)"
       actions={<RangeTabs value={range} onChange={setRange} />}
     >
@@ -734,6 +743,7 @@ function AdvancedSection({
               ) : undefined
             }
             note={entry.note}
+            source={entry.source}
           />
         ))}
       </div>
@@ -854,7 +864,10 @@ function SingleChartSection() {
   }>(`/api/macro/ticker?symbol=${encodeURIComponent(symbol)}&period=${period}`);
 
   return (
-    <Card title="📈 지표별 기간별 단독 차트">
+    <Card
+      title="📈 지표별 기간별 단독 차트"
+      source={symbol === "^MOVE" ? "Yahoo Finance ^TNX 변동성 기반 추정 (실제 ICE BofA MOVE 아님)" : `Yahoo Finance (${symbol})`}
+    >
       <div className="mb-4 flex flex-wrap gap-3">
         <Select label="지표" value={symbol} onChange={setSymbol} options={SINGLE_TICKERS} />
         <Select
@@ -905,6 +918,7 @@ function ScrapedSection() {
   return (
     <Card
       title="🔎 비공식 스크래핑 시세 비교"
+      source="TradingView Scanner · Yahoo Finance 공개 엔드포인트 (비공식)"
       subtitle="TradingView·Yahoo 공개 엔드포인트에서 받은 참고 시세입니다. 공식 확정치가 아닙니다."
       actions={data?.updatedAt ? <SourceBadge>{formatKst(data.updatedAt)}</SourceBadge> : undefined}
     >
@@ -948,3 +962,17 @@ function ScrapedSection() {
     </Card>
   );
 }
+
+/** 카드 한 장의 출처. 수집기가 붙인 값이 우선이고, 예전 저장본(출처 필드 없음)은 티커로 채웁니다. */
+function itemSource(item: MacroItem): string | undefined {
+  if (item.source) return item.source;
+  return item.ticker ? `Yahoo Finance (${item.ticker})` : undefined;
+}
+
+const RISK_SOURCES: Record<string, string> = {
+  vix: "Yahoo Finance (^VIX)",
+  move: "Yahoo Finance ^TNX 기반 추정",
+  hyOas: "FRED BAMLH0A0HYM2 (ICE BofA 하이일드 OAS)",
+  cpSpread: "FRED CPF3M − DGS3MO (계산)",
+  stlfsi: "FRED STLFSI4",
+};

@@ -3,16 +3,23 @@
 import { ReactNode } from "react";
 import { deltaColor, EMPTY, formatAge, formatKst } from "@/lib/format";
 
-/** 섹션 카드 컨테이너. */
+/**
+ * 섹션 카드 컨테이너.
+ *
+ * @param source 이 카드 숫자의 출처. 모든 카드가 같은 모양("출처 · …")으로 적도록 여기서 그립니다.
+ *               출처 문구는 `lib/sources.ts`에 모아 두었습니다 — 화면마다 따로 적으면 표기가 갈립니다.
+ */
 export function Card({
   title,
   subtitle,
+  source,
   actions,
   children,
   className = "",
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
+  source?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -21,11 +28,12 @@ export function Card({
     <section
       className={`rounded-lg border border-border bg-surface p-4 sm:p-5 ${className}`}
     >
-      {(title || actions) && (
+      {(title || actions || source) && (
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             {title && <h2 className="text-base font-semibold text-bright">{title}</h2>}
             {subtitle && <p className="mt-1 text-xs text-muted">{subtitle}</p>}
+            {source && <SourceLine>{source}</SourceLine>}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </header>
@@ -43,6 +51,7 @@ export function Metric({
   deltaText,
   caption,
   note,
+  source,
   tone,
 }: {
   label: ReactNode;
@@ -51,6 +60,8 @@ export function Metric({
   deltaText?: string;
   caption?: ReactNode;
   note?: ReactNode;
+  /** 이 지표 하나의 출처 (카드 전체 출처와 다를 때) */
+  source?: ReactNode;
   tone?: string;
 }) {
   return (
@@ -66,7 +77,18 @@ export function Metric({
       )}
       {caption && <div className="mt-1 text-[11px] text-muted">{caption}</div>}
       {note && <div className="mt-2 text-[11px] leading-relaxed text-muted">{note}</div>}
+      {source && <SourceLine>{source}</SourceLine>}
     </div>
+  );
+}
+
+/** "출처 · …" 한 줄. 카드·지표가 같은 모양을 쓰게 합니다. */
+export function SourceLine({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-1 text-[11px] text-muted">
+      <span className="mr-1 rounded border border-border px-1 py-px text-[10px]">출처</span>
+      {children}
+    </p>
   );
 }
 

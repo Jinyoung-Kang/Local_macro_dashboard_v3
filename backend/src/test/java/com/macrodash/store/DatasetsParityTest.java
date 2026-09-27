@@ -66,6 +66,7 @@ class DatasetsParityTest {
         assertThat(constant(source, "SNAP_FSC_PRICES_META")).isEqualTo(Datasets.SNAP_FSC_PRICES_META);
         assertThat(constant(source, "SNAP_TOSS_MARKET_FLOWS")).isEqualTo(Datasets.SNAP_TOSS_MARKET_FLOWS);
         assertThat(constant(source, "OBS_TOSS_STOCK_FLOW")).isEqualTo(Datasets.OBS_TOSS_STOCK_FLOW);
+        assertThat(constant(source, "SNAP_TOSS_RADAR_UNIVERSE")).isEqualTo(Datasets.SNAP_TOSS_RADAR_UNIVERSE);
     }
 
     @Test

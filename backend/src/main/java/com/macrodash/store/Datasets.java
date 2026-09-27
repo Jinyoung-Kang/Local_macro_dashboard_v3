@@ -30,6 +30,8 @@ public final class Datasets {
     public static final String SNAP_FSC_PRICES_META = "kr.fsc_prices_meta";
     /** 코스피·코스닥 투자자별 매매대금 (토스증권 공식, 일별). */
     public static final String SNAP_TOSS_MARKET_FLOWS = "kr.toss_market_flows";
+    /** 거래대금 상위 100종목의 투자자 매매 (토스증권 공식) — 레이더 폴백용. */
+    public static final String SNAP_TOSS_RADAR_UNIVERSE = "kr.toss_radar_universe";
 
     /** 변동성 지수는 가장 긴 기간으로 한 번 저장하고 짧은 기간은 잘라 씁니다. */
     public static final String VOLATILITY_STORE_PERIOD = "5y";

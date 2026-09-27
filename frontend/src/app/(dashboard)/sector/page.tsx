@@ -15,6 +15,7 @@ import {
 import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatNumber, formatPercent } from "@/lib/format";
 import type { SectorResponse, SectorRow } from "@/lib/types";
+import { SOURCES } from "@/lib/sources";
 
 /**
  * 🔄 섹터 & 자산군 로테이션.
@@ -73,7 +74,7 @@ export default function SectorPage() {
       )}
 
       <Card
-        title="섹터 모멘텀"
+        title="섹터 모멘텀" source={SOURCES.yahooEtf}
         actions={
           <div className="flex flex-wrap items-end gap-3">
             <Select
@@ -107,13 +108,13 @@ export default function SectorPage() {
       </Card>
 
       <Card
-        title="섹터 상세"
+        title="섹터 상세" source={SOURCES.yahooEtf}
         subtitle={`표본이 부족한 기간은 —로 표시합니다. 순위는 위에서 고른 ${period} 기준입니다.`}
       >
         <ReturnsTable rows={sectors} period={period} kindLabel="유형" />
       </Card>
 
-      <Card title="자산군 상세" subtitle="주식·채권·원자재·통화 전반의 상대 성과">
+      <Card title="자산군 상세" source={SOURCES.yahooEtf} subtitle="주식·채권·원자재·통화 전반의 상대 성과">
         {/* 초과성과(α)는 S&P 500 대비 지표라 자산군에는 의미가 없습니다.
             전부 "—"인 열을 남겨 두면 "계산이 실패했나?"로 읽힙니다. */}
         <ReturnsTable rows={assets} period={period} kindLabel="자산군" showAlpha={false} />

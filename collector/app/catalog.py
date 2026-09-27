@@ -27,6 +27,7 @@ SNAP_DART_CORP_CODES = "kr.dart_corp_codes"     # DART 고유번호 ↔ 종목�
 SNAP_DART_FUNDAMENTALS = "kr.dart_fundamentals" # DART 사업보고서 주요계정 (수급 레이더 종목)
 SNAP_FSC_PRICES_META = "kr.fsc_prices_meta"     # 금융위 시세 최신 기준일·시장 합계 (종목별 값은 observations)
 SNAP_TOSS_MARKET_FLOWS = "kr.toss_market_flows" # 코스피·코스닥 투자자별 매매대금 (토스증권 공식, 일별)
+SNAP_TOSS_RADAR_UNIVERSE = "kr.toss_radar_universe"  # 거래대금 상위 100종목의 투자자 매매 (레이더 폴백용)
 
 # 변동성 지수(^VIX / ^MOVE)는 가장 긴 기간으로 한 번 저장하고, 짧은 기간
 # 요청은 잘라 씁니다 (13F에서 q1을 q8에서 유도하는 것과 같은 방식).

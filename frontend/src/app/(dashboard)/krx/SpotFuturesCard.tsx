@@ -30,9 +30,10 @@ export function SpotFuturesCard() {
       title="🔀 현물·선물 수급 동조 (외국인·기관·개인)"
       subtitle={
         data?.available
-          ? `현물 기준일 ${data.spotDate} (코스피 전체, 토스증권 공식) · 선물 기준일 ${data.futuresDate} (KOSPI200 선물, Daum)`
-          : "현물: 토스증권 Open API · 선물: Daum 투자주체별 매매동향"
+          ? `현물 기준일 ${data.spotDate} (코스피 전체) · 선물 기준일 ${data.futuresDate} (KOSPI200 선물)`
+          : undefined
       }
+      source="현물: 토스증권 Open API (공식, 원) · 선물: Daum 투자주체별 매매동향 (비공식, 계약)"
       actions={<Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} />}
     >
       {loading && !data && <Loading />}
