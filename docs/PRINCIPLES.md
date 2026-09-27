@@ -323,10 +323,15 @@ PostgreSQL·수집기는 비밀번호가 없거나(`macro/macro`) 토큰이 선�
 있습니다. 반대로 휴대폰에서 보실 거라면 **`APP_PASSWORD`를 기본값에서 반드시
 바꾸세요** — 그 값 하나가 대시보드 전체의 접근 통제입니다.
 
-수집기 API에 토큰(`COLLECTOR_API_TOKEN`)을 설정하면 수집을 유발하는 경로가 전부
-막힙니다. `/health`와 `/status`만 열어 둡니다 — 컨테이너 헬스체크와
-`make status`·`make doctor`가 쓰고, 비밀값은 담지 않습니다(키는 설정 여부만
-`true/false`로 알립니다).
+수집기 API에 토큰(`COLLECTOR_API_TOKEN`, `make setup`이 채움)을 설정하면 수집을
+유발하는 경로가 전부 막힙니다. `/health`와 `/status`만 열어 둡니다 — 컨테이너
+헬스체크와 `make status`·`make doctor`가 쓰고, 비밀값은 담지 않습니다(키는 설정
+여부만 `true/false`로 알립니다).
+
+`127.0.0.1`에만 열어도 **이 맥의 브라우저**는 수집기에 닿습니다. 대시보드를 켜 둔 채
+방문한 다른 사이트가 `/maintenance/purge`를 부르면 다시 받을 수 없는 누적 이력이
+지워졌습니다(재현: 100행 → 0행). 그래서 브라우저가 보낸 다른 출처의 요청은 토큰과
+상관없이 403으로 막습니다(`Sec-Fetch-Site`·`Origin` 검사, `collector/app/webguard.py`).
 
 ## 자동 갱신은 지킬 수 있는 주기만 약속합니다
 
