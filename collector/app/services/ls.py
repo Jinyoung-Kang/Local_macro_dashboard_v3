@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from .. import settings
+from .. import http, settings
 from .. import kst
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,11 @@ INVESTOR_CODES = {
     "외국인": "1", "기관": "2", "개인": "3",
     "투신": "4", "금융투자": "5", "연기금": "7",
 }
+
+
+def _http() -> requests.Session:
+    """이 클라이언트 전용 세션 — 연결만 재사용합니다(재시도·쿠키 없음, app/http.py)."""
+    return http.get_api_session("ls")
 
 
 def has_credentials() -> bool:
@@ -91,7 +96,7 @@ def request_token() -> tuple[str, str, str]:
 
     for base in base_urls():
         try:
-            res = requests.post(
+            res = _http().post(
                 f"{base}/oauth2/token", headers=headers, data=payload, timeout=10
             )
         except Exception as exc:  # noqa: BLE001
@@ -158,7 +163,7 @@ def call_api(tr_cd: str, tr_url: str, body: dict) -> dict:
     }
 
     try:
-        res = requests.post(f"{base}{tr_url}", headers=headers, json=body, timeout=10)
+        res = _http().post(f"{base}{tr_url}", headers=headers, json=body, timeout=10)
     except Exception as exc:  # noqa: BLE001
         logger.warning("LS TR (%s) 호출 실패: %s", tr_cd, exc)
         return {"rsp_msg": f"서버 통신 예외: {exc}"}
