@@ -43,7 +43,7 @@ make logs S=backend
 make test              # 세 가지 전부
 make test-collector    # pytest
 make test-backend      # JUnit (실제 PostgreSQL 사용)
-make test-frontend     # 자가검증 + 린트 + 빌드(타입 검사)
+make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(타입 검사)
 ```
 
 ### ⚠️ 테스트는 전용 DB에서 돕니다
@@ -61,6 +61,10 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 백엔드에는 `guardAgainstRealDatabase()`가 있어 DB 이름이 `_test`로 끝나지 않으면
 테스트가 스스로 멈춥니다.
 
+화면 테스트는 두 가지입니다. 순수 함수는 `src/lib/__checks__/*.check.mts`(`npm run check`,
+추가 도구 없음), React로 렌더링해야 확인되는 훅은 `src/**/__tests__/*.test.ts`
+(`npm test`, vitest + Testing Library + jsdom — 개발 의존성이라 운영 이미지에는 없습니다).
+
 ### 테스트가 고정하는 것
 
 단순 커버리지가 아니라 **한 번씩 틀렸던 규칙**을 고정합니다.
@@ -73,8 +77,10 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 | `SectorSeriesAlignmentTest` | 날짜와 종가 배열이 한 칸씩 밀리는 것 |
 | `KstTest` | 서버 시간대(UTC) 때문에 날짜가 하루 어긋나는 것 |
 | `StoreReaderNonBlockingTest` | 화면이 수집을 기다리게 되는 것 |
+| `RouteInventoryTest` | 컨트롤러를 옮기다 경로가 빠지는 것, API.md와 실제 경로가 어긋나는 것 |
 | `test_equities.py` | 모르는 종목 이름에 엉뚱한 티커가 붙는 것 |
 | `marketCalendar.check.mts` | 공휴일과 거래소 휴장일을 혼동하는 것 |
+| `useApi.test.ts` | 자동 갱신 한 번 실패로 화면이 비는 것, 수동 새로고침이 세션 확인까지 다시 돌려 화면 상태가 초기화되는 것, 늦게 온 이전 응답이 화면을 되돌리는 것 |
 
 ---
 

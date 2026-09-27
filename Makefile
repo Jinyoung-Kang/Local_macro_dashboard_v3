@@ -161,8 +161,8 @@ test-backend: db-test ## 백엔드 테스트 (PostgreSQL 필요)
 	cd backend && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-jdbc:postgresql://localhost:$(DATABASE_PORT)/$(TEST_DB_NAME)} \
 		mvn -B verify
 
-test-frontend: ## 화면 자가검증 + 린트 + 빌드(타입 검사 포함)
-	cd frontend && npm run check && npm run lint && npm run build
+test-frontend: ## 화면 자가검증 + 훅 테스트 + 린트 + 빌드(타입 검사 포함)
+	cd frontend && npm run check && npm test && npm run lint && npm run build
 
 # ------------------------------------------------------------- 네이티브 개발
 dev-collector: ## 수집기 개발 서버 (자동 리로드 · collector/.venv 필요)
