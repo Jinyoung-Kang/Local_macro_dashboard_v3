@@ -118,7 +118,7 @@ public final class MyMath {
 }
 ```
 
-### ④ 응답 조립 — `backend/.../service/` + `web/DashboardController.java`
+### ④ 응답 조립 — `backend/.../service/` + `web/` 메뉴별 컨트롤러
 
 `Datasets.java`에 ②에서 정한 이름을 **똑같이** 적습니다.
 
@@ -135,6 +135,12 @@ public static final String SNAP_MY_THING = "domain.my_thing";
 ```java
 snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
 ```
+
+엔드포인트는 메뉴에 맞는 컨트롤러에 붙입니다(`MacroController`·`InstitutionController`·
+`PositioningController`·`AnalyticsController`·`StatusController`, 출처가 따로인 것은
+`FlowsController`·`PublicDataController`·`TossController`). 경로를 추가하면
+`RouteInventoryTest`의 목록과 [API.md](API.md) 표에도 적어야 빌드가 통과합니다.
+컨트롤러 하나가 서비스를 5개보다 많이 받으면 같은 테스트가 실패하니, 그때는 나눕니다.
 
 ### ⑤ 화면 — `frontend/src/app/(dashboard)/…`
 

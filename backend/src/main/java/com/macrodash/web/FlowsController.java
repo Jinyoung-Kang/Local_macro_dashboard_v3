@@ -11,7 +11,7 @@ import java.util.Map;
 /**
  * 🏦 투자자별 매매 (토스증권 공식 Open API).
  *
- * <p>DashboardController와 나눈 이유 — 출처(토스 키 하나)가 같은 것끼리 묶어 두면,
+ * <p>메뉴별 컨트롤러(PositioningController 등)와 나눈 이유 — 출처(토스 키 하나)가 같은 것끼리 묶어 두면,
  * 키가 없을 때 어떤 화면이 비는지가 이 파일 하나로 보입니다(PublicDataController와 같은 원칙).
  * 모든 경로는 저장본만 읽습니다. 화면이 토스를 직접 부르지 않습니다.
  */

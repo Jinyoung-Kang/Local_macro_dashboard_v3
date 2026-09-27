@@ -1,7 +1,5 @@
 package com.macrodash.web;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.macrodash.collector.CollectorClient;
 import com.macrodash.service.AiService;
 import com.macrodash.service.SnapshotTextService;
 import org.springframework.http.HttpStatus;
@@ -15,10 +13,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
- * 🤖 AI 종합 리포트 · 🤖 AI 연결 테스트 · 🔌 토스증권 API 테스트.
+ * 🤖 AI 종합 리포트 · 🤖 AI 연결 테스트.
+ *
+ * <p>같은 화면(🔌 연결 테스트)에 붙는 토스 조회는 {@link TossController}에 있습니다.
  */
 @RestController
 @RequestMapping("/api/ai")
@@ -26,12 +25,10 @@ public class AiController {
 
     private final AiService ai;
     private final SnapshotTextService snapshotText;
-    private final CollectorClient collector;
 
-    public AiController(AiService ai, SnapshotTextService snapshotText, CollectorClient collector) {
+    public AiController(AiService ai, SnapshotTextService snapshotText) {
         this.ai = ai;
         this.snapshotText = snapshotText;
-        this.collector = collector;
     }
 
     @GetMapping("/engines")
@@ -112,32 +109,5 @@ public class AiController {
                 ? "한국어로 한 문장만 답하십시오: 지금 연결이 정상인지 알려 주세요."
                 : prompt;
         return ai.generate(engineId, text, "간결하게 한국어로 답하십시오.");
-    }
-
-    // ----------------------------------------------------- 🔌 토스 API
-    @GetMapping("/toss/diagnostics")
-    public Map<String, Object> tossDiagnostics() {
-        return unwrap(collector.tossDiagnostics(),
-                "수집기에 연결하지 못했습니다. 토스 진단은 수집기가 수행합니다.");
-    }
-
-    @GetMapping("/toss/exchange-rate")
-    public Map<String, Object> tossExchangeRate(@RequestParam(defaultValue = "USD") String base,
-                                                @RequestParam(defaultValue = "KRW") String quote) {
-        return unwrap(collector.tossExchangeRate(base, quote), "수집기에 연결하지 못했습니다.");
-    }
-
-    @GetMapping("/toss/indices")
-    public Map<String, Object> tossIndices(@RequestParam String symbols) {
-        return unwrap(collector.tossIndices(symbols), "수집기에 연결하지 못했습니다.");
-    }
-
-    private Map<String, Object> unwrap(Optional<JsonNode> payload, String failureMessage) {
-        if (payload.isEmpty()) {
-            return Map.of("ok", false, "message", failureMessage);
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        payload.get().properties().forEach(entry -> out.put(entry.getKey(), entry.getValue()));
-        return out;
     }
 }

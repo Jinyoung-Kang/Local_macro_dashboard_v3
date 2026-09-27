@@ -240,7 +240,7 @@ make test-frontend     # 자가검증 + 린트 + 빌드(타입 검사)
 1. `collector/app/indicators.py` — 무엇을 받을지 정의
 2. `collector/app/tasks.py` — 받아서 저장하는 태스크 추가 (+ `catalog.py`에 이름)
 3. `backend/.../analytics/` — 순수 계산 작성 (테스트를 여기에)
-4. `backend/.../service/` + `web/DashboardController.java` — 응답 조립 + 엔드포인트
+4. `backend/.../service/` + `web/` 메뉴별 컨트롤러 — 응답 조립 + 엔드포인트
 5. `frontend/src/app/(dashboard)/…` — 화면
 
 **데이터셋 이름은 `catalog.py`(Python)와 `Datasets.java`(Java) 양쪽에 있고,
