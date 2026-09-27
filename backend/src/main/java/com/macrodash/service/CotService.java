@@ -269,7 +269,7 @@ public class CotService {
         List<Map<String, Object>> summaries = new ArrayList<>();
 
         if (assets != null) {
-            assets.fields().forEachRemaining(entry -> {
+            assets.properties().forEach(entry -> {
                 List<JsonNode> rows = Json.array(entry.getValue(), "rows");
                 Map<String, Object> summary = summarize(entry.getKey(), rows);
                 summary.put("error", Json.asText(entry.getValue(), "error"));

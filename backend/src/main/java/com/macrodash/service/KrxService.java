@@ -173,7 +173,7 @@ public class KrxService {
         }
 
         Map<String, Object> out = new LinkedHashMap<>();
-        payload.get().fields().forEachRemaining(entry ->
+        payload.get().properties().forEach(entry ->
                 out.put(entry.getKey(), entry.getValue()));
         return out;
     }
