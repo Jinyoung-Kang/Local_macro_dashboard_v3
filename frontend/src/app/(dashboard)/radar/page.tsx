@@ -621,19 +621,22 @@ function HistoryPanel({
   investor: string;
   tradeType: string;
 }) {
+  const [date, setDate] = useState("");
+  // 고른 거래일 하루치만 받습니다(latest=true — 날짜를 안 골랐으면 이 조건의 가장 최근 거래일).
+  // 예전에는 전 기간을 받아 화면에서 30행만 골랐습니다(1년치 합성 데이터: 7,800행·2.3MB).
   const { data, loading } = useApi<{
     dates: string[];
+    obsDate?: string | null;
     note: string;
     rows: { obsDate: string; code: string; name: string; netAmountEok: number }[];
   }>(
-    `/api/radar/history?market=${market}&investor=${encodeURIComponent(
+    `/api/radar/history?market=${encodeURIComponent(market)}&investor=${encodeURIComponent(
       investor,
-    )}&tradeType=${encodeURIComponent(tradeType)}`,
+    )}&tradeType=${encodeURIComponent(tradeType)}&latest=true${date ? `&obsDate=${date}` : ""}`,
   );
 
-  const [date, setDate] = useState("");
   const dates = data?.dates ?? [];
-  const selectedDate = date || dates[0] || "";
+  const selectedDate = date || data?.obsDate || "";
   const rows = (data?.rows ?? []).filter((row) => row.obsDate === selectedDate).slice(0, 30);
 
   return (

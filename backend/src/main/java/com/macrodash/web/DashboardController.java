@@ -360,8 +360,9 @@ public class DashboardController {
             @RequestParam(required = false) String investor,
             @RequestParam(required = false) String tradeType,
             @RequestParam(required = false) String obsDate,
-            @RequestParam(required = false) String startDate) {
-        return radar.history(market, investor, tradeType, obsDate, startDate);
+            @RequestParam(required = false) String startDate,
+            @RequestParam(defaultValue = "false") boolean latest) {
+        return radar.history(market, investor, tradeType, obsDate, startDate, latest);
     }
 
     @GetMapping("/radar/diagnostics")

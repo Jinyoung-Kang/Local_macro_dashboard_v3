@@ -341,9 +341,17 @@ public class RadarService {
                 || Boolean.TRUE.equals(institution.get("stale")));
     }
 
-    /** 누적 이력 조회 (Naver/Daum이 제공하지 않는 과거 데이터). */
+    /**
+     * 누적 이력 조회 (Naver/Daum이 제공하지 않는 과거 데이터).
+     *
+     * @param latest true면 <b>한 거래일만</b> 줍니다 — obsDate가 없으면 이 조건의 가장 최근
+     *               거래일. 거래일 목록({@code dates})도 이 조건의 기록이 있는 날만 담고,
+     *               실제로 고른 날은 {@code obsDate}로 알려 줍니다. 화면은 하루치 30행만
+     *               보여 주는데 예전에는 전 기간을 받아 걸렀습니다(1년치: 7,800행·2.3MB).
+     *               false면 예전과 같습니다(하위 호환).
+     */
     public Map<String, Object> history(String market, String investor, String tradeType,
-                                       String obsDate, String startDate) {
+                                       String obsDate, String startDate, boolean latest) {
         Map<String, String> filters = new LinkedHashMap<>();
         if (market != null) {
             filters.put("market", market);
@@ -359,11 +367,21 @@ public class RadarService {
         LocalDate day = Params.optionalDate("obsDate", obsDate);
         LocalDate since = Params.optionalDate("startDate", startDate);
 
-        List<JsonNode> rows = repository.readObservations(Datasets.OBS_RADAR, day, since, filters);
-
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("dates", repository.listObservationDates(Datasets.OBS_RADAR));
-        out.put("rows", rows);
+        if (latest) {
+            List<String> dates = repository.listObservationDates(Datasets.OBS_RADAR, filters);
+            if (day == null && !dates.isEmpty()) {
+                day = LocalDate.parse(dates.get(0));
+            }
+            out.put("dates", dates);
+            out.put("obsDate", day == null ? null : day.toString());
+            out.put("rows", day == null
+                    ? List.of()
+                    : repository.readObservations(Datasets.OBS_RADAR, day, null, filters));
+        } else {
+            out.put("dates", repository.listObservationDates(Datasets.OBS_RADAR));
+            out.put("rows", repository.readObservations(Datasets.OBS_RADAR, day, since, filters));
+        }
         out.put("note",
                 "Naver·Daum·KRX는 과거 날짜 조회를 지원하지 않습니다. 이 이력은 수집기가 "
                         + "돌 때마다 쌓아 온 값이라 외부에서 다시 받을 수 없습니다 — "

@@ -237,6 +237,22 @@ public class StoreRepository {
         );
     }
 
+    /**
+     * 조건(payload 포함 관계)에 맞는 기록이 있는 날짜만, 최신 순.
+     *
+     * @param filters 비었으면 {@link #listObservationDates(String)}와 같습니다
+     */
+    public List<String> listObservationDates(String dataset, Map<String, String> filters) {
+        if (filters == null || filters.isEmpty()) {
+            return listObservationDates(dataset);
+        }
+        return jdbc.query(
+                "SELECT DISTINCT obs_date FROM observations WHERE dataset = ? AND payload @> ?::jsonb "
+                        + "ORDER BY obs_date DESC",
+                (rs, rowNum) -> rs.getDate("obs_date").toLocalDate().toString(),
+                dataset, writeJson(filters));
+    }
+
     public long countObservations() {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM observations", Long.class);
         return count == null ? 0 : count;

@@ -393,6 +393,42 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("수급 이력 latest=true: 그 조건의 거래일 목록과 하루치만 준다 (전 기간을 보내지 않음)")
+    void radarHistoryLatestReturnsOneDayOnly() {
+        // 예전에는 전 기간 이력을 모두 보내고 화면이 30행만 썼습니다(1년치 합성 데이터: 7,800행·2.3MB).
+        jdbc.update("DELETE FROM observations WHERE dataset = ?", Datasets.OBS_RADAR);
+        insertRadar("2026-09-23", "외국인", "005930", 10.0);
+        insertRadar("2026-09-24", "외국인", "005930", 20.0);
+        insertRadar("2026-09-24", "외국인", "000660", 15.0);
+        insertRadar("2026-09-25", "기관", "005930", 30.0);     // 다른 조건만 있는 날
+
+        String base = "/api/radar/history?market=KOSPI&investor=외국인&tradeType=순매수";
+        JsonNode latest = authorizedGet(base + "&latest=true");
+        assertThat(latest.path("obsDate").asText()).isEqualTo("2026-09-24");
+        assertThat(latest.path("dates").toString()).isEqualTo("[\"2026-09-24\",\"2026-09-23\"]");
+        assertThat(latest.path("rows")).hasSize(2);
+        latest.path("rows").forEach(row -> assertThat(row.path("obsDate").asText()).isEqualTo("2026-09-24"));
+
+        JsonNode chosen = authorizedGet(base + "&latest=true&obsDate=2026-09-23");
+        assertThat(chosen.path("obsDate").asText()).isEqualTo("2026-09-23");
+        assertThat(chosen.path("rows")).hasSize(1);
+
+        // latest 없이 부르면 예전처럼 전 기간 (하위 호환)
+        assertThat(authorizedGet(base).path("rows")).hasSize(3);
+        jdbc.update("DELETE FROM observations WHERE dataset = ?", Datasets.OBS_RADAR);
+    }
+
+    private void insertRadar(String date, String investor, String code, double netAmountEok) {
+        String entity = "KOSPI|" + investor + "|순매수|TODAY|" + code;
+        String payload = """
+                {"code":"%s","name":"종목%s","netAmountEok":%s,"market":"KOSPI","investor":"%s",
+                 "tradeType":"순매수","intervalType":"TODAY","entity":"%s"}
+                """.formatted(code, code, netAmountEok, investor, entity);
+        jdbc.update("INSERT INTO observations (dataset, obs_date, entity, payload) VALUES (?, ?, ?, ?::jsonb)",
+                Datasets.OBS_RADAR, java.sql.Date.valueOf(date), entity, payload);
+    }
+
+    @Test
     @DisplayName("수집기가 없으면 수동 실행은 502 — 200에 ok:false로 숨기지 않는다")
     void manualRunWithoutCollectorIsBadGateway() {
         ResponseEntity<JsonNode> response = authorizedExchange("/api/status/run/sec_13f", HttpMethod.POST);
