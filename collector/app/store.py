@@ -89,7 +89,7 @@ def init_schema(path: str | None = None) -> None:
     found = migrations.discover(directory)
     with connection() as conn:
         migrations.apply_pending(conn, found)
-    logger.info("저장 계층 준비 완료: %s (V%d까지)", directory, found[-1].version)
+    logger.info("저장 계층 준비 완료: %s (V%d까지)", directory, found[-1].version if found else 0)
 
 
 def _resolve_migrations_dir(path: str | None) -> Path | None:

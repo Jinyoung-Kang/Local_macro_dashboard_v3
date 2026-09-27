@@ -155,3 +155,9 @@ def test_V2는_기본키와_겹치는_인덱스를_지우고_GIN을_레이더_�
     assert not {"idx_timeseries_lookup", "idx_observations_lookup", "idx_observations_radar_filter"} & indexes.keys()
     # 부분 인덱스는 조건의 데이터셋 이름이 정확히 같아야 쓰입니다.
     assert f"WHERE (dataset = '{catalog.OBS_RADAR}'::text)" in indexes["idx_observations_radar_payload"]
+
+
+def test_번호_파일이_없으면_아무것도_적용하지_않고_기동을_이어_간다(store, tmp_path):
+    """V*__*.sql 모양이어도 번호가 아니면 마이그레이션이 아닙니다. 그때도 기동이 멈추면 안 됩니다."""
+    _write(tmp_path, "Vnext__draft.sql", "SELECT 1;")
+    store.init_schema(str(tmp_path))
