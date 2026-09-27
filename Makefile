@@ -138,13 +138,18 @@ test: test-collector test-backend test-frontend ## 전체 테스트
 # 거부"하는 안전장치를 두었습니다(ApiIntegrationTest).
 TEST_DB_NAME := macrodash_test
 
+# 마이그레이션은 번호 순서로 적용합니다(V10은 V9 다음). 모두 여러 번 실행해도 안전합니다.
+MIGRATIONS = $(shell ls db/migrations/V*__*.sql | sort -t V -k 2 -n)
+
 db-test: ## 테스트 전용 DB 준비 (없으면 만들고 스키마 적용)
 	@$(COMPOSE) exec -T postgres psql -U $${DATABASE_USER:-macro} -d postgres -tAc \
 		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'" | grep -q 1 || \
 		$(COMPOSE) exec -T postgres psql -U $${DATABASE_USER:-macro} -d postgres \
 			-c "CREATE DATABASE $(TEST_DB_NAME) OWNER $${DATABASE_USER:-macro}" >/dev/null
-	@$(COMPOSE) exec -T postgres psql -q -U $${DATABASE_USER:-macro} -d $(TEST_DB_NAME) \
-		-f /dev/stdin < db/migrations/V1__init.sql >/dev/null
+	@for f in $(MIGRATIONS); do \
+		$(COMPOSE) exec -T postgres psql -q -v ON_ERROR_STOP=1 -U $${DATABASE_USER:-macro} \
+			-d $(TEST_DB_NAME) -f /dev/stdin < "$$f" >/dev/null || exit 1; \
+	done
 	@echo "✅ 테스트 DB 준비: $(TEST_DB_NAME) (운영 DB는 건드리지 않습니다)"
 
 test-collector: db-test ## 수집기 테스트 (PostgreSQL 필요)

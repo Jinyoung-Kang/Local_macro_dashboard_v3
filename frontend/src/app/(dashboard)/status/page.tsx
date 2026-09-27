@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import {
   Banner,
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
-import { apiPost } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { EMPTY, formatAge, formatKst, formatNumber } from "@/lib/format";
 import type {
   PublicApiDiagnosticsResponse,
@@ -24,6 +24,7 @@ import type {
   VerificationResponse,
 } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { waitForTaskRun, type TaskRunRow } from "@/lib/taskRun";
 
 const TASK_ICONS: Record<string, string> = { ok: "✅", empty: "⚠️", error: "❌" };
 
@@ -48,25 +49,46 @@ export default function StatusPage() {
   const [message, setMessage] = useState<string | null>(null);
   const { reloadAll } = useRefreshSignal();
 
+  // 화면을 떠나면 끝나기를 기다리던 확인을 멈춥니다.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  /**
+   * 태스크를 시작하고(202) 실행 이력에 새 기록이 생길 때까지 기다립니다.
+   *
+   * 예전에는 요청 하나가 끝날 때까지 붙잡았는데, 90초보다 오래 걸리는 태스크(13F 등)는
+   * 실제로는 수집 중인데도 "수집기에 연결하지 못했습니다"가 떴습니다.
+   */
   const runTask = async (taskName: string) => {
     setRunning(taskName);
     setMessage(null);
     try {
-      const result = await apiPost<{ ok: boolean; okCount?: number; failCount?: number }>(
-        `/api/status/run/${taskName}`,
-      );
+      const started = await apiPost<{ baselineStartedAt?: string | null }>(`/api/status/run/${taskName}`);
+      setMessage(`${taskName} 실행을 시작했습니다. 끝나면 여기에 결과가 표시됩니다…`);
+      const finished = await waitForTaskRun(started.baselineStartedAt ?? null, {
+        fetchLatest: () =>
+          apiGet<{ history?: TaskRunRow[] }>(`/api/status/history?task=${encodeURIComponent(taskName)}&limit=1`)
+            .then((result) => result.history?.[0]),
+        isCancelled: () => !mounted.current,
+      });
+      if (!mounted.current) return;
       setMessage(
-        result.ok
-          ? `${taskName} 실행 완료 (성공 ${result.okCount ?? 0} · 실패 ${result.failCount ?? 0})`
-          : "수집기에 연결하지 못했습니다.",
+        finished
+          ? `${TASK_ICONS[finished.status] ?? ""} ${taskName} 완료${finished.detail ? ` — ${finished.detail}` : ""}`
+          : `${taskName}이(가) 아직 진행 중입니다. 끝나면 아래 표에 결과가 나타납니다.`,
       );
       // 개별 태스크 실행도 화면 전체를 갱신합니다. 이 태스크가 바꾼 스냅샷을
       // 다른 메뉴도 보고 있을 수 있습니다.
       reloadAll();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "실행에 실패했습니다.");
+      if (mounted.current) setMessage(err instanceof Error ? err.message : "실행에 실패했습니다.");
     } finally {
-      setRunning(null);
+      if (mounted.current) setRunning(null);
     }
   };
 

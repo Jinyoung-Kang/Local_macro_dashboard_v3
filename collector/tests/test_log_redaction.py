@@ -52,6 +52,8 @@ def test_여러_형태의_비밀_파라미터를_가린다():
         "?app_secret=SECRET4": "SECRET4",
         "?access_token=SECRET5": "SECRET5",
         "?password=SECRET6": "SECRET6",
+        # 토스 토큰 발급 본문. '_' 뒤의 secret은 단어 경계가 아니라 예전에는 그대로 남았습니다.
+        "grant_type=client_credentials&client_id=cid&client_secret=SECRET7": "SECRET7",
     }
     for text, secret in samples.items():
         assert secret not in logredact.redact(text), text

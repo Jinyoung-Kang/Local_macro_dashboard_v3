@@ -29,7 +29,7 @@ import time
 
 import requests
 
-from .. import settings
+from .. import http, settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,11 @@ _lock = threading.Lock()
 # 먼저 받은 쪽 토큰이 즉시 무효가 됩니다(연결 테스트와 수집 태스크가 겹칠 때).
 _issue_lock = threading.Lock()
 _token_cache: tuple[str, float] | None = None
+
+
+def _http() -> requests.Session:
+    """이 클라이언트 전용 세션 — 연결만 재사용합니다(재시도·쿠키 없음, app/http.py)."""
+    return http.get_api_session("toss")
 
 
 def has_credentials() -> bool:
@@ -69,7 +74,7 @@ def _issue_token() -> tuple[str | None, str | None]:
         return None, "[toss] client_id / client_secret이 설정되지 않았습니다."
 
     try:
-        res = requests.post(
+        res = _http().post(
             AUTH_URL,
             data={
                 "grant_type": "client_credentials",
@@ -104,7 +109,7 @@ def test_connection() -> dict:
         return {"ok": False, "stage": "token", "message": error}
 
     try:
-        res = requests.get(
+        res = _http().get(
             f"{BASE_URL}/api/v1/exchange-rate",
             headers={"Authorization": f"Bearer {token}"},
             params={"baseCurrency": "USD", "quoteCurrency": "KRW"},
@@ -149,7 +154,7 @@ def get_exchange_rate(base: str = "USD", quote: str = "KRW") -> dict:
         return {"ok": False, "error": error}
 
     try:
-        res = requests.get(
+        res = _http().get(
             f"{BASE_URL}/api/v1/exchange-rate",
             headers={"Authorization": f"Bearer {token}"},
             params={"baseCurrency": base, "quoteCurrency": quote},
@@ -167,7 +172,7 @@ def get_index_prices(symbols: list[str]) -> dict:
         return {"ok": False, "error": error}
 
     try:
-        res = requests.get(
+        res = _http().get(
             f"{BASE_URL}/api/v1/market-indicators/prices",
             headers={"Authorization": f"Bearer {token}"},
             params={"symbols": ",".join(symbols)},
@@ -232,7 +237,7 @@ def api_get(path: str, params: dict | None = None, timeout: float = 10.0) -> dic
         if not token:
             raise TossError(f"토큰 발급 실패 — {error}")
         try:
-            res = requests.get(
+            res = _http().get(
                 f"{BASE_URL}{path}", headers={"Authorization": f"Bearer {token}"},
                 params=params, timeout=timeout,
             )

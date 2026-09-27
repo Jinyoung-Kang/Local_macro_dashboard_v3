@@ -95,6 +95,35 @@ class DatasetsParityTest {
         assertThat(numericConstant(source, "MAX_AGE_SLOW")).isEqualTo(Datasets.MAX_AGE_SLOW);
     }
 
+    @Test
+    @DisplayName("FRED 시계열 목록이 indicators.py(FRED_ALL_SERIES)와 일치한다")
+    void fredSeriesMatchIndicators() throws IOException {
+        // 화면 API는 이 목록에 없는 ID를 400으로 거릅니다. 수집기가 새 시계열을 받기
+        // 시작했는데 여기에 없으면 그 시계열 화면만 조용히 400이 됩니다.
+        Path indicators = Path.of("../collector/app/indicators.py");
+        assumeTrue(Files.exists(indicators), "collector/app/indicators.py를 찾을 수 없습니다");
+        String source = Files.readString(indicators);
+
+        java.util.List<String> expected = new java.util.ArrayList<>(tupleOf(source, "FRED_BASE_SERIES"));
+        expected.addAll(tupleOf(source, "FRED_ADVANCED_SERIES"));
+        assertThat(Datasets.FRED_SERIES).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    /** {@code NAME = ("A", "B", …)} 형태의 튜플에서 문자열만 꺼냅니다(주석 무시). */
+    private java.util.List<String> tupleOf(String source, String name) {
+        // 주석에 "(TIPS)" 같은 괄호가 있어, 줄 맨 앞의 닫는 괄호까지를 튜플로 봅니다.
+        Matcher block = Pattern.compile(name + "\\s*=\\s*\\((.*?)\\n\\)", Pattern.DOTALL).matcher(source);
+        assertThat(block.find()).as("%s를 찾지 못했습니다", name).isTrue();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String line : block.group(1).split("\\n")) {
+            Matcher item = Pattern.compile("\"([^\"]+)\"").matcher(line.replaceAll("#.*$", ""));
+            while (item.find()) {
+                out.add(item.group(1));
+            }
+        }
+        return out;
+    }
+
     private String constant(String source, String name) {
         Matcher matcher = Pattern.compile(name + "\\s*=\\s*\"([^\"]+)\"").matcher(source);
         assertThat(matcher.find())

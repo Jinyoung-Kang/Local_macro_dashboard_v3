@@ -1,13 +1,20 @@
 package com.macrodash.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.macrodash.analytics.Json;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
+import com.macrodash.support.InvalidRequestException;
+import com.macrodash.support.Params;
+import com.macrodash.support.SecretRedactor;
+import com.macrodash.support.UpstreamUnavailableException;
 import org.springframework.stereotype.Service;
 
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -53,9 +60,9 @@ public class DataStatusService {
             out.put("keys", payload.get("keys"));
             out.put("intervals", payload.get("intervals"));
             out.put("missingDatasets", payload.get("missingDatasets"));
-            out.put("lastRun", payload.get("lastRun"));
+            out.put("lastRun", redactDetails(payload.get("lastRun")));
             out.put("lastRunStatus", Json.asText(payload, "lastRunStatus"));
-            out.put("taskSummary", payload.get("taskSummary"));
+            out.put("taskSummary", redactDetails(payload.get("taskSummary")));
             out.put("timeseriesRows", Json.asDouble(payload, "timeseriesRows"));
             out.put("observationRows", Json.asDouble(payload, "observationRows"));
         } else {
@@ -63,8 +70,11 @@ public class DataStatusService {
             out.put("collectorReachable", false);
             out.put("message",
                     "수집기에 연결하지 못했습니다. 아래 정보는 데이터베이스에서 직접 읽은 값입니다.");
-            out.put("lastRun", repository.readLastRun().orElse(null));
-            out.put("taskSummary", repository.readTaskSummary());
+            // 수집기가 주는 것과 같은 모양으로 바꿔 내보냅니다(아래 runView·taskView 설명).
+            Optional<Map<String, Object>> lastRun = repository.readLastRun();
+            out.put("lastRun", lastRun.map(DataStatusService::runView).orElse(null));
+            out.put("lastRunStatus", resolveRunStatus(lastRun.orElse(null), Instant.now()));
+            out.put("taskSummary", repository.readTaskSummary().stream().map(DataStatusService::taskView).toList());
             out.put("timeseriesRows", repository.countTimeseries());
             out.put("observationRows", repository.countObservations());
         }
@@ -134,12 +144,120 @@ public class DataStatusService {
         return out;
     }
 
+    /** 실행 이력 한 번에 볼 수 있는 최대 행 수 (수집기 {@code /task-history}의 le=200과 같음). */
+    static final int MAX_HISTORY_ROWS = 200;
+
+    /**
+     * 태스크 실행 이력.
+     *
+     * @param limit 1~{@value #MAX_HISTORY_ROWS}로 접습니다. 예전에는 음수가 그대로 SQL
+     *              {@code LIMIT}에 들어가 500과 함께 SQL 문장이 응답에 실렸습니다.
+     */
     public Map<String, Object> taskHistory(String task, int limit) {
-        Optional<JsonNode> payload = collector.taskHistory(task, limit);
+        int rows = Params.clamp(limit, 1, MAX_HISTORY_ROWS);
+        Optional<JsonNode> payload = collector.taskHistory(task, rows);
         if (payload.isPresent()) {
-            return Map.of("history", payload.get().get("history"));
+            return Map.of("history", redactDetails(payload.get().get("history")));
         }
-        return Map.of("history", repository.readTaskHistory(task, limit));
+        return Map.of("history",
+                repository.readTaskHistory(task, rows).stream().map(DataStatusService::taskView).toList());
+    }
+
+    // ------------------------------------------------------------ 실패 사유의 비밀값 가림
+    // 사유는 예외 문구 그대로라 요청 URL(쿼리의 API 키)이 섞일 수 있고, 화면에 나가 복사됩니다.
+    // 수집기도 저장·응답 전에 가리지만, 수집기가 죽어 DB에서 바로 읽는 경로와 가리기 전에
+    // 저장된 기록이 있어 내보내기 직전에 한 번 더 거릅니다(오류 모음은 StatusIssues가 가림).
+
+    /** 수집기 응답(객체 하나 또는 배열)의 detail. 응답을 파싱한 사본이라 그 자리에서 바꿉니다. */
+    private static JsonNode redactDetails(JsonNode node) {
+        if (node != null && node.isArray()) {
+            node.forEach(DataStatusService::redactDetailNode);
+        } else if (node != null) {
+            redactDetailNode(node);
+        }
+        return node;
+    }
+
+    private static void redactDetailNode(JsonNode node) {
+        if (node instanceof ObjectNode object && object.path("detail").isTextual()) {
+            object.put("detail", SecretRedactor.redact(object.path("detail").asText()));
+        }
+    }
+
+    // ------------------------------------------------------------ 수집기가 꺼졌을 때의 응답 모양
+    // DB에서 바로 읽은 행을 수집기 /status·/task-history와 같은 모양으로 바꿉니다
+    // (collector/app/store.py의 _serialize_run·_serialize_task — StatusShapeParityTest가 대조).
+    // 예전에는 DB 행을 그대로 내보내 started_at·ok_count 같은 이름이 나갔고, 화면이 읽지 못해
+    // "기록 없음 · 0 / 0 · NaNs"가 보였습니다(BUG-06).
+
+    /** 'running' 기록을 비정상 종료로 보는 heartbeat 공백 (수집기 store.STALE_RUN_SECONDS와 같음). */
+    static final Duration STALE_RUN = Duration.ofMinutes(30);
+
+    /** collector_runs 한 행 → 수집기 lastRun 모양. 실패 사유의 비밀값은 가립니다. */
+    static Map<String, Object> runView(Map<String, Object> row) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", row.get("id"));
+        out.put("startedAt", iso(row.get("started_at")));
+        out.put("finishedAt", iso(row.get("finished_at")));
+        out.put("heartbeatAt", iso(row.get("heartbeat_at")));
+        out.put("status", row.get("status"));
+        out.put("okCount", row.get("ok_count"));
+        out.put("failCount", row.get("fail_count"));
+        out.put("detail", redacted(row.get("detail")));
+        out.put("pid", row.get("pid"));
+        out.put("host", row.get("host"));
+        out.put("groupName", row.get("group_name"));
+        return out;
+    }
+
+    /** collector_task_runs 한 행 → 수집기 태스크 기록 모양 (요약·이력 공통). */
+    static Map<String, Object> taskView(Map<String, Object> row) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("task", row.get("task"));
+        out.put("speed", row.get("speed"));
+        out.put("status", row.get("status"));
+        out.put("startedAt", iso(row.get("started_at")));
+        out.put("durationMs", row.get("duration_ms"));
+        out.put("detail", redacted(row.get("detail")));
+        out.put("runId", row.get("run_id"));
+        return out;
+    }
+
+    /**
+     * 기록된 status를 실제 상태로 보정합니다 — 수집기 resolve_run_status와 같은 규칙.
+     *
+     * <p>'running'인데 heartbeat(없으면 시작 시각)가 30분 넘게 끊겼으면 'interrupted'.
+     * 수집기는 PID 생존도 보지만, 백엔드는 다른 컨테이너라 PID를 볼 수 없어 시각만 봅니다.
+     *
+     * @param row 가장 최근 실행 기록. 없으면 null
+     * @return none · ok · partial · fail · running · interrupted …
+     */
+    static String resolveRunStatus(Map<String, Object> row, Instant now) {
+        if (row == null) {
+            return "none";
+        }
+        Object status = row.get("status");
+        if (!"running".equals(status)) {
+            return status == null ? "?" : status.toString();
+        }
+        Object beat = row.get("heartbeat_at") != null ? row.get("heartbeat_at") : row.get("started_at");
+        if (beat instanceof Timestamp timestamp
+                && Duration.between(timestamp.toInstant(), now).compareTo(STALE_RUN) > 0) {
+            return "interrupted";
+        }
+        return "running";
+    }
+
+    /** DB 시각 → ISO-8601 (수집기 응답과 같은 형식). 화면의 formatKst가 그대로 읽습니다. */
+    private static String iso(Object value) {
+        if (value instanceof Timestamp timestamp) {
+            return timestamp.toInstant().toString();
+        }
+        return value == null ? null : value.toString();
+    }
+
+    private static Object redacted(Object detail) {
+        return detail instanceof String text ? SecretRedactor.redact(text) : detail;
     }
 
     /** 수동 새로고침: 기준 시각을 갱신하고, auto 모드면 fast 작업을 함께 돌립니다. */
@@ -192,14 +310,57 @@ public class DataStatusService {
                 .orElseGet(() -> Map.of("tasks", List.of(), "collectorReachable", false));
     }
 
-    public Map<String, Object> runTask(String taskName) {
-        Optional<JsonNode> payload = collector.runTask(taskName);
-        if (payload.isEmpty()) {
-            return Map.of("ok", false, "message", "수집기에 연결하지 못했습니다.");
+    /**
+     * 태스크 1건의 실행을 <b>시작</b>합니다(끝날 때까지 기다리지 않습니다).
+     *
+     * <p>예전에는 끝날 때까지 기다렸는데, 수집기 대기 한도(90초)보다 오래 걸리는 태스크
+     * (13F 등)는 실제로는 수집 중인데도 "수집기에 연결하지 못했습니다"로 표시됐습니다.
+     * 이제 바로 답하고, 화면이 실행 이력을 보며 끝났는지 확인합니다.
+     *
+     * @return {@code accepted, task, baselineStartedAt} — 이보다 늦게 시작한 실행 기록이 생기면
+     *         끝난 것입니다(수집기는 태스크가 끝날 때 기록을 남깁니다). 기록이 없었으면 null
+     * @throws InvalidRequestException      수집기에 등록되지 않은 태스크
+     * @throws UpstreamUnavailableException 수집기에 닿지 못함
+     */
+    public Map<String, Object> startTask(String taskName) {
+        Optional<JsonNode> registered = collector.tasks();
+        if (registered.isEmpty()) {
+            throw new UpstreamUnavailableException("수집기에 연결하지 못했습니다. 수집기가 실행 중인지 확인하세요.");
         }
+        boolean known = Json.array(registered.get(), "tasks").stream()
+                .anyMatch(task -> taskName.equals(Json.asText(task, "name")));
+        if (!known) {
+            throw new InvalidRequestException("알 수 없는 태스크입니다: " + Params.echo(taskName));
+        }
+
+        String baseline = latestStartedAt(taskName);
+        if (collector.runTask(taskName, false).isEmpty()) {
+            throw new UpstreamUnavailableException("수집기가 실행 요청을 받지 못했습니다. 잠시 후 다시 시도하세요.");
+        }
+
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        payload.get().fields().forEachRemaining(entry -> out.put(entry.getKey(), entry.getValue()));
+        out.put("accepted", true);
+        out.put("task", taskName);
+        out.put("baselineStartedAt", baseline);
         return out;
+    }
+
+    /**
+     * 그 태스크의 가장 최근 실행 기록이 시작한 시각(ISO-8601). 기록이 없으면 null.
+     *
+     * <p>화면이 끝났는지 확인할 때 읽는 경로({@link #taskHistory})와 <b>같은 곳</b>에서 읽습니다.
+     * 다른 곳에서 읽으면 한쪽에만 있는 옛 기록을 "방금 끝난 실행"으로 착각할 수 있습니다.
+     */
+    private String latestStartedAt(String taskName) {
+        Optional<JsonNode> fromCollector = collector.taskHistory(taskName, 1);
+        if (fromCollector.isPresent()) {
+            List<JsonNode> rows = Json.array(fromCollector.get(), "history");
+            return rows.isEmpty() ? null : Json.asText(rows.get(0), "startedAt");
+        }
+        List<Map<String, Object>> rows = repository.readTaskHistory(taskName, 1);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        return iso(rows.get(0).get("started_at"));
     }
 }

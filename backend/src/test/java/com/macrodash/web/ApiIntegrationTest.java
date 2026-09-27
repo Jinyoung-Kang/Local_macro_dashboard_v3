@@ -60,6 +60,9 @@ class ApiIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    com.macrodash.store.StoreRepository repository;
+
     private String sessionCookie;
 
     @BeforeEach
@@ -332,6 +335,204 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("잘못된 파라미터는 400이고, 오류 본문에 내부 정보(예외·SQL·자바 타입)가 없다")
+    void invalidParametersAreBadRequestsWithoutInternals() {
+        // 예전에는 날짜 형식 오류가 500과 함께 "Text 'abc' could not be parsed…"를,
+        // 숫자 형식 오류가 "Failed to convert value of type 'java.lang.String'…"을 돌려줬습니다.
+        for (String path : List.of(
+                "/api/radar/history?obsDate=abc",
+                "/api/radar/history?startDate=2026-13-45",
+                "/api/radar/ranking?topN=abc",
+                "/api/macro/fred/DGS10?years=abc")) {
+            ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
+            assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().path("error").asText()).as(path).isEqualTo("bad_request");
+            assertThat(response.getBody().path("message").asText()).as(path).isNotBlank();
+            assertThat(response.getBody().toString()).as(path)
+                    .doesNotContain("java.", "Exception", "SQL", "could not be parsed", "Failed to convert");
+        }
+    }
+
+    @Test
+    @DisplayName("범위를 벗어난 숫자 파라미터는 500이 아니라 허용 범위로 접어 응답한다")
+    void extremeNumbersAreClampedNot500() {
+        // 예전: limit=-1 → SQL 오류 문장이 그대로 담긴 500, years=2147483647 → DateTimeException 500
+        for (String path : List.of(
+                "/api/status/history?limit=-1",
+                "/api/status/history?limit=2147483647",
+                "/api/macro/fred/DGS10?years=2147483647",
+                "/api/liquidity?years=2147483647",
+                "/api/analytics/regime?years=2147483647",
+                "/api/analytics/correlation?x=fred:DGS10&y=fred:DGS2&years=2147483647")) {
+            ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
+            assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.OK);
+        }
+    }
+
+    @Test
+    @DisplayName("추적하지 않는 CIK·모르는 FRED ID는 수집을 기다리지 않고 바로 400")
+    void unknownIdentifiersAreRejectedUpFront() {
+        // 예전에는 저장본이 "없음" → 전체 수집을 동기로 기다렸습니다(CIK 3개 = 수집 6회·30초 재현).
+        for (String path : List.of(
+                "/api/sec13f/portfolio?cik=0000000000",
+                "/api/sec13f/consensus?ciks=1,2,3",
+                "/api/sec13f/new-buys?ciks=0001067983,999",
+                "/api/guru/risk?cik=0000000000",
+                "/api/macro/fred/NOPE",
+                "/api/macro/spread?longId=NOPE&shortId=DGS2")) {
+            long started = System.nanoTime();
+            ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
+            long millis = (System.nanoTime() - started) / 1_000_000;
+
+            assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().path("error").asText()).as(path).isEqualTo("bad_request");
+            assertThat(millis).as("%s 응답 시간(ms)", path).isLessThan(2_000);
+        }
+        // 파생 시리즈(30Y-3M)와 목록에 있는 ID는 그대로 통과합니다.
+        assertThat(authorizedExchange("/api/macro/fred/T30Y3M", HttpMethod.GET).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(authorizedExchange("/api/macro/spread?longId=DGS10&shortId=DGS2", HttpMethod.GET)
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("수급 이력 latest=true: 그 조건의 거래일 목록과 하루치만 준다 (전 기간을 보내지 않음)")
+    void radarHistoryLatestReturnsOneDayOnly() {
+        // 예전에는 전 기간 이력을 모두 보내고 화면이 30행만 썼습니다(1년치 합성 데이터: 7,800행·2.3MB).
+        jdbc.update("DELETE FROM observations WHERE dataset = ?", Datasets.OBS_RADAR);
+        insertRadar("2026-09-23", "외국인", "005930", 10.0);
+        insertRadar("2026-09-24", "외국인", "005930", 20.0);
+        insertRadar("2026-09-24", "외국인", "000660", 15.0);
+        insertRadar("2026-09-25", "기관", "005930", 30.0);     // 다른 조건만 있는 날
+
+        String base = "/api/radar/history?market=KOSPI&investor=외국인&tradeType=순매수";
+        JsonNode latest = authorizedGet(base + "&latest=true");
+        assertThat(latest.path("obsDate").asText()).isEqualTo("2026-09-24");
+        assertThat(latest.path("dates").toString()).isEqualTo("[\"2026-09-24\",\"2026-09-23\"]");
+        assertThat(latest.path("rows")).hasSize(2);
+        latest.path("rows").forEach(row -> assertThat(row.path("obsDate").asText()).isEqualTo("2026-09-24"));
+
+        JsonNode chosen = authorizedGet(base + "&latest=true&obsDate=2026-09-23");
+        assertThat(chosen.path("obsDate").asText()).isEqualTo("2026-09-23");
+        assertThat(chosen.path("rows")).hasSize(1);
+
+        // latest 없이 부르면 예전처럼 전 기간 (하위 호환)
+        assertThat(authorizedGet(base).path("rows")).hasSize(3);
+        jdbc.update("DELETE FROM observations WHERE dataset = ?", Datasets.OBS_RADAR);
+    }
+
+    private void insertRadar(String date, String investor, String code, double netAmountEok) {
+        String entity = "KOSPI|" + investor + "|순매수|TODAY|" + code;
+        String payload = """
+                {"code":"%s","name":"종목%s","netAmountEok":%s,"market":"KOSPI","investor":"%s",
+                 "tradeType":"순매수","intervalType":"TODAY","entity":"%s"}
+                """.formatted(code, code, netAmountEok, investor, entity);
+        jdbc.update("INSERT INTO observations (dataset, obs_date, entity, payload) VALUES (?, ?, ?, ?::jsonb)",
+                Datasets.OBS_RADAR, java.sql.Date.valueOf(date), entity, payload);
+    }
+
+    @Test
+    @DisplayName("태스크별 최근 실행: 태스크마다 마지막에 기록한 1건을 이름 순으로 준다")
+    void taskSummaryIsLastRecordedRowPerTask() {
+        // 쿼리를 DISTINCT ON(전체 정렬)에서 태스크별 인덱스 첫 행 조회로 바꿨으므로 결과를 고정합니다.
+        String prefix = "it_summary_";
+        jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+        try {
+            insertTaskRun(prefix + "radar", "ok", "2026-09-01T00:00:00Z");
+            insertTaskRun(prefix + "fx", "error", "2026-09-01T00:05:00Z");
+            insertTaskRun(prefix + "radar", "error", "2026-09-01T00:10:00Z");
+            insertTaskRun(prefix + "fx", "ok", "2026-09-01T00:01:00Z");    // 시작은 더 이르지만 나중에 기록
+            insertTaskRun(prefix + "cot", "empty", "2026-09-01T00:03:00Z");
+
+            List<Map<String, Object>> mine = repository.readTaskSummary().stream()
+                    .filter(row -> String.valueOf(row.get("task")).startsWith(prefix))
+                    .toList();
+            assertThat(mine).extracting(row -> row.get("task") + "=" + row.get("status"))
+                    .containsExactly(prefix + "cot=empty", prefix + "fx=ok", prefix + "radar=error");
+            assertThat(mine.get(0).keySet()).containsExactly(
+                    "task", "speed", "status", "started_at", "duration_ms", "detail", "run_id");
+        } finally {
+            jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+        }
+    }
+
+    @Test
+    @DisplayName("수집기가 꺼져 DB에서 읽어도 상태 화면은 수집기와 같은 모양(camelCase)으로 받는다")
+    void statusFallbackUsesTheCollectorShape() {
+        // 예전에는 DB 행을 그대로 내보내(started_at·ok_count …) 화면이 "기록 없음 · 0 / 0 · NaNs"를
+        // 그렸습니다. 이 테스트의 수집기 주소(localhost:1)는 닿지 않으므로 DB 폴백 경로를 탑니다.
+        String prefix = "it_fallback_";
+        Long runId = jdbc.queryForObject(
+                "INSERT INTO collector_runs (started_at, finished_at, status, ok_count, fail_count, detail, "
+                        + "pid, host, heartbeat_at, group_name) VALUES (now() - interval '10 minutes', "
+                        + "now() - interval '9 minutes', 'partial', 17, 2, 'fsc_prices 실패', 1, 'it-host', "
+                        + "now() - interval '9 minutes', 'slow') RETURNING id", Long.class);
+        try {
+            jdbc.update("INSERT INTO collector_task_runs (run_id, task, speed, status, started_at, duration_ms, detail) "
+                    + "VALUES (?, ?, 'slow', 'ok', now() - interval '10 minutes', 1234, '12/12')", runId, prefix + "fred");
+
+            JsonNode status = authorizedGet("/api/status");
+            assertThat(status.path("collectorReachable").asBoolean(true)).isFalse();
+            assertThat(status.path("lastRunStatus").asText()).isEqualTo("partial");
+            JsonNode lastRun = status.path("lastRun");
+            assertThat(lastRun.path("id").asLong()).isEqualTo(runId);
+            assertThat(lastRun.path("okCount").asInt()).isEqualTo(17);
+            assertThat(lastRun.path("failCount").asInt()).isEqualTo(2);
+            assertThat(lastRun.path("groupName").asText()).isEqualTo("slow");
+            assertThat(java.time.Instant.parse(lastRun.path("startedAt").asText())).isNotNull();
+            assertThat(lastRun.has("ok_count") || lastRun.has("started_at")).isFalse();
+
+            JsonNode task = null;
+            for (JsonNode row : status.path("taskSummary")) {
+                if ((prefix + "fred").equals(row.path("task").asText())) {
+                    task = row;
+                }
+            }
+            assertThat(task).isNotNull();
+            assertThat(task.path("durationMs").asInt()).isEqualTo(1234);
+            assertThat(task.path("runId").asLong()).isEqualTo(runId);
+            assertThat(java.time.Instant.parse(task.path("startedAt").asText())).isNotNull();
+            assertThat(task.has("duration_ms") || task.has("started_at")).isFalse();
+
+            JsonNode history = authorizedGet("/api/status/history?task=" + prefix + "fred&limit=1").path("history");
+            assertThat(history).hasSize(1);
+            assertThat(history.get(0).path("durationMs").asInt()).isEqualTo(1234);
+            assertThat(history.get(0).has("started_at")).isFalse();
+        } finally {
+            jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+            jdbc.update("DELETE FROM collector_runs WHERE id = ?", runId);
+        }
+    }
+
+    private void insertTaskRun(String task, String status, String startedAt) {
+        jdbc.update("INSERT INTO collector_task_runs (task, speed, status, started_at, duration_ms) "
+                + "VALUES (?, 'fast', ?, ?::timestamptz, 1)", task, status, startedAt);
+    }
+
+    @Test
+    @DisplayName("수집기가 없으면 수동 실행은 502 — 200에 ok:false로 숨기지 않는다")
+    void manualRunWithoutCollectorIsBadGateway() {
+        ResponseEntity<JsonNode> response = authorizedExchange("/api/status/run/sec_13f", HttpMethod.POST);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+        assertThat(response.getBody().path("error").asText()).isEqualTo("bad_gateway");
+        assertThat(response.getBody().path("message").asText()).contains("수집기");
+    }
+
+    @Test
+    @DisplayName("없는 API·허용되지 않는 메서드도 같은 오류 형식으로 답한다")
+    void unknownPathsAndMethodsUseTheSameErrorShape() {
+        ResponseEntity<JsonNode> notFound = authorizedExchange("/api/does-not-exist", HttpMethod.GET);
+        assertThat(notFound.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(notFound.getBody().path("error").asText()).isEqualTo("not_found");
+        assertThat(notFound.getBody().path("message").asText()).isNotBlank();
+
+        ResponseEntity<JsonNode> wrongMethod = authorizedExchange("/api/verification", HttpMethod.GET);
+        assertThat(wrongMethod.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(wrongMethod.getBody().path("error").asText()).isEqualTo("method_not_allowed");
+    }
+
+    @Test
     @DisplayName("AI 대기 한도 설정이 실제로 적용된다")
     void aiTimeoutPropertyIsInjected() {
         // 생성자가 둘인데 아무 표시가 없으면 Spring이 무인자 쪽을 골라
@@ -340,16 +541,19 @@ class ApiIntegrationTest {
     }
 
     private JsonNode authorizedGet(String path) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, sessionCookie);
-
-        ResponseEntity<JsonNode> response = rest.exchange(
-                url(path), HttpMethod.GET, new HttpEntity<>(null, headers), JsonNode.class);
+        ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
 
         assertThat(response.getStatusCode())
                 .as("%s 응답 상태", path)
                 .isEqualTo(HttpStatus.OK);
         return response.getBody();
+    }
+
+    /** 상태 코드를 검사하지 않고 그대로 돌려줍니다(오류 응답을 확인할 때). */
+    private ResponseEntity<JsonNode> authorizedExchange(String path, HttpMethod method) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, sessionCookie);
+        return rest.exchange(url(path), method, new HttpEntity<>(null, headers), JsonNode.class);
     }
 
     private void insertSnapshot(String name, String payload) {

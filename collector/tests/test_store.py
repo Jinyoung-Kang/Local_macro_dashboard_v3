@@ -140,6 +140,58 @@ def test_mark_stale_runs_interrupted(store):
     assert store.read_last_run()["status"] == "interrupted"
 
 
+def test_restart_with_reused_pid_marks_previous_running_run_interrupted(store):
+    """
+    BUG-04. 컨테이너가 재시작되면 새 수집기도 PID 1이고 호스트 이름도 같습니다.
+    이전 프로세스가 남긴 'running' 기록이 "살아 있는 PID"로 보여, heartbeat 기준(30분)이
+    지날 때까지 "진행 중"으로 남았습니다.
+    """
+    store.start_run("fast")     # 같은 호스트·같은 PID로 남은 기록 = PID를 물려받은 재시작 직전 상태
+    assert store.resolve_run_status(store.read_last_run()) == "running"
+
+    # 기동 직후에는 이 프로세스가 시작한 실행이 없으므로 이전 프로세스의 기록입니다.
+    assert store.mark_stale_runs_interrupted() == 1
+    assert store.read_last_run()["status"] == "interrupted"
+
+
+def test_startup_cleanup_keeps_live_runs_of_other_processes(store):
+    """다른 호스트(또는 같은 호스트의 다른 살아 있는 프로세스)가 돌리는 실행은 건드리지 않습니다."""
+    run_id = store.start_run("fast")
+    with store.connection() as conn:
+        conn.execute("UPDATE collector_runs SET host = 'other-host' WHERE id = %s", (run_id,))
+
+    assert store.mark_stale_runs_interrupted() == 0
+    assert store.read_last_run()["status"] == "running"
+
+
+def test_run_details_are_redacted_when_stored_and_served(store):
+    """
+    SEC-05. 실패 사유(detail)는 상태 화면에 그대로 나가고 복사됩니다. 로그에서만 가리던
+    비밀값을 저장할 때도 가리고, 예전에 가리지 않고 저장된 기록은 내보낼 때 가립니다.
+    """
+    leaked = "HTTPError: 500 for url: https://apis.data.go.kr/x?serviceKey=SECRET123&pageNo=1"
+    run_id = store.start_run("slow")
+    store.record_task_run(run_id, "fsc_prices", speed="slow", status="error",
+                          started_at=datetime.now(timezone.utc), duration_ms=1, detail=leaked)
+    store.finish_run(run_id, status="fail", fail_count=1, detail="fsc_prices: " + leaked)
+    with store.connection() as conn:
+        stored = [row["detail"] for row in conn.execute(
+            "SELECT detail FROM collector_task_runs UNION ALL SELECT detail FROM collector_runs")]
+        # 수정 전에 저장된 기록 흉내 (가리지 않은 원문)
+        conn.execute(
+            "INSERT INTO collector_task_runs (task, status, detail) VALUES ('kr_holidays', 'error', %s)",
+            (leaked,),
+        )
+    assert len(stored) == 2
+    assert all("SECRET123" not in text and "serviceKey=***redacted***" in text for text in stored)
+
+    stats = store.store_stats()
+    served = [task["detail"] for task in stats["taskSummary"]] + [stats["lastRun"]["detail"]]
+    served += [store._serialize_task(row)["detail"] for row in store.read_task_history(limit=10)]
+    assert len(served) == 5
+    assert all("SECRET123" not in text for text in served)
+
+
 def test_refresh_request_moves_forward(store):
     first = store.request_refresh()
     second = store.request_refresh()
@@ -187,6 +239,39 @@ def test_task_summary_hides_removed_tasks(store):
     assert {row["task"] for row in store.read_task_summary()} == {"kr_holidays", "seoul_apartments"}
 
 
+def test_task_summary_is_last_recorded_row_per_task_in_name_order(store):
+    """
+    태스크마다 마지막에 기록한 1건을 태스크 이름 순으로 돌려줍니다 (PERF-03).
+
+    실행 기록 전체를 훑던 DISTINCT ON을 태스크별 인덱스 첫 행 조회로 바꿨으므로,
+    결과가 예전과 같은지(최신 기준 = 기록 순서, 이름 순, 같은 컬럼) 고정해 둡니다.
+    """
+    run_id = store.start_run("fast")
+    base = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    for task, status, minutes in (
+        ("radar_rankings", "ok", 0),
+        ("fx_history", "error", 5),
+        ("radar_rankings", "error", 10),
+        ("fx_history", "ok", 1),         # 시작 시각은 더 이르지만 나중에 기록 → 이것이 최신
+        ("cot_history", "empty", 3),
+    ):
+        store.record_task_run(
+            run_id, task, speed="fast", status=status,
+            started_at=base + timedelta(minutes=minutes), duration_ms=1, detail=None,
+        )
+
+    everything = store.read_task_summary()
+    assert [(row["task"], row["status"]) for row in everything] == [
+        ("cot_history", "empty"), ("fx_history", "ok"), ("radar_rankings", "error"),
+    ]
+    assert list(everything[0]) == ["task", "speed", "status", "started_at", "duration_ms", "detail", "run_id"]
+
+    # 한 번도 돌지 않은 이름은 행이 없고, 같은 이름을 두 번 줘도 한 행입니다.
+    named = store.read_task_summary(["radar_rankings", "never_ran", "fx_history", "fx_history"])
+    assert [(row["task"], row["status"]) for row in named] == [("fx_history", "ok"), ("radar_rankings", "error")]
+    assert store.read_task_summary([]) == []
+
+
 def test_purge_retired_datasets(store):
     store.put_observations("molit_apt", "2026-08-01", [{"lawd": "11680"}], entity_key="lawd")
     store.put_observations(catalog.OBS_RADAR, "2026-09-23", [{"code": "005930"}], entity_key="code")
@@ -194,3 +279,43 @@ def test_purge_retired_datasets(store):
     assert store.purge_retired_datasets() == 1
     assert store.read_observations("molit_apt") == []
     assert len(store.read_observations(catalog.OBS_RADAR)) == 1
+
+
+def test_purge_run_logs_only_touches_old_run_logs(store):
+    """
+    보존 기간이 지난 실행 기록만 지웁니다 (ARC-03). 수집한 데이터는 기간과 무관하게 남습니다.
+
+    기간과 무관하게 남기는 실행 기록
+      - 태스크마다 가장 최근 1건: 오래 돌지 않은 태스크도 상태 화면이 "마지막 실행"을 보여 줍니다.
+      - 최근 실행 50건: 수동 정리(purge_older_than)와 같은 규칙.
+    """
+    long_ago = datetime.now(timezone.utc) - timedelta(days=100)
+    with store.connection() as conn:
+        conn.execute(
+            "INSERT INTO collector_runs (started_at, status, group_name) "
+            "SELECT %s + g * interval '1 minute', 'ok', 'slow' FROM generate_series(1, 55) g",
+            (long_ago,),
+        )
+    recent_run = store.start_run("slow")
+    for task, started_at in (
+        ("fx_history", long_ago),                                      # 오래됨 + 더 최근 기록 있음 → 삭제
+        ("fx_history", datetime.now(timezone.utc) - timedelta(days=1)),
+        ("cot_history", long_ago),                                     # 오래됐지만 이 태스크의 마지막 기록 → 유지
+    ):
+        store.record_task_run(recent_run, task, speed="slow", status="ok",
+                              started_at=started_at, duration_ms=1, detail=None)
+    old_day = (long_ago - timedelta(days=300)).date().isoformat()
+    store.put_timeseries("demo", "S", [(old_day, 1.0)])
+    store.put_observations("demo_obs", old_day, [{"code": "005930"}], entity_key="code")
+
+    removed = store.purge_run_logs(90)
+
+    assert removed == {"taskRuns": 1, "collectorRuns": 6}    # 오래된 실행 55건 중 최근 50건 안에 드는 49건은 유지
+    remaining = {(row["task"], row["started_at"].date()) for row in store.read_task_history(limit=10)}
+    assert remaining == {
+        ("fx_history", (datetime.now(timezone.utc) - timedelta(days=1)).date()),
+        ("cot_history", long_ago.date()),
+    }
+    assert [row["date"] for row in store.read_timeseries("demo", "S")] == [old_day]
+    assert len(store.read_observations("demo_obs")) == 1
+    assert store.purge_run_logs(90) == {"taskRuns": 0, "collectorRuns": 0}

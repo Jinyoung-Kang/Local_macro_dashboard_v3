@@ -50,7 +50,7 @@ public class LiquidityService {
         List<JsonNode> rows = Json.array(payload, "rows");
 
         if (years != null && years > 0) {
-            LocalDate cutoff = Kst.today().minusYears(years);
+            LocalDate cutoff = Kst.yearsAgo(years);
             rows = rows.stream()
                     .filter(row -> {
                         LocalDate date = Json.parseDate(Json.asText(row, "date"));

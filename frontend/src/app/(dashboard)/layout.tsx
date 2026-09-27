@@ -59,8 +59,11 @@ function DashboardShell({
   const router = useRouter();
   const pathname = usePathname();
   useDocumentTitle(pathname);
-  const session = useApi<{ authenticated: boolean }>("/api/auth/session", 0, {
+  // 수동 새로고침에는 반응하지 않습니다(followRefresh: false). 반응하면 새로고침마다
+  // 아래의 "세션을 확인하는 중…"이 떠 화면 전체가 다시 그려지고 화면 상태가 초기화됐습니다.
+  const session = useApi<{ authenticated: boolean; readMode?: string }>("/api/auth/session", 0, {
     timeoutMs: SESSION_TIMEOUT_MS,
+    followRefresh: false,
   });
   const { data, loading, unauthorized, error, reload } = session;
 
@@ -86,8 +89,6 @@ function DashboardShell({
     return () => clearTimeout(timer);
   }, [error, reload]);
 
-  const status = useApi<{ readMode?: string }>(authenticated ? "/api/status" : null);
-
   // 예전에는 여기가 `loading || !authenticated`뿐이었습니다. 백엔드가 꺼져 있으면
   // 요청이 실패해 loading=false·data=null이 되는데, 로그인으로 보내는 조건(401 또는
   // authenticated=false 응답)에도 걸리지 않아 "세션을 확인하는 중…"에 영원히 멈췄습니다.
@@ -95,7 +96,8 @@ function DashboardShell({
     return <BackendUnavailable reason={failure} retrying={loading} onRetry={() => void reload()} />;
   }
 
-  if (loading || !authenticated) {
+  // 이미 로그인이 확인됐으면, 다시 확인하는 동안(loading)에도 화면을 그대로 둡니다.
+  if (!authenticated) {
     return (
       <main className="flex min-h-screen items-center justify-center text-sm text-muted">
         세션을 확인하는 중…
@@ -105,7 +107,9 @@ function DashboardShell({
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <Sidebar readMode={status.data?.readMode} />
+      {/* 읽기 모드는 세션 응답에 함께 옵니다. 예전에는 이 한 줄 때문에 페이지를 열 때마다
+          무거운 /api/status(수집기 상태 + DB 집계)를 불렀습니다. */}
+      <Sidebar readMode={data?.readMode} />
       <main className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:h-screen lg:overflow-y-auto">
         <div className="mb-5">
           <MarketClock />

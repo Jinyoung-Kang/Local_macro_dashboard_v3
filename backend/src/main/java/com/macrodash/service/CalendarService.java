@@ -8,7 +8,6 @@ import com.macrodash.store.StoreReader;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,9 +62,7 @@ public class CalendarService {
         Map<String, Object> years = new LinkedHashMap<>();
         JsonNode stored = Json.child(payload, "years");
         if (stored != null) {
-            Iterator<Map.Entry<String, JsonNode>> it = stored.fields();
-            while (it.hasNext()) {
-                Map.Entry<String, JsonNode> entry = it.next();
+            for (Map.Entry<String, JsonNode> entry : stored.properties()) {
                 List<Map<String, String>> holidays = new ArrayList<>();
                 for (JsonNode day : Json.array(entry.getValue(), "holidays")) {
                     String date = Json.asText(day, "date");

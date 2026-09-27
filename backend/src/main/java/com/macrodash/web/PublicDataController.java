@@ -80,7 +80,7 @@ public class PublicDataController {
             return out;
         }
         out.put("available", true);
-        payload.get().fields().forEachRemaining(entry -> out.put(entry.getKey(), entry.getValue()));
+        payload.get().properties().forEach(entry -> out.put(entry.getKey(), entry.getValue()));
         return out;
     }
 }

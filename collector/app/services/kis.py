@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from .. import settings
+from .. import http, settings
 from .. import kst
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,11 @@ INVESTOR_FIELDS = {
 }
 
 
+def _http() -> requests.Session:
+    """이 클라이언트 전용 세션 — 연결만 재사용합니다(재시도·쿠키 없음, app/http.py)."""
+    return http.get_api_session("kis")
+
+
 def has_credentials() -> bool:
     app_key, app_secret = settings.kis_credentials()
     return bool(app_key and app_secret)
@@ -79,7 +84,7 @@ def get_access_token() -> str:
 
 def _request_token(app_key: str, app_secret: str) -> str:
     try:
-        res = requests.post(
+        res = _http().post(
             f"{settings.KIS_BASE_URL}/oauth2/tokenP",
             json={
                 "grant_type": "client_credentials",
@@ -128,7 +133,7 @@ def call_api(tr_id: str, endpoint: str, params: dict) -> dict:
     }
 
     try:
-        res = requests.get(
+        res = _http().get(
             f"{settings.KIS_BASE_URL}{endpoint}",
             headers=headers,
             params=params,

@@ -137,7 +137,7 @@ public class AiController {
             return Map.of("ok", false, "message", failureMessage);
         }
         Map<String, Object> out = new LinkedHashMap<>();
-        payload.get().fields().forEachRemaining(entry -> out.put(entry.getKey(), entry.getValue()));
+        payload.get().properties().forEach(entry -> out.put(entry.getKey(), entry.getValue()));
         return out;
     }
 }

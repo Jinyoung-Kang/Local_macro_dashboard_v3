@@ -57,7 +57,7 @@ public class ScorecardService {
         JsonNode tickers = Json.child(snapshot.get().payload(), "tickers");
         Map<String, Map<String, Object>> byTicker = new LinkedHashMap<>();
         if (nameMap != null) {
-            nameMap.fields().forEachRemaining(entry -> {
+            nameMap.properties().forEach(entry -> {
                 String ticker = Json.asText(entry.getValue(), "ticker");
                 if (ticker == null || tickers == null || tickers.get(ticker) == null) {
                     return;
@@ -203,8 +203,7 @@ public class ScorecardService {
         String name = null;
         String sector = null;
         if (nameMap != null) {
-            for (var it = nameMap.fields(); it.hasNext(); ) {
-                var entry = it.next();
+            for (var entry : nameMap.properties()) {
                 if (symbol.equals(Json.asText(entry.getValue(), "ticker"))) {
                     name = entry.getKey();
                     sector = Json.asText(entry.getValue(), "sector");

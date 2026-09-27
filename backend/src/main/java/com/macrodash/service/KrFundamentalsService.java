@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -133,9 +132,7 @@ public class KrFundamentalsService {
         if (node == null) {
             return out;
         }
-        Iterator<Map.Entry<String, JsonNode>> it = node.fields();
-        while (it.hasNext()) {
-            Map.Entry<String, JsonNode> entry = it.next();
+        for (Map.Entry<String, JsonNode> entry : node.properties()) {
             out.put(entry.getKey(), new KrFundamentals.Amounts(
                     Json.asDouble(entry.getValue(), "current"),
                     Json.asDouble(entry.getValue(), "previous")));

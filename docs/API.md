@@ -12,7 +12,7 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | POST | `/api/auth/login` | `{"password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict). 틀리면 401, 연속 5회 실패 후 **429 + `Retry-After`**(30초부터 2배씩, 최대 15분) |
-| GET | `/api/auth/session` | `{"authenticated": bool}` |
+| GET | `/api/auth/session` | `{"authenticated": bool, "readMode": "auto" \| "store_only" \| "live_only"}`. `readMode`는 로그인한 경우에만 옵니다(사이드바 표시용 — 예전에는 이 한 줄 때문에 화면이 `/api/status`를 불렀습니다) |
 | POST | `/api/auth/logout` | 쿠키 만료 |
 
 로그인·세션·헬스체크를 제외한 모든 `/api/**`는 유효한 세션 쿠키를 요구합니다
@@ -48,6 +48,31 @@
 **저장본이 없어도 HTTP 200입니다.** `{"available": false, "message": "..."}`를
 돌려줍니다 — 화면이 500 에러 페이지 대신 "수집기를 먼저 실행하세요" 같은 안내를
 띄울 수 있어야 하기 때문입니다.
+
+### 오류 응답
+
+4xx·5xx는 모두 같은 모양입니다.
+
+```json
+{"error": "bad_request", "message": "obsDate 날짜 형식이 올바르지 않습니다: abc (예: 2026-09-18)"}
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `error` | HTTP 상태 이름 소문자 (`bad_request`·`unauthorized`·`not_found`·`method_not_allowed`·`bad_gateway`·`internal_server_error` 등) |
+| `message` | 사람이 읽는 한국어 설명. 예외 원문·SQL·자바 타입은 담지 않습니다 |
+
+| 상태 | 언제 |
+|---|---|
+| 400 | 형식이 틀린 파라미터(`obsDate=abc`), 추적하지 않는 식별자(13F `cik`, FRED `seriesId`) — 없는 이름으로 수집을 기다리지 않고 바로 답합니다 |
+| 401 | 세션 쿠키가 없거나 만료됨 |
+| 404 · 405 | 없는 경로 · 허용되지 않는 메서드 |
+| 502 | 수집기에 닿지 못함 (태스크 수동 실행) |
+| 500 | 예상하지 못한 오류. 원인은 백엔드 로그에만 남습니다 |
+
+범위만 벗어난 **숫자**는 오류 대신 허용 범위로 맞춥니다 — `limit`은 1~200, `years`는
+최대 100년(저장본보다 길면 결과가 같기 때문). 로그인 제한(429)만 예전 모양
+`{"ok": false, "retryAfterSeconds": n, "message": "..."}`에 `Retry-After` 헤더를 씁니다.
 
 ### 📊 매크로
 
@@ -90,7 +115,7 @@
 | `GET /api/radar/options` | 선택지 목록 + `supportedInvestors`(토스 폴백 저장본이 있으면 여섯, 없으면 외국인·기관) + `fallbackChain`(수집기 체인 순서) |
 | `GET /api/radar/ranking?market=&investor=&tradeType=&topN=&intervalType=` | 수급 랭킹 |
 | `GET /api/radar/consensus?market=&tradeType=&topN=&intervalType=` | 외국인·기관이 **같은 방향**으로 움직인 종목 (두 상위 N 목록의 교집합) |
-| `GET /api/radar/history?market=&investor=&tradeType=` | 누적 이력 |
+| `GET /api/radar/history?market=&investor=&tradeType=&latest=true&obsDate=` | 누적 이력. `latest=true`면 **한 거래일만** 줍니다 — `dates`(이 조건의 기록이 있는 날, 최신 순), `obsDate`(고른 날, 비우면 가장 최근), `rows`(그날 기록). 빼면 예전처럼 전 기간(`startDate`로 시작일 지정). 날짜는 `YYYY-MM-DD`, 틀리면 400 |
 | `GET /api/radar/diagnostics` | 5개 소스 연결 진단 |
 
 ### 🇰🇷 국내 공공 API 데이터
@@ -107,11 +132,11 @@
 
 | 경로 | 설명 |
 |---|---|
-| `GET /api/status` | 수집 현황·신선도·누락 데이터셋 |
+| `GET /api/status` | 수집 현황·신선도·누락 데이터셋. 실패 사유(`detail`)의 비밀값은 가려져 있습니다. 수집기가 꺼져 있으면 DB에서 직접 읽어 **같은 모양**으로 답합니다(`collectorReachable: false`, 키 보유·누락 목록은 빠짐) |
 | `GET /api/status/tasks` | 수집 작업 목록 |
-| `GET /api/status/history?task=&limit=40` | 태스크 실행 이력 |
+| `GET /api/status/history?task=&limit=40` | 태스크 실행 이력 (`limit` 1~200, 비밀값 가림) |
 | `POST /api/status/refresh?runFast=true` | 수동 새로고침 |
-| `POST /api/status/run/{taskName}` | 특정 태스크 실행 |
+| `POST /api/status/run/{taskName}` | 태스크 실행을 **시작만** 하고 바로 **202** `{accepted, task, baselineStartedAt}`. 끝났는지는 `/api/status/history?task=&limit=1`의 `startedAt`이 `baselineStartedAt`보다 새로워졌는지로 확인합니다(화면이 3초 간격으로 확인). 없는 태스크 400, 수집기에 닿지 못하면 502 |
 | `POST /api/verification` | 교차 검증 (판정 포함) |
 | `GET /api/status/issues` | 수집 오류·경고 모음 — 지금 실패 중인 태스크, 최근 24시간 실패 이력(같은 사유는 묶음·횟수), 누락 데이터셋. `text`는 복사용이며 **비밀값이 가려져** 있습니다. 실행 기록은 DB에서 직접 읽어 수집기가 꺼져 있어도 동작 |
 | `GET /api/status/public-apis` | 국내 공공 API 연결 진단 — **API마다 실제 1회 호출**. 결과에 키 값은 없음 |
@@ -164,8 +189,13 @@
 `make status`·`scripts/doctor.sh`가 헤더 없이 부르고, 비밀값을 담지 않기
 때문입니다(키는 설정 여부만 `true/false`로 알립니다).
 
-토큰을 설정하지 않으면(로컬 기본값) 아무것도 막지 않습니다. 대신 수집기 포트는
-`127.0.0.1`에만 열립니다([PRINCIPLES.md](PRINCIPLES.md)).
+토큰은 `make setup`이 무작위 값으로 `.env`에 채웁니다. 비워 두면 토큰 검사는 하지
+않습니다. 수집기 포트는 `127.0.0.1`에만 열립니다([PRINCIPLES.md](PRINCIPLES.md)).
+
+**브라우저가 보낸 다른 출처의 요청은 토큰과 상관없이 403입니다** — `Sec-Fetch-Site`가
+`none`·`same-origin`이 아니거나, 그 헤더 없이 `Origin`이 수집기 자신이 아닌 경우.
+대시보드를 켜 둔 채 방문한 다른 사이트가 `/maintenance/purge` 같은 경로를 부를 수
+있었습니다. 백엔드·curl·make는 이 헤더를 보내지 않아 영향이 없습니다.
 
 | 경로 | 설명 |
 |---|---|

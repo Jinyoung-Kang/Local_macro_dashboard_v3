@@ -32,7 +32,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
-from . import catalog, settings
+from . import catalog, logredact, migrations, settings
 
 logger = logging.getLogger(__name__)
 
@@ -69,56 +69,51 @@ def connection():
         yield conn
 
 
-def init_schema(sql_path: str | None = None) -> None:
+def init_schema(path: str | None = None) -> None:
     """
-    스키마를 적용합니다(멱등).
+    스키마를 최신 버전으로 맞춥니다 — db/migrations에서 아직 적용하지 않은 파일만
+    번호 순서로 적용합니다(app/migrations.py).
 
-    운영에서는 db/migrations를 Flyway 등으로 적용하지만, 로컬 개발과 테스트에서
-    수집기 단독으로 띄울 수 있어야 하므로 같은 SQL을 직접 실행할 수단을 둡니다.
+    쓰기는 수집기의 몫이라 수집기가 기동할 때 적용합니다. 백엔드는 읽기만 합니다.
+
+    :param path: 마이그레이션 디렉터리. 파일 경로를 주면 그 파일이 있는 디렉터리를 씁니다
+    :raises psycopg.Error: 적용에 실패하면 전부 되돌리고 그대로 올립니다(기동 중단)
     """
-    path = _resolve_schema_path(sql_path)
-    if path is None:
+    directory = _resolve_migrations_dir(path)
+    if directory is None:
         logger.warning(
-            "스키마 파일을 찾지 못했습니다. MACRO_SCHEMA_SQL로 경로를 지정하세요."
+            "마이그레이션 디렉터리를 찾지 못했습니다. MACRO_MIGRATIONS_DIR로 경로를 지정하세요."
         )
         return
 
-    try:
-        sql = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        logger.warning("스키마 파일을 읽지 못했습니다 (%s): %s", path, exc)
-        return
-
+    found = migrations.discover(directory)
     with connection() as conn:
-        conn.execute(sql)
-    logger.info("저장 계층 준비 완료: %s", path)
+        migrations.apply_pending(conn, found)
+    logger.info("저장 계층 준비 완료: %s (V%d까지)", directory, found[-1].version if found else 0)
 
 
-def _resolve_schema_path(sql_path: str | None) -> Path | None:
+def _resolve_migrations_dir(path: str | None) -> Path | None:
     """
-    스키마 SQL의 위치를 찾습니다.
+    마이그레이션 디렉터리를 찾습니다.
 
     배포 형태마다 경로가 다릅니다.
-      - 저장소 실행 : <repo>/db/migrations/V1__init.sql
-      - 컨테이너    : /app/db/migrations/V1__init.sql (compose가 마운트)
-    명시 인자 → 환경변수 → 관례적 위치 순으로 찾고, 없으면 None을 돌려줍니다
-    (잘못된 경로를 조용히 만들어 내지 않습니다).
+      - 저장소 실행 : <repo>/db/migrations
+      - 컨테이너    : /app/db/migrations (compose가 마운트)
+    명시 인자 → MACRO_MIGRATIONS_DIR → MACRO_SCHEMA_SQL(예전 설정: V1 파일 경로) →
+    관례적 위치 순으로 찾고, 없으면 None을 돌려줍니다(잘못된 경로를 조용히 만들어 내지 않습니다).
     """
     candidates: list[Path] = []
-    if sql_path:
-        candidates.append(Path(sql_path))
-
-    env_path = os.environ.get("MACRO_SCHEMA_SQL", "").strip()
-    if env_path:
-        candidates.append(Path(env_path))
+    for value in (path, os.environ.get("MACRO_MIGRATIONS_DIR"), os.environ.get("MACRO_SCHEMA_SQL")):
+        if value and value.strip():
+            candidate = Path(value.strip())
+            candidates.append(candidate.parent if candidate.suffix == ".sql" else candidate)
 
     here = Path(__file__).resolve()
-    relative = Path("db") / "migrations" / "V1__init.sql"
     # app/ → collector/ → <repo> 순으로 거슬러 올라가며 찾습니다.
-    candidates.extend(parent / relative for parent in here.parents)
+    candidates.extend(parent / "db" / "migrations" for parent in here.parents)
 
     for candidate in candidates:
-        if candidate.is_file():
+        if candidate.is_dir() and any(candidate.glob("V*__*.sql")):
             return candidate
     return None
 
@@ -427,8 +422,23 @@ def finish_run(
             "UPDATE collector_runs SET finished_at = now(), status = %s, "
             "ok_count = %s, fail_count = %s, detail = %s, heartbeat_at = now() "
             "WHERE id = %s",
-            (status, ok_count, fail_count, (detail or "")[:2000] or None, run_id),
+            (status, ok_count, fail_count, _safe_detail(detail, 2000), run_id),
         )
+
+
+def _safe_detail(detail: str | None, limit: int) -> str | None:
+    """
+    실행 기록에 남길 실패 사유 — 비밀값을 가리고 길이를 자릅니다.
+
+    사유는 예외 문구 그대로라 요청 URL(쿼리의 API 키)이 섞일 수 있고, 상태 화면에 나가
+    복사됩니다. 로그만 가리던 것을 저장할 때도 가립니다.
+    """
+    return (_redacted(detail) or "")[:limit] or None
+
+
+def _redacted(detail: str | None) -> str | None:
+    """가리기 전에 저장된 옛 기록을 내보낼 때 씁니다 (길이는 그대로)."""
+    return logredact.redact(detail) if detail else detail
 
 
 def record_task_run(
@@ -451,7 +461,7 @@ def record_task_run(
                 (
                     run_id, task, speed, status,
                     started_at.astimezone(timezone.utc),
-                    duration_ms, (detail or "")[:1000] or None,
+                    duration_ms, _safe_detail(detail, 1000),
                 ),
             )
     except psycopg.Error as exc:
@@ -500,13 +510,22 @@ def resolve_run_status(run: dict | None) -> str:
 
 
 def mark_stale_runs_interrupted() -> int:
-    """죽은 'running' 레코드를 정리합니다. 수집기 기동 시 호출합니다."""
+    """
+    죽은 'running' 레코드를 정리합니다. **수집기 기동 시에만** 호출합니다.
+
+    기동 직후에는 이 프로세스가 시작한 실행이 아직 없으므로, 같은 호스트·같은 PID로 남은
+    'running' 기록은 이전 프로세스의 것입니다. 컨테이너가 재시작되면 새 수집기도 PID 1이라
+    "살아 있는 PID"로 보여, 예전에는 heartbeat 기준(30분)이 지날 때까지 "진행 중"으로 남았습니다.
+    """
     with connection() as conn:
         rows = conn.execute(
             "SELECT * FROM collector_runs WHERE status = 'running'"
         ).fetchall()
 
-        stale = [r["id"] for r in rows if resolve_run_status(dict(r)) == "interrupted"]
+        stale = [
+            r["id"] for r in rows
+            if _left_by_previous_process(r) or resolve_run_status(dict(r)) == "interrupted"
+        ]
         if not stale:
             return 0
 
@@ -518,6 +537,12 @@ def mark_stale_runs_interrupted() -> int:
         )
     logger.info("비정상 종료된 수집 기록 %d건을 정리했습니다.", len(stale))
     return len(stale)
+
+
+def _left_by_previous_process(run: dict) -> bool:
+    """이 호스트에서 지금 프로세스와 같은 PID로 남은 기록인지 (기동 시 판정 전용)."""
+    same_host = (run.get("host") or socket.gethostname()) == socket.gethostname()
+    return same_host and run.get("pid") == os.getpid()
 
 
 def read_last_run() -> dict | None:
@@ -535,16 +560,36 @@ def read_task_summary(task_names: Sequence[str] | None = None) -> list[dict]:
     :param task_names: 지금 등록된 태스크 이름. 주면 그 태스크만 돌려줍니다.
     주의사항 — 실행 기록은 태스크를 없앤 뒤에도 남습니다. 거르지 않으면 없어진
     태스크가 상태 화면에 영원히 남고, 누를 수 없는 "다시 실행" 버튼이 생깁니다.
+
+    태스크마다 (task, id DESC) 인덱스의 첫 행만 읽습니다. 예전 DISTINCT ON은 실행 기록
+    전체를 정렬해, 1년치(43만 행)에서 125ms가 걸렸습니다(지금 0.14ms).
     """
-    sql = (
-        "SELECT DISTINCT ON (task) task, speed, status, started_at, duration_ms, detail, run_id "
-        "FROM collector_task_runs"
-    )
     params: list[Any] = []
-    if task_names is not None:
-        sql += " WHERE task = ANY(%s)"
+    if task_names is None:
+        # 기록에 있는 태스크 이름을 인덱스에서 하나씩 건너뛰며 찾습니다.
+        names_sql = """
+            WITH RECURSIVE names AS (
+                (SELECT task FROM collector_task_runs ORDER BY task LIMIT 1)
+                UNION ALL
+                SELECT (SELECT r.task FROM collector_task_runs r
+                        WHERE r.task > n.task ORDER BY r.task LIMIT 1)
+                FROM names n WHERE n.task IS NOT NULL
+            )
+            SELECT task FROM names
+        """
+    else:
+        names_sql = "SELECT DISTINCT unnest(%s::text[]) AS task"
         params.append(list(task_names))
-    sql += " ORDER BY task, id DESC"
+    sql = f"""
+        SELECT latest.* FROM ({names_sql}) t
+        CROSS JOIN LATERAL (
+            SELECT task, speed, status, started_at, duration_ms, detail, run_id
+            FROM collector_task_runs r
+            WHERE r.task = t.task
+            ORDER BY r.id DESC LIMIT 1
+        ) latest
+        ORDER BY latest.task
+    """
     with connection() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
@@ -643,7 +688,7 @@ def _serialize_run(run: dict | None) -> dict | None:
         "status": out.get("status"),
         "okCount": out.get("ok_count"),
         "failCount": out.get("fail_count"),
-        "detail": out.get("detail"),
+        "detail": _redacted(out.get("detail")),
         "pid": out.get("pid"),
         "host": out.get("host"),
         "groupName": out.get("group_name"),
@@ -658,7 +703,7 @@ def _serialize_task(task: dict) -> dict:
         "status": task.get("status"),
         "startedAt": started.isoformat() if isinstance(started, datetime) else started,
         "durationMs": task.get("duration_ms"),
-        "detail": task.get("detail"),
+        "detail": _redacted(task.get("detail")),
         "runId": task.get("run_id"),
     }
 
@@ -754,6 +799,37 @@ def purge_older_than(days: int) -> dict[str, int]:
             (cutoff,),
         ).rowcount
     return {"timeseries": ts, "observations": ob, "collectorRuns": runs}
+
+
+def purge_run_logs(days: int) -> dict[str, int]:
+    """
+    보존 기간이 지난 수집 실행 기록(collector_task_runs · collector_runs)을 지웁니다.
+
+    실행 기록은 하루 약 1,200행씩 쌓여 DB를 키우고 상태 화면 조회를 느리게 합니다.
+    **수집한 데이터(timeseries · observations)는 건드리지 않습니다** — 외부에서 다시
+    받을 수 없는 이력이 있습니다.
+
+    기간과 무관하게 남기는 것
+      - 태스크마다 가장 최근 1건: 오래 돌지 않은 태스크도 상태 화면이 "마지막 실행"을 보여 줍니다.
+      - 최근 실행 50건: purge_older_than과 같은 규칙.
+
+    :param days: 보존 기간(일). 이보다 먼저 시작한 기록이 대상입니다
+    :returns: {"taskRuns": 지운 태스크 기록 수, "collectorRuns": 지운 실행 기록 수}
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    with connection() as conn:
+        task_runs = conn.execute(
+            "DELETE FROM collector_task_runs old WHERE old.started_at < %s "
+            "AND EXISTS (SELECT 1 FROM collector_task_runs newer "
+            "            WHERE newer.task = old.task AND newer.id > old.id)",
+            (cutoff,),
+        ).rowcount
+        runs = conn.execute(
+            "DELETE FROM collector_runs WHERE started_at < %s "
+            "AND id NOT IN (SELECT id FROM collector_runs ORDER BY id DESC LIMIT 50)",
+            (cutoff,),
+        ).rowcount
+    return {"taskRuns": task_runs, "collectorRuns": runs}
 
 
 # ==============================================================================

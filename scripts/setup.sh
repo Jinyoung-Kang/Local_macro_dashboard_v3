@@ -4,7 +4,8 @@
 # 최초 1회 준비 스크립트 (macOS · Linux 공통).
 #
 #   1) .env 생성 (.env.example 복사)
-#   2) 세션 서명 키(JWT_SECRET) 자동 생성 — 기본 placeholder를 쓰면 안 됩니다
+#   2) 세션 서명 키(JWT_SECRET)·수집기 내부 토큰(COLLECTOR_API_TOKEN) 자동 생성
+#      — 기본 placeholder나 빈 값을 쓰면 안 됩니다. 둘 다 외부 API 키가 아닙니다
 #   3) 필수 도구 확인 (Docker / 네이티브 실행용 Java·Node·Python)
 #   4) 포트 충돌 확인 (3000 · 8080 · 8000 · 5432 · 6379)
 #
@@ -73,6 +74,29 @@ if grep -q '^JWT_SECRET=change-me' .env 2>/dev/null; then
   fi
 else
   ok "JWT_SECRET이 이미 설정돼 있습니다"
+fi
+
+# --- 수집기 내부 토큰 -----------------------------------------------------
+# 비어 있으면 수집기 API가 인증 없이 열립니다. 외부 API 키가 아니라 이 컴퓨터 안에서
+# 백엔드·make가 수집기를 부를 때 쓰는 값이라, 무작위로 만들어 두면 됩니다
+# (docker compose가 백엔드·수집기에 같은 값을 넘기고, Makefile도 이 값을 읽습니다).
+if ! grep -q '^COLLECTOR_API_TOKEN=.' .env 2>/dev/null; then
+  if command -v openssl >/dev/null 2>&1; then
+    TOKEN=$(openssl rand -hex 32)
+    if grep -q '^COLLECTOR_API_TOKEN=' .env 2>/dev/null; then
+      tmp=$(mktemp)
+      awk -v token="$TOKEN" \
+        '/^COLLECTOR_API_TOKEN=/ { print "COLLECTOR_API_TOKEN=" token; next } { print }' .env > "$tmp"
+      mv "$tmp" .env
+    else
+      printf 'COLLECTOR_API_TOKEN=%s\n' "$TOKEN" >> .env
+    fi
+    ok "COLLECTOR_API_TOKEN(수집기 내부 토큰)을 무작위 값으로 생성했습니다 — 'make up'으로 반영하세요"
+  else
+    warn "openssl이 없어 COLLECTOR_API_TOKEN을 생성하지 못했습니다. .env에 무작위 문자열을 직접 넣으세요"
+  fi
+else
+  ok "COLLECTOR_API_TOKEN이 설정돼 있습니다"
 fi
 
 # --- 접속 비밀번호 --------------------------------------------------------

@@ -57,6 +57,24 @@ class AuthControllerTest {
     }
 
     @Test
+    @DisplayName("세션 확인은 로그인돼 있을 때만 읽기 모드를 함께 준다")
+    void sessionCarriesReadModeOnlyWhenAuthenticated() {
+        properties.setReadMode("store_only");
+        MockHttpServletRequest anonymous = new MockHttpServletRequest();
+        assertThat(controller.session(anonymous))
+                .containsEntry("authenticated", false)
+                .doesNotContainKey("readMode");
+
+        String cookie = login("right-password", "10.0.0.9").getHeaders().getFirst(HttpHeaders.SET_COOKIE);
+        MockHttpServletRequest signedIn = new MockHttpServletRequest();
+        signedIn.setCookies(new jakarta.servlet.http.Cookie(
+                AuthService.COOKIE_NAME, cookie.split(";")[0].split("=", 2)[1]));
+        assertThat(controller.session(signedIn))
+                .containsEntry("authenticated", true)
+                .containsEntry("readMode", "store_only");
+    }
+
+    @Test
     @DisplayName("본문 없는 로그인 요청은 500이 아니라 401")
     void missingBodyIs401() {
         MockHttpServletRequest request = new MockHttpServletRequest();

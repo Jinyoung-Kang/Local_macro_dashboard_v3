@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
 
-from . import catalog, indicators, logredact, settings, store, tasks
+from . import catalog, indicators, logredact, settings, store, tasks, webguard
 from .services import (
     kis as kis_service,
     krx as krx_service,
@@ -116,6 +116,9 @@ app = FastAPI(
     description="외부 시장 데이터 수집기 (PostgreSQL 적재 + 실시간 조회 API)",
     lifespan=lifespan,
 )
+
+# 브라우저에서 온 교차 출처 요청은 토큰 유무와 관계없이 막습니다(webguard 설명 참고).
+app.add_middleware(webguard.CrossSiteRequestGuard)
 
 
 def _run_group_job(group: str) -> None:

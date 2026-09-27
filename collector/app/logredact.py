@@ -31,13 +31,14 @@ import re
 #   consumer_key·secret,  SGIS (인증 → accessToken 발급)
 #   accessToken
 #   confmKey              도로명주소
+#   client_secret         토스증권 토큰 발급 (secret 앞의 '_' 때문에 secret 규칙에 걸리지 않음)
 # 주의사항 — 새 API를 붙일 때 키 파라미터 이름이 여기 없으면 로그에 그대로
 # 찍힙니다. tests/test_log_redaction.py에 표본을 함께 추가하세요.
 _SECRET_PARAMS = (
     "api_key", "apikey", "auth_key", "authkey", "token", "access_token",
     "appkey", "app_key", "appsecret", "app_secret", "secret", "password",
     "servicekey", "crtfc_key", "key", "consumer_key", "consumer_secret",
-    "accesstoken", "confmkey",
+    "accesstoken", "confmkey", "client_secret",
 )
 
 _QUERY_PATTERN = re.compile(

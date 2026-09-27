@@ -22,7 +22,8 @@ const nextConfig = {
   reactStrictMode: true,
   // "X-Powered-By: Next.js"로 프레임워크를 광고하지 않습니다.
   poweredByHeader: false,
-  // 백엔드 주소는 런타임 환경변수로 주입합니다(컨테이너 이미지 재빌드 없이 변경 가능).
+  // 백엔드 주소는 **빌드할 때** 번들에 들어갑니다(NEXT_PUBLIC_ 접두사). 실행 중인 컨테이너의
+  // 환경변수를 바꿔도 반영되지 않으므로, 바꾼 뒤에는 이미지를 다시 빌드하세요(make up).
   env: {
     NEXT_PUBLIC_API_BASE: process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080",
   },

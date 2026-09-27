@@ -55,7 +55,7 @@ def creds(monkeypatch):
             "json": lambda self: {"access_token": f"tok{len(issued)}", "expires_in": 3600},
         })()
 
-    monkeypatch.setattr(toss.requests, "post", fake_post)
+    monkeypatch.setattr(toss._http(), "post", fake_post)
     yield issued
     toss._invalidate_token()
 
@@ -106,7 +106,7 @@ def test_non_numeric_amount_is_none():
 # ------------------------------------------------------------------ 호출 규칙
 def test_missing_key_does_not_call(monkeypatch):
     monkeypatch.setattr(toss.settings, "toss_credentials", lambda: ("", ""))
-    monkeypatch.setattr(toss.requests, "get", lambda *a, **k: pytest.fail("호출하면 안 됩니다"))
+    monkeypatch.setattr(toss._http(), "get", lambda *a, **k: pytest.fail("호출하면 안 됩니다"))
     with pytest.raises(toss.TossMissingKey):
         toss.fetch_stock_investor_trading("005930")
 
@@ -120,7 +120,7 @@ def test_401_reissues_token_once(monkeypatch, creds):
             return FakeResponse(401, {"error": {"code": "invalid-token", "message": "", "requestId": "x"}})
         return FakeResponse(200, _fixture("stock_investor_trading_005930.json"))
 
-    monkeypatch.setattr(toss.requests, "get", fake_get)
+    monkeypatch.setattr(toss._http(), "get", fake_get)
     records = toss.fetch_stock_investor_trading("005930", count=3)
     assert len(records) == 3
     assert calls == ["Bearer tok1", "Bearer tok2"]  # 재발급한 새 토큰으로 다시
@@ -144,7 +144,7 @@ def test_concurrent_callers_issue_one_token(monkeypatch):
             "json": lambda self: {"access_token": f"tok{len(issued)}", "expires_in": 3600},
         })()
 
-    monkeypatch.setattr(toss.requests, "post", slow_post)
+    monkeypatch.setattr(toss._http(), "post", slow_post)
     tokens: list[str | None] = []
     threads = [threading.Thread(target=lambda: tokens.append(toss.get_access_token()[0])) for _ in range(4)]
     for thread in threads:
@@ -173,13 +173,13 @@ def test_429_waits_retry_after(monkeypatch, creds):
         FakeResponse(200, _fixture("market_investor_trading_kospi.json")),
     ])
     monkeypatch.setattr(toss.time, "sleep", slept.append)
-    monkeypatch.setattr(toss.requests, "get", lambda *a, **k: next(responses))
+    monkeypatch.setattr(toss._http(), "get", lambda *a, **k: next(responses))
     assert len(toss.fetch_market_investor_trading("KOSPI")) == 2
     assert slept == [2.0]
 
 
 def test_403_is_forbidden_without_secret_in_message(monkeypatch, creds):
-    monkeypatch.setattr(toss.requests, "get", lambda *a, **k: FakeResponse(
+    monkeypatch.setattr(toss._http(), "get", lambda *a, **k: FakeResponse(
         403, {"error": {"code": "forbidden-ip", "message": "허용되지 않은 IP", "requestId": "r"}}))
     with pytest.raises(toss.TossForbidden) as info:
         toss.fetch_stock_investor_trading("005930")

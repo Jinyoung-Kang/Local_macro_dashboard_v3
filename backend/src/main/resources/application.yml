@@ -23,8 +23,10 @@ server:
     enabled: true
     mime-types: application/json,text/plain
     min-response-size: 2048
+  # 오류 응답에 예외 문구를 싣지 않습니다(예전에는 SQL 문장까지 나갔습니다).
+  # API 오류 형식은 web/ApiExceptionHandler · config/ErrorResponseConfig가 맞춥니다.
   error:
-    include-message: always
+    include-message: never
 
 management:
   endpoints:

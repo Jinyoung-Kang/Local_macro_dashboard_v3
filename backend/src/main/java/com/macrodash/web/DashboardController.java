@@ -14,6 +14,7 @@ import com.macrodash.service.Sec13FService;
 import com.macrodash.service.SectorService;
 import com.macrodash.service.SnapshotTextService;
 import com.macrodash.service.VerificationService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -359,8 +360,9 @@ public class DashboardController {
             @RequestParam(required = false) String investor,
             @RequestParam(required = false) String tradeType,
             @RequestParam(required = false) String obsDate,
-            @RequestParam(required = false) String startDate) {
-        return radar.history(market, investor, tradeType, obsDate, startDate);
+            @RequestParam(required = false) String startDate,
+            @RequestParam(defaultValue = "false") boolean latest) {
+        return radar.history(market, investor, tradeType, obsDate, startDate, latest);
     }
 
     @GetMapping("/radar/diagnostics")
@@ -399,9 +401,15 @@ public class DashboardController {
         return status.refresh(runFast);
     }
 
+    /**
+     * 태스크 1건 실행 시작 → 202. 끝났는지는 {@code GET /api/status/history?task=…&limit=1}의
+     * 시작 시각이 {@code baselineStartedAt}보다 늦어졌는지로 확인합니다.
+     *
+     * @return 202 시작함 · 400 모르는 태스크 · 502 수집기에 닿지 못함
+     */
     @PostMapping("/status/run/{taskName}")
-    public Map<String, Object> runTask(@PathVariable String taskName) {
-        return status.runTask(taskName);
+    public ResponseEntity<Map<String, Object>> runTask(@PathVariable String taskName) {
+        return ResponseEntity.accepted().body(status.startTask(taskName));
     }
 
     @PostMapping("/verification")

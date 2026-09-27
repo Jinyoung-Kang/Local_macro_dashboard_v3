@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from http.cookiejar import DefaultCookiePolicy
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -180,6 +181,32 @@ def get_sec_session() -> requests.Session:
     if session.headers.get("User-Agent") != headers["User-Agent"]:
         session.headers.update(headers)
     return session
+
+
+def get_api_session(name: str) -> requests.Session:
+    """
+    증권사 Open API(토스·KIS·LS)용 세션 — 연결(TCP·TLS)만 재사용합니다.
+
+    예전에는 호출마다 requests.get/post로 새로 연결했습니다. 아래 두 가지는 그때와 같습니다.
+      - 재시도하지 않습니다. 이 API들은 부르는 쪽이 401(토큰 재발급)·429(Retry-After 대기)·
+        403(허용 IP)을 직접 처리합니다. 공용 세션처럼 어댑터가 403·429를 다시 보내면 그
+        처리와 겹치고, 토큰 발급 POST가 두 번 나가 먼저 받은 토큰이 무효가 될 수 있습니다.
+      - 쿠키를 저장하지 않습니다. 이전 응답의 쿠키가 다음 요청에 실리지 않습니다.
+    인증 헤더는 요청마다 넘깁니다(세션에 두지 않음).
+
+    :param name: 클라이언트 이름 (toss / kis / ls). 이름마다 세션이 하나입니다
+    """
+    with _lock:
+        session = _sessions.get(name)
+        if session is None:
+            session = requests.Session()
+            session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
+            adapter = HTTPAdapter(pool_connections=4, pool_maxsize=8)  # max_retries 기본값 0
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
+            _sessions[name] = session
+            logger.debug("HTTP 세션 생성: %s", name)
+        return session
 
 
 def _get(
