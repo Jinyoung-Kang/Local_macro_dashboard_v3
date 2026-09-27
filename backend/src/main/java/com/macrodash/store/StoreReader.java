@@ -4,11 +4,14 @@ import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -26,6 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li><b>live_only</b> — 항상 수집을 요청한 뒤 읽습니다(디버깅용).</li>
  * </ul>
  *
+ * <p>저장본이 아예 없어 수집을 기다렸는데도 여전히 없으면(키가 없거나 외부가 막힘,
+ * 없는 CIK·시계열 등), 같은 태스크는 {@link #MISSING_RETRY_MS} 동안 다시 기다리지 않습니다.
+ * 예전에는 요청마다 전체 수집을 다시 기다려, 없는 CIK 3개를 넣은 요청 하나가 13F 수집을
+ * 6번 붙잡았습니다(수집기 대기 한도 90초씩, 그때마다 SEC 재크롤링).
+ *
  * <p>수동 새로고침은 저장본을 지우지 않습니다. "이 시각 이전 저장본은 낡은
  * 것으로 본다"는 기준({@code refresh_requests})만 세웁니다. 저장본을 지우면
  * 수집이 실패했을 때 보여 줄 값이 아예 없어지기 때문입니다.
@@ -41,21 +49,46 @@ public class StoreReader {
      */
     private static final long TRIGGER_COOLDOWN_MS = 30_000;
 
+    /**
+     * 저장본이 없어 수집을 기다렸던 태스크를 다시 기다리기까지의 간격.
+     *
+     * <p>기다린 뒤에도 없던 데이터셋은 곧바로 다시 기다려도 결과가 같습니다. 이 시간이 지나면
+     * (키를 넣었다든지 상황이 바뀌었을 수 있어) 다시 한 번 기다립니다. 그 사이에도 스케줄러는
+     * 주기대로 수집하므로, 데이터가 생기면 다음 조회에서 바로 보입니다.
+     */
+    static final long MISSING_RETRY_MS = 10 * 60_000L;
+
     private final Map<String, Long> lastTriggeredAt = new ConcurrentHashMap<>();
 
+    /** 태스크별 "저장본이 없어 기다린" 수집이 끝난 시각(ms). */
+    private final Map<String, Long> lastAwaitedAt = new ConcurrentHashMap<>();
+
+    /** 지금 기다리는 중인 수집. 같은 태스크를 기다리는 요청은 여기에 합류합니다. */
+    private final Map<String, CompletableFuture<Boolean>> inFlightWaits = new ConcurrentHashMap<>();
 
     private static final Logger log = LoggerFactory.getLogger(StoreReader.class);
 
     private final StoreRepository repository;
     private final CollectorClient collector;
     private final AppProperties properties;
+    private final Clock clock;
 
+    @Autowired
     public StoreReader(StoreRepository repository,
                        CollectorClient collector,
                        AppProperties properties) {
+        this(repository, collector, properties, Clock.systemUTC());
+    }
+
+    /** 테스트가 시각을 움직일 수 있게 시계를 받습니다. */
+    StoreReader(StoreRepository repository,
+                CollectorClient collector,
+                AppProperties properties,
+                Clock clock) {
         this.repository = repository;
         this.collector = collector;
         this.properties = properties;
+        this.clock = clock;
     }
 
     public AppProperties.ReadMode readMode() {
@@ -105,19 +138,57 @@ public class StoreReader {
         }
 
         // 보여 줄 것이 아예 없을 때만 기다립니다. 빈 화면보다는 나은 선택입니다.
+        // 다만 방금 기다렸던 태스크면 다시 기다리지 않습니다 — 결과는 같고 시간만 버립니다.
+        // 그 사이 수집이 끝났을 수 있으니 저장본은 한 번 더 읽습니다.
+        if (awaitedRecently(taskName)) {
+            log.debug("저장본이 없습니다({}). '{}'는 방금 기다렸으므로 다시 기다리지 않습니다.",
+                    name, taskName);
+            return repository.readSnapshot(name);
+        }
+
         log.info("저장본이 없습니다({}). 수집기에 '{}' 태스크를 요청하고 기다립니다.",
                 name, taskName);
-        Optional<?> triggered = collector.runTask(taskName, true);
+        boolean accepted = awaitCollection(taskName);
 
         Optional<Snapshot> refreshed = repository.readSnapshot(name);
         if (refreshed.isPresent()) {
             return refreshed;
         }
 
-        if (triggered.isEmpty()) {
+        if (!accepted) {
             log.warn("수집 요청 실패({}). 남아 있는 저장본으로 대체합니다.", name);
         }
         return stored;
+    }
+
+    /**
+     * 태스크 수집이 끝날 때까지 기다립니다. 같은 태스크를 이미 기다리는 요청이 있으면
+     * 새로 요청하지 않고 그 수집에 합류합니다(첫 화면에서 여러 카드가 동시에 비어 있을 때).
+     *
+     * @return 수집기가 요청을 받았으면 true
+     */
+    private boolean awaitCollection(String taskName) {
+        CompletableFuture<Boolean> mine = new CompletableFuture<>();
+        CompletableFuture<Boolean> running = inFlightWaits.putIfAbsent(taskName, mine);
+        if (running != null) {
+            return running.join();
+        }
+        boolean accepted = false;
+        try {
+            accepted = collector.runTask(taskName, true).isPresent();
+            return accepted;
+        } finally {
+            // 순서가 중요합니다: 끝난 시각을 먼저 남겨야, 그 사이에 들어온 요청이
+            // 합류할 곳도 없고 "방금 기다림"도 못 보는 틈이 생기지 않습니다.
+            lastAwaitedAt.put(taskName, clock.millis());
+            inFlightWaits.remove(taskName, mine);
+            mine.complete(accepted);
+        }
+    }
+
+    private boolean awaitedRecently(String taskName) {
+        Long finished = lastAwaitedAt.get(taskName);
+        return finished != null && clock.millis() - finished < MISSING_RETRY_MS;
     }
 
     /**
@@ -129,7 +200,7 @@ public class StoreReader {
      * 왕복과 실행 기록을 아낍니다.
      */
     private boolean shouldTrigger(String taskName) {
-        long now = System.currentTimeMillis();
+        long now = clock.millis();
         Long previous = lastTriggeredAt.get(taskName);
         if (previous != null && now - previous < TRIGGER_COOLDOWN_MS) {
             return false;

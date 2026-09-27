@@ -235,6 +235,7 @@ public class GuruService {
      * 전체인 것처럼 보여 주면 안 됩니다.
      */
     public Map<String, Object> risk(String cik, String benchmark, int years) {
+        Sec13FService.requireKnownCik(cik);
         Map<String, Object> out = new LinkedHashMap<>();
         String benchmarkTicker = BENCHMARKS.contains(benchmark) ? benchmark : "SPY";
         int window = Math.max(1, Math.min(5, years));

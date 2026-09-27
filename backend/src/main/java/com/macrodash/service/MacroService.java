@@ -9,6 +9,8 @@ import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
+import com.macrodash.support.InvalidRequestException;
+import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -161,6 +163,8 @@ public class MacroService {
 
     /** FRED 공식 일별 확정치로 계산한 스프레드 시계열. */
     public Map<String, Object> officialSpread(String longId, String shortId) {
+        requireKnownFredSeries(longId, false);
+        requireKnownFredSeries(shortId, false);
         Map<LocalDate, Double> longSeries = seriesMap(longId);
         Map<LocalDate, Double> shortSeries = seriesMap(shortId);
 
@@ -196,6 +200,23 @@ public class MacroService {
      */
     public static final Map<String, String[]> DERIVED_SPREADS = Map.of(
             "T30Y3M", new String[]{"DGS30", "DGS3MO"});
+
+    /**
+     * 수집하는 FRED 시계열인지 확인합니다.
+     *
+     * <p>모르는 ID는 저장본이 생길 수 없는데, 예전에는 그대로 찾다가 FRED 전체 수집을
+     * 동기로 기다렸습니다(재현: 없는 ID 한 번에 수집기 지연만큼 대기, 반복 요청마다 다시).
+     *
+     * @param allowDerived 우리가 계산하는 파생 시리즈(T30Y3M 등)도 허용할지
+     * @throws InvalidRequestException 목록에 없는 ID
+     */
+    private static void requireKnownFredSeries(String seriesId, boolean allowDerived) {
+        if (Datasets.FRED_SERIES.contains(seriesId)
+                || (allowDerived && DERIVED_SPREADS.containsKey(seriesId))) {
+            return;
+        }
+        throw new InvalidRequestException("알 수 없는 FRED 시계열입니다: " + Params.echo(seriesId));
+    }
 
     /** 날짜별 값 (파생 시리즈 포함). 날짜 오름차순입니다. */
     private Map<LocalDate, Double> resolvedSeries(String seriesId) {
@@ -280,6 +301,7 @@ public class MacroService {
 
     /** FRED 시리즈 원본 (차트용). */
     public Map<String, Object> fredSeries(String seriesId, Integer years) {
+        requireKnownFredSeries(seriesId, true);
         // 파생 시리즈(30Y-3M 등)는 저장본이 없습니다 — 원본 둘을 빼서 만듭니다.
         if (DERIVED_SPREADS.containsKey(seriesId)) {
             return derivedSeriesResponse(seriesId, years);

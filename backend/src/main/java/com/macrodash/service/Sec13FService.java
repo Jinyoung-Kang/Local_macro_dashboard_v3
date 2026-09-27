@@ -5,6 +5,8 @@ import com.macrodash.analytics.Json;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
+import com.macrodash.support.InvalidRequestException;
+import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -44,8 +46,25 @@ public class Sec13FService {
         return Map.of("institutions", INSTITUTIONS);
     }
 
+    /**
+     * 추적하는 기관의 CIK인지 확인합니다.
+     *
+     * <p>모르는 CIK는 저장본이 있을 수 없는데, 예전에는 그대로 저장본을 찾다가 "없음" →
+     * 13F 전체 수집을 동기로 기다렸습니다(재현: CIK 하나에 수집 2회, 세 개면 6회·30초).
+     *
+     * @throws InvalidRequestException 목록에 없는 CIK
+     */
+    public static void requireKnownCik(String cik) {
+        boolean known = INSTITUTIONS.stream().anyMatch(entry -> entry.get("cik").equals(cik));
+        if (!known) {
+            throw new InvalidRequestException("추적하지 않는 기관 CIK입니다: " + Params.echo(cik)
+                    + " (/api/sec13f/institutions 목록의 cik를 쓰세요)");
+        }
+    }
+
     /** 기관 1곳의 분기 이력 + 최신 분기 QoQ 분석. */
     public Map<String, Object> portfolio(String cik, int quarters, int topN) {
+        requireKnownCik(cik);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("cik", cik);
         out.put("quartersRequested", quarters);
@@ -289,6 +308,7 @@ public class Sec13FService {
      */
     public Map<String, Object> consensus(List<String> ciks, String reportDate,
                                          int minHolders, int topN) {
+        ciks.forEach(Sec13FService::requireKnownCik);   // 저장본을 찾기 전에 전부 확인합니다
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, Map<String, Object>> aggregate = new LinkedHashMap<>();
         List<String> participants = new ArrayList<>();
@@ -407,6 +427,7 @@ public class Sec13FService {
      * @param minHolders 최소 몇 곳이 새로 담았을 때 목록에 올릴지
      */
     public Map<String, Object> newBuys(List<String> ciks, String reportDate, int minHolders) {
+        ciks.forEach(Sec13FService::requireKnownCik);   // 저장본을 찾기 전에 전부 확인합니다
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, Map<String, Object>> aggregate = new LinkedHashMap<>();
         List<String> participants = new ArrayList<>();

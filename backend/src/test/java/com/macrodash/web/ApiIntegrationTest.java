@@ -367,6 +367,32 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("추적하지 않는 CIK·모르는 FRED ID는 수집을 기다리지 않고 바로 400")
+    void unknownIdentifiersAreRejectedUpFront() {
+        // 예전에는 저장본이 "없음" → 전체 수집을 동기로 기다렸습니다(CIK 3개 = 수집 6회·30초 재현).
+        for (String path : List.of(
+                "/api/sec13f/portfolio?cik=0000000000",
+                "/api/sec13f/consensus?ciks=1,2,3",
+                "/api/sec13f/new-buys?ciks=0001067983,999",
+                "/api/guru/risk?cik=0000000000",
+                "/api/macro/fred/NOPE",
+                "/api/macro/spread?longId=NOPE&shortId=DGS2")) {
+            long started = System.nanoTime();
+            ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
+            long millis = (System.nanoTime() - started) / 1_000_000;
+
+            assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().path("error").asText()).as(path).isEqualTo("bad_request");
+            assertThat(millis).as("%s 응답 시간(ms)", path).isLessThan(2_000);
+        }
+        // 파생 시리즈(30Y-3M)와 목록에 있는 ID는 그대로 통과합니다.
+        assertThat(authorizedExchange("/api/macro/fred/T30Y3M", HttpMethod.GET).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(authorizedExchange("/api/macro/spread?longId=DGS10&shortId=DGS2", HttpMethod.GET)
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     @DisplayName("없는 API·허용되지 않는 메서드도 같은 오류 형식으로 답한다")
     void unknownPathsAndMethodsUseTheSameErrorShape() {
         ResponseEntity<JsonNode> notFound = authorizedExchange("/api/does-not-exist", HttpMethod.GET);

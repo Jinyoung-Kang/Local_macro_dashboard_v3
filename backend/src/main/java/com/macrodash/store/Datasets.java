@@ -1,5 +1,7 @@
 package com.macrodash.store;
 
+import java.util.List;
+
 /**
  * 데이터셋 이름과 신선도 기준의 단일 출처 (Java 쪽).
  *
@@ -64,6 +66,17 @@ public final class Datasets {
     public static String fredSeries(String seriesId) {
         return "fred.series." + seriesId;
     }
+
+    /**
+     * 수집기가 받아 저장하는 FRED 시계열 (collector/app/indicators.py의 FRED_ALL_SERIES).
+     *
+     * <p>이 목록에 없는 ID는 저장본이 생길 수 없습니다. 화면 API가 모르는 ID로 저장본을 찾으면
+     * "없음" → FRED 전체 수집을 동기로 기다리게 되므로, 입구에서 거릅니다.
+     * 두 목록이 같은지는 DatasetsParityTest가 확인합니다.
+     */
+    public static final List<String> FRED_SERIES = List.of(
+            "DGS2", "DGS10", "DGS30", "DGS3MO", "BAMLH0A0HYM2", "STLFSI4", "CPF3M",
+            "T10Y3M", "DFII10", "T10YIE", "BAMLC0A0CM", "NFCI");
 
     public static String radarScanner(String market, String investor,
                                       String tradeType, String intervalType) {
