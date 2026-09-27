@@ -4,6 +4,13 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# 실행에 필요한 의존성만(next·react). 빌드 도구(typescript·eslint·tailwind 등)는 운영
+# 이미지에 넣지 않습니다.
+FROM node:22-alpine AS prod-deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -26,9 +33,13 @@ WORKDIR /app
 ENV NODE_ENV=production TZ=Asia/Seoul
 
 COPY --from=build /app/package.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
+COPY --from=prod-deps /app/node_modules ./node_modules
+# next start가 .next/cache에 쓰므로 그 폴더만 실행 사용자에게 줍니다. 나머지는 읽기 전용.
+COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build /app/public ./public
+
+# root로 돌지 않습니다(node 이미지에 들어 있는 비루트 사용자).
+USER node
 
 EXPOSE 3000
 CMD ["npm", "run", "start"]

@@ -280,7 +280,7 @@ cd ~/Projects/Local-macro-dashboard-v2
 
 # 가상환경을 collector/.venv 에 만듭니다. Makefile도 이 경로를 먼저 찾습니다.
 python3.11 -m venv collector/.venv
-collector/.venv/bin/pip install -r collector/requirements.txt
+collector/.venv/bin/pip install -r collector/requirements-dev.txt
 
 make dev-collector      # 내부적으로 collector/.venv/bin/python -m uvicorn 실행
 ```
@@ -415,7 +415,7 @@ make db-test           # 테스트 전용 DB 준비 (위 명령들이 자동으�
 > 먼저 씁니다.
 > ```bash
 > python3.11 -m venv collector/.venv
-> collector/.venv/bin/pip install -r collector/requirements.txt
+> collector/.venv/bin/pip install -r collector/requirements-dev.txt
 > ```
 >
 > **`mvn: command not found`가 나면** `make test-backend`는 로컬 Maven이

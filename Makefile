@@ -167,7 +167,7 @@ test-frontend: ## 화면 자가검증 + 린트 + 빌드(타입 검사 포함)
 # ------------------------------------------------------------- 네이티브 개발
 dev-collector: ## 수집기 개발 서버 (자동 리로드 · collector/.venv 필요)
 	@test -x $(VENV_PY) || (echo "⚠️  collector/.venv가 없습니다. 먼저:" && \
-		echo "    python3 -m venv collector/.venv && collector/.venv/bin/pip install -r collector/requirements.txt" && exit 1)
+		echo "    python3 -m venv collector/.venv && collector/.venv/bin/pip install -r collector/requirements-dev.txt" && exit 1)
 	cd collector && DATABASE_URL=postgresql://macro:macro@localhost:5432/macrodash \
 		.venv/bin/python -m uvicorn app.main:app --reload --port $(COLLECTOR_PORT)
 

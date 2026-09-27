@@ -1,2 +1,5 @@
+# 개발·테스트용 (운영 이미지에는 requirements.txt만 들어갑니다)
 -r requirements.txt
+pytest==9.1.1
+httpx==0.28.1
 ruff==0.8.6

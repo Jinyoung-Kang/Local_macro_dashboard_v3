@@ -13,10 +13,14 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # wget은 헬스체크에 씁니다.
-RUN apk add --no-cache wget tzdata
+# root로 돌지 않습니다. 쓰는 곳은 /tmp(내장 톰캣 작업 폴더)뿐이고 app.jar는 읽기만 합니다.
+RUN apk add --no-cache wget tzdata \
+    && addgroup -S app && adduser -S -G app -u 10001 app
 ENV TZ=Asia/Seoul
 
 COPY --from=build /build/target/*.jar app.jar
+
+USER app
 
 EXPOSE 8080
 
