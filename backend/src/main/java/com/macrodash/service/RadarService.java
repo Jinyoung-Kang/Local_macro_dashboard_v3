@@ -9,6 +9,7 @@ import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
+import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -354,11 +355,11 @@ public class RadarService {
             filters.put("tradeType", tradeType);
         }
 
-        List<JsonNode> rows = repository.readObservations(
-                Datasets.OBS_RADAR,
-                obsDate == null ? null : LocalDate.parse(obsDate),
-                startDate == null ? null : LocalDate.parse(startDate),
-                filters);
+        // 형식이 틀린 날짜는 400입니다(예전에는 파싱 예외 문구와 함께 500).
+        LocalDate day = Params.optionalDate("obsDate", obsDate);
+        LocalDate since = Params.optionalDate("startDate", startDate);
+
+        List<JsonNode> rows = repository.readObservations(Datasets.OBS_RADAR, day, since, filters);
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("dates", repository.listObservationDates(Datasets.OBS_RADAR));

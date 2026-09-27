@@ -332,6 +332,54 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("잘못된 파라미터는 400이고, 오류 본문에 내부 정보(예외·SQL·자바 타입)가 없다")
+    void invalidParametersAreBadRequestsWithoutInternals() {
+        // 예전에는 날짜 형식 오류가 500과 함께 "Text 'abc' could not be parsed…"를,
+        // 숫자 형식 오류가 "Failed to convert value of type 'java.lang.String'…"을 돌려줬습니다.
+        for (String path : List.of(
+                "/api/radar/history?obsDate=abc",
+                "/api/radar/history?startDate=2026-13-45",
+                "/api/radar/ranking?topN=abc",
+                "/api/macro/fred/DGS10?years=abc")) {
+            ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
+            assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().path("error").asText()).as(path).isEqualTo("bad_request");
+            assertThat(response.getBody().path("message").asText()).as(path).isNotBlank();
+            assertThat(response.getBody().toString()).as(path)
+                    .doesNotContain("java.", "Exception", "SQL", "could not be parsed", "Failed to convert");
+        }
+    }
+
+    @Test
+    @DisplayName("범위를 벗어난 숫자 파라미터는 500이 아니라 허용 범위로 접어 응답한다")
+    void extremeNumbersAreClampedNot500() {
+        // 예전: limit=-1 → SQL 오류 문장이 그대로 담긴 500, years=2147483647 → DateTimeException 500
+        for (String path : List.of(
+                "/api/status/history?limit=-1",
+                "/api/status/history?limit=2147483647",
+                "/api/macro/fred/DGS10?years=2147483647",
+                "/api/liquidity?years=2147483647",
+                "/api/analytics/regime?years=2147483647",
+                "/api/analytics/correlation?x=fred:DGS10&y=fred:DGS2&years=2147483647")) {
+            ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
+            assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.OK);
+        }
+    }
+
+    @Test
+    @DisplayName("없는 API·허용되지 않는 메서드도 같은 오류 형식으로 답한다")
+    void unknownPathsAndMethodsUseTheSameErrorShape() {
+        ResponseEntity<JsonNode> notFound = authorizedExchange("/api/does-not-exist", HttpMethod.GET);
+        assertThat(notFound.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(notFound.getBody().path("error").asText()).isEqualTo("not_found");
+        assertThat(notFound.getBody().path("message").asText()).isNotBlank();
+
+        ResponseEntity<JsonNode> wrongMethod = authorizedExchange("/api/verification", HttpMethod.GET);
+        assertThat(wrongMethod.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(wrongMethod.getBody().path("error").asText()).isEqualTo("method_not_allowed");
+    }
+
+    @Test
     @DisplayName("AI 대기 한도 설정이 실제로 적용된다")
     void aiTimeoutPropertyIsInjected() {
         // 생성자가 둘인데 아무 표시가 없으면 Spring이 무인자 쪽을 골라
@@ -340,16 +388,19 @@ class ApiIntegrationTest {
     }
 
     private JsonNode authorizedGet(String path) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, sessionCookie);
-
-        ResponseEntity<JsonNode> response = rest.exchange(
-                url(path), HttpMethod.GET, new HttpEntity<>(null, headers), JsonNode.class);
+        ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
 
         assertThat(response.getStatusCode())
                 .as("%s 응답 상태", path)
                 .isEqualTo(HttpStatus.OK);
         return response.getBody();
+    }
+
+    /** 상태 코드를 검사하지 않고 그대로 돌려줍니다(오류 응답을 확인할 때). */
+    private ResponseEntity<JsonNode> authorizedExchange(String path, HttpMethod method) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, sessionCookie);
+        return rest.exchange(url(path), method, new HttpEntity<>(null, headers), JsonNode.class);
     }
 
     private void insertSnapshot(String name, String payload) {

@@ -105,7 +105,7 @@ public class AnalyticsService {
             return out;
         }
 
-        LocalDate cutoff = Kst.today().minusYears(Math.max(1, years));
+        LocalDate cutoff = Kst.yearsAgo(Math.max(1, years));
         NavigableMap<LocalDate, Double> left = sliceFrom(series(xId), cutoff);
         NavigableMap<LocalDate, Double> right = sliceFrom(series(yId), cutoff);
 
@@ -184,7 +184,7 @@ public class AnalyticsService {
 
         // 최근 이력 — 같은 규칙을 과거 날짜에 그대로 적용합니다.
         List<Map<String, Object>> timeline = new ArrayList<>();
-        LocalDate cutoff = Kst.today().minusYears(Math.max(1, years));
+        LocalDate cutoff = Kst.yearsAgo(Math.max(1, years));
         for (LocalDate date : weeklyDates(curve, cutoff)) {
             Regime.Verdict past = Regime.classify(
                     valueAsOf(curve, date), valueAsOf(nfci, date), valueAsOf(hyOas, date),

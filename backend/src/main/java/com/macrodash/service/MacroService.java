@@ -298,7 +298,7 @@ public class MacroService {
 
         List<JsonNode> points = Json.array(snapshot.get().payload(), "points");
         if (years != null && years > 0) {
-            LocalDate cutoff = Kst.today().minusYears(years);
+            LocalDate cutoff = Kst.yearsAgo(years);
             points = points.stream()
                     .filter(p -> {
                         LocalDate date = Json.parseDate(Json.asText(p, "date"));
@@ -321,7 +321,7 @@ public class MacroService {
 
         Map<LocalDate, Double> series = resolvedSeries(seriesId);
         LocalDate cutoff = (years != null && years > 0)
-                ? Kst.today().minusYears(years) : null;
+                ? Kst.yearsAgo(years) : null;
 
         List<Map<String, Object>> points = new ArrayList<>();
         for (Map.Entry<LocalDate, Double> entry : series.entrySet()) {

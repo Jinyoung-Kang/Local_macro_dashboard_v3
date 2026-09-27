@@ -6,6 +6,7 @@ import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
+import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -134,12 +135,22 @@ public class DataStatusService {
         return out;
     }
 
+    /** 실행 이력 한 번에 볼 수 있는 최대 행 수 (수집기 {@code /task-history}의 le=200과 같음). */
+    static final int MAX_HISTORY_ROWS = 200;
+
+    /**
+     * 태스크 실행 이력.
+     *
+     * @param limit 1~{@value #MAX_HISTORY_ROWS}로 접습니다. 예전에는 음수가 그대로 SQL
+     *              {@code LIMIT}에 들어가 500과 함께 SQL 문장이 응답에 실렸습니다.
+     */
     public Map<String, Object> taskHistory(String task, int limit) {
-        Optional<JsonNode> payload = collector.taskHistory(task, limit);
+        int rows = Params.clamp(limit, 1, MAX_HISTORY_ROWS);
+        Optional<JsonNode> payload = collector.taskHistory(task, rows);
         if (payload.isPresent()) {
             return Map.of("history", payload.get().get("history"));
         }
-        return Map.of("history", repository.readTaskHistory(task, limit));
+        return Map.of("history", repository.readTaskHistory(task, rows));
     }
 
     /** 수동 새로고침: 기준 시각을 갱신하고, auto 모드면 fast 작업을 함께 돌립니다. */

@@ -38,6 +38,23 @@ public final class Kst {
         return LocalDate.now(ZONE);
     }
 
+    /** "최근 N년" 조회의 상한. 저장본은 길어야 수십 년이라, 이보다 길면 "전체"와 같습니다. */
+    public static final int MAX_LOOKBACK_YEARS = 100;
+
+    /**
+     * 한국 기준 오늘로부터 {@code years}년 전 날짜.
+     *
+     * <p>years는 URL 파라미터로 들어옵니다. 2147483647을 그대로 빼면 날짜 범위를 벗어나
+     * DateTimeException(500)이 났습니다. 결과가 같으므로 {@value #MAX_LOOKBACK_YEARS}년으로
+     * 접고, 음수는 0(오늘)으로 봅니다.
+     *
+     * @param years 몇 년 전인지
+     * @return 기준 날짜 (이 날짜 이후가 조회 범위)
+     */
+    public static LocalDate yearsAgo(int years) {
+        return today().minusYears(Math.min(Math.max(years, 0), MAX_LOOKBACK_YEARS));
+    }
+
     /**
      * 화면에 나가는 시각 형식 — {@code "yyyy-MM-dd HH:mm"} (초 없음, 날짜 항상 포함).
      *
