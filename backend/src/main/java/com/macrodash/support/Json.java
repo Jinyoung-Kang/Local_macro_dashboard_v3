@@ -1,6 +1,6 @@
 package com.macrodash.support;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -37,7 +37,8 @@ public final class Json {
             return null;
         }
         JsonNode value = node.get(field);
-        return (value == null || value.isNull()) ? null : value.asText();
+        // asString(""): 객체·배열이면 "" (Jackson 2의 asText()와 같은 결과, Jackson 3의 asString()은 예외)
+        return (value == null || value.isNull()) ? null : value.asString("");
     }
 
     public static boolean asBoolean(JsonNode node, String field) {

@@ -1,9 +1,9 @@
 package com.macrodash.support;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.macrodash.analytics.FlowRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 

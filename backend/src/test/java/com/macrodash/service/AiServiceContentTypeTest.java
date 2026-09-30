@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>실제로 화면에 떴던 오류입니다.
  * <pre>
  * 생성 실패: Error while extracting response for type
- *   [com.fasterxml.jackson.databind.JsonNode]
+ *   [tools.jackson.databind.JsonNode]
  *   and content type [application/octet-stream]
  * </pre>
  *

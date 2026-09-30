@@ -1,7 +1,5 @@
 package com.macrodash.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
@@ -9,6 +7,8 @@ import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.UpstreamUnavailableException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
 import java.time.Instant;

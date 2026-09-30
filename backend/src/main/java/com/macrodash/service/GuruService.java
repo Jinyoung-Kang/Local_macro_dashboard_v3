@@ -1,7 +1,6 @@
 package com.macrodash.service;
 
 import com.macrodash.Kst;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.analytics.GuruStyle;
 import com.macrodash.support.Json;
 import com.macrodash.analytics.PortfolioRisk;
@@ -9,6 +8,7 @@ import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -447,7 +447,7 @@ public class GuruService {
         }
         int size = Math.min(dates.size(), closes.size());
         for (int i = 0; i < size; i++) {
-            LocalDate date = Json.parseDate(dates.get(i).asText());
+            LocalDate date = Json.parseDate(dates.get(i).asString(""));
             JsonNode close = closes.get(i);
             if (date != null && close != null && close.isNumber()
                     && (cutoff == null || !date.isBefore(cutoff))) {

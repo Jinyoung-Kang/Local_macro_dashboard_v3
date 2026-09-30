@@ -12,8 +12,10 @@ spring:
 
   jackson:
     default-property-inclusion: always
-    serialization:
-      write-dates-as-timestamps: false
+    # 날짜는 숫자(타임스탬프)가 아니라 ISO 문자열로. Jackson 3에서는 날짜 기능이 datatype.datetime으로 옮겨졌습니다.
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
 
 server:
   port: ${SERVER_PORT:8080}

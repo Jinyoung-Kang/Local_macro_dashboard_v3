@@ -1,7 +1,5 @@
 package com.macrodash.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.macrodash.support.Json;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
@@ -12,6 +10,8 @@ import com.macrodash.support.Params;
 import com.macrodash.support.SecretRedactor;
 import com.macrodash.support.UpstreamUnavailableException;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -179,8 +179,8 @@ public class DataStatusService {
     }
 
     private static void redactDetailNode(JsonNode node) {
-        if (node instanceof ObjectNode object && object.path("detail").isTextual()) {
-            object.put("detail", SecretRedactor.redact(object.path("detail").asText()));
+        if (node instanceof ObjectNode object && object.path("detail").isString()) {
+            object.put("detail", SecretRedactor.redact(object.path("detail").asString()));
         }
     }
 

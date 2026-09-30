@@ -1,13 +1,13 @@
 package com.macrodash.service;
 
 import com.macrodash.Kst;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.support.Json;
 import com.macrodash.analytics.SeriesMath;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -223,7 +223,7 @@ public class SectorService {
 
         int size = Math.min(dateArray.size(), valueArray.size());
         for (int i = 0; i < size; i++) {
-            LocalDate date = Json.parseDate(dateArray.get(i).asText());
+            LocalDate date = Json.parseDate(dateArray.get(i).asString(""));
             JsonNode value = valueArray.get(i);
             if (date != null && value != null && value.isNumber()) {
                 dates.add(date);

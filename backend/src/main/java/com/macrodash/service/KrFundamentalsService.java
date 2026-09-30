@@ -1,6 +1,5 @@
 package com.macrodash.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.support.Json;
 import com.macrodash.analytics.KrFundamentals;
 import com.macrodash.store.Datasets;
@@ -8,6 +7,7 @@ import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;

@@ -1,13 +1,13 @@
 package com.macrodash.service;
 
 import com.macrodash.Kst;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.support.Json;
 import com.macrodash.analytics.Scorecard;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -146,7 +146,7 @@ public class ScorecardService {
         List<Double> uVolatility = new ArrayList<>();
         List<Double> uDrawdown = new ArrayList<>();
         List<Double> uTrend = new ArrayList<>();
-        tickers.fieldNames().forEachRemaining(ticker -> {
+        tickers.propertyNames().forEach(ticker -> {
             NavigableMap<LocalDate, Double> other = GuruService.closes(tickers.get(ticker), cutoff);
             Scorecard.Raw one = Scorecard.measure(other, null);
             if (one.momentum12m() != null) {

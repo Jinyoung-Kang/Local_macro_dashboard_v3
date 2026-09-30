@@ -1,9 +1,9 @@
 package com.macrodash.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.macrodash.analytics.AdvancedIndicators;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,7 +54,7 @@ class DerivedSpreadTest {
 
         assertThat(deduped).hasSize(2);
         // 목록은 최신순이므로 먼저 나온 것(더 최근 제출)을 남깁니다.
-        assertThat(deduped.get(0).path("filingDate").asText()).isEqualTo("2026-08-20");
-        assertThat(deduped.get(1).path("reportDate").asText()).isEqualTo("2026-03-31");
+        assertThat(deduped.get(0).path("filingDate").asString()).isEqualTo("2026-08-20");
+        assertThat(deduped.get(1).path("reportDate").asString()).isEqualTo("2026-03-31");
     }
 }

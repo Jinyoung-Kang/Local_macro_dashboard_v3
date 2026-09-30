@@ -1,7 +1,5 @@
 package com.macrodash.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +10,9 @@ import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -467,7 +468,7 @@ public class AiService {
                     }
                     try {
                         return MAPPER.readTree(raw);
-                    } catch (IOException e) {
+                    } catch (JacksonException e) {
                         throw new IllegalStateException(
                                 "응답을 JSON으로 읽지 못했습니다 — 받은 본문: " + preview(raw), e);
                     }

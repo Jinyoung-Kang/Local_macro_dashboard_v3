@@ -1,13 +1,13 @@
 package com.macrodash.service;
 
 import com.macrodash.Kst;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.analytics.FxIndex;
 import com.macrodash.support.Json;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -86,7 +86,7 @@ public class FxService {
         // 않아, 그냥 읽으면 화면 버튼이 매번 가나다순으로 뒤집힙니다.
         List<Map<String, Object>> catalog = new ArrayList<>();
         if (stored != null) {
-            stored.fieldNames().forEachRemaining(key -> {
+            stored.propertyNames().forEach(key -> {
                 JsonNode entry = stored.get(key);
                 Map<String, Object> meta = new LinkedHashMap<>();
                 meta.put("id", key);
@@ -172,7 +172,7 @@ public class FxService {
         }
         int size = Math.min(dates.size(), closes.size());
         for (int i = 0; i < size; i++) {
-            LocalDate date = Json.parseDate(dates.get(i).asText());
+            LocalDate date = Json.parseDate(dates.get(i).asString(""));
             JsonNode close = closes.get(i);
             if (date != null && close != null && close.isNumber()) {
                 out.put(date, close.asDouble());

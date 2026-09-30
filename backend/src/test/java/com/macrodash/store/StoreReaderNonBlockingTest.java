@@ -1,10 +1,10 @@
 package com.macrodash.store;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Clock;
 import java.time.Duration;

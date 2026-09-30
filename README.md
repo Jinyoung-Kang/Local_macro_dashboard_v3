@@ -145,7 +145,7 @@ make down            # 정지
        │ REST (쿠키 세션)
 ┌──────▼───────┐  ②모든 계산·판정이 여기 있습니다. 수익률 매트릭스, 국면 판정,
 │  Backend     │    위험 지표, 교차 검증. 타입으로 고정되고 테스트가 지킵니다.
-└──────┬───────┘    Java 21 · Spring Boot 3.5
+└──────┬───────┘    Java 21 · Spring Boot 4.1
        │ JDBC
 ┌──────▼───────┐  ③저장본(JSONB) + 누적 이력. 수집기와 백엔드가 공유하는 유일한 지점.
 │  PostgreSQL  │
@@ -376,7 +376,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | 영역 | 채택 | 왜 |
 |---|---|---|
 | Frontend | TypeScript · React 18 · Next.js 15 · Tailwind · Recharts | 15개 메뉴가 서로 다른 표·차트를 쓰므로 컴포넌트 재사용이 크게 이득 |
-| Backend | Java 21 · Spring Boot 3.5 | 모든 계산을 한 계층에 모아 타입과 테스트로 고정 |
+| Backend | Java 21 · Spring Boot 4.1 | 모든 계산을 한 계층에 모아 타입과 테스트로 고정 |
 | Store | PostgreSQL 16 | 수집기와 API가 다른 프로세스라 파일 공유 불가. JSONB로 저장해 SQL로 질의 |
 | Collector | Python 3.11 · FastAPI · pandas · yfinance · pykrx | 금융 데이터 수집·파싱 라이브러리 생태계 |
 | DevOps | Docker Compose · GitHub Actions | 네 프로세스를 한 명령으로, 세 언어 테스트를 매 푸시마다 |

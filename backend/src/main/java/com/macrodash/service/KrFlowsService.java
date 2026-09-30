@@ -1,6 +1,5 @@
 package com.macrodash.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.Kst;
 import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.InvestorFlows;
@@ -11,6 +10,7 @@ import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
 import com.macrodash.support.FlowJson;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;

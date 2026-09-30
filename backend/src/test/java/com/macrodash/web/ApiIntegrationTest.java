@@ -1,13 +1,13 @@
 package com.macrodash.web;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import tools.jackson.databind.JsonNode;
 
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 @TestPropertySource(properties = {
         "spring.datasource.url=${TEST_DATABASE_URL:jdbc:postgresql://localhost:5432/macrodash_test}",
         "dashboard.password=test-password",
@@ -161,7 +163,7 @@ class ApiIntegrationTest {
         JsonNode samsung = stocks.get(0);
         assertThat(samsung.path("available").asBoolean()).isTrue();
         assertThat(samsung.path("records").asInt()).isEqualTo(2);
-        assertThat(samsung.path("latestDate").asText()).isEqualTo(today.toString());
+        assertThat(samsung.path("latestDate").asString()).isEqualTo(today.toString());
         JsonNode foreigner = samsung.path("investors").get(0);
         assertThat(foreigner.path("net5").path("sum").asLong()).isEqualTo(200);
         assertThat(foreigner.path("streak").asInt()).isEqualTo(1);
@@ -204,7 +206,7 @@ class ApiIntegrationTest {
         JsonNode body = authorizedGet("/api/macro/overview");
 
         assertThat(body.path("available").asBoolean()).isTrue();
-        assertThat(body.path("categories").get(0).path("items").get(0).path("priceStr").asText())
+        assertThat(body.path("categories").get(0).path("items").get(0).path("priceStr").asString())
                 .isEqualTo("1,389.50");
         // 10Y − 2Y = 4.11 − 3.62 = 0.49
         assertThat(body.path("spreads").path("realtime").path("spread").asDouble())
@@ -230,10 +232,10 @@ class ApiIntegrationTest {
         JsonNode body = authorizedGet("/api/krx/futures");
 
         assertThat(body.path("isEstimated").asBoolean()).isTrue();
-        assertThat(body.path("estimateNotice").asText()).contains("추정치");
-        assertThat(body.path("latest").path("marketPhase").asText()).isEqualTo("판정 불가 (등락률 미제공)");
+        assertThat(body.path("estimateNotice").asString()).contains("추정치");
+        assertThat(body.path("latest").path("marketPhase").asString()).isEqualTo("판정 불가 (등락률 미제공)");
         // 베이시스를 모르면 0으로 메우지 않고 "데이터 미제공"으로 표시합니다.
-        assertThat(body.path("latest").path("basisState").asText()).isEqualTo("데이터 미제공");
+        assertThat(body.path("latest").path("basisState").asString()).isEqualTo("데이터 미제공");
     }
 
     @Test
@@ -241,7 +243,7 @@ class ApiIntegrationTest {
     void storeOnlyModeNeverWaitsForCollector() {
         JsonNode body = authorizedGet("/api/status");
 
-        assertThat(body.path("readMode").asText()).isEqualTo("store_only");
+        assertThat(body.path("readMode").asString()).isEqualTo("store_only");
         assertThat(body.path("collectorReachable").asBoolean()).isFalse();
     }
 
@@ -317,8 +319,8 @@ class ApiIntegrationTest {
         // 합니다 — 빈 화면은 "이 메뉴가 고장났다"로 읽힙니다.
         JsonNode body = authorizedGet("/api/snapshot/text");
 
-        String text = body.path("text").asText();
-        assertThat(body.path("generatedAtKst").asText()).endsWith("KST");
+        String text = body.path("text").asString();
+        assertThat(body.path("generatedAtKst").asString()).endsWith("KST");
         assertThat(body.path("chars").asInt()).isEqualTo(text.length());
 
         for (String section : List.of(
@@ -349,7 +351,7 @@ class ApiIntegrationTest {
                 }
                 """);
 
-        String text = authorizedGet("/api/snapshot/text").path("text").asText();
+        String text = authorizedGet("/api/snapshot/text").path("text").asString();
 
         assertThat(text).contains("- 수집 시각: ");
         assertThat(text).contains("원/달러 (USD/KRW): 1,389.50");
@@ -367,8 +369,8 @@ class ApiIntegrationTest {
                 "/api/macro/fred/DGS10?years=abc")) {
             ResponseEntity<JsonNode> response = authorizedExchange(path, HttpMethod.GET);
             assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody().path("error").asText()).as(path).isEqualTo("bad_request");
-            assertThat(response.getBody().path("message").asText()).as(path).isNotBlank();
+            assertThat(response.getBody().path("error").asString()).as(path).isEqualTo("bad_request");
+            assertThat(response.getBody().path("message").asString()).as(path).isNotBlank();
             assertThat(response.getBody().toString()).as(path)
                     .doesNotContain("java.", "Exception", "SQL", "could not be parsed", "Failed to convert");
         }
@@ -406,7 +408,7 @@ class ApiIntegrationTest {
             long millis = (System.nanoTime() - started) / 1_000_000;
 
             assertThat(response.getStatusCode()).as("%s 상태", path).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody().path("error").asText()).as(path).isEqualTo("bad_request");
+            assertThat(response.getBody().path("error").asString()).as(path).isEqualTo("bad_request");
             assertThat(millis).as("%s 응답 시간(ms)", path).isLessThan(2_000);
         }
         // 파생 시리즈(30Y-3M)와 목록에 있는 ID는 그대로 통과합니다.
@@ -428,13 +430,13 @@ class ApiIntegrationTest {
 
         String base = "/api/radar/history?market=KOSPI&investor=외국인&tradeType=순매수";
         JsonNode latest = authorizedGet(base + "&latest=true");
-        assertThat(latest.path("obsDate").asText()).isEqualTo("2026-09-24");
+        assertThat(latest.path("obsDate").asString()).isEqualTo("2026-09-24");
         assertThat(latest.path("dates").toString()).isEqualTo("[\"2026-09-24\",\"2026-09-23\"]");
         assertThat(latest.path("rows")).hasSize(2);
-        latest.path("rows").forEach(row -> assertThat(row.path("obsDate").asText()).isEqualTo("2026-09-24"));
+        latest.path("rows").forEach(row -> assertThat(row.path("obsDate").asString()).isEqualTo("2026-09-24"));
 
         JsonNode chosen = authorizedGet(base + "&latest=true&obsDate=2026-09-23");
-        assertThat(chosen.path("obsDate").asText()).isEqualTo("2026-09-23");
+        assertThat(chosen.path("obsDate").asString()).isEqualTo("2026-09-23");
         assertThat(chosen.path("rows")).hasSize(1);
 
         // latest 없이 부르면 예전처럼 전 기간 (하위 호환)
@@ -494,25 +496,25 @@ class ApiIntegrationTest {
 
             JsonNode status = authorizedGet("/api/status");
             assertThat(status.path("collectorReachable").asBoolean(true)).isFalse();
-            assertThat(status.path("lastRunStatus").asText()).isEqualTo("partial");
+            assertThat(status.path("lastRunStatus").asString()).isEqualTo("partial");
             JsonNode lastRun = status.path("lastRun");
             assertThat(lastRun.path("id").asLong()).isEqualTo(runId);
             assertThat(lastRun.path("okCount").asInt()).isEqualTo(17);
             assertThat(lastRun.path("failCount").asInt()).isEqualTo(2);
-            assertThat(lastRun.path("groupName").asText()).isEqualTo("slow");
-            assertThat(java.time.Instant.parse(lastRun.path("startedAt").asText())).isNotNull();
+            assertThat(lastRun.path("groupName").asString()).isEqualTo("slow");
+            assertThat(java.time.Instant.parse(lastRun.path("startedAt").asString())).isNotNull();
             assertThat(lastRun.has("ok_count") || lastRun.has("started_at")).isFalse();
 
             JsonNode task = null;
             for (JsonNode row : status.path("taskSummary")) {
-                if ((prefix + "fred").equals(row.path("task").asText())) {
+                if ((prefix + "fred").equals(row.path("task").asString())) {
                     task = row;
                 }
             }
             assertThat(task).isNotNull();
             assertThat(task.path("durationMs").asInt()).isEqualTo(1234);
             assertThat(task.path("runId").asLong()).isEqualTo(runId);
-            assertThat(java.time.Instant.parse(task.path("startedAt").asText())).isNotNull();
+            assertThat(java.time.Instant.parse(task.path("startedAt").asString())).isNotNull();
             assertThat(task.has("duration_ms") || task.has("started_at")).isFalse();
 
             JsonNode history = authorizedGet("/api/status/history?task=" + prefix + "fred&limit=1").path("history");
@@ -536,8 +538,8 @@ class ApiIntegrationTest {
         ResponseEntity<JsonNode> response = authorizedExchange("/api/status/run/sec_13f", HttpMethod.POST);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
-        assertThat(response.getBody().path("error").asText()).isEqualTo("bad_gateway");
-        assertThat(response.getBody().path("message").asText()).contains("수집기");
+        assertThat(response.getBody().path("error").asString()).isEqualTo("bad_gateway");
+        assertThat(response.getBody().path("message").asString()).contains("수집기");
     }
 
     @Test
@@ -545,12 +547,12 @@ class ApiIntegrationTest {
     void unknownPathsAndMethodsUseTheSameErrorShape() {
         ResponseEntity<JsonNode> notFound = authorizedExchange("/api/does-not-exist", HttpMethod.GET);
         assertThat(notFound.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(notFound.getBody().path("error").asText()).isEqualTo("not_found");
-        assertThat(notFound.getBody().path("message").asText()).isNotBlank();
+        assertThat(notFound.getBody().path("error").asString()).isEqualTo("not_found");
+        assertThat(notFound.getBody().path("message").asString()).isNotBlank();
 
         ResponseEntity<JsonNode> wrongMethod = authorizedExchange("/api/verification", HttpMethod.GET);
         assertThat(wrongMethod.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
-        assertThat(wrongMethod.getBody().path("error").asText()).isEqualTo("method_not_allowed");
+        assertThat(wrongMethod.getBody().path("error").asString()).isEqualTo("method_not_allowed");
     }
 
     @Test

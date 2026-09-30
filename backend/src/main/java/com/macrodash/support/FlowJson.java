@@ -1,9 +1,9 @@
 package com.macrodash.support;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.InvestorFlows;
 import com.macrodash.analytics.SupplyConsensus;
+import tools.jackson.databind.JsonNode;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,6 +82,7 @@ public final class FlowJson {
 
     private static Long integral(JsonNode node, String field) {
         JsonNode value = node.get(field);
-        return value != null && value.isIntegralNumber() ? value.asLong() : null;
+        // long 범위를 넘는 정수는 모름(null) — Jackson 3의 asLong()은 이 경우 예외를 던집니다.
+        return value != null && value.isIntegralNumber() && value.canConvertToLong() ? value.asLong() : null;
     }
 }

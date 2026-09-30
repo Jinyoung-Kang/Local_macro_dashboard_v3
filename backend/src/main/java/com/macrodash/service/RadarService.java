@@ -1,6 +1,5 @@
 package com.macrodash.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.support.Json;
 import com.macrodash.analytics.SupplyConsensus;
 import com.macrodash.collector.CollectorClient;
@@ -12,6 +11,7 @@ import com.macrodash.store.StoreRepository;
 import com.macrodash.support.FlowJson;
 import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -193,8 +193,8 @@ public class RadarService {
     private List<String> reasonsOf(JsonNode payload) {
         List<String> reasons = new ArrayList<>();
         for (JsonNode reason : Json.array(payload, "reasons")) {
-            if (reason.isTextual()) {
-                reasons.add(reason.asText());
+            if (reason.isString()) {
+                reasons.add(reason.asString());
             }
         }
         return reasons;
