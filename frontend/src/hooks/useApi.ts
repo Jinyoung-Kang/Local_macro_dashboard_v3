@@ -31,7 +31,7 @@ const EMPTY_STATE = {
 /**
  * 백엔드 GET 요청 훅.
  *
- * @param path      `/api/...` 경로. **null이면 요청하지 않습니다**(조건부 조회에 씁니다)
+ * @param path      API 경로(lib/endpoints). **null이면 요청하지 않습니다**(조건부 조회에 씁니다)
  * @param refreshMs 자동 갱신 주기(ms). 0이면 갱신하지 않습니다
  * @returns `{ data, loading, error, unauthorized, loadedAt, reload }`
  *

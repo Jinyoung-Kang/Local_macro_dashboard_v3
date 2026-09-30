@@ -25,6 +25,7 @@ import type {
 } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { waitForTaskRun, type TaskRunRow } from "@/lib/taskRun";
+import { endpoints } from "@/lib/endpoints";
 
 const TASK_ICONS: Record<string, string> = { ok: "✅", empty: "⚠️", error: "❌" };
 
@@ -44,7 +45,7 @@ const RUN_STATUS_LABEL: Record<string, string> = {
  * 핵심은 "무엇이 왜 실패했는지"와 "있어야 하는데 없는 데이터셋"입니다.
  */
 export default function StatusPage() {
-  const { data, loading, error, reload } = useApi<StatusResponse>("/api/status", 60_000);
+  const { data, loading, error, reload } = useApi<StatusResponse>(endpoints.status.overview, 60_000);
   const [running, setRunning] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const { reloadAll } = useRefreshSignal();
@@ -68,11 +69,11 @@ export default function StatusPage() {
     setRunning(taskName);
     setMessage(null);
     try {
-      const started = await apiPost<{ baselineStartedAt?: string | null }>(`/api/status/run/${taskName}`);
+      const started = await apiPost<{ baselineStartedAt?: string | null }>(endpoints.status.runTask(taskName));
       setMessage(`${taskName} 실행을 시작했습니다. 끝나면 여기에 결과가 표시됩니다…`);
       const finished = await waitForTaskRun(started.baselineStartedAt ?? null, {
         fetchLatest: () =>
-          apiGet<{ history?: TaskRunRow[] }>(`/api/status/history?task=${encodeURIComponent(taskName)}&limit=1`)
+          apiGet<{ history?: TaskRunRow[] }>(endpoints.status.history(taskName, 1))
             .then((result) => result.history?.[0]),
         isCancelled: () => !mounted.current,
       });
@@ -310,7 +311,7 @@ export default function StatusPage() {
 function PublicApiPanel() {
   const [runId, setRunId] = useState<number | null>(null);
   const { data, loading, error } = useApi<PublicApiDiagnosticsResponse>(
-    runId === null ? null : `/api/status/public-apis?run=${runId}`,
+    runId === null ? null : endpoints.publicData.apiStatus(runId),
   );
 
   return (
@@ -378,7 +379,7 @@ function VerificationPanel() {
     setRunning(true);
     setError(null);
     try {
-      setResult(await apiPost<VerificationResponse>("/api/verification"));
+      setResult(await apiPost<VerificationResponse>(endpoints.status.verification));
     } catch (err) {
       setError(err instanceof Error ? err.message : "검증에 실패했습니다.");
     } finally {
@@ -454,7 +455,7 @@ function VerificationPanel() {
  * 보여 주고 한 번에 복사합니다(비밀값은 백엔드에서 가려져 옵니다).
  */
 function IssuesPanel() {
-  const { data, loading, error, reload } = useApi<StatusIssuesResponse>("/api/status/issues", 60_000);
+  const { data, loading, error, reload } = useApi<StatusIssuesResponse>(endpoints.status.issues, 60_000);
   const counts = data?.counts;
   const hasIssues =
     !!counts && counts.errors + counts.warnings + counts.recentGroups + counts.missingDatasets > 0;

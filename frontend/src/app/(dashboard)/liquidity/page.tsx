@@ -20,6 +20,7 @@ import {
 } from "@/lib/format";
 import type { LiquidityResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 const PERIODS = [
   { value: "1", label: "최근 1년" },
@@ -39,7 +40,7 @@ const PERIODS = [
 export default function LiquidityPage() {
   const [years, setYears] = useState("3");
   const { data, loading, error, reload } = useApi<LiquidityResponse>(
-    `/api/liquidity?years=${years}`,
+    endpoints.macro.liquidity(years),
     300_000,
   );
   // 달러 금액에 원화를 함께 적습니다. 매크로 화면이 이미 수집한 같은 환율을

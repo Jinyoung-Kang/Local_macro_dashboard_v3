@@ -10,6 +10,7 @@ import {
   Select,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { endpoints } from "@/lib/endpoints";
 
 const SINGLE_TICKERS = [
   { value: "^VIX", label: "CBOE VIX" },
@@ -35,7 +36,7 @@ export function SingleChartSection() {
     isProxy?: boolean;
     sourceLabel?: string | null;
     points: { date: string; close: number | null; value?: number | null }[];
-  }>(`/api/macro/ticker?symbol=${encodeURIComponent(symbol)}&period=${period}`);
+  }>(endpoints.macro.ticker(symbol, period));
 
   return (
     <Card

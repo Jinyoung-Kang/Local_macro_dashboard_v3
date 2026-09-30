@@ -25,6 +25,7 @@ import type {
   RadarResponse,
 } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 📡 외국인/기관 수급 레이더.
@@ -44,7 +45,7 @@ export default function RadarPage() {
     intervals: string[];
     /** 수집기의 실제 체인 순서 (백엔드가 내려줌 — 화면에 따로 적어 두면 어긋납니다) */
     fallbackChain?: string[];
-  }>("/api/radar/options");
+  }>(endpoints.positioning.radarOptions);
 
   const [market, setMarket] = useState("KOSPI");
   const [investor, setInvestor] = useState("외국인");
@@ -53,9 +54,7 @@ export default function RadarPage() {
   const [topN, setTopN] = useState("30");
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  const query =
-    `/api/radar/ranking?market=${market}&investor=${encodeURIComponent(investor)}` +
-    `&tradeType=${encodeURIComponent(tradeType)}&intervalType=${interval}&topN=${topN}`;
+  const query = endpoints.positioning.radarRanking({ market, investor, tradeType, intervalType: interval, topN });
 
   const { data, loading, error, reload } = useApi<RadarResponse>(query, 60_000);
 
@@ -301,7 +300,7 @@ function OmittedNote({ count }: { count: number }) {
 }
 
 function DiagnosticsPanel() {
-  const { data, loading, reload } = useApi<DiagnosticsResponse>("/api/radar/diagnostics");
+  const { data, loading, reload } = useApi<DiagnosticsResponse>(endpoints.positioning.radarDiagnostics);
 
   return (
     <Card
@@ -359,7 +358,7 @@ function FundamentalsPanel({ codes }: { codes: string[] }) {
   // 순서를 정렬해 키를 고정합니다. 랭킹 순서만 바뀌어도 다시 요청하지 않게.
   const key = [...new Set(codes)].sort().join(",");
   const { data, loading, error, reload } = useApi<KrFundamentalsResponse>(
-    key ? `/api/kr/fundamentals?codes=${key}` : null,
+    key ? endpoints.publicData.fundamentals(key) : null,
   );
   const byCode = new Map((data?.companies ?? []).map((company) => [company.code, company]));
   const all = codes.map((code) => byCode.get(code) ?? { code, available: false });
@@ -474,8 +473,7 @@ function ConsensusPanel({
   topN: string;
 }) {
   const { data, loading, error, reload } = useApi<RadarConsensusResponse>(
-    `/api/radar/consensus?market=${market}&tradeType=${encodeURIComponent(tradeType)}` +
-      `&intervalType=${interval}&topN=${topN}`,
+    endpoints.positioning.radarConsensus({ market, tradeType, intervalType: interval, topN }),
     60_000,
   );
 
@@ -647,9 +645,7 @@ function HistoryPanel({
     note: string;
     rows: { obsDate: string; code: string; name: string; netAmountEok: number }[];
   }>(
-    `/api/radar/history?market=${encodeURIComponent(market)}&investor=${encodeURIComponent(
-      investor,
-    )}&tradeType=${encodeURIComponent(tradeType)}&latest=true${date ? `&obsDate=${date}` : ""}`,
+    endpoints.positioning.radarHistory({ market, investor, tradeType, obsDate: date }),
   );
 
   const dates = data?.dates ?? [];

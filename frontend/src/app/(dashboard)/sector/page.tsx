@@ -16,6 +16,7 @@ import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatNumber, formatPercent } from "@/lib/format";
 import type { SectorResponse, SectorRow } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🔄 섹터 & 자산군 로테이션.
@@ -28,7 +29,7 @@ export default function SectorPage() {
   const [mode, setMode] = useState<"return" | "alpha">("return");
 
   const { data, loading, error, reload } = useApi<SectorResponse>(
-    `/api/sector/rotation?period=${period}`,
+    endpoints.macro.sectorRotation(period),
     300_000,
   );
 

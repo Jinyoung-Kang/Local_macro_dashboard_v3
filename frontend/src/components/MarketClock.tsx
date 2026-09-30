@@ -8,6 +8,7 @@ import {
   krMarketHolidays,
   usMarketHolidays,
 } from "@/lib/marketCalendar";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 실시간 거래소 시계 + 장 상태 배지.
@@ -114,7 +115,7 @@ export function MarketClock() {
   const usYear = est ? Number(est.date.slice(0, 4)) : null;
   // 공식 공휴일(천문연)을 백엔드에서 한 번 받아 둡니다. 실패해도 시계는 내장 표로
   // 동작합니다 — 응답이 없다고 "거래 중"을 멈추면 안 됩니다.
-  const { data: official } = useApi<KrHolidaysResponse>("/api/calendar/kr-holidays");
+  const { data: official } = useApi<KrHolidaysResponse>(endpoints.publicData.krHolidays);
   const officialDays = useMemo(
     () => (krYear === null ? null : official?.years?.[String(krYear)]?.holidays.map((day) => day.date) ?? null),
     [official, krYear],

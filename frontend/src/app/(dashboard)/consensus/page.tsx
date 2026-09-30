@@ -18,6 +18,7 @@ import { useUsdKrw } from "@/hooks/useUsdKrw";
 import { EMPTY, formatCurrency, formatNumber } from "@/lib/format";
 import type { ConsensusResponse, NewBuysResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🎯 기관 13F Money 교집합.
@@ -28,7 +29,7 @@ import { SOURCES } from "@/lib/sources";
  */
 export default function ConsensusPage() {
   const institutions = useApi<{ institutions: { name: string; cik: string }[] }>(
-    "/api/sec13f/institutions",
+    endpoints.institution.institutions,
   );
   const [selected, setSelected] = useState<string[]>([]);
   const [reportDate, setReportDate] = useState("");
@@ -36,9 +37,7 @@ export default function ConsensusPage() {
 
   const ciks = selected.length > 0 ? selected.join(",") : "";
   const { data, loading, error, reload } = useApi<ConsensusResponse>(
-    `/api/sec13f/consensus?minHolders=${minHolders}&topN=40${
-      ciks ? `&ciks=${ciks}` : ""
-    }${reportDate ? `&reportDate=${reportDate}` : ""}`,
+    endpoints.institution.consensus({ minHolders, topN: 40, ciks, reportDate }),
   );
   // 매크로 화면이 이미 수집하는 원/달러를 그대로 씁니다.
   const usdKrw = useUsdKrw();
@@ -231,8 +230,7 @@ function NewBuysCard({ reportDate }: { reportDate: string }) {
   const [minHolders, setMinHolders] = useState("3");
 
   const { data, loading, error, reload } = useApi<NewBuysResponse>(
-    `/api/sec13f/new-buys?minHolders=${minHolders}` +
-      (reportDate ? `&reportDate=${encodeURIComponent(reportDate)}` : ""),
+    endpoints.institution.newBuys(minHolders, reportDate),
   );
   const usdKrw = useUsdKrw();
 

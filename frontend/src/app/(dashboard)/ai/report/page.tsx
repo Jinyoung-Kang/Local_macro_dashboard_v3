@@ -8,6 +8,7 @@ import { apiPost } from "@/lib/api";
 import { formatKst } from "@/lib/format";
 import type { AiEngines, AiResponse, SnapshotText } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🤖 AI 종합 데이터 분석 &amp; 결론 리포트.
@@ -17,9 +18,9 @@ import { SOURCES } from "@/lib/sources";
  * 추정치에 적용하는 것을 막습니다.
  */
 export default function AiReportPage() {
-  const engines = useApi<AiEngines>("/api/ai/engines");
-  const reportTypes = useApi<{ types: string[] }>("/api/ai/report-types");
-  const snapshot = useApi<SnapshotText>("/api/snapshot/text");
+  const engines = useApi<AiEngines>(endpoints.ai.engines);
+  const reportTypes = useApi<{ types: string[] }>(endpoints.ai.reportTypes);
+  const snapshot = useApi<SnapshotText>(endpoints.snapshot.text);
 
   const [engineId, setEngineId] = useState("auto");
   const [reportType, setReportType] = useState("");
@@ -56,7 +57,7 @@ export default function AiReportPage() {
     setError(null);
     try {
       setResult(
-        await apiPost<AiResponse>("/api/ai/report", {
+        await apiPost<AiResponse>(endpoints.ai.report, {
           engineId,
           reportType: reportType || reportTypes.data?.types?.[0],
           extraInstruction: extra,

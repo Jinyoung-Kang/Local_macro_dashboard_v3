@@ -16,6 +16,7 @@ import { useApi } from "@/hooks/useApi";
 import { EMPTY, formatNumber } from "@/lib/format";
 import type { CorrelationResponse, SeriesRef } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🔗 지표 상관관계.
@@ -27,7 +28,7 @@ import { SOURCES } from "@/lib/sources";
  * 문구를 항상 같이 보여 줍니다.
  */
 export default function CorrelationPage() {
-  const catalog = useApi<{ series: SeriesRef[] }>("/api/analytics/series");
+  const catalog = useApi<{ series: SeriesRef[] }>(endpoints.insight.series);
 
   const [x, setX] = useState("liquidity:net");
   const [y, setY] = useState("etf:QQQ");
@@ -36,8 +37,7 @@ export default function CorrelationPage() {
   const [mode, setMode] = useState("change");
 
   const { data, loading, error, reload } = useApi<CorrelationResponse>(
-    `/api/analytics/correlation?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}` +
-      `&window=${window}&years=${years}&mode=${mode}`,
+    endpoints.insight.correlation({ x, y, window, years, mode }),
     300_000,
   );
 

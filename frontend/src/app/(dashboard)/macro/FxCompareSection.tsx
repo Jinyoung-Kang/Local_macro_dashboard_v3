@@ -15,6 +15,7 @@ import { useApi } from "@/hooks/useApi";
 import { SOURCES } from "@/lib/sources";
 import { EMPTY, formatNumber, formatPercent } from "@/lib/format";
 import type { FxSeriesResponse } from "@/lib/types";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 💱 환율·달러인덱스 비교.
@@ -34,7 +35,7 @@ export function FxCompareSection() {
   const [mode, setMode] = useState<"index" | "raw">("index");
 
   const { data, loading, error, reload } = useApi<FxSeriesResponse>(
-    `/api/macro/fx?ids=${selected.join(",")}&period=${period}&mode=${mode}`,
+    endpoints.macro.fx(selected, period, mode),
     600_000,
   );
 

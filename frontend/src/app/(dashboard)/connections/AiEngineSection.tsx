@@ -6,6 +6,7 @@ import { useApi } from "@/hooks/useApi";
 import { apiPost } from "@/lib/api";
 import type { AiEngine, AiResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 const SAMPLE_PROMPTS = [
   "한국어로 한 문장만 답하십시오: 지금 연결이 정상인지 알려 주세요.",
@@ -16,7 +17,7 @@ const SAMPLE_PROMPTS = [
 /** 🤖 AI 엔진 — 엔진별 키 설정 여부, 호출 응답·지연시간·폴오버 경로. */
 export function AiEngineSection() {
   const engines = useApi<{ engines: AiEngine[]; keys: Record<string, boolean>; enabled: boolean }>(
-    "/api/ai/engines",
+    endpoints.ai.engines,
   );
   const [engineId, setEngineId] = useState("auto");
   const [prompt, setPrompt] = useState(SAMPLE_PROMPTS[0]);
@@ -28,7 +29,7 @@ export function AiEngineSection() {
     try {
       setResult(
         await apiPost<AiResponse>(
-          `/api/ai/test?engineId=${engineId}&prompt=${encodeURIComponent(prompt)}`,
+          endpoints.ai.test(engineId, prompt),
         ),
       );
     } catch (error) {

@@ -19,6 +19,7 @@ import {
   statusColor,
 } from "@/lib/format";
 import type { AdvancedIndicators } from "@/lib/types";
+import { endpoints } from "@/lib/endpoints";
 
 export function AdvancedSection({
   data,
@@ -40,7 +41,7 @@ export function AdvancedSection({
   // 10년치를 한 번 받아 두고 기간은 화면에서 자릅니다. 기간을 바꿀 때마다
   // 다시 부르면 FRED 호출만 늘고 반응도 느립니다.
   const series = useApi<{ available: boolean; points: { date: string; value: number }[] }>(
-    `/api/macro/fred/${selected}?years=10`,
+    endpoints.macro.fred(selected, 10),
   );
 
   if (loading && !data) {

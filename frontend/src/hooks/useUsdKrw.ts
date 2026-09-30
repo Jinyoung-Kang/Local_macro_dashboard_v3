@@ -3,6 +3,7 @@
 import { useApi } from "@/hooks/useApi";
 import { EMPTY, formatKrw, formatNumber } from "@/lib/format";
 import type { UsdKrwResponse } from "@/lib/types";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 달러 금액에 원화를 병기하기 위한 공용 환율 훅.
@@ -21,7 +22,7 @@ import type { UsdKrwResponse } from "@/lib/types";
 export function useUsdKrw() {
   // 환율은 이 화면들의 주인공이 아닙니다. 2분이면 원화 환산의 자릿수를 바꾸지
   // 않으면서 충분히 따라갑니다(카드 자체는 매크로 화면이 더 자주 읽습니다).
-  const { data } = useApi<UsdKrwResponse>("/api/macro/usdkrw", 120_000);
+  const { data } = useApi<UsdKrwResponse>(endpoints.macro.usdkrw, 120_000);
 
   const available = Boolean(data?.available && data.rate && data.rate > 0);
   const rate = available ? (data?.rate ?? null) : null;

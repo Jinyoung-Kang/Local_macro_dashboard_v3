@@ -14,6 +14,7 @@ import {
   formatNumber,
   formatPercent,
 } from "@/lib/format";
+import { endpoints } from "@/lib/endpoints";
 
 export function ScrapedSection() {
   const { data, loading } = useApi<{
@@ -30,7 +31,7 @@ export function ScrapedSection() {
       changePct: number | null;
       error: string | null;
     }[];
-  }>("/api/macro/scraped", 120_000);
+  }>(endpoints.macro.scraped, 120_000);
 
   return (
     <Card

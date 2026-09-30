@@ -4,6 +4,7 @@ import { Banner, Card, Freshness, Loading, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { deltaColor, formatSigned, formatSignedKrw } from "@/lib/format";
 import type { SpotFuturesResponse, SpotFuturesRow } from "@/lib/types";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🔀 현물·선물 수급 동조 — 같은 투자자가 코스피 현물과 KOSPI200 선물을 같은 방향으로 샀나.
@@ -23,7 +24,7 @@ function verdictClass(verdict: string): string {
 }
 
 export function SpotFuturesCard() {
-  const { data, loading, error } = useApi<SpotFuturesResponse>("/api/krx/spot-futures", 300_000);
+  const { data, loading, error } = useApi<SpotFuturesResponse>(endpoints.positioning.krxSpotFutures, 300_000);
 
   return (
     <Card

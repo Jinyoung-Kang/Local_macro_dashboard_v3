@@ -5,6 +5,7 @@ import { Banner, Button, Card, Loading, SourceBadge } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { apiGet } from "@/lib/api";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🔌 토스증권 — 연결 진단·조회 테스트.
@@ -18,7 +19,7 @@ import { SOURCES } from "@/lib/sources";
 export function TossSection() {
   const [runId, setRunId] = useState<number | null>(null);
   const diagnostics = useApi<{ ok: boolean; stage?: string; message?: string; sample?: unknown }>(
-    runId === null ? null : `/api/ai/toss/diagnostics?run=${runId}`,
+    runId === null ? null : endpoints.toss.diagnostics(runId),
   );
   const [result, setResult] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -65,13 +66,13 @@ export function TossSection() {
       <Card title="실제 데이터 조회 테스트" source={SOURCES.toss}>
         <div className="flex flex-wrap gap-2">
           <Button
-            onClick={() => call("/api/ai/toss/exchange-rate?base=USD&quote=KRW")}
+            onClick={() => call(endpoints.toss.exchangeRate("USD", "KRW"))}
             disabled={busy}
           >
             환율 조회 (USD → KRW)
           </Button>
           <Button
-            onClick={() => call("/api/ai/toss/indices?symbols=KOSPI,KOSDAQ")}
+            onClick={() => call(endpoints.toss.indices("KOSPI,KOSDAQ"))}
             disabled={busy}
           >
             지수 시세 조회
