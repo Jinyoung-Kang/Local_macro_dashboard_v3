@@ -1,4 +1,4 @@
-package com.macrodash.feature.ai;
+package com.macrodash.feature.toss;
 
 import com.macrodash.collector.CollectorClient;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +44,6 @@ class TossControllerTest {
     }
 
     private static TossController controller(CollectorClient collector) {
-        return new TossController(collector);
+        return new TossController(new TossService(collector));
     }
 }

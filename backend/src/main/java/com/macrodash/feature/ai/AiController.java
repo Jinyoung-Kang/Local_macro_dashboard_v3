@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * 🤖 AI 종합 리포트 · 🤖 AI 연결 테스트.
  *
- * <p>같은 화면(🔌 연결 테스트)에 붙는 토스 조회는 {@link TossController}에 있습니다.
+ * <p>같은 화면(🔌 연결 테스트)에 붙는 토스 조회는 {@code feature.toss.TossController}에 있습니다.
  */
 @RestController
 @RequestMapping("/api/ai")

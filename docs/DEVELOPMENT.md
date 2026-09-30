@@ -145,7 +145,7 @@ snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
 엔드포인트는 메뉴에 맞는 기능 패키지의 컨트롤러에 붙입니다(`feature/macro/MacroController`·
 `feature/institution/InstitutionController`·`feature/positioning/PositioningController`·
 `feature/insight/AnalyticsController`·`feature/status/StatusController`, 출처가 따로인 것은
-`FlowsController`·`PublicDataController`·`TossController`). 경로를 추가하면
+`FlowsController`·`PublicDataController`·`feature/toss/TossController`). 경로를 추가하면
 `RouteInventoryTest`의 목록과 [API.md](API.md) 표에도 적어야 빌드가 통과합니다.
 컨트롤러 하나가 서비스를 5개보다 많이 받으면 같은 테스트가 실패하니, 그때는 나눕니다.
 

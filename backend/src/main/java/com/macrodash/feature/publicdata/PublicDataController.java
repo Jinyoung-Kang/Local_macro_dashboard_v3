@@ -1,15 +1,11 @@
 package com.macrodash.feature.publicdata;
 
-import com.macrodash.collector.CollectorClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * 국내 공공 API(공공데이터포털·Open DART)로 모은 데이터.
@@ -24,16 +20,16 @@ public class PublicDataController {
     private final CalendarService calendar;
     private final KrFundamentalsService fundamentals;
     private final KrMarketService market;
-    private final CollectorClient collector;
+    private final PublicApiStatusService publicApis;
 
     public PublicDataController(CalendarService calendar,
                                 KrFundamentalsService fundamentals,
                                 KrMarketService market,
-                                CollectorClient collector) {
+                                PublicApiStatusService publicApis) {
         this.calendar = calendar;
         this.fundamentals = fundamentals;
         this.market = market;
-        this.collector = collector;
+        this.publicApis = publicApis;
     }
 
     /** 📅 한국 공휴일 (천문연 특일정보) — 시계의 KRX 휴장 판정용. */
@@ -70,15 +66,6 @@ public class PublicDataController {
      */
     @GetMapping("/status/public-apis")
     public Map<String, Object> publicApiDiagnostics() {
-        Optional<JsonNode> payload = collector.publicApiDiagnostics();
-        Map<String, Object> out = new LinkedHashMap<>();
-        if (payload.isEmpty()) {
-            out.put("available", false);
-            out.put("message", "수집기에 연결하지 못했습니다. 진단은 수집기가 수행합니다.");
-            return out;
-        }
-        out.put("available", true);
-        payload.get().properties().forEach(entry -> out.put(entry.getKey(), entry.getValue()));
-        return out;
+        return publicApis.diagnostics();
     }
 }

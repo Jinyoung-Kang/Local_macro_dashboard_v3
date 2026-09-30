@@ -44,6 +44,6 @@ class PublicApiDiagnosticsTest {
     }
 
     private static PublicDataController controller(CollectorClient collector) {
-        return new PublicDataController(null, null, null, collector);
+        return new PublicDataController(null, null, null, new PublicApiStatusService(collector));
     }
 }
