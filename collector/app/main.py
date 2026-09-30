@@ -64,6 +64,12 @@ API_TOKEN = os.environ.get("COLLECTOR_API_TOKEN", "")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not API_TOKEN:
+        # 인증이 꺼진 채 도는 것을 모르고 지나치지 않게 알립니다(make setup이 토큰을 만들어 줍니다).
+        logger.warning(
+            "COLLECTOR_API_TOKEN이 비어 있어 수집기가 인증 없이 요청을 받습니다. "
+            "로컬 개발용이 아니라면 make setup으로 토큰을 만드세요."
+        )
     store.get_pool()
     if os.environ.get("COLLECTOR_INIT_SCHEMA", "true").lower() in ("1", "true", "yes"):
         store.init_schema()
