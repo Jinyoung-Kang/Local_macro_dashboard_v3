@@ -21,6 +21,11 @@ export function SpreadSection({
   const points = sliceByRange(allPoints, range);
   const scraped = block?.scraped;
   const inverted = (block?.latest ?? 0) < 0;
+  // 어느 한쪽이라도 모르면(null이든 필드가 없든) 변화도 모릅니다 — 0으로 메워 계산하지 않습니다.
+  const change =
+    typeof block?.latest === "number" && typeof block?.previous === "number"
+      ? block.latest - block.previous
+      : null;
   const pair = `${block?.longId?.replace("DGS", "")}Y−${block?.shortId?.replace("DGS", "")}Y`;
 
   // 카드가 공식·스크래핑 둘을 함께 담으므로 부제도 둘을 다 적습니다.
@@ -56,16 +61,8 @@ export function SpreadSection({
                   ? EMPTY
                   : `${formatSigned(block.latest, 3)}%p`
               }
-              delta={
-                block?.latest !== null && block?.previous !== null
-                  ? (block?.latest ?? 0) - (block?.previous ?? 0)
-                  : null
-              }
-              deltaText={
-                block?.latest !== null && block?.previous !== null
-                  ? `${formatSigned((block?.latest ?? 0) - (block?.previous ?? 0), 3)}%p`
-                  : EMPTY
-              }
+              delta={change}
+              deltaText={change === null ? EMPTY : `${formatSigned(change, 3)}%p`}
               caption={
                 allPoints.length > 0
                   ? `기준일 ${allPoints[allPoints.length - 1].date}`
