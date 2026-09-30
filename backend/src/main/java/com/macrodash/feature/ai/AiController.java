@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -22,11 +21,11 @@ import java.util.Map;
 public class AiController {
 
     private final AiService ai;
-    private final SnapshotTextService snapshotText;
+    private final AiReportService reports;
 
-    public AiController(AiService ai, SnapshotTextService snapshotText) {
+    public AiController(AiService ai, AiReportService reports) {
         this.ai = ai;
-        this.snapshotText = snapshotText;
+        this.reports = reports;
     }
 
     @GetMapping("/engines")
@@ -36,13 +35,13 @@ public class AiController {
 
     @GetMapping("/report-types")
     public Map<String, Object> reportTypes() {
-        return Map.of("types", snapshotText.reportPrompts().keySet());
+        return Map.of("types", reports.reportTypes());
     }
 
     /** 수집 데이터 원본 텍스트 (AI 입력 · 복사용). */
     @GetMapping("/snapshot-text")
     public Map<String, Object> snapshotText() {
-        return Map.of("text", snapshotText.fullText());
+        return Map.of("text", reports.inputText());
     }
 
     public record ReportRequest(String engineId, String reportType, String extraInstruction) {
@@ -65,37 +64,14 @@ public class AiController {
     }
 
     /**
-     * 수집 데이터 기반 AI 리포트.
+     * 수집 데이터 기반 AI 리포트({@link AiReportService}).
      *
-     * <p>프롬프트에는 대시보드 원본 텍스트가 그대로 들어갑니다. AI가 데이터에
-     * 없는 수치를 지어내지 않도록 "주어진 데이터만 근거로 삼으라"는 지시와
-     * 추정치 경고가 함께 전달됩니다.
+     * <p>추가 지시는 유료 AI API로 그대로 전달되므로, 길이는 여기(HTTP 경계)에서 먼저 막습니다.
      */
     @PostMapping("/report")
     public Map<String, Object> report(@RequestBody ReportRequest request) {
         requireShort(request.extraInstruction(), "추가 지시");
-        Map<String, String> prompts = snapshotText.reportPrompts();
-        String reportType = (request.reportType() == null || !prompts.containsKey(request.reportType()))
-                ? prompts.keySet().iterator().next()
-                : request.reportType();
-
-        String systemPrompt = prompts.get(reportType);
-        String data = snapshotText.fullText();
-
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("아래는 대시보드가 수집한 최신 원본 데이터입니다.\n\n");
-        prompt.append(data);
-        prompt.append("\n\n요청: ").append(reportType).append("을(를) 작성하십시오.");
-        if (request.extraInstruction() != null && !request.extraInstruction().isBlank()) {
-            prompt.append("\n추가 지시: ").append(request.extraInstruction());
-        }
-
-        Map<String, Object> result = ai.generate(request.engineId(), prompt.toString(), systemPrompt);
-
-        Map<String, Object> out = new LinkedHashMap<>(result);
-        out.put("reportType", reportType);
-        out.put("promptChars", prompt.length());
-        return out;
+        return reports.report(request.engineId(), request.reportType(), request.extraInstruction());
     }
 
     /** AI 연결 테스트 (짧은 프롬프트로 엔진 응답만 확인). */

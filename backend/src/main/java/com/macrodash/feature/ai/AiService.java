@@ -38,7 +38,7 @@ import java.util.regex.Pattern;
  *
  * <p>AI는 <b>수집된 데이터만</b> 근거로 삼습니다. 리포트 프롬프트에는 대시보드
  * 원본 텍스트가 그대로 들어가고, 추정치·대용 지표에는 경고 문구가 함께
- * 들어갑니다({@link SnapshotTextService}).
+ * 들어갑니다({@code feature.snapshot.SnapshotTextService}).
  */
 @Service
 public class AiService {

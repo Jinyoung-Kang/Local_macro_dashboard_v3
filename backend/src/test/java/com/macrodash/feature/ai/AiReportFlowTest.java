@@ -1,5 +1,6 @@
 package com.macrodash.feature.ai;
 
+import com.macrodash.feature.snapshot.SnapshotTextService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -82,6 +83,6 @@ class AiReportFlowTest {
     }
 
     private AiController controller() {
-        return new AiController(ai, snapshotText);
+        return new AiController(ai, new AiReportService(ai, snapshotText));
     }
 }

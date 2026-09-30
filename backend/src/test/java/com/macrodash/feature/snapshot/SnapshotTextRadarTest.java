@@ -1,4 +1,4 @@
-package com.macrodash.feature.ai;
+package com.macrodash.feature.snapshot;
 
 import com.macrodash.feature.institution.Sec13FService;
 import com.macrodash.feature.macro.LiquidityService;

@@ -1,7 +1,5 @@
 package com.macrodash.feature.status;
 
-import com.macrodash.feature.ai.SnapshotTextService;
-import com.macrodash.feature.publicdata.PublicDataController;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,18 +11,18 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 🗄️ 데이터 저장소 상태 · 교차 검증 · 📋 전체 원본 데이터 · 헬스체크.
+ * 🗄️ 데이터 저장소 상태 · 교차 검증 · 헬스체크.
  *
  * <pre>
  *  GET  /api/health            헬스체크 (인증 없음)
  *  GET  /api/status/*          수집 현황·오류 모음·태스크·실행 이력
  *  POST /api/status/*          수동 새로고침·태스크 1건 실행
  *  POST /api/verification      교차 검증
- *  GET  /api/snapshot/text     전체 원본 텍스트
  * </pre>
  *
  * <p>국내 공공 API 진단({@code /api/status/public-apis})은 출처가 같은
- * {@link PublicDataController}에 있습니다.
+ * {@code feature.publicdata.PublicDataController}에, 전체 원본 텍스트({@code /api/snapshot/text})는
+ * {@code feature.snapshot.SnapshotTextController}에 있습니다.
  */
 @RestController
 @RequestMapping("/api")
@@ -32,14 +30,11 @@ public class StatusController {
 
     private final DataStatusService status;
     private final VerificationService verification;
-    private final SnapshotTextService snapshotText;
 
     public StatusController(DataStatusService status,
-                            VerificationService verification,
-                            SnapshotTextService snapshotText) {
+                            VerificationService verification) {
         this.status = status;
         this.verification = verification;
-        this.snapshotText = snapshotText;
     }
 
     @GetMapping("/health")
@@ -92,18 +87,5 @@ public class StatusController {
     @PostMapping("/verification")
     public Map<String, Object> verification() {
         return verification.run();
-    }
-
-    // ------------------------------------------------- 📋 전체 원본 데이터
-    /**
-     * 수집한 전체 대시보드 원본 텍스트 (AI 분석 없음 · 화면 표시/복사용).
-     *
-     * <p>AI 메뉴의 {@code /api/ai/snapshot-text}와 같은 텍스트지만 경로를 나눠
-     * 둡니다. 원본 데이터를 보는 일은 AI 키가 없어도 되는 기능인데, AI 경로
-     * 아래에 두면 "AI 기능"으로 읽히기 때문입니다.
-     */
-    @GetMapping("/snapshot/text")
-    public Map<String, Object> snapshotText() {
-        return snapshotText.payload();
     }
 }
