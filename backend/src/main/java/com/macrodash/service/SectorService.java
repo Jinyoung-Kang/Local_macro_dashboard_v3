@@ -11,6 +11,7 @@ import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -250,7 +251,8 @@ public class SectorService {
         map.put("XLP", Map.of("name", "필수소비재 (Consumer Staples)", "type", "방어주"));
         map.put("XLU", Map.of("name", "유틸리티 (Utilities)", "type", "방어주 / 배당"));
         map.put("XLRE", Map.of("name", "부동산 (Real Estate)", "type", "방어주 / 금리민감"));
-        return Map.copyOf(map);
+        // Map.copyOf는 JVM마다 반복 순서가 달라집니다. 정해 둔 순서를 지키려고 LinkedHashMap을 그대로 감쌉니다.
+        return Collections.unmodifiableMap(map);
     }
 
     private static Map<String, Map<String, String>> assetClassEtfs() {
@@ -266,6 +268,7 @@ public class SectorService {
         map.put("USO", Map.of("name", "원유 (WTI Crude Oil)", "category", "원자재"));
         map.put("DBA", Map.of("name", "농산물 (Agriculture)", "category", "원자재"));
         map.put("UUP", Map.of("name", "미국 달러 인덱스 ETF", "category", "통화"));
-        return Map.copyOf(map);
+        // Map.copyOf는 JVM마다 반복 순서가 달라집니다. 정해 둔 순서를 지키려고 LinkedHashMap을 그대로 감쌉니다.
+        return Collections.unmodifiableMap(map);
     }
 }

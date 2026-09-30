@@ -13,6 +13,7 @@ import tools.jackson.databind.JsonNode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -338,6 +339,7 @@ public class CotService {
         map.put("달러 인덱스", Map.of("code", "098662", "category", "통화"));
         map.put("WTI 원유", Map.of("code", "067651", "category", "원자재"));
         map.put("금", Map.of("code", "088691", "category", "원자재"));
-        return Map.copyOf(map);
+        // Map.copyOf는 JVM마다 반복 순서가 달라집니다. 정해 둔 순서를 지키려고 LinkedHashMap을 그대로 감쌉니다.
+        return Collections.unmodifiableMap(map);
     }
 }
