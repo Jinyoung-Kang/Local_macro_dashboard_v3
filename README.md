@@ -365,6 +365,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md) | **이 프로젝트가 지키는 규칙과 그 이유** — 새 기능을 붙이기 전에 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 계층 구조, 데이터 흐름, 저장 스키마 |
 | [docs/API.md](docs/API.md) | REST 엔드포인트 전체 목록 |
+| [docs/adr/](docs/adr/README.md) | 설계 결정 기록 — 기능 단위 패키지·의존 규칙, Spring Boot 4 전환, 백업·복원, 프런트엔드 층 나누기 |
 | [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | 수집 태스크 20종, 소스별 폴백 체인, 한계 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 기여 절차, 브랜치·Git 문제 해결, 테스트 상세 |
 | [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) | 맥 설치·실행 상세, 포트 변경, launchd 상주 |

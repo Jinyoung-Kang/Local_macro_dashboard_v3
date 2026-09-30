@@ -119,6 +119,8 @@ config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 ```
 
 한 기능을 고칠 때 볼 파일이 한 폴더에 모이고, 기능 사이 의존이 import로 드러납니다.
+의존 규칙(바깥 → 안쪽)과 그 이유는 [ADR 0001](adr/0001-feature-modules-and-dependency-rules.md)에 있고,
+`ArchitectureRulesTest`가 빌드마다 확인합니다. 화면 쪽 층 나누기는 [ADR 0004](adr/0004-frontend-layering.md)입니다.
 
 | 클래스 | 계산 |
 |---|---|
