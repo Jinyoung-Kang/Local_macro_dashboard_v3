@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ArchitectureRulesTest {
 
     private static final Path MAIN = Path.of("src/main/java/com/macrodash");
-    private static final Pattern IMPORT = Pattern.compile("^import\\s+(?:static\\s+)?([\\w.]+?)(?:\\.\\*)?;", Pattern.MULTILINE);
+    private static final Pattern IMPORT = Pattern.compile("^import\\s+(?:static\\s+)?([\\w.]+(?:\\.\\*)?);", Pattern.MULTILINE);
     private static final Pattern INLINE = Pattern.compile("\\bcom\\.macrodash(?:\\.[a-z]\\w*)+\\.[A-Z]\\w*");
     private static final Pattern PACKAGE = Pattern.compile("^package\\s+([\\w.]+);", Pattern.MULTILINE);
 
@@ -84,13 +84,30 @@ class ArchitectureRulesTest {
                 .isEmpty();
     }
 
+    /**
+     * 기반 패키지가 쓸 수 있는 우리 패키지(ADR 0001의 표). 자기 패키지와 최상위(Kst 등)는 늘 허용합니다.
+     */
+    private static final Map<String, List<String>> INFRASTRUCTURE_ALLOWED = Map.of(
+            "com.macrodash.store", List.of(),
+            "com.macrodash.collector", List.of("com.macrodash.config."),
+            "com.macrodash.support", List.of("com.macrodash.analytics."),
+            "com.macrodash.read", List.of("com.macrodash.store.", "com.macrodash.collector.", "com.macrodash.config."));
+
     @Test
-    @DisplayName("store(저장소 접근)는 수집기·설정·읽기 정책·기능을 모른다")
+    @DisplayName("store(저장소 접근)는 DB만 다룬다 — 수집기·설정·읽기 정책·기능을 모른다")
     void storeOnlyTalksToDatabase() {
-        assertThat(violations("com.macrodash.store", ref -> startsWithAny(ref,
-                "com.macrodash.collector.", "com.macrodash.config.", "com.macrodash.read.",
-                "com.macrodash.feature.", "com.macrodash.web.")))
+        assertThat(violations("com.macrodash.store", ref -> isOurs(ref)
+                && !ref.startsWith("com.macrodash.store.") && !isRootClass(ref)))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("기반 패키지(store·collector·support·read)는 ADR 0001 표에 적힌 패키지만 쓴다")
+    void infrastructureUsesOnlyWhatTheTableAllows() {
+        INFRASTRUCTURE_ALLOWED.forEach((pkg, allowed) -> assertThat(violations(pkg, ref -> isOurs(ref)
+                && !ref.startsWith(pkg + ".") && !isRootClass(ref)
+                && allowed.stream().noneMatch(ref::startsWith)))
+                .as(pkg).isEmpty());
     }
 
     @Test
@@ -150,7 +167,7 @@ class ArchitectureRulesTest {
             Set<String> edges = graph.computeIfAbsent(source.pkg(), key -> new TreeSet<>());
             for (String ref : source.refs()) {
                 if (ref.startsWith("com.macrodash.feature.")) {
-                    String target = ref.substring(0, ref.lastIndexOf('.'));
+                    String target = packageOf(ref);
                     if (!target.equals(source.pkg())) {
                         edges.add(target);
                     }
@@ -174,6 +191,27 @@ class ArchitectureRulesTest {
             }
         });
         return found;
+    }
+
+    private static boolean isOurs(String ref) {
+        return ref.startsWith("com.macrodash.");
+    }
+
+    /** 최상위 패키지의 클래스(com.macrodash.Kst 등). */
+    private static boolean isRootClass(String ref) {
+        return ref.matches("com\\.macrodash\\.[A-Z]\\w*(\\..*)?");
+    }
+
+    /** 참조가 가리키는 패키지: 대문자로 시작하는 조각(클래스) 앞까지, 와일드카드면 .* 앞까지. */
+    static String packageOf(String ref) {
+        StringBuilder out = new StringBuilder();
+        for (String part : ref.split("\\.")) {
+            if (part.equals("*") || Character.isUpperCase(part.charAt(0))) {
+                break;
+            }
+            out.append(out.isEmpty() ? "" : ".").append(part);
+        }
+        return out.toString();
     }
 
     private static boolean startsWithAny(String ref, String... prefixes) {
