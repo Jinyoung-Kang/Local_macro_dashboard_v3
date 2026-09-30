@@ -21,7 +21,10 @@ vi.mock("@/hooks/useRefreshSignal", () => ({
 }));
 
 const taskRun = vi.hoisted(() => ({ waitForTaskRun: vi.fn() }));
-vi.mock("@/lib/taskRun", () => taskRun);
+vi.mock("@/lib/taskRun", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/taskRun")>()),
+  waitForTaskRun: taskRun.waitForTaskRun,
+}));
 
 import AiReportPage from "../ai/report/page";
 import { AiEngineSection } from "../connections/AiEngineSection";

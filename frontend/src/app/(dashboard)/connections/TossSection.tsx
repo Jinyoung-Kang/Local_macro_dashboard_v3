@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Banner, Button, Card, Loading, SourceBadge } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiGet } from "@/lib/api";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
@@ -21,21 +22,10 @@ export function TossSection() {
   const diagnostics = useApi<{ ok: boolean; stage?: string; message?: string; sample?: unknown }>(
     runId === null ? null : endpoints.toss.diagnostics(runId),
   );
-  const [result, setResult] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const call = async (path: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      setResult(await apiGet(path));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "호출에 실패했습니다.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { run: call, busy, result, error } = useAsyncAction(
+    (path: string) => apiGet<unknown>(path),
+    "호출에 실패했습니다.",
+  );
 
   return (
     <section className="flex flex-col gap-4">
