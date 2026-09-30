@@ -15,9 +15,21 @@
 DB_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$DB_SCRIPTS_DIR/.." && pwd)"
 
-# .env의 KEY=VALUE 한 줄을 읽습니다(없으면 빈 문자열). docker compose와 같은 방식으로 따옴표 없이 씁니다.
+ENV_FILE="${ENV_FILE:-$PROJECT_ROOT/.env}"
+
+# .env의 KEY=VALUE 한 줄을 읽습니다(없으면 빈 문자열). docker compose와 같은 값을 쓰도록
+# 앞뒤 따옴표, 따옴표 없는 값 뒤의 ` # 주석`, 줄 끝 CR(윈도 줄바꿈)을 걷어 냅니다.
 env_file_value() {
-    grep -s "^$1=" "$PROJECT_ROOT/.env" | tail -1 | cut -d= -f2- || true
+    local line value
+    line="$(grep -s "^$1=" "$ENV_FILE" | tail -1)" || true
+    value="${line#*=}"
+    value="${value%$'\r'}"
+    case "$value" in
+        \"*) value="${value#\"}"; value="${value%%\"*}" ;;
+        \'*) value="${value#\'}"; value="${value%%\'*}" ;;
+        *) value="${value%% #*}"; value="${value%"${value##*[![:space:]]}"}" ;;
+    esac
+    printf '%s' "$value"
 }
 
 DB_USER="${DATABASE_USER:-$(env_file_value DATABASE_USER)}"

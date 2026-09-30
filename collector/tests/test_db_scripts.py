@@ -259,3 +259,24 @@ def test_복원은_돌고_있는_서비스를_멈췄다가_다시_켠다(databas
     calls = log.read_text(encoding="utf-8").splitlines()
     assert "compose stop collector backend" in calls
     assert "compose start collector backend" in calls
+
+
+@pytest.mark.parametrize("line", [
+    'DATABASE_NAME="{name}"',
+    "DATABASE_NAME='{name}'",
+    "DATABASE_NAME={name}  # 로컬 DB",
+    "DATABASE_NAME={name}\r",
+])
+def test_env_파일의_값을_docker_compose와_같게_읽는다(database_url, scratch_db, tmp_path, line):
+    """따옴표·줄 끝 주석·윈도 줄바꿈이 있어도 compose가 읽는 DB 이름과 같은 DB를 백업합니다."""
+    name, _ = scratch_db
+    env = _env(database_url, name, tmp_path)
+    env.pop("DATABASE_NAME")
+    env_file = tmp_path / "test.env"
+    env_file.write_bytes(("DATABASE_USER=macro\n" + line.format(name=name) + "\n").encode("utf-8"))
+    env["ENV_FILE"] = str(env_file)
+
+    result = _run(BACKUP, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert _backups(tmp_path)[0].name.startswith(f"{name}-")
