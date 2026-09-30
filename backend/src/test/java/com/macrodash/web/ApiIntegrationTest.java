@@ -57,7 +57,7 @@ class ApiIntegrationTest {
     TestRestTemplate rest;
 
     @Autowired
-    com.macrodash.service.AiService ai;
+    com.macrodash.feature.ai.AiService ai;
 
     @Autowired
     JdbcTemplate jdbc;

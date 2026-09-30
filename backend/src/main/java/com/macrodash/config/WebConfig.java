@@ -1,7 +1,7 @@
 package com.macrodash.config;
 
-import com.macrodash.service.AuthService;
-import com.macrodash.web.AuthController;
+import com.macrodash.feature.auth.AuthService;
+import com.macrodash.feature.auth.AuthController;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

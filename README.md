@@ -196,10 +196,10 @@ make down            # 정지
 │   └── tests/
 ├── backend/            Java · Spring Boot — 계산·판정·REST API
 │   └── src/main/java/com/macrodash/
+│       ├── feature/         기능별 모듈 (컨트롤러 + 서비스: macro·institution·positioning·…)
 │       ├── analytics/       순수 계산 (상관·국면·위험·백테스트·스코어)
-│       ├── service/         저장본 읽기 + 화면용 응답 조립
 │       ├── store/           저장소 접근, 데이터셋 이름, 신선도
-│       └── web/             REST 컨트롤러
+│       └── support/         공통 도구 (JSON 읽기·파라미터·비밀값 가림)
 ├── frontend/           TypeScript · Next.js — 화면
 │   └── src/
 │       ├── app/(dashboard)/ 메뉴별 페이지
@@ -242,7 +242,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 1. `collector/app/indicators.py` — 무엇을 받을지 정의
 2. `collector/app/tasks.py` — 받아서 저장하는 태스크 추가 (+ `catalog.py`에 이름)
 3. `backend/.../analytics/` — 순수 계산 작성 (테스트를 여기에)
-4. `backend/.../service/` + `web/` 메뉴별 컨트롤러 — 응답 조립 + 엔드포인트
+4. `backend/.../feature/<기능>/` 서비스 + 컨트롤러 — 응답 조립 + 엔드포인트
 5. `frontend/src/app/(dashboard)/…` — 화면
 
 **데이터셋 이름은 `catalog.py`(Python)와 `Datasets.java`(Java) 양쪽에 있고,
