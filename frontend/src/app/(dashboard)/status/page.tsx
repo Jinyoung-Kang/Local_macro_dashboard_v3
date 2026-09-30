@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import {
   Banner,
@@ -15,7 +15,9 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
-import { apiGet, apiPost } from "@/lib/api";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useTaskRunner } from "@/hooks/useTaskRunner";
+import { apiPost } from "@/lib/api";
 import { EMPTY, formatAge, formatKst, formatNumber } from "@/lib/format";
 import type {
   PublicApiDiagnosticsResponse,
@@ -24,9 +26,8 @@ import type {
   VerificationResponse,
 } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
-import { waitForTaskRun, type TaskRunRow } from "@/lib/taskRun";
-
-const TASK_ICONS: Record<string, string> = { ok: "✅", empty: "⚠️", error: "❌" };
+import { TASK_ICONS } from "@/lib/taskRun";
+import { endpoints } from "@/lib/endpoints";
 
 const RUN_STATUS_LABEL: Record<string, string> = {
   ok: "정상 종료",
@@ -44,53 +45,10 @@ const RUN_STATUS_LABEL: Record<string, string> = {
  * 핵심은 "무엇이 왜 실패했는지"와 "있어야 하는데 없는 데이터셋"입니다.
  */
 export default function StatusPage() {
-  const { data, loading, error, reload } = useApi<StatusResponse>("/api/status", 60_000);
-  const [running, setRunning] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const { data, loading, error, reload } = useApi<StatusResponse>(endpoints.status.overview, 60_000);
   const { reloadAll } = useRefreshSignal();
-
-  // 화면을 떠나면 끝나기를 기다리던 확인을 멈춥니다.
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  /**
-   * 태스크를 시작하고(202) 실행 이력에 새 기록이 생길 때까지 기다립니다.
-   *
-   * 예전에는 요청 하나가 끝날 때까지 붙잡았는데, 90초보다 오래 걸리는 태스크(13F 등)는
-   * 실제로는 수집 중인데도 "수집기에 연결하지 못했습니다"가 떴습니다.
-   */
-  const runTask = async (taskName: string) => {
-    setRunning(taskName);
-    setMessage(null);
-    try {
-      const started = await apiPost<{ baselineStartedAt?: string | null }>(`/api/status/run/${taskName}`);
-      setMessage(`${taskName} 실행을 시작했습니다. 끝나면 여기에 결과가 표시됩니다…`);
-      const finished = await waitForTaskRun(started.baselineStartedAt ?? null, {
-        fetchLatest: () =>
-          apiGet<{ history?: TaskRunRow[] }>(`/api/status/history?task=${encodeURIComponent(taskName)}&limit=1`)
-            .then((result) => result.history?.[0]),
-        isCancelled: () => !mounted.current,
-      });
-      if (!mounted.current) return;
-      setMessage(
-        finished
-          ? `${TASK_ICONS[finished.status] ?? ""} ${taskName} 완료${finished.detail ? ` — ${finished.detail}` : ""}`
-          : `${taskName}이(가) 아직 진행 중입니다. 끝나면 아래 표에 결과가 나타납니다.`,
-      );
-      // 개별 태스크 실행도 화면 전체를 갱신합니다. 이 태스크가 바꾼 스냅샷을
-      // 다른 메뉴도 보고 있을 수 있습니다.
-      reloadAll();
-    } catch (err) {
-      if (mounted.current) setMessage(err instanceof Error ? err.message : "실행에 실패했습니다.");
-    } finally {
-      if (mounted.current) setRunning(null);
-    }
-  };
+  // 개별 태스크 실행도 화면 전체를 갱신합니다(useTaskRunner 설명 참고).
+  const { running, message, runTask } = useTaskRunner(reloadAll);
 
   if (loading && !data) {
     return <Loading label="저장소 상태를 확인하는 중…" />;
@@ -310,7 +268,7 @@ export default function StatusPage() {
 function PublicApiPanel() {
   const [runId, setRunId] = useState<number | null>(null);
   const { data, loading, error } = useApi<PublicApiDiagnosticsResponse>(
-    runId === null ? null : `/api/status/public-apis?run=${runId}`,
+    runId === null ? null : endpoints.publicData.apiStatus(runId),
   );
 
   return (
@@ -370,21 +328,12 @@ const VERDICT_ICON: Record<string, string> = {
 };
 
 function VerificationPanel() {
-  const [result, setResult] = useState<VerificationResponse | null>(null);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = async () => {
-    setRunning(true);
-    setError(null);
-    try {
-      setResult(await apiPost<VerificationResponse>("/api/verification"));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "검증에 실패했습니다.");
-    } finally {
-      setRunning(false);
-    }
-  };
+  const verification = useAsyncAction(
+    () => apiPost<VerificationResponse>(endpoints.status.verification),
+    "검증에 실패했습니다.",
+  );
+  const { result, error, busy: running } = verification;
+  const run = () => verification.run();
 
   return (
     <Card
@@ -454,7 +403,7 @@ function VerificationPanel() {
  * 보여 주고 한 번에 복사합니다(비밀값은 백엔드에서 가려져 옵니다).
  */
 function IssuesPanel() {
-  const { data, loading, error, reload } = useApi<StatusIssuesResponse>("/api/status/issues", 60_000);
+  const { data, loading, error, reload } = useApi<StatusIssuesResponse>(endpoints.status.issues, 60_000);
   const counts = data?.counts;
   const hasIssues =
     !!counts && counts.errors + counts.warnings + counts.recentGroups + counts.missingDatasets > 0;

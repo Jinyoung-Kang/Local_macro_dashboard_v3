@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { HorizontalBars } from "@/components/charts";
+import { knownBars } from "@/lib/chartData";
 import {
   Banner,
   Button,
@@ -24,6 +25,7 @@ import type {
   RadarResponse,
 } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 📡 외국인/기관 수급 레이더.
@@ -43,7 +45,7 @@ export default function RadarPage() {
     intervals: string[];
     /** 수집기의 실제 체인 순서 (백엔드가 내려줌 — 화면에 따로 적어 두면 어긋납니다) */
     fallbackChain?: string[];
-  }>("/api/radar/options");
+  }>(endpoints.positioning.radarOptions);
 
   const [market, setMarket] = useState("KOSPI");
   const [investor, setInvestor] = useState("외국인");
@@ -52,9 +54,7 @@ export default function RadarPage() {
   const [topN, setTopN] = useState("30");
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  const query =
-    `/api/radar/ranking?market=${market}&investor=${encodeURIComponent(investor)}` +
-    `&tradeType=${encodeURIComponent(tradeType)}&intervalType=${interval}&topN=${topN}`;
+  const query = endpoints.positioning.radarRanking({ market, investor, tradeType, intervalType: interval, topN });
 
   const { data, loading, error, reload } = useApi<RadarResponse>(query, 60_000);
 
@@ -64,10 +64,12 @@ export default function RadarPage() {
 
   // 사용자가 "상위 30개"를 골랐는데 차트만 15개를 그리면, 표와 개수가 어긋나
   // 무엇이 빠졌는지 알 수 없습니다. 고른 만큼 그립니다(차트 높이가 늘어납니다).
-  const chartData = (data?.rows ?? []).map((row) => ({
-    name: row.name,
-    value: row.netAmountEok ?? 0,
-  }));
+  // 금액을 모르는 종목은 0억 막대로 그리지 않고 빼며, 뺀 개수를 차트 아래에 적습니다.
+  const chart = knownBars(
+    data?.rows ?? [],
+    (row) => row.name,
+    (row) => row.netAmountEok,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -191,12 +193,13 @@ export default function RadarPage() {
             }
           >
             <HorizontalBars
-              data={chartData}
+              data={chart.bars}
               unit="억"
               digits={0}
               valueName={`${investor} ${tradeType} 금액`}
-              height={Math.max(260, chartData.length * 26)}
+              height={Math.max(260, chart.bars.length * 26)}
             />
+            <OmittedNote count={chart.omitted} />
           </Card>
 
           <Card title="📋 상세 목록" source={data.source ?? undefined}>
@@ -286,8 +289,18 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 const SOURCE_ORDER = ["kis", "daum", "naver", "ls", "toss", "pykrx"];
 
+/** 금액을 몰라 차트에서 뺀 종목 수. 표에는 그대로 "—"로 남아 있습니다. */
+function OmittedNote({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <p className="mt-2 text-xs text-muted">
+      금액을 모르는 {count}개 종목은 차트에서 뺐습니다(아래 표에 &quot;{EMPTY}&quot;로 표시).
+    </p>
+  );
+}
+
 function DiagnosticsPanel() {
-  const { data, loading, reload } = useApi<DiagnosticsResponse>("/api/radar/diagnostics");
+  const { data, loading, reload } = useApi<DiagnosticsResponse>(endpoints.positioning.radarDiagnostics);
 
   return (
     <Card
@@ -345,7 +358,7 @@ function FundamentalsPanel({ codes }: { codes: string[] }) {
   // 순서를 정렬해 키를 고정합니다. 랭킹 순서만 바뀌어도 다시 요청하지 않게.
   const key = [...new Set(codes)].sort().join(",");
   const { data, loading, error, reload } = useApi<KrFundamentalsResponse>(
-    key ? `/api/kr/fundamentals?codes=${key}` : null,
+    key ? endpoints.publicData.fundamentals(key) : null,
   );
   const byCode = new Map((data?.companies ?? []).map((company) => [company.code, company]));
   const all = codes.map((code) => byCode.get(code) ?? { code, available: false });
@@ -460,13 +473,17 @@ function ConsensusPanel({
   topN: string;
 }) {
   const { data, loading, error, reload } = useApi<RadarConsensusResponse>(
-    `/api/radar/consensus?market=${market}&tradeType=${encodeURIComponent(tradeType)}` +
-      `&intervalType=${interval}&topN=${topN}`,
+    endpoints.positioning.radarConsensus({ market, tradeType, intervalType: interval, topN }),
     60_000,
   );
 
   const buying = tradeType === "순매수";
   const rows = data?.rows ?? [];
+  const top = knownBars(
+    rows.slice(0, 15),
+    (row) => row.name,
+    (row) => row.totalEok,
+  );
 
   return (
     <Card
@@ -521,15 +538,13 @@ function ConsensusPanel({
           </div>
 
           <HorizontalBars
-            data={rows.slice(0, 15).map((row) => ({
-              name: row.name,
-              value: row.totalEok ?? 0,
-            }))}
+            data={top.bars}
             unit="억"
             digits={0}
             valueName={`외국인+기관 합산 ${tradeType} 금액`}
-            height={Math.max(260, Math.min(rows.length, 15) * 26)}
+            height={Math.max(260, top.bars.length * 26)}
           />
+          <OmittedNote count={top.omitted} />
 
           <div className="mt-4">
             <Table
@@ -630,9 +645,7 @@ function HistoryPanel({
     note: string;
     rows: { obsDate: string; code: string; name: string; netAmountEok: number }[];
   }>(
-    `/api/radar/history?market=${encodeURIComponent(market)}&investor=${encodeURIComponent(
-      investor,
-    )}&tradeType=${encodeURIComponent(tradeType)}&latest=true${date ? `&obsDate=${date}` : ""}`,
+    endpoints.positioning.radarHistory({ market, investor, tradeType, obsDate: date }),
   );
 
   const dates = data?.dates ?? [];

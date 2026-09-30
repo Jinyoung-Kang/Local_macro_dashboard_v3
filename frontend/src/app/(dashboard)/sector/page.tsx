@@ -16,6 +16,9 @@ import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatNumber, formatPercent } from "@/lib/format";
 import type { SectorResponse, SectorRow } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
+import { knownBars } from "@/lib/chartData";
+import { sortDescUnknownLast } from "@/lib/transforms";
 
 /**
  * 🔄 섹터 & 자산군 로테이션.
@@ -28,7 +31,7 @@ export default function SectorPage() {
   const [mode, setMode] = useState<"return" | "alpha">("return");
 
   const { data, loading, error, reload } = useApi<SectorResponse>(
-    `/api/sector/rotation?period=${period}`,
+    endpoints.macro.sectorRotation(period),
     300_000,
   );
 
@@ -42,14 +45,12 @@ export default function SectorPage() {
   const sectors = data?.sectors ?? [];
   const assets = data?.assetClasses ?? [];
 
-  const chartData = [...sectors]
-    .map((row) => ({
-      name: row.name.split(" ")[0],
-      value:
-        (mode === "alpha" ? row.alpha?.[period] : row.returns?.[period]) ?? Number.NaN,
-    }))
-    .filter((row) => !Number.isNaN(row.value))
-    .sort((a, b) => b.value - a.value);
+  // 값을 모르는 섹터는 막대에서 뺍니다(0으로 그리지 않음).
+  const chartData = knownBars(
+    sectors,
+    (row) => row.name.split(" ")[0],
+    (row) => (mode === "alpha" ? row.alpha?.[period] : row.returns?.[period]),
+  ).bars.sort((a, b) => b.value - a.value);
 
   return (
     <div className="flex flex-col gap-6">
@@ -134,17 +135,7 @@ function ReturnsTable({
   kindLabel: string;
   showAlpha?: boolean;
 }) {
-  const sorted = [...rows].sort((a, b) => {
-    const left = a.returns?.[period];
-    const right = b.returns?.[period];
-    if (left === null || left === undefined) {
-      return 1;
-    }
-    if (right === null || right === undefined) {
-      return -1;
-    }
-    return right - left;
-  });
+  const sorted = sortDescUnknownLast(rows, (row) => row.returns?.[period]);
 
   return (
     <Table

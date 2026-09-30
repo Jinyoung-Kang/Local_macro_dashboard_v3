@@ -181,35 +181,12 @@ db: ## PostgreSQL 셸
 	$(COMPOSE) exec postgres psql -U macro -d macrodash
 
 # ------------------------------------------------------------------ 백업·정리
-backup: ## 데이터베이스 백업 (backups/ 폴더에 저장 · 내용 요약 표시)
-	@mkdir -p backups
-	@f="backups/macrodash-$$(date +%Y%m%d-%H%M%S).sql"; \
-	$(COMPOSE) exec -T postgres pg_dump -U macro -d $${DATABASE_NAME:-macrodash} > "$$f"; \
-	echo ""; \
-	ls -lh "$$f" | awk '{printf "  파일     : %s (%s)\n", $$NF, $$5}'; \
-	if tail -c 200 "$$f" | grep -q 'PostgreSQL database dump complete\|unrestrict'; then \
-		echo "  상태     : 정상 종료 표시 확인"; \
-	else \
-		echo "  ⚠️ 상태  : 덤프가 중간에 끊겼을 수 있습니다. 다시 실행하세요"; \
-	fi; \
-	echo "  테이블   : $$(grep -c '^COPY public' "$$f")개"; \
-	echo ""; \
-	$(COMPOSE) exec -T postgres psql -U macro -d $${DATABASE_NAME:-macrodash} -tAc \
-		"SELECT '  누적 수급 : ' || count(*) || '행 · ' || \
-		        coalesce(min(obs_date)::text,'없음') || ' ~ ' || coalesce(max(obs_date)::text,'없음') \
-		 FROM observations" ; \
-	$(COMPOSE) exec -T postgres psql -U macro -d $${DATABASE_NAME:-macrodash} -tAc \
-		"SELECT '  시계열    : ' || count(*) || '행' FROM timeseries"; \
-	$(COMPOSE) exec -T postgres psql -U macro -d $${DATABASE_NAME:-macrodash} -tAc \
-		"SELECT '  스냅샷    : ' || count(*) || '건' FROM snapshots"
-	@echo ""
-	@echo "  누적 수급 이력은 외부에서 다시 받을 수 없습니다(Naver·Daum·KRX는 과거 조회를"
-	@echo "  지원하지 않습니다). 위 날짜 범위가 기대와 다르면 알려 주세요."
-	@echo ""
+backup: ## 데이터베이스 백업 (backups/ 폴더에 저장 · 실패하면 파일을 남기지 않음)
+	@bash scripts/db-backup.sh
 
-restore: ## 백업 복원 (make restore F=backups/xxx.sql)
+restore: ## 백업으로 DB 전체 교체 (make restore F=backups/xxx.sql · 교체 전 자동 백업)
 	@test -n "$(F)" || (echo "사용법: make restore F=backups/파일.sql" && exit 1)
-	$(COMPOSE) exec -T postgres psql -U macro -d macrodash < $(F)
+	@bash scripts/db-restore.sh "$(F)"
 
 reset: ## ⚠️ 전체 삭제 후 재기동 (수집 이력까지 사라집니다)
 	@printf "정말 모든 데이터를 지울까요? 누적 수급 이력은 복구할 수 없습니다 [y/N] " && read ans && [ "$$ans" = "y" ]

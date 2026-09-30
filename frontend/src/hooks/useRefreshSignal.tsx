@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { apiGet, apiPost } from "@/lib/api";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 화면 전체를 다시 읽게 만드는 공용 신호.
@@ -78,7 +79,7 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const result = await apiPost<RefreshResponse>(
-        "/api/status/refresh?runFast=true",
+        endpoints.status.refresh(true),
       );
       setMessage(result.message ?? "새로고침을 요청했습니다.");
 
@@ -125,7 +126,7 @@ async function waitForCollection(baselineRunId: number | null): Promise<boolean>
   while (Date.now() < deadline) {
     await sleep(POLL_INTERVAL_MS);
     try {
-      const status = await apiGet<StatusShape>("/api/status");
+      const status = await apiGet<StatusShape>(endpoints.status.overview);
       const run = status.lastRun;
       if (!run?.id) {
         continue;

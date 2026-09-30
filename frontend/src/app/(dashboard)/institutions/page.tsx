@@ -24,6 +24,7 @@ import {
 } from "@/lib/format";
 import type { PortfolioResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 const SERIES_COLORS = [
   "#58A6FF", "#3FB950", "#D29922", "#F85149", "#A371F7",
@@ -38,14 +39,14 @@ const SERIES_COLORS = [
  */
 export default function InstitutionsPage() {
   const institutions = useApi<{ institutions: { key: string; name: string; cik: string; desc: string }[] }>(
-    "/api/sec13f/institutions",
+    endpoints.institution.institutions,
   );
   const [cik, setCik] = useState("0001067983");   // 버크셔 해서웨이
   const [quarters, setQuarters] = useState("8");
   const [topN, setTopN] = useState("30");
 
   const { data, loading, error, reload } = useApi<PortfolioResponse>(
-    `/api/sec13f/portfolio?cik=${cik}&quarters=${quarters}&topN=${topN}`,
+    endpoints.institution.portfolio(cik, quarters, topN),
   );
   // 매크로 화면이 이미 수집하는 원/달러를 그대로 씁니다. 여기서 따로 받아 오면
   // 같은 포트폴리오가 메뉴마다 다른 원화 금액으로 보입니다.

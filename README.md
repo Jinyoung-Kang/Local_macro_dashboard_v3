@@ -145,7 +145,7 @@ make down            # 정지
        │ REST (쿠키 세션)
 ┌──────▼───────┐  ②모든 계산·판정이 여기 있습니다. 수익률 매트릭스, 국면 판정,
 │  Backend     │    위험 지표, 교차 검증. 타입으로 고정되고 테스트가 지킵니다.
-└──────┬───────┘    Java 21 · Spring Boot 3.5
+└──────┬───────┘    Java 21 · Spring Boot 4.1
        │ JDBC
 ┌──────▼───────┐  ③저장본(JSONB) + 누적 이력. 수집기와 백엔드가 공유하는 유일한 지점.
 │  PostgreSQL  │
@@ -196,10 +196,10 @@ make down            # 정지
 │   └── tests/
 ├── backend/            Java · Spring Boot — 계산·판정·REST API
 │   └── src/main/java/com/macrodash/
+│       ├── feature/         기능별 모듈 (컨트롤러 + 서비스: macro·institution·positioning·…)
 │       ├── analytics/       순수 계산 (상관·국면·위험·백테스트·스코어)
-│       ├── service/         저장본 읽기 + 화면용 응답 조립
 │       ├── store/           저장소 접근, 데이터셋 이름, 신선도
-│       └── web/             REST 컨트롤러
+│       └── support/         공통 도구 (JSON 읽기·파라미터·비밀값 가림)
 ├── frontend/           TypeScript · Next.js — 화면
 │   └── src/
 │       ├── app/(dashboard)/ 메뉴별 페이지
@@ -242,7 +242,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 1. `collector/app/indicators.py` — 무엇을 받을지 정의
 2. `collector/app/tasks.py` — 받아서 저장하는 태스크 추가 (+ `catalog.py`에 이름)
 3. `backend/.../analytics/` — 순수 계산 작성 (테스트를 여기에)
-4. `backend/.../service/` + `web/` 메뉴별 컨트롤러 — 응답 조립 + 엔드포인트
+4. `backend/.../feature/<기능>/` 서비스 + 컨트롤러 — 응답 조립 + 엔드포인트
 5. `frontend/src/app/(dashboard)/…` — 화면
 
 **데이터셋 이름은 `catalog.py`(Python)와 `Datasets.java`(Java) 양쪽에 있고,
@@ -365,6 +365,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md) | **이 프로젝트가 지키는 규칙과 그 이유** — 새 기능을 붙이기 전에 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 계층 구조, 데이터 흐름, 저장 스키마 |
 | [docs/API.md](docs/API.md) | REST 엔드포인트 전체 목록 |
+| [docs/adr/](docs/adr/README.md) | 설계 결정 기록 — 기능 단위 패키지·의존 규칙, Spring Boot 4 전환, 백업·복원, 프런트엔드 층 나누기 |
 | [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | 수집 태스크 20종, 소스별 폴백 체인, 한계 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 기여 절차, 브랜치·Git 문제 해결, 테스트 상세 |
 | [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) | 맥 설치·실행 상세, 포트 변경, launchd 상주 |
@@ -376,7 +377,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | 영역 | 채택 | 왜 |
 |---|---|---|
 | Frontend | TypeScript · React 18 · Next.js 15 · Tailwind · Recharts | 15개 메뉴가 서로 다른 표·차트를 쓰므로 컴포넌트 재사용이 크게 이득 |
-| Backend | Java 21 · Spring Boot 3.5 | 모든 계산을 한 계층에 모아 타입과 테스트로 고정 |
+| Backend | Java 21 · Spring Boot 4.1 | 모든 계산을 한 계층에 모아 타입과 테스트로 고정 |
 | Store | PostgreSQL 16 | 수집기와 API가 다른 프로세스라 파일 공유 불가. JSONB로 저장해 SQL로 질의 |
 | Collector | Python 3.11 · FastAPI · pandas · yfinance · pykrx | 금융 데이터 수집·파싱 라이브러리 생태계 |
 | DevOps | Docker Compose · GitHub Actions | 네 프로세스를 한 명령으로, 세 언어 테스트를 매 푸시마다 |

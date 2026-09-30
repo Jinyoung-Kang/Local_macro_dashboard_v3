@@ -32,6 +32,7 @@ import { RiskSection } from "./RiskSection";
 import { AdvancedSection } from "./AdvancedSection";
 import { SingleChartSection } from "./SingleChartSection";
 import { ScrapedSection } from "./ScrapedSection";
+import { endpoints } from "@/lib/endpoints";
 
 const SPREAD_TABLE = [
   {
@@ -72,11 +73,11 @@ export default function MacroPage() {
     refreshMs === 0 ? 0 : Math.max(refreshMs, floorMs);
 
   const overview = useApi<MacroOverview>(
-    `/api/macro/overview${live ? "?live=true" : ""}`,
+    endpoints.macro.overview(live),
     refreshMs,
   );
-  const risk = useApi<RiskIndicators>("/api/macro/risk", slower(120_000));
-  const advanced = useApi<AdvancedIndicators>("/api/macro/advanced", slower(300_000));
+  const risk = useApi<RiskIndicators>(endpoints.macro.risk, slower(120_000));
+  const advanced = useApi<AdvancedIndicators>(endpoints.macro.advanced, slower(300_000));
   // 개장/마감 배지는 보는 시각 기준이라 1분마다 다시 판정합니다(데이터는 다시 받지 않음).
   const now = useMinuteClock();
   const krOfficial = useKrOfficialHolidays(now);

@@ -462,8 +462,19 @@ Naver·Daum·KRX가 과거 날짜 조회를 지원하지 않기 때문입니다.
 
 ```bash
 make backup                              # backups/macrodash-YYYYmmdd-HHMMSS.sql
-make restore F=backups/macrodash-….sql   # 복원
+make restore F=backups/macrodash-….sql   # 복원 (DB 전체를 백업 시점으로 교체)
 ```
+
+- **백업**은 pg_dump가 끝까지 성공했을 때만 파일을 남깁니다. 실패하면 파일 없이 오류로 끝납니다.
+- **복원**은 지금 DB를 **통째로 백업 시점으로 바꿉니다.** 순서:
+  1. 백업 파일이 끝까지 기록된 것인지 확인합니다.
+  2. 확인(y)을 받습니다.
+  3. 지금 상태를 `backups/pre-restore-….sql`로 먼저 백업합니다.
+  4. 수집기·백엔드를 잠시 멈추고 **한 트랜잭션**으로 교체합니다.
+  5. 멈췄던 서비스를 다시 켭니다.
+
+  도중에 실패하거나 입력이 끊겨도(창을 닫음·Ctrl-C) 전부 되돌려 DB는 복원 전과 같습니다. 잘못 복원했다면
+  `make restore F=backups/pre-restore-….sql`로 되돌리면 됩니다.
 
 Time Machine을 쓴다면 `~/Projects/Local-macro-dashboard-v2/backups`가 백업
 대상에 포함되는지 확인해 두세요. Docker 볼륨 자체(`postgres-data`)는 Time

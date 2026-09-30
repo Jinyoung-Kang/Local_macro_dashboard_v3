@@ -7,8 +7,9 @@ import { useApi } from "@/hooks/useApi";
 import { apiGet } from "@/lib/api";
 import { formatKst } from "@/lib/format";
 import type { SnapshotText } from "@/lib/types";
+import { endpoints } from "@/lib/endpoints";
 
-const PATH = "/api/snapshot/text";
+const PATH = endpoints.snapshot.text;
 
 /**
  * 📋 전체 대시보드 원본 데이터 보기 / 복사.

@@ -102,15 +102,25 @@ pandas DataFrame을 JSON 문자열로 저장하면 **dtype을 따로 실어야**
 화면 코드가 직접 계산하면 같은 수치를 AI 리포트가 다르게 말할 여지가 생깁니다.
 계산을 백엔드로 모아 그 여지를 없앴습니다.
 
-### 4-1. `analytics` 패키지 — 저장소를 모르는 순수 계산
+### 4-1. 패키지 — 기능 모듈과 저장소를 모르는 순수 계산
 
-백엔드 안에서도 한 겹을 더 나눕니다.
+백엔드는 **기능(메뉴) 단위**로 나누고, 그 안쪽에 저장소를 모르는 계산 계층을 둡니다.
 
 ```
-analytics/   스프링도 DB도 모릅니다. 입력은 숫자와 날짜, 출력도 숫자입니다.
-service/     저장본을 읽어 analytics에 넘기고, 화면용 응답으로 조립합니다.
-web/         HTTP 경계.
+feature/<기능>/  기능 하나의 컨트롤러(HTTP 경계) + 서비스(저장본을 읽어 analytics에 넘기고
+                 화면용 응답으로 조립). auth · macro · institution · insight · positioning ·
+                 publicdata · status · snapshot(전체 원본 텍스트) · ai · toss
+analytics/       스프링도 DB도 모릅니다. 입력은 숫자와 날짜, 출력도 숫자입니다.
+read/            읽기 정책(StoreReader) — 저장본이 오래됐으면 읽기 모드에 따라 수집을 요청하고 다시 읽음
+store/           저장소 접근 · 데이터셋 이름 · 신선도 (외부 호출 없음)
+collector/       수집기 호출
+support/         공통 도구(저장본 JSON 읽기, 파라미터 해석, 비밀값 가림, 공통 예외)
+config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 ```
+
+한 기능을 고칠 때 볼 파일이 한 폴더에 모이고, 기능 사이 의존이 import로 드러납니다.
+의존 규칙(바깥 → 안쪽)과 그 이유는 [ADR 0001](adr/0001-feature-modules-and-dependency-rules.md)에 있고,
+`ArchitectureRulesTest`가 빌드마다 확인합니다. 화면 쪽 층 나누기는 [ADR 0004](adr/0004-frontend-layering.md)입니다.
 
 | 클래스 | 계산 |
 |---|---|
@@ -127,7 +137,11 @@ web/         HTTP 경계.
 | `InvestorFlows` | 투자자별 매매 누적(null은 건너뛰고 일수 보고)·연속 순매수 일수·기관 세부·외국인 보유율 변화·현물/선물 방향 동조 |
 | `Verification` | 교차 검증 판정 |
 | `FlowIntegrity` | 토스 투자자별 매매대금 정합성 (매수 합계 = 매도 합계, 기관 = 세부 7개 합) |
-| `Json` | 저장본 JSON을 null 안전하게 읽기 |
+| `FlowRecord` | 투자자별 매매 기록 한 건(값을 모르면 null) — 수급 계산의 입력 타입 |
+
+`analytics`는 `java.*`만 씁니다. 저장본 JSON을 읽는 일(`support.Json`)과 계산 입력 타입으로
+바꾸는 일(`support.FlowJson`)은 서비스 쪽에서 끝냅니다 — JSON 라이브러리가 바뀌어도 계산 코드는
+그대로입니다.
 
 **왜 나눴나** — 이 계산들이 이 프로젝트에서 가장 조용히 틀리는 곳입니다.
 표본이 부족한데 숫자를 만들어내거나, 배열이 한 칸 밀리거나, 미래 정보를 쓰거나.

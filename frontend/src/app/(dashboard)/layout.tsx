@@ -7,6 +7,7 @@ import { MENUS, Sidebar } from "@/components/Sidebar";
 import { useApi } from "@/hooks/useApi";
 import { API_BASE } from "@/lib/api";
 import { RefreshProvider } from "@/hooks/useRefreshSignal";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 대시보드 공통 레이아웃 — 사이드바 + 거래소 시계.
@@ -61,7 +62,7 @@ function DashboardShell({
   useDocumentTitle(pathname);
   // 수동 새로고침에는 반응하지 않습니다(followRefresh: false). 반응하면 새로고침마다
   // 아래의 "세션을 확인하는 중…"이 떠 화면 전체가 다시 그려지고 화면 상태가 초기화됐습니다.
-  const session = useApi<{ authenticated: boolean; readMode?: string }>("/api/auth/session", 0, {
+  const session = useApi<{ authenticated: boolean; readMode?: string }>(endpoints.auth.session, 0, {
     timeoutMs: SESSION_TIMEOUT_MS,
     followRefresh: false,
   });

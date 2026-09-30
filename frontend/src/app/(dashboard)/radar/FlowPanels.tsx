@@ -5,6 +5,7 @@ import { Banner, Card, Freshness, Loading, SourceBadge, Table } from "@/componen
 import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatKst, formatNumber, formatShares, formatSignedKrw } from "@/lib/format";
 import type { FlowRow, FlowWindow, MarketFlowsResponse, StockFlowsResponse } from "@/lib/types";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 토스증권 공식 투자자별 매매 — 레이더 화면의 두 패널.
@@ -39,7 +40,7 @@ function streakText(streak: number | undefined, records: number): string {
 
 // ------------------------------------------------------------------ 시장 전체
 export function MarketFlowsPanel({ market }: { market: string }) {
-  const { data, loading, error } = useApi<MarketFlowsResponse>("/api/kr/investor-flows", 300_000);
+  const { data, loading, error } = useApi<MarketFlowsResponse>(endpoints.positioning.investorFlows, 300_000);
   const symbol = market === "KOSDAQ" ? "KOSDAQ" : "KOSPI";
   const summary = data?.markets?.[symbol];
 
@@ -102,7 +103,7 @@ export function MarketFlowsPanel({ market }: { market: string }) {
 export function StockFlowsPanel({ rows }: { rows: { code: string; name: string }[] }) {
   const codes = rows.map((row) => row.code).join(",");
   const { data, loading, error } = useApi<StockFlowsResponse>(
-    codes ? `/api/kr/stock-flows?codes=${codes}` : null,
+    codes ? endpoints.positioning.stockFlows(codes) : null,
     300_000,
   );
   const names = new Map(rows.map((row) => [row.code, row.name]));

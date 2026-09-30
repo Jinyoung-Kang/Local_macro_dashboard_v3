@@ -15,6 +15,7 @@ import { useApi } from "@/hooks/useApi";
 import { EMPTY, formatNumber } from "@/lib/format";
 import type { RegimeResponse, RegimeSignal } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🧭 시장 국면.
@@ -63,7 +64,7 @@ const TIMELINE_COLOR: Record<string, string> = {
 export default function RegimePage() {
   const [years, setYears] = useState("5");
   const { data, loading, error, reload } = useApi<RegimeResponse>(
-    `/api/analytics/regime?years=${years}`,
+    endpoints.insight.regime(years),
     300_000,
   );
 

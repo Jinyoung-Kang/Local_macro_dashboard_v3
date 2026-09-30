@@ -1,6 +1,5 @@
 package com.macrodash.collector;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,6 +7,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
+import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
 import java.time.Duration;

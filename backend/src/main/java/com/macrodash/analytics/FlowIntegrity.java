@@ -1,7 +1,5 @@
 package com.macrodash.analytics;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,19 +37,19 @@ public final class FlowIntegrity {
      * @param recordsByMarket {@code KOSPI|KOSDAQ → 정규화된 기록 목록(최신순)}
      * @return 판정 결과. 확정 기록이 하나도 없으면 "확인 못 함"
      */
-    public static Verification.Result check(Map<String, List<JsonNode>> recordsByMarket) {
+    public static Verification.Result check(Map<String, List<FlowRecord>> recordsByMarket) {
         List<Verification.Reading> readings = new ArrayList<>();
         List<String> problems = new ArrayList<>();
         List<String> dates = new ArrayList<>();
         double worst = 0.0;
 
-        for (Map.Entry<String, List<JsonNode>> entry : recordsByMarket.entrySet()) {
-            JsonNode record = latestComplete(entry.getValue());
+        for (Map.Entry<String, List<FlowRecord>> entry : recordsByMarket.entrySet()) {
+            FlowRecord record = latestComplete(entry.getValue());
             if (record == null) {
                 continue;
             }
             String label = "KOSDAQ".equals(entry.getKey()) ? "코스닥" : "코스피";
-            String date = Json.asText(record, "date");
+            String date = record.date();
             dates.add(label + " " + date);
 
             long buy = sum(record, "investors", INVESTORS, "buy");
@@ -98,11 +96,11 @@ public final class FlowIntegrity {
     }
 
     /** 네 분류의 매수·매도가 모두 있는 가장 최신 기록. 없으면 null. */
-    static JsonNode latestComplete(List<JsonNode> records) {
+    static FlowRecord latestComplete(List<FlowRecord> records) {
         if (records == null) {
             return null;
         }
-        for (JsonNode record : records) {
+        for (FlowRecord record : records) {
             boolean complete = INVESTORS.stream().allMatch(key ->
                     value(record, "investors", key, "buy") != null
                             && value(record, "investors", key, "sell") != null);
@@ -113,12 +111,11 @@ public final class FlowIntegrity {
         return null;
     }
 
-    static Long value(JsonNode record, String group, String key, String side) {
-        JsonNode node = record.path(group).path(key).path(side);
-        return node.isIntegralNumber() ? node.asLong() : null;
+    static Long value(FlowRecord record, String group, String key, String side) {
+        return record.value(group, key, side);
     }
 
-    private static long sum(JsonNode record, String group, List<String> keys, String side) {
+    private static long sum(FlowRecord record, String group, List<String> keys, String side) {
         long total = 0;
         for (String key : keys) {
             Long v = value(record, group, key, side);
@@ -128,7 +125,7 @@ public final class FlowIntegrity {
     }
 
     /** 하나라도 비어 있으면 null — 빈 값을 0으로 메워 등식을 "통과"시키지 않습니다. */
-    private static Long sumOrNull(JsonNode record, String group, List<String> keys, String side) {
+    private static Long sumOrNull(FlowRecord record, String group, List<String> keys, String side) {
         long total = 0;
         for (String key : keys) {
             Long v = value(record, group, key, side);

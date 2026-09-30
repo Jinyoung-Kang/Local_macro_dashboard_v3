@@ -62,8 +62,9 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 테스트가 스스로 멈춥니다.
 
 화면 테스트는 두 가지입니다. 순수 함수는 `src/lib/__checks__/*.check.mts`(`npm run check`,
-추가 도구 없음), React로 렌더링해야 확인되는 훅은 `src/**/__tests__/*.test.ts`
-(`npm test`, vitest + Testing Library + jsdom — 개발 의존성이라 운영 이미지에는 없습니다).
+추가 도구 없음)와 `src/lib/__tests__`, React로 렌더링해야 확인되는 훅·화면 동작은
+`src/**/__tests__/*.test.ts(x)`(`npm test`, vitest + Testing Library + jsdom — 개발 의존성이라
+운영 이미지에는 없습니다).
 
 ### 테스트가 고정하는 것
 
@@ -81,6 +82,10 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 | `test_equities.py` | 모르는 종목 이름에 엉뚱한 티커가 붙는 것 |
 | `marketCalendar.check.mts` | 공휴일과 거래소 휴장일을 혼동하는 것 |
 | `useApi.test.ts` | 자동 갱신 한 번 실패로 화면이 비는 것, 수동 새로고침이 세션 확인까지 다시 돌려 화면 상태가 초기화되는 것, 늦게 온 이전 응답이 화면을 되돌리는 것 |
+| `ArchitectureRulesTest` | 계산 패키지가 스프링·JSON을 알게 되는 것, 컨트롤러가 저장소·수집기를 직접 부르는 것, 기능 사이 순환([ADR 0001](adr/0001-feature-modules-and-dependency-rules.md)) |
+| `test_db_scripts.py` | 백업·복원이 실패를 성공으로 알리는 것, 복원이 반만 되는 것([ADR 0003](adr/0003-backup-and-restore.md)) |
+| `endpoints.test.ts` | 화면이 만든 API 주소가 깨지거나(인코딩) 문서에 없는 경로를 부르는 것 |
+| `chartData.test.ts`·`SpreadSection.test.tsx` | 모르는 값을 0으로 채워 막대·변화량을 만드는 것 |
 
 ---
 
@@ -124,7 +129,7 @@ public final class MyMath {
 }
 ```
 
-### ④ 응답 조립 — `backend/.../service/` + `web/` 메뉴별 컨트롤러
+### ④ 응답 조립 — `backend/.../feature/<기능>/` 서비스 + 컨트롤러
 
 `Datasets.java`에 ②에서 정한 이름을 **똑같이** 적습니다.
 
@@ -142,16 +147,19 @@ public static final String SNAP_MY_THING = "domain.my_thing";
 snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
 ```
 
-엔드포인트는 메뉴에 맞는 컨트롤러에 붙입니다(`MacroController`·`InstitutionController`·
-`PositioningController`·`AnalyticsController`·`StatusController`, 출처가 따로인 것은
-`FlowsController`·`PublicDataController`·`TossController`). 경로를 추가하면
+엔드포인트는 메뉴에 맞는 기능 패키지의 컨트롤러에 붙입니다(`feature/macro/MacroController`·
+`feature/institution/InstitutionController`·`feature/positioning/PositioningController`·
+`feature/insight/AnalyticsController`·`feature/status/StatusController`, 출처가 따로인 것은
+`FlowsController`·`PublicDataController`·`feature/toss/TossController`). 경로를 추가하면
 `RouteInventoryTest`의 목록과 [API.md](API.md) 표에도 적어야 빌드가 통과합니다.
 컨트롤러 하나가 서비스를 5개보다 많이 받으면 같은 테스트가 실패하니, 그때는 나눕니다.
 
 ### ⑤ 화면 — `frontend/src/app/(dashboard)/…`
 
-`useApi` 훅으로 읽고, 값이 없으면 `EMPTY`(`—`)로 그립니다. 사이드바
-(`components/Sidebar.tsx`)에 메뉴를 추가하세요.
+주소는 `lib/endpoints.ts`에 함수로 추가하고(테스트 CASES에도 한 줄), `useApi` 훅으로 읽습니다.
+버튼으로 서버를 부르면 `useAsyncAction`, 데이터 가공은 `lib/`의 순수 함수로 두고 테스트합니다
+([ADR 0004](adr/0004-frontend-layering.md)). 값이 없으면 `EMPTY`(`—`)로 그립니다 — 0으로 채우지
+않습니다. 사이드바(`components/Sidebar.tsx`)에 메뉴를 추가하세요.
 
 ---
 

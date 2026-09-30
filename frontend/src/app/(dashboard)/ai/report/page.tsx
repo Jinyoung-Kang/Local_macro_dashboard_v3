@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import { Banner, Button, Card, Loading, Select, SourceBadge } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useElapsedSeconds } from "@/hooks/useElapsedSeconds";
 import { apiPost } from "@/lib/api";
 import { formatKst } from "@/lib/format";
 import type { AiEngines, AiResponse, SnapshotText } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🤖 AI 종합 데이터 분석 &amp; 결론 리포트.
@@ -17,33 +20,21 @@ import { SOURCES } from "@/lib/sources";
  * 추정치에 적용하는 것을 막습니다.
  */
 export default function AiReportPage() {
-  const engines = useApi<AiEngines>("/api/ai/engines");
-  const reportTypes = useApi<{ types: string[] }>("/api/ai/report-types");
-  const snapshot = useApi<SnapshotText>("/api/snapshot/text");
+  const engines = useApi<AiEngines>(endpoints.ai.engines);
+  const reportTypes = useApi<{ types: string[] }>(endpoints.ai.reportTypes);
+  const snapshot = useApi<SnapshotText>(endpoints.snapshot.text);
 
   const [engineId, setEngineId] = useState("auto");
   const [reportType, setReportType] = useState("");
   const [extra, setExtra] = useState("");
-  const [result, setResult] = useState<AiResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [showData, setShowData] = useState(false);
-
-  // 생성 중에는 경과 시간을 보여 줍니다. 버튼이 "생성 중…"으로만 멈춰 있으면
-  // 진행 중인지 멈춘 건지 알 수 없어, 사용자가 새로고침으로 날려 버립니다.
-  useEffect(() => {
-    if (!busy) {
-      return;
-    }
-    const startedAt = Date.now();
-    setElapsed(0);
-    const timer = setInterval(
-      () => setElapsed(Math.floor((Date.now() - startedAt) / 1000)),
-      1000,
-    );
-    return () => clearInterval(timer);
-  }, [busy]);
+  const report = useAsyncAction(
+    (body: { engineId: string; reportType: string | undefined; extraInstruction: string }) =>
+      apiPost<AiResponse>(endpoints.ai.report, body),
+    "리포트 생성에 실패했습니다.",
+  );
+  const { busy, result, error } = report;
+  const elapsed = useElapsedSeconds(busy);
 
   const selectedEngine = (engines.data?.engines ?? []).find(
     (engine) => engine.id === engineId,
@@ -51,23 +42,8 @@ export default function AiReportPage() {
   const autoBudget = engines.data?.autoBudgetSeconds;
   const engineTimeout = engines.data?.timeoutSeconds;
 
-  const generate = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      setResult(
-        await apiPost<AiResponse>("/api/ai/report", {
-          engineId,
-          reportType: reportType || reportTypes.data?.types?.[0],
-          extraInstruction: extra,
-        }),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "리포트 생성에 실패했습니다.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const generate = () =>
+    report.run({ engineId, reportType: reportType || reportTypes.data?.types?.[0], extraInstruction: extra });
 
   return (
     <div className="flex flex-col gap-6">

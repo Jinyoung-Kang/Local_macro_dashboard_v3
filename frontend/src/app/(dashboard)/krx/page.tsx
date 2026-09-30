@@ -16,6 +16,8 @@ import { deltaColor, EMPTY, formatKrw, formatNumber, formatPercent, formatSigned
 import type { InvestorTrendResponse, KrMarketTotalsResponse, KrxFuturesResponse } from "@/lib/types";
 import { SpotFuturesCard } from "./SpotFuturesCard";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
+import { mergeByDate } from "@/lib/chartData";
 
 /**
  * 🇰🇷 국내 파생 & 투기세력 (KRX).
@@ -26,8 +28,8 @@ import { SOURCES } from "@/lib/sources";
  *  - Daum 선물 수급은 계약수 기준입니다(금액 기준은 제공되지 않습니다).
  */
 export default function KrxPage() {
-  const futures = useApi<KrxFuturesResponse>("/api/krx/futures?days=60", 300_000);
-  const trend = useApi<InvestorTrendResponse>("/api/krx/investor-trend", 300_000);
+  const futures = useApi<KrxFuturesResponse>(endpoints.positioning.krxFutures(60), 300_000);
+  const trend = useApi<InvestorTrendResponse>(endpoints.positioning.krxInvestorTrend, 300_000);
   const intraday = useApi<{
     available: boolean;
     skipped?: boolean;
@@ -42,7 +44,7 @@ export default function KrxPage() {
     institutionChange?: number;
     flowStatus?: string;
     source?: string;
-  }>("/api/krx/intraday?minutes=30", 60_000);
+  }>(endpoints.positioning.krxIntraday(30), 60_000);
 
   if (futures.loading && !futures.data) {
     return <Loading label="KRX 파생 데이터를 불러오는 중…" />;
@@ -307,19 +309,14 @@ export default function KrxPage() {
  * 오후에 갱신됩니다(오늘 값은 없습니다).
  */
 function MarketTotalsCard() {
-  const { data, loading, error, reload } = useApi<KrMarketTotalsResponse>("/api/kr/market-totals?days=180");
+  const { data, loading, error, reload } = useApi<KrMarketTotalsResponse>(endpoints.publicData.marketTotals(180));
   const markets = data?.markets ?? [];
 
-  // 두 시장의 날짜를 합쳐 한 표로 만듭니다(날짜별로 값을 짝지음 — 배열 순서에 기대지 않음).
-  const rows = new Map<string, Record<string, unknown>>();
-  markets.forEach((market) => {
-    market.marketCap.forEach((point) => {
-      const row = rows.get(point.date) ?? { date: point.date };
-      row[`${market.market}_cap`] = point.value / 1e12;
-      rows.set(point.date, row);
-    });
-  });
-  const chart = [...rows.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  // 두 시장의 날짜를 합쳐 한 표로 만듭니다(날짜별로 값을 짝지음 — 배열 순서에 기대지 않음). 단위: 조 원.
+  const chart = mergeByDate(markets.map((market) => ({
+    key: `${market.market}_cap`,
+    points: market.marketCap.map((point) => ({ date: point.date, value: point.value / 1e12 })),
+  })));
   const latest = (market: string, key: "marketCap" | "tradingValue") =>
     markets.find((m) => m.market === market)?.[key].at(-1)?.value ?? null;
 

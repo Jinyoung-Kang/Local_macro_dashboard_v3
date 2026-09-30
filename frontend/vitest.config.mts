@@ -12,6 +12,8 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
+  // tsconfig의 jsx: "preserve"는 Next.js용입니다. 테스트에서는 컴포넌트를 직접 렌더링하므로 JSX를 변환합니다.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     environment: "jsdom",
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],

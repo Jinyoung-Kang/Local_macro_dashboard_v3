@@ -15,6 +15,9 @@ import type { TaskSummary } from "./types.ts";
 
 export type TaskRunRow = Pick<TaskSummary, "task" | "status" | "startedAt" | "durationMs" | "detail">;
 
+/** 태스크 결과 표시 아이콘: ✅ 정상 · ⚠️ 데이터 없음(기존 저장본 유지) · ❌ 오류 */
+export const TASK_ICONS: Record<string, string> = { ok: "✅", empty: "⚠️", error: "❌" };
+
 /** 기준 시각 이후에 시작한 실행 기록인지. 기준이 없으면(처음 실행) 기록이 있기만 하면 됩니다. */
 export function isNewerRun(row: TaskRunRow | null | undefined, baselineStartedAt: string | null): boolean {
   if (!row?.startedAt) return false;

@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.16</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -15,7 +15,7 @@
     <artifactId>macro-dashboard-backend</artifactId>
     <version>2.0.0</version>
     <name>Local Macro Dashboard Backend</name>
-    <description>매크로 대시보드 API (저장본 읽기 · 분석 · 인증 · 캐시)</description>
+    <description>매크로 대시보드 API (저장본 읽기 · 분석 · 인증)</description>
 
     <properties>
         <java.version>21</java.version>
@@ -25,7 +25,7 @@
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -65,9 +65,21 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Spring Boot 4는 테스트 지원도 기능별 모듈로 나뉩니다: MockMvc·웹 테스트, TestRestTemplate -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-resttestclient</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- TestRestTemplate이 RestTemplateBuilder를 씁니다(본 코드는 RestClient를 직접 만들어 필요 없음) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-restclient</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

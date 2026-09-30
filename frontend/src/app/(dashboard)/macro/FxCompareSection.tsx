@@ -15,6 +15,8 @@ import { useApi } from "@/hooks/useApi";
 import { SOURCES } from "@/lib/sources";
 import { EMPTY, formatNumber, formatPercent } from "@/lib/format";
 import type { FxSeriesResponse } from "@/lib/types";
+import { endpoints } from "@/lib/endpoints";
+import { mergeByDate } from "@/lib/chartData";
 
 /**
  * 💱 환율·달러인덱스 비교.
@@ -34,7 +36,7 @@ export function FxCompareSection() {
   const [mode, setMode] = useState<"index" | "raw">("index");
 
   const { data, loading, error, reload } = useApi<FxSeriesResponse>(
-    `/api/macro/fx?ids=${selected.join(",")}&period=${period}&mode=${mode}`,
+    endpoints.macro.fx(selected, period, mode),
     600_000,
   );
 
@@ -56,17 +58,7 @@ export function FxCompareSection() {
   // 계열마다 거래일이 다릅니다(시장별 휴일). 날짜를 합집합으로 모으고, 값이
   // 없는 날은 비워 둡니다 — 없는 거래를 선으로 이으면 실제로는 없던 흐름이
   // 생깁니다.
-  const byDate = new Map<string, Record<string, string | number | null>>();
-  series.forEach((entry) => {
-    entry.points.forEach((point) => {
-      const row = byDate.get(point.date) ?? { date: point.date };
-      row[entry.id] = point.value;
-      byDate.set(point.date, row);
-    });
-  });
-  const chartData = [...byDate.values()].sort((left, right) =>
-    String(left.date).localeCompare(String(right.date)),
-  );
+  const chartData = mergeByDate(series.map((entry) => ({ key: entry.id, points: entry.points })));
 
   const chartSeries = series.map((entry, index) => ({
     key: entry.id,

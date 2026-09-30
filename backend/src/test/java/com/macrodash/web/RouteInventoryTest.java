@@ -98,12 +98,12 @@ class RouteInventoryTest {
 
     // ------------------------------------------------------------------ 보조
 
-    /** com.macrodash.web의 @RestController 전부 (스프링이 찾는 방식 그대로 클래스패스에서 찾습니다). */
+    /** com.macrodash 아래 @RestController 전부 (스프링이 찾는 방식 그대로 클래스패스에서 찾습니다). */
     static List<Class<?>> controllers() throws ClassNotFoundException {
         var scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
         List<Class<?>> out = new ArrayList<>();
-        for (var candidate : scanner.findCandidateComponents("com.macrodash.web")) {
+        for (var candidate : scanner.findCandidateComponents("com.macrodash")) {
             out.add(Class.forName(candidate.getBeanClassName()));
         }
         assertThat(out).as("컨트롤러를 하나도 찾지 못했습니다").isNotEmpty();

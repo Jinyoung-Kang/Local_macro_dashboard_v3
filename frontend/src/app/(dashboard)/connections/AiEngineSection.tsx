@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { Banner, Button, Card, Loading, Select, SourceBadge, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { errorMessage, useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiPost } from "@/lib/api";
 import type { AiEngine, AiResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 const SAMPLE_PROMPTS = [
   "한국어로 한 문장만 답하십시오: 지금 연결이 정상인지 알려 주세요.",
@@ -16,30 +18,18 @@ const SAMPLE_PROMPTS = [
 /** 🤖 AI 엔진 — 엔진별 키 설정 여부, 호출 응답·지연시간·폴오버 경로. */
 export function AiEngineSection() {
   const engines = useApi<{ engines: AiEngine[]; keys: Record<string, boolean>; enabled: boolean }>(
-    "/api/ai/engines",
+    endpoints.ai.engines,
   );
   const [engineId, setEngineId] = useState("auto");
   const [prompt, setPrompt] = useState(SAMPLE_PROMPTS[0]);
-  const [result, setResult] = useState<AiResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const run = async () => {
-    setBusy(true);
-    try {
-      setResult(
-        await apiPost<AiResponse>(
-          `/api/ai/test?engineId=${engineId}&prompt=${encodeURIComponent(prompt)}`,
-        ),
-      );
-    } catch (error) {
-      setResult({
-        status: false,
-        error: error instanceof Error ? error.message : "호출에 실패했습니다.",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
+  // 실패도 결과 자리(빨간 안내)에 보여 줍니다 — 오류를 결과 모양으로 바꿔 돌려줍니다.
+  const { run: call, busy, result } = useAsyncAction(
+    (id: string, text: string): Promise<AiResponse> =>
+      apiPost<AiResponse>(endpoints.ai.test(id, text))
+        .catch((error: unknown) => ({ status: false, error: errorMessage(error, "호출에 실패했습니다.") })),
+    "호출에 실패했습니다.",
+  );
+  const run = () => call(engineId, prompt);
 
   return (
     <section className="flex flex-col gap-4">

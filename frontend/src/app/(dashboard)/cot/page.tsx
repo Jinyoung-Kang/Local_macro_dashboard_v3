@@ -17,6 +17,7 @@ import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatNumber, formatPercent, formatSigned } from "@/lib/format";
 import type { CotAssetResponse, CotExtremesResponse, CotSummary } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🏛️ 글로벌 투기세력 (CFTC COT).
@@ -26,7 +27,7 @@ import { SOURCES } from "@/lib/sources";
  */
 export default function CotPage() {
   const assets = useApi<{ assets: { name: string; code: string; category: string }[] }>(
-    "/api/cot/assets",
+    endpoints.positioning.cotAssets,
   );
   const overview = useApi<{
     available: boolean;
@@ -34,13 +35,13 @@ export default function CotPage() {
     ageSeconds?: number;
     assets: CotSummary[];
   }>(
-    "/api/cot/overview",
+    endpoints.positioning.cotOverview,
     600_000,
   );
   const [asset, setAsset] = useState("S&P 500 E-Mini");
 
   const detail = useApi<CotAssetResponse>(
-    `/api/cot/asset?name=${encodeURIComponent(asset)}`,
+    endpoints.positioning.cotAsset(asset),
   );
 
   return (
@@ -255,8 +256,7 @@ function ExtremesPanel({ asset }: { asset: string }) {
   const [lookback, setLookback] = useState("52");
 
   const { data, loading, error, reload } = useApi<CotExtremesResponse>(
-    `/api/cot/extremes?name=${encodeURIComponent(asset)}` +
-      `&percentile=${percentile}&lookbackWeeks=${lookback}`,
+    endpoints.positioning.cotExtremes(asset, percentile, lookback),
   );
 
   return (

@@ -6,6 +6,7 @@
  * (토큰을 localStorage에 두지 않습니다 — XSS로 새어 나갈 수 있습니다.)
  */
 
+import { endpoints } from "./endpoints.ts";
 import { createSharedFetcher } from "./sharedRequest.ts";
 
 export const API_BASE =
@@ -144,21 +145,9 @@ export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-/** 쿼리스트링을 만듭니다. undefined/null 값은 제외합니다. */
-export function query(params: Record<string, string | number | boolean | undefined | null>): string {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      search.set(key, String(value));
-    }
-  });
-  const text = search.toString();
-  return text ? `?${text}` : "";
-}
-
 // ---------------------------------------------------------------- 인증
 export const auth = {
-  login: (password: string) => apiPost<{ ok: boolean }>("/api/auth/login", { password }),
-  logout: () => apiPost<{ ok: boolean }>("/api/auth/logout"),
-  session: () => apiGet<{ authenticated: boolean; readMode?: string }>("/api/auth/session"),
+  login: (password: string) => apiPost<{ ok: boolean }>(endpoints.auth.login, { password }),
+  logout: () => apiPost<{ ok: boolean }>(endpoints.auth.logout),
+  session: () => apiGet<{ authenticated: boolean; readMode?: string }>(endpoints.auth.session),
 };

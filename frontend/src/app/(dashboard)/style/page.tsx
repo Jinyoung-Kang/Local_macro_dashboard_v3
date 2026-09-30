@@ -25,6 +25,8 @@ import type {
   GuruSimilarityResponse,
 } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
+import { topPairs } from "@/lib/transforms";
 
 /**
  * 🧬 기관 13F 스타일·위험 (옛 이름: 구루 포트폴리오 분석, 주소 /guru → /style).
@@ -65,7 +67,7 @@ export default function GuruPage() {
  * 이 값은 수십으로 나옵니다.
  */
 function ProfilesCard() {
-  const { data, loading, error, reload } = useApi<GuruProfilesResponse>("/api/guru/profiles");
+  const { data, loading, error, reload } = useApi<GuruProfilesResponse>(endpoints.institution.guruProfiles);
   const usdKrw = useUsdKrw();
 
   return (
@@ -163,7 +165,7 @@ function ProfilesCard() {
 
 /** 기관 간 유사도. 머리기사는 겹침 비중입니다 — 코사인보다 그대로 읽힙니다. */
 function SimilarityCard() {
-  const { data, loading, error, reload } = useApi<GuruSimilarityResponse>("/api/guru/similarity");
+  const { data, loading, error, reload } = useApi<GuruSimilarityResponse>(endpoints.institution.guruSimilarity);
   const [mode, setMode] = useState<"overlap" | "cosine">("overlap");
 
   const matrix = mode === "overlap" ? data?.overlap : data?.cosine;
@@ -172,19 +174,7 @@ function SimilarityCard() {
 
   // 짝 순위는 행렬에서 직접 만듭니다. 서버의 topPairs는 겹침 비중 순이라, 코사인을
   // 고르면 목록과 기준이 어긋납니다. 기관 12곳이면 66쌍이라 브라우저에서 충분합니다.
-  const pairs = useMemo(() => {
-    if (!matrix) return [];
-    const out: { left: string; right: string; value: number }[] = [];
-    for (let row = 0; row < names.length; row += 1) {
-      for (let col = row + 1; col < names.length; col += 1) {
-        const value = matrix[row]?.[col];
-        if (value !== undefined && value !== null) {
-          out.push({ left: shortName(names[row].name), right: shortName(names[col].name), value });
-        }
-      }
-    }
-    return out.sort((a, b) => b.value - a.value).slice(0, 8);
-  }, [matrix, names]);
+  const pairs = useMemo(() => (matrix ? topPairs(names, matrix, shortName, 8) : []), [matrix, names]);
 
   return (
     <Card
@@ -318,13 +308,13 @@ function SimilarityCard() {
 
 /** 기관 포트폴리오의 위험. 커버리지를 항상 먼저 보여 줍니다. */
 function RiskCard() {
-  const profiles = useApi<GuruProfilesResponse>("/api/guru/profiles");
+  const profiles = useApi<GuruProfilesResponse>(endpoints.institution.guruProfiles);
   const [cik, setCik] = useState("0001067983");
   const [benchmark, setBenchmark] = useState("SPY");
   const [years, setYears] = useState("1");
 
   const { data, loading, error, reload } = useApi<GuruRiskResponse>(
-    `/api/guru/risk?cik=${cik}&benchmark=${benchmark}&years=${years}`,
+    endpoints.institution.guruRisk(cik, benchmark, years),
   );
 
   const coverage = data?.coverage;
@@ -523,7 +513,7 @@ function HoldersCard() {
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const { data, loading } = useApi<GuruHoldersResponse>(
-    query ? `/api/guru/holders?q=${encodeURIComponent(query)}` : null,
+    query ? endpoints.institution.guruHolders(query) : null,
   );
 
   return (

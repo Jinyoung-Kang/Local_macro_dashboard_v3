@@ -17,6 +17,7 @@ import { useApi } from "@/hooks/useApi";
 import { deltaColor, EMPTY, formatNumber } from "@/lib/format";
 import type { ScorecardResponse, StockUniverseResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
+import { endpoints } from "@/lib/endpoints";
 
 /**
  * 🩺 종목 스코어카드 — <b>가격으로 잴 수 있는 것만</b>.
@@ -26,13 +27,13 @@ import { SOURCES } from "@/lib/sources";
  * 점수가 아니며, 부실기업도 주가만 오르면 높은 점수를 받습니다.
  */
 export default function ScorecardPage() {
-  const universe = useApi<StockUniverseResponse>("/api/stock/universe");
+  const universe = useApi<StockUniverseResponse>(endpoints.insight.stockUniverse);
   const [symbol, setSymbol] = useState("AAPL");
   const [benchmark, setBenchmark] = useState("SPY");
   const [years, setYears] = useState("1");
 
   const { data, loading, error, reload } = useApi<ScorecardResponse>(
-    `/api/stock/scorecard?symbol=${symbol}&benchmark=${benchmark}&years=${years}`,
+    endpoints.insight.scorecard(symbol, benchmark, years),
   );
 
   return (
