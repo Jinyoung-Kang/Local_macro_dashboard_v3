@@ -33,6 +33,7 @@ from app import migrations
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKUP = ROOT / "scripts" / "db-backup.sh"
+RESTORE = ROOT / "scripts" / "db-restore.sh"
 
 pytestmark = pytest.mark.skipif(
     shutil.which("pg_dump") is None or shutil.which("psql") is None,
@@ -115,3 +116,70 @@ def test_백업은_끝까지_기록된_덤프를_남긴다(database_url, scratch
     files = _backups(tmp_path)
     assert len(files) == 1
     assert "PostgreSQL database dump complete" in files[0].read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------------ 복원
+def test_복원하면_백업_시점과_같아지고_복원_전_상태도_남긴다(database_url, scratch_db, tmp_path):
+    name, db_url = scratch_db
+    env = _env(database_url, name, tmp_path)
+    _set(db_url, "INSERT INTO snapshots(name, payload, collected_at) VALUES ('macro', '{\"v\":\"backup-time\"}', now())")
+    assert _run(BACKUP, env=env).returncode == 0
+    backup_file = _backups(tmp_path)[0]
+
+    # 백업 뒤에 값이 망가지고 행이 늘었습니다.
+    _set(db_url, "UPDATE snapshots SET payload = '{\"v\":\"corrupted\"}'")
+    _set(db_url, "INSERT INTO snapshots(name, payload, collected_at) VALUES ('extra', '{}', now())")
+
+    result = _run(RESTORE, str(backup_file), "--yes", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _snapshot_values(db_url) == {"macro": "backup-time"}
+    safety = [f for f in _backups(tmp_path) if f.name.startswith("pre-restore-")]
+    assert len(safety) == 1                          # 되돌릴 수 있게 복원 직전 상태를 남깁니다
+    assert "corrupted" in safety[0].read_text(encoding="utf-8")
+
+
+def test_복원_도중_실패하면_아무것도_바뀌지_않는다(database_url, scratch_db, tmp_path):
+    name, db_url = scratch_db
+    env = _env(database_url, name, tmp_path)
+    _set(db_url, "INSERT INTO snapshots(name, payload, collected_at) VALUES ('macro', '{\"v\":\"before\"}', now())")
+    assert _run(BACKUP, env=env).returncode == 0
+    good = _backups(tmp_path)[0]
+    broken = tmp_path / "broken.sql.txt"
+    # 끝 표시는 그대로 두고 중간 문장만 망가뜨립니다(복원이 중간까지 진행된 뒤 실패하는 상황).
+    broken.write_text(good.read_text(encoding="utf-8").replace(
+        "CREATE TABLE public.snapshots", "CREATE TABLEX public.snapshots", 1), encoding="utf-8")
+    _set(db_url, "UPDATE snapshots SET payload = '{\"v\":\"current\"}'")
+
+    result = _run(RESTORE, str(broken), "--yes", env=env)
+
+    assert result.returncode != 0
+    assert _snapshot_values(db_url) == {"macro": "current"}   # 스키마를 지운 것까지 되돌아갔습니다
+
+
+def test_끝까지_기록되지_않은_백업은_복원하지_않는다(database_url, scratch_db, tmp_path):
+    name, db_url = scratch_db
+    env = _env(database_url, name, tmp_path)
+    _set(db_url, "INSERT INTO snapshots(name, payload, collected_at) VALUES ('macro', '{\"v\":\"current\"}', now())")
+    truncated = tmp_path / "truncated.sql.txt"
+    truncated.write_text("-- PostgreSQL database dump\nCREATE TABLE public.x (id int);\n", encoding="utf-8")
+
+    result = _run(RESTORE, str(truncated), "--yes", env=env)
+
+    assert result.returncode != 0
+    assert _snapshot_values(db_url) == {"macro": "current"}
+    assert _backups(tmp_path) == []                  # 시작도 하지 않았으므로 안전 백업도 없습니다
+
+
+def test_확인_없이는_복원하지_않는다(database_url, scratch_db, tmp_path):
+    name, db_url = scratch_db
+    env = _env(database_url, name, tmp_path)
+    _set(db_url, "INSERT INTO snapshots(name, payload, collected_at) VALUES ('macro', '{\"v\":\"current\"}', now())")
+    assert _run(BACKUP, env=env).returncode == 0
+    backup_file = _backups(tmp_path)[0]
+    _set(db_url, "UPDATE snapshots SET payload = '{\"v\":\"changed\"}'")
+
+    result = _run(RESTORE, str(backup_file), env=env)   # --yes 없음, 표준입력은 터미널이 아님
+
+    assert result.returncode != 0
+    assert _snapshot_values(db_url) == {"macro": "changed"}

@@ -184,9 +184,9 @@ db: ## PostgreSQL 셸
 backup: ## 데이터베이스 백업 (backups/ 폴더에 저장 · 실패하면 파일을 남기지 않음)
 	@bash scripts/db-backup.sh
 
-restore: ## 백업 복원 (make restore F=backups/xxx.sql)
+restore: ## 백업으로 DB 전체 교체 (make restore F=backups/xxx.sql · 교체 전 자동 백업)
 	@test -n "$(F)" || (echo "사용법: make restore F=backups/파일.sql" && exit 1)
-	$(COMPOSE) exec -T postgres psql -U macro -d macrodash < $(F)
+	@bash scripts/db-restore.sh "$(F)"
 
 reset: ## ⚠️ 전체 삭제 후 재기동 (수집 이력까지 사라집니다)
 	@printf "정말 모든 데이터를 지울까요? 누적 수급 이력은 복구할 수 없습니다 [y/N] " && read ans && [ "$$ans" = "y" ]
