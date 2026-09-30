@@ -3,12 +3,14 @@ package com.macrodash.service;
 import com.macrodash.Kst;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.analytics.FlowIntegrity;
+import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Json;
 import com.macrodash.analytics.Verification;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
+import com.macrodash.support.FlowJson;
 import org.springframework.stereotype.Service;
 
 import java.time.ZonedDateTime;
@@ -347,9 +349,9 @@ public class VerificationService {
                     "토스 수급 저장본이 없습니다 — 🗄️ 데이터 저장소 상태에서 toss_market_flows를 실행하세요.");
         }
         JsonNode markets = snapshot.get().payload().path("markets");
-        Map<String, List<JsonNode>> byMarket = new LinkedHashMap<>();
+        Map<String, List<FlowRecord>> byMarket = new LinkedHashMap<>();
         for (String market : List.of("KOSPI", "KOSDAQ")) {
-            byMarket.put(market, Json.array(markets.path(market), "records"));
+            byMarket.put(market, FlowJson.records(Json.array(markets.path(market), "records")));
         }
         return FlowIntegrity.check(byMarket);
     }

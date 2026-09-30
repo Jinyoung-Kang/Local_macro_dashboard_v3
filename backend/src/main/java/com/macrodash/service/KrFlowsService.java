@@ -2,12 +2,14 @@ package com.macrodash.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.Kst;
+import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.InvestorFlows;
 import com.macrodash.analytics.Json;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
+import com.macrodash.support.FlowJson;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -66,7 +68,7 @@ public class KrFlowsService {
         LocalDate today = Kst.today();
         Map<String, Object> markets = new LinkedHashMap<>();
         for (String market : List.of("KOSPI", "KOSDAQ")) {
-            List<JsonNode> records = Json.array(payload.path("markets").path(market), "records");
+            List<FlowRecord> records = FlowJson.records(Json.array(payload.path("markets").path(market), "records"));
             if (!records.isEmpty()) {
                 markets.put(market, InvestorFlows.summarize(records, today, 20));
             }
@@ -94,7 +96,7 @@ public class KrFlowsService {
 
         List<Map<String, Object>> stocks = new ArrayList<>();
         for (String code : requested) {
-            List<JsonNode> records = series.getOrDefault(code, List.of());
+            List<FlowRecord> records = FlowJson.records(series.getOrDefault(code, List.of()));
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("code", code);
             row.put("available", !records.isEmpty());
@@ -125,8 +127,8 @@ public class KrFlowsService {
     public Map<String, Object> spotFutures() {
         Map<String, Object> out = new LinkedHashMap<>();
         Optional<Snapshot> snapshot = readMarketSnapshot();
-        List<JsonNode> spot = snapshot.filter(s -> s.payload() != null)
-                .map(s -> Json.array(s.payload().path("markets").path("KOSPI"), "records"))
+        List<FlowRecord> spot = snapshot.filter(s -> s.payload() != null)
+                .map(s -> FlowJson.records(Json.array(s.payload().path("markets").path("KOSPI"), "records")))
                 .orElse(List.of());
         Map<String, Object> futures = krx.investorTrend();
         Object rows = futures.get("rows");
@@ -141,7 +143,8 @@ public class KrFlowsService {
             return out;
         }
         out.put("available", true);
-        out.putAll(InvestorFlows.spotFutures(spot, futuresRows, (String) futures.get("dataDate")));
+        out.putAll(InvestorFlows.spotFutures(
+                spot, FlowJson.futuresRows(futuresRows), (String) futures.get("dataDate")));
         out.put("spotSource", SOURCE + " — 코스피 투자자별 매매대금(원)");
         out.put("futuresSource", futures.get("source") + " — 계약");
         snapshot.get().putFreshness(out);

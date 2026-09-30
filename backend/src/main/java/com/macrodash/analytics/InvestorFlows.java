@@ -1,7 +1,5 @@
 package com.macrodash.analytics;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -19,6 +17,7 @@ import java.util.Map;
  *   foreignerHoldingRate: 0.5089 | null }      // 종목 기록에만
  * </pre>
  * 시장 기록의 단위는 원(KRW), 종목 기록의 단위는 주(株)입니다. 이 클래스는 단위를 모릅니다.
+ * 저장본은 {@code support.FlowJson}이 {@link FlowRecord}로 바꿔 넘깁니다.
  *
  * <p>주의사항
  * <ul>
@@ -56,13 +55,9 @@ public final class InvestorFlows {
         return LABELS.getOrDefault(key, key);
     }
 
-    /** {@code record.group.key.net}. 노드가 없거나 숫자가 아니면 null. */
-    static Long net(JsonNode record, String group, String key) {
-        if (record == null) {
-            return null;
-        }
-        JsonNode node = record.path(group).path(key).path("net");
-        return node.isIntegralNumber() ? node.asLong() : null;
+    /** {@code record.group.key.net}. 모르면 null. */
+    static Long net(FlowRecord record, String group, String key) {
+        return record == null ? null : record.value(group, key, "net");
     }
 
     /**
@@ -70,7 +65,7 @@ public final class InvestorFlows {
      *
      * @return {@code {sum, days, window}} — 값이 있는 기록만 더합니다. 하나도 없으면 sum은 null
      */
-    static Map<String, Object> sum(List<JsonNode> records, int window, String group, String key) {
+    static Map<String, Object> sum(List<FlowRecord> records, int window, String group, String key) {
         long total = 0;
         int days = 0;
         for (int i = 0; i < Math.min(window, records.size()); i++) {
@@ -94,7 +89,7 @@ public final class InvestorFlows {
      *
      * @return +n(n일째 순매수) / −n(n일째 순매도) / 0(최신 값이 없거나 0)
      */
-    static int streak(List<JsonNode> records, String key) {
+    static int streak(List<FlowRecord> records, String key) {
         if (records.isEmpty()) {
             return 0;
         }
@@ -104,7 +99,7 @@ public final class InvestorFlows {
         }
         int sign = Long.signum(first);
         int count = 0;
-        for (JsonNode record : records) {
+        for (FlowRecord record : records) {
             Long value = net(record, "investors", key);
             if (value == null || Long.signum(value) != sign) {
                 break;
@@ -121,16 +116,16 @@ public final class InvestorFlows {
      * @param today   오늘(KST). 최신 기록이 오늘이면 장중 잠정치일 수 있다고 표시합니다
      * @param seriesDays 차트용 일별 순매수 계열 길이(0이면 넣지 않음, 오래된 날이 앞)
      */
-    public static Map<String, Object> summarize(List<JsonNode> records, LocalDate today, int seriesDays) {
+    public static Map<String, Object> summarize(List<FlowRecord> records, LocalDate today, int seriesDays) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("records", records.size());
         if (records.isEmpty()) {
             return out;
         }
-        JsonNode latest = records.get(0);
-        String latestDate = Json.asText(latest, "date");
+        FlowRecord latest = records.get(0);
+        String latestDate = latest.date();
         out.put("latestDate", latestDate);
-        out.put("latestUpdatedAt", Json.asText(latest, "updatedAt"));
+        out.put("latestUpdatedAt", latest.updatedAt());
         // 공식 설명: "당일 기록은 장 종료 전까지 갱신될 수 있는 잠정치"
         out.put("provisional", today != null && today.toString().equals(latestDate));
 
@@ -167,9 +162,9 @@ public final class InvestorFlows {
         if (seriesDays > 0) {
             List<Map<String, Object>> series = new ArrayList<>();
             for (int i = Math.min(seriesDays, records.size()) - 1; i >= 0; i--) {
-                JsonNode record = records.get(i);
+                FlowRecord record = records.get(i);
                 Map<String, Object> point = new LinkedHashMap<>();
-                point.put("date", Json.asText(record, "date"));
+                point.put("date", record.date());
                 for (String key : List.of("foreigner", "institution", "individual")) {
                     point.put(key, net(record, "investors", key));
                 }
@@ -185,12 +180,12 @@ public final class InvestorFlows {
      *
      * @return 값이 있는 기록이 없으면 null
      */
-    static Map<String, Object> foreignerHolding(List<JsonNode> records, int window) {
-        JsonNode newest = null;
-        JsonNode oldest = null;
+    static Map<String, Object> foreignerHolding(List<FlowRecord> records, int window) {
+        FlowRecord newest = null;
+        FlowRecord oldest = null;
         for (int i = 0; i < Math.min(window, records.size()); i++) {
-            JsonNode record = records.get(i);
-            if (Json.asDouble(record, "foreignerHoldingRate") == null) {
+            FlowRecord record = records.get(i);
+            if (record.foreignerHoldingRate() == null) {
                 continue;
             }
             if (newest == null) {
@@ -201,17 +196,28 @@ public final class InvestorFlows {
         if (newest == null) {
             return null;
         }
-        double latestRate = Json.asDouble(newest, "foreignerHoldingRate");
-        double oldestRate = Json.asDouble(oldest, "foreignerHoldingRate");
+        double latestRate = newest.foreignerHoldingRate();
+        double oldestRate = oldest.foreignerHoldingRate();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ratePct", latestRate * 100);
-        out.put("date", Json.asText(newest, "date"));
+        out.put("date", newest.date());
         out.put("changePp", newest == oldest ? null : (latestRate - oldestRate) * 100);
-        out.put("fromDate", newest == oldest ? null : Json.asText(oldest, "date"));
+        out.put("fromDate", newest == oldest ? null : oldest.date());
         return out;
     }
 
     // ------------------------------------------------------------------ 현물·선물 동조
+    /**
+     * Daum KOSPI200 선물 수급 행 하나(단위: 계약).
+     *
+     * @param investor 행 이름 (예: "외국인 (스마트머니)"). 모르면 null
+     * @param netToday 당일 순매수. 모르면 null
+     * @param net5d    5일 순매수. 모르면 null
+     * @param net20d   20일 순매수. 모르면 null
+     */
+    public record FuturesRow(String investor, Double netToday, Double net5d, Double net20d) {
+    }
+
     /**
      * 토스 현물 키 → Daum 선물 수급 행 이름의 <b>첫 단어</b>.
      *
@@ -248,29 +254,29 @@ public final class InvestorFlows {
      * @param futuresDate  Daum 기준일 (YYYY-MM-DD, 모르면 null)
      * @return 투자자별 {spot, futures, verdict}. 기준일이 다르면 당일 판정은 하지 않습니다
      */
-    public static Map<String, Object> spotFutures(List<JsonNode> spotRecords, List<JsonNode> futuresRows,
+    public static Map<String, Object> spotFutures(List<FlowRecord> spotRecords, List<FuturesRow> futuresRows,
                                                   String futuresDate) {
-        Map<String, JsonNode> futuresByLabel = new LinkedHashMap<>();
-        for (JsonNode row : futuresRows) {
-            String name = Json.asText(row, "investor");
+        Map<String, FuturesRow> futuresByLabel = new LinkedHashMap<>();
+        for (FuturesRow row : futuresRows) {
+            String name = row.investor();
             if (name != null) {
                 futuresByLabel.putIfAbsent(firstWord(name), row);
             }
         }
-        String spotDate = spotRecords.isEmpty() ? null : Json.asText(spotRecords.get(0), "date");
+        String spotDate = spotRecords.isEmpty() ? null : spotRecords.get(0).date();
         boolean sameDay = spotDate != null && spotDate.equals(futuresDate);
 
         List<Map<String, Object>> rows = new ArrayList<>();
         for (String key : List.of("foreigner", "institution", "individual", "financialInvestment")) {
             String group = "financialInvestment".equals(key) ? "breakdown" : "investors";
-            JsonNode futures = futuresByLabel.get(FUTURES_LABELS.get(key));
+            FuturesRow futures = futuresByLabel.get(FUTURES_LABELS.get(key));
 
             Long spotToday = spotRecords.isEmpty() ? null : net(spotRecords.get(0), group, key);
             Long spot5 = (Long) sum(spotRecords, 5, group, key).get("sum");
             Long spot20 = (Long) sum(spotRecords, 20, group, key).get("sum");
-            Long futToday = asLong(futures, "netToday");
-            Long fut5 = asLong(futures, "net5d");
-            Long fut20 = asLong(futures, "net20d");
+            Long futToday = futures == null ? null : rounded(futures.netToday());
+            Long fut5 = futures == null ? null : rounded(futures.net5d());
+            Long fut20 = futures == null ? null : rounded(futures.net20d());
 
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("key", key);
@@ -312,8 +318,7 @@ public final class InvestorFlows {
         return spot > 0 ? "현물 매수 · 선물 매도" : "현물 매도 · 선물 매수";
     }
 
-    private static Long asLong(JsonNode node, String field) {
-        Double value = node == null ? null : Json.asDouble(node, field);
+    private static Long rounded(Double value) {
         return value == null ? null : Math.round(value);
     }
 }

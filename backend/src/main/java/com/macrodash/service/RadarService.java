@@ -9,6 +9,7 @@ import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;
 import com.macrodash.store.StoreRepository;
+import com.macrodash.support.FlowJson;
 import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
 
@@ -267,7 +268,7 @@ public class RadarService {
         }
 
         List<Map<String, Object>> rows =
-                SupplyConsensus.intersect(rowsOf(foreign), rowsOf(institution));
+                SupplyConsensus.intersect(FlowJson.rankRows(rowsOf(foreign)), FlowJson.rankRows(rowsOf(institution)));
 
         out.put("available", !rows.isEmpty());
         out.put("rows", rows);

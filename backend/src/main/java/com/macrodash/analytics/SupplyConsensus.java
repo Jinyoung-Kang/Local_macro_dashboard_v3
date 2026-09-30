@@ -1,7 +1,5 @@
 package com.macrodash.analytics;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -26,6 +24,20 @@ public final class SupplyConsensus {
     }
 
     /**
+     * 수급 상위 목록의 한 행. 값을 모르면 null.
+     *
+     * @param code         종목코드 (맞추는 키)
+     * @param name         종목명
+     * @param price        현재가
+     * @param changePct    등락률(%)
+     * @param netAmountEok 순매수 금액(억 원)
+     * @param rank         순위
+     */
+    public record Row(String code, String name, Double price, Double changePct,
+                      Double netAmountEok, Double rank) {
+    }
+
+    /**
      * 두 목록에 모두 있는 종목을 한 줄로 합칩니다.
      *
      * @param foreign     외국인 수급 상위 목록 (code·name·netAmountEok·rank 필드 사용)
@@ -40,35 +52,34 @@ public final class SupplyConsensus {
      * <p>한쪽 금액이 없으면 {@code totalEok}가 null입니다 — 0으로 채우면 "기관은
      * 안 샀다"가 아니라 "기관이 0억 샀다"로 읽힙니다.
      */
-    public static List<Map<String, Object>> intersect(List<JsonNode> foreign,
-                                                      List<JsonNode> institution) {
-        Map<String, JsonNode> byCode = new LinkedHashMap<>();
-        for (JsonNode row : institution) {
-            String code = Json.asText(row, "code");
+    public static List<Map<String, Object>> intersect(List<Row> foreign, List<Row> institution) {
+        Map<String, Row> byCode = new LinkedHashMap<>();
+        for (Row row : institution) {
+            String code = row.code();
             if (code != null && !code.isBlank()) {
                 byCode.putIfAbsent(code, row);
             }
         }
 
         List<Map<String, Object>> out = new ArrayList<>();
-        for (JsonNode row : foreign) {
-            String code = Json.asText(row, "code");
+        for (Row row : foreign) {
+            String code = row.code();
             if (code == null || code.isBlank()) {
                 continue;
             }
-            JsonNode other = byCode.get(code);
+            Row other = byCode.get(code);
             if (other == null) {
                 continue;
             }
 
-            Double foreignEok = Json.asDouble(row, "netAmountEok");
-            Double institutionEok = Json.asDouble(other, "netAmountEok");
+            Double foreignEok = row.netAmountEok();
+            Double institutionEok = other.netAmountEok();
 
             Map<String, Object> merged = new LinkedHashMap<>();
             merged.put("code", code);
-            merged.put("name", Json.asText(row, "name"));
-            merged.put("price", Json.asDouble(row, "price"));
-            merged.put("changePct", Json.asDouble(row, "changePct"));
+            merged.put("name", row.name());
+            merged.put("price", row.price());
+            merged.put("changePct", row.changePct());
             merged.put("foreignEok", foreignEok);
             merged.put("institutionEok", institutionEok);
             // 한쪽 금액이 없으면 합계를 만들지 않습니다. 없는 값을 0으로 두면
@@ -90,8 +101,8 @@ public final class SupplyConsensus {
         return total instanceof Number number ? Math.abs(number.doubleValue()) : 0.0;
     }
 
-    private static Integer intOrNull(JsonNode row) {
-        Double rank = Json.asDouble(row, "rank");
+    private static Integer intOrNull(Row row) {
+        Double rank = row.rank();
         return rank == null ? null : (int) Math.round(rank);
     }
 }

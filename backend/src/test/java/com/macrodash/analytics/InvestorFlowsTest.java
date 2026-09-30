@@ -3,6 +3,7 @@ package com.macrodash.analytics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.macrodash.support.FlowJson;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,8 +19,11 @@ class InvestorFlowsTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** 기록 하나. null을 넣으면 그 투자자는 "모름"(당일 잠정치 모양)입니다. */
-    private static JsonNode record(String date, Long foreigner, Long institution, Long individual,
+    /**
+     * 기록 하나. null을 넣으면 그 투자자는 "모름"(당일 잠정치 모양)입니다.
+     * 저장본과 같은 JSON을 만든 뒤 서비스와 같은 변환({@link FlowJson})을 거칩니다.
+     */
+    private static FlowRecord record(String date, Long foreigner, Long institution, Long individual,
                                    Long pension, Double holdingRate) {
         ObjectNode node = MAPPER.createObjectNode();
         node.put("date", date);
@@ -41,7 +45,7 @@ class InvestorFlowsTest {
         } else {
             node.put("foreignerHoldingRate", holdingRate);
         }
-        return node;
+        return FlowJson.record(node);
     }
 
     private static void putNet(ObjectNode parent, String key, Long net) {
@@ -61,7 +65,7 @@ class InvestorFlowsTest {
     @Test
     @DisplayName("누적은 값이 있는 날만 더하고, 더한 일수를 함께 돌려준다 (null을 0으로 더하지 않음)")
     void sumsSkipNullsAndReportDays() {
-        List<JsonNode> records = List.of(
+        List<FlowRecord> records = List.of(
                 record("2026-09-25", 300L, 50L, null, null, null),   // 당일 잠정: 개인·기관 세부 없음
                 record("2026-09-24", 200L, -10L, -150L, 40L, 0.5089),
                 record("2026-09-23", -100L, 20L, 80L, 10L, 0.5085));
@@ -85,7 +89,7 @@ class InvestorFlowsTest {
     @Test
     @DisplayName("연속 일수: 부호가 이어진 만큼, 모르는 날에서 멈춘다")
     void streakStopsAtSignChangeOrNull() {
-        List<JsonNode> buying = List.of(
+        List<FlowRecord> buying = List.of(
                 record("d5", 10L, -1L, 1L, null, null),
                 record("d4", 20L, -2L, null, null, null),
                 record("d3", 5L, 3L, 1L, null, null),
@@ -101,7 +105,7 @@ class InvestorFlowsTest {
     @Test
     @DisplayName("외국인 보유율: 최신 값과 창 안 변화(%p), 값이 한 날뿐이면 변화 없음")
     void foreignerHoldingChange() {
-        List<JsonNode> records = List.of(
+        List<FlowRecord> records = List.of(
                 record("2026-09-25", 1L, 1L, 1L, null, null),
                 record("2026-09-24", 1L, 1L, 1L, null, 0.5089),
                 record("2026-09-23", 1L, 1L, 1L, null, 0.5085));
@@ -119,7 +123,7 @@ class InvestorFlowsTest {
     @Test
     @DisplayName("차트 계열은 오래된 날이 앞이다")
     void seriesAscending() {
-        List<JsonNode> records = new ArrayList<>();
+        List<FlowRecord> records = new ArrayList<>();
         for (int day = 25; day >= 1; day--) {
             records.add(record(String.format("2026-09-%02d", day), (long) day, 0L, 0L, null, null));
         }
@@ -134,16 +138,16 @@ class InvestorFlowsTest {
     @Test
     @DisplayName("현물·선물 동조: 방향만 비교하고, 기준일이 다르면 당일 판정을 하지 않는다")
     void spotFuturesVerdicts() {
-        List<JsonNode> spot = List.of(
+        List<FlowRecord> spot = List.of(
                 record("2026-09-25", 2000L, -500L, -1500L, 300L, null),
                 record("2026-09-24", 1000L, -500L, -500L, 100L, null));
-        List<JsonNode> futures = List.of(
+        List<InvestorFlows.FuturesRow> futures = FlowJson.futuresRows(List.of(
                 MAPPER.createObjectNode().put("investor", "외국인 (스마트머니)")
                         .put("netToday", 1200).put("net5d", 3000).put("net20d", -800),
                 MAPPER.createObjectNode().put("investor", "기관계")
                         .put("netToday", -300).put("net5d", -900).put("net20d", -100),
                 MAPPER.createObjectNode().put("investor", "금융투자 (차익거래)")
-                        .put("netToday", 400).put("net5d", 700).put("net20d", 900));
+                        .put("netToday", 400).put("net5d", 700).put("net20d", 900)));
 
         Map<String, Object> same = InvestorFlows.spotFutures(spot, futures, "2026-09-25");
         @SuppressWarnings("unchecked")
@@ -161,8 +165,9 @@ class InvestorFlowsTest {
         assertThat(financial.get("verdict5")).isEqualTo("현물 매도 · 선물 매수");
 
         // 예전 저장본처럼 설명 없는 이름("외국인")이어도 같은 행으로 맞춥니다
-        List<JsonNode> legacy = List.of(MAPPER.createObjectNode().put("investor", "외국인")
-                .put("netToday", 1).put("net5d", 1).put("net20d", 1));
+        List<InvestorFlows.FuturesRow> legacy = FlowJson.futuresRows(List.of(
+                MAPPER.createObjectNode().put("investor", "외국인")
+                        .put("netToday", 1).put("net5d", 1).put("net20d", 1)));
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> legacyRows = (List<Map<String, Object>>)
                 InvestorFlows.spotFutures(spot, legacy, "2026-09-25").get("rows");

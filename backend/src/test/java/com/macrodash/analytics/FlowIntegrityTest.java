@@ -3,6 +3,7 @@ package com.macrodash.analytics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.macrodash.support.FlowJson;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,9 +54,10 @@ class FlowIntegrityTest {
         }
     }
 
-    private static Map<String, List<JsonNode>> kospi(JsonNode... records) {
-        Map<String, List<JsonNode>> out = new LinkedHashMap<>();
-        out.put("KOSPI", List.of(records));
+    /** 저장본과 같은 JSON을 서비스와 같은 변환({@link FlowJson})으로 넘깁니다. */
+    private static Map<String, List<FlowRecord>> kospi(JsonNode... records) {
+        Map<String, List<FlowRecord>> out = new LinkedHashMap<>();
+        out.put("KOSPI", FlowJson.records(List.of(records)));
         return out;
     }
 

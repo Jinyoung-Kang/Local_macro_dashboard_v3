@@ -2,6 +2,7 @@ package com.macrodash.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.macrodash.support.FlowJson;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -112,10 +113,10 @@ class FxAndConsensusTest {
         @Test
         @DisplayName("두 목록에 모두 있는 종목만 남는다")
         void keepsOnlyShared() {
-            List<JsonNode> foreign = rows(
+            List<SupplyConsensus.Row> foreign = rows(
                     Map.of("code", "005930", "name", "삼성전자", "netAmountEok", 1200.0, "rank", 1),
                     Map.of("code", "000660", "name", "SK하이닉스", "netAmountEok", 800.0, "rank", 2));
-            List<JsonNode> institution = rows(
+            List<SupplyConsensus.Row> institution = rows(
                     Map.of("code", "000660", "name", "SK하이닉스", "netAmountEok", 300.0, "rank", 5),
                     Map.of("code", "035420", "name", "NAVER", "netAmountEok", 150.0, "rank", 6));
 
@@ -133,9 +134,9 @@ class FxAndConsensusTest {
         @Test
         @DisplayName("한쪽 금액이 없으면 합계를 만들지 않는다")
         void nullTotalWhenOneSideMissing() {
-            List<JsonNode> foreign = rows(
+            List<SupplyConsensus.Row> foreign = rows(
                     Map.of("code", "005930", "name", "삼성전자", "netAmountEok", 1200.0, "rank", 1));
-            List<JsonNode> institution = rows(
+            List<SupplyConsensus.Row> institution = rows(
                     Map.of("code", "005930", "name", "삼성전자", "rank", 3));
 
             List<Map<String, Object>> merged = SupplyConsensus.intersect(foreign, institution);
@@ -147,10 +148,10 @@ class FxAndConsensusTest {
         @Test
         @DisplayName("순매도(음수)도 크기 순으로 정렬한다")
         void sortsSellsByMagnitude() {
-            List<JsonNode> foreign = rows(
+            List<SupplyConsensus.Row> foreign = rows(
                     Map.of("code", "A", "name", "작게 판 종목", "netAmountEok", -100.0, "rank", 2),
                     Map.of("code", "B", "name", "크게 판 종목", "netAmountEok", -900.0, "rank", 1));
-            List<JsonNode> institution = rows(
+            List<SupplyConsensus.Row> institution = rows(
                     Map.of("code", "A", "name", "작게 판 종목", "netAmountEok", -50.0, "rank", 2),
                     Map.of("code", "B", "name", "크게 판 종목", "netAmountEok", -400.0, "rank", 1));
 
@@ -163,9 +164,9 @@ class FxAndConsensusTest {
         @Test
         @DisplayName("종목코드가 없는 행은 이름으로 추측해 맞추지 않는다")
         void dropsRowsWithoutCode() {
-            List<JsonNode> foreign = rows(
+            List<SupplyConsensus.Row> foreign = rows(
                     Map.of("name", "삼성전자", "netAmountEok", 1200.0, "rank", 1));
-            List<JsonNode> institution = rows(
+            List<SupplyConsensus.Row> institution = rows(
                     Map.of("name", "삼성전자", "netAmountEok", 300.0, "rank", 1));
 
             assertThat(SupplyConsensus.intersect(foreign, institution)).isEmpty();
@@ -173,7 +174,8 @@ class FxAndConsensusTest {
     }
 
     @SafeVarargs
-    private static List<JsonNode> rows(Map<String, Object>... maps) {
-        return List.of(maps).stream().map(map -> (JsonNode) MAPPER.valueToTree(map)).toList();
+    /** 저장본과 같은 JSON을 서비스와 같은 변환({@link FlowJson})으로 넘깁니다. */
+    private static List<SupplyConsensus.Row> rows(Map<String, Object>... maps) {
+        return FlowJson.rankRows(List.of(maps).stream().map(map -> (JsonNode) MAPPER.valueToTree(map)).toList());
     }
 }
