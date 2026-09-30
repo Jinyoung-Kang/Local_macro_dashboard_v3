@@ -218,3 +218,44 @@ def test_입력이_중간에_끊기면_반쯤_복원된_상태를_확정하지_�
     assert result.returncode != 0
     assert "복원했습니다" not in result.stdout
     assert _snapshot_values(db_url) == {"macro": "current"}   # 스키마를 지운 것까지 되돌아갔습니다
+
+
+def test_복원은_돌고_있는_서비스를_멈췄다가_다시_켠다(database_url, scratch_db, tmp_path):
+    """
+    컨테이너 모드에서는 쓰기가 겹치지 않게 수집기·백엔드를 멈춥니다. 예전에는
+    `docker compose ps … | grep -q`를 pipefail 아래에서 써서, grep이 먼저 찾고 끝나면 docker가
+    SIGPIPE로 죽어 "돌고 있지 않음"으로 판정 — 수집기를 멈추지 않고 복원했습니다.
+    가짜 docker가 첫 줄을 쓴 뒤 잠시 쉬었다가 나머지를 써서 그 상황을 만듭니다.
+    """
+    name, db_url = scratch_db
+    env = _env(database_url, name, tmp_path)
+    _set(db_url, "INSERT INTO snapshots(name, payload, collected_at) VALUES ('macro', '{\"v\":\"1\"}', now())")
+    assert _run(BACKUP, env=env).returncode == 0
+    backup_file = _backups(tmp_path)[0]
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "docker.log"
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(
+        "#!/bin/bash\n"
+        'echo "$*" >> "$DOCKER_LOG"\n'
+        'if [ "$1 $2" = "compose ps" ]; then echo collector; sleep 0.3; echo backend; echo frontend; fi\n',
+        encoding="utf-8")
+    fake_docker.chmod(0o755)
+    passthrough = tmp_path / "passthrough.sh"          # 컨테이너 모드로 돌리되 psql·pg_dump는 바로 실행
+    passthrough.write_text('#!/bin/bash\nexec "$@"\n', encoding="utf-8")
+    passthrough.chmod(0o755)
+    env.update({
+        "DB_EXEC": str(passthrough),
+        "RESTORE_STOP_SERVICES": "collector backend",
+        "PATH": f"{bin_dir}:{env['PATH']}",
+        "DOCKER_LOG": str(log),
+    })
+
+    result = _run(RESTORE, str(backup_file), "--yes", env=env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert "compose stop collector backend" in calls
+    assert "compose start collector backend" in calls

@@ -47,10 +47,13 @@ dump_to "$safety" || die "복원 전 백업에 실패해 복원하지 않았습�
 echo "    → $safety"
 
 # 컨테이너 모드에서만: 돌고 있던 서비스를 멈췄다가 끝나면 다시 켭니다.
+# 목록은 한 번 받아 둔 뒤 비교합니다. `docker compose ps … | grep -q`는 pipefail 아래에서 grep이 먼저
+# 찾고 끝나면 docker가 SIGPIPE로 죽어 "돌고 있지 않음"으로 판정되고, 그 서비스를 멈추지 않았습니다.
 stopped=""
 if [ -n "$DB_EXEC" ]; then
+    running="$(docker compose ps --status running --services 2>/dev/null || true)"
     for service in ${RESTORE_STOP_SERVICES-collector backend}; do
-        if docker compose ps --status running --services 2>/dev/null | grep -qx "$service"; then
+        if grep -qx "$service" <<< "$running"; then
             stopped="$stopped $service"
         fi
     done
