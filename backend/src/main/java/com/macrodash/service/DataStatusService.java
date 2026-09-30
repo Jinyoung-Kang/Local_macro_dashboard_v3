@@ -2,7 +2,7 @@ package com.macrodash.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.macrodash.analytics.Json;
+import com.macrodash.support.Json;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.StoreReader;

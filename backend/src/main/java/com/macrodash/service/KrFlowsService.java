@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.Kst;
 import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.InvestorFlows;
-import com.macrodash.analytics.Json;
+import com.macrodash.support.Json;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreReader;

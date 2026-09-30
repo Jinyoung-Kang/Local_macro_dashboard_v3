@@ -1,7 +1,7 @@
 package com.macrodash.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.macrodash.analytics.Json;
+import com.macrodash.support.Json;
 import com.macrodash.analytics.SupplyConsensus;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;

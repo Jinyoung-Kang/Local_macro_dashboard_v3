@@ -3,7 +3,7 @@ package com.macrodash.service;
 import com.macrodash.Kst;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.macrodash.analytics.GuruStyle;
-import com.macrodash.analytics.Json;
+import com.macrodash.support.Json;
 import com.macrodash.analytics.PortfolioRisk;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;

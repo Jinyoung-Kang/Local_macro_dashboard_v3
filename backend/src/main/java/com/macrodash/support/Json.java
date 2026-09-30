@@ -1,4 +1,4 @@
-package com.macrodash.analytics;
+package com.macrodash.support;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
