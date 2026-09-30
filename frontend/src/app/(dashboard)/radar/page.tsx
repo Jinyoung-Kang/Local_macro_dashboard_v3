@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { HorizontalBars } from "@/components/charts";
+import { knownBars } from "@/lib/chartData";
 import {
   Banner,
   Button,
@@ -64,10 +65,12 @@ export default function RadarPage() {
 
   // 사용자가 "상위 30개"를 골랐는데 차트만 15개를 그리면, 표와 개수가 어긋나
   // 무엇이 빠졌는지 알 수 없습니다. 고른 만큼 그립니다(차트 높이가 늘어납니다).
-  const chartData = (data?.rows ?? []).map((row) => ({
-    name: row.name,
-    value: row.netAmountEok ?? 0,
-  }));
+  // 금액을 모르는 종목은 0억 막대로 그리지 않고 빼며, 뺀 개수를 차트 아래에 적습니다.
+  const chart = knownBars(
+    data?.rows ?? [],
+    (row) => row.name,
+    (row) => row.netAmountEok,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -191,12 +194,13 @@ export default function RadarPage() {
             }
           >
             <HorizontalBars
-              data={chartData}
+              data={chart.bars}
               unit="억"
               digits={0}
               valueName={`${investor} ${tradeType} 금액`}
-              height={Math.max(260, chartData.length * 26)}
+              height={Math.max(260, chart.bars.length * 26)}
             />
+            <OmittedNote count={chart.omitted} />
           </Card>
 
           <Card title="📋 상세 목록" source={data.source ?? undefined}>
@@ -285,6 +289,16 @@ const SOURCE_LABELS: Record<string, string> = {
   pykrx: "PyKrx",
 };
 const SOURCE_ORDER = ["kis", "daum", "naver", "ls", "toss", "pykrx"];
+
+/** 금액을 몰라 차트에서 뺀 종목 수. 표에는 그대로 "—"로 남아 있습니다. */
+function OmittedNote({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <p className="mt-2 text-xs text-muted">
+      금액을 모르는 {count}개 종목은 차트에서 뺐습니다(아래 표에 &quot;{EMPTY}&quot;로 표시).
+    </p>
+  );
+}
 
 function DiagnosticsPanel() {
   const { data, loading, reload } = useApi<DiagnosticsResponse>("/api/radar/diagnostics");
@@ -467,6 +481,11 @@ function ConsensusPanel({
 
   const buying = tradeType === "순매수";
   const rows = data?.rows ?? [];
+  const top = knownBars(
+    rows.slice(0, 15),
+    (row) => row.name,
+    (row) => row.totalEok,
+  );
 
   return (
     <Card
@@ -521,15 +540,13 @@ function ConsensusPanel({
           </div>
 
           <HorizontalBars
-            data={rows.slice(0, 15).map((row) => ({
-              name: row.name,
-              value: row.totalEok ?? 0,
-            }))}
+            data={top.bars}
             unit="억"
             digits={0}
             valueName={`외국인+기관 합산 ${tradeType} 금액`}
-            height={Math.max(260, Math.min(rows.length, 15) * 26)}
+            height={Math.max(260, top.bars.length * 26)}
           />
+          <OmittedNote count={top.omitted} />
 
           <div className="mt-4">
             <Table
