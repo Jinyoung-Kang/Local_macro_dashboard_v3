@@ -37,8 +37,8 @@ Next.js ──REST──▶ Spring Boot ──JDBC──▶ PostgreSQL ◀──
 
 ```bash
 git clone https://github.com/Jinyoung-Kang/Local_macro_dashboard_v3.git \
-  ~/Projects/Local-macro-dashboard-v3
-cd ~/Projects/Local-macro-dashboard-v3
+  ~/Projects/Local_macro_dashboard_v3
+cd ~/Projects/Local_macro_dashboard_v3
 
 make setup     # .env 생성 + 세션 서명 키 자동 생성
 make up        # 전체 기동 (최초 빌드 5~10분)
