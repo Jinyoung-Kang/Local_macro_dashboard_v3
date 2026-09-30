@@ -1,6 +1,6 @@
 # 로컬 설치·실행 가이드 (macOS)
 
-이 문서는 맥에서 `~/Projects/Local-macro-dashboard-v2`에 프로젝트를 두고 쓰는
+이 문서는 맥에서 `~/Projects/Local-macro-dashboard-v3`에 프로젝트를 두고 쓰는
 것을 기준으로 씁니다. 다른 경로를 쓰면 아래 명령의 경로만 바꾸면 됩니다.
 
 > 컨테이너 네 개(화면·API·수집기·DB)로 이뤄져 있어 **Docker로 묶어 한 줄로
@@ -12,9 +12,9 @@
 
 ```bash
 # 저장
-git clone https://github.com/Jinyoung-Kang/Local_macro_dashboard_v2.git \
-  ~/Projects/Local-macro-dashboard-v2
-cd ~/Projects/Local-macro-dashboard-v2
+git clone https://github.com/Jinyoung-Kang/Local_macro_dashboard_v3.git \
+  ~/Projects/Local-macro-dashboard-v3
+cd ~/Projects/Local-macro-dashboard-v3
 
 # 준비 (.env 생성 · 키/포트 확인)
 make setup
@@ -26,10 +26,16 @@ open http://localhost:3000
 ```
 
 > **저장소 이름과 폴더 이름이 다릅니다.** GitHub 저장소는 밑줄
-> (`Local_macro_dashboard_v2`), 로컬 폴더는 하이픈
-> (`Local-macro-dashboard-v2`)입니다. 그래서 `git clone` 뒤에 **폴더 경로를
-> 반드시 직접 지정**해야 합니다. 생략하면 `Local_macro_dashboard_v2` 폴더가
+> (`Local_macro_dashboard_v3`), 로컬 폴더는 하이픈
+> (`Local-macro-dashboard-v3`)입니다. 그래서 `git clone` 뒤에 **폴더 경로를
+> 반드시 직접 지정**해야 합니다. 생략하면 `Local_macro_dashboard_v3` 폴더가
 > 만들어집니다.
+
+> **예전 `Local-macro-dashboard-v2` 폴더를 쓰던 경우**에는 새로 clone하지 말고
+> 원격 주소만 바꾸세요.
+> `git remote set-url origin https://github.com/Jinyoung-Kang/Local_macro_dashboard_v3.git`
+> Docker는 폴더 이름으로 DB 볼륨을 구분하므로, 새 폴더에 clone하면 빈 DB로
+> 시작합니다(쌓아 둔 수급 이력은 옛 폴더의 볼륨에 남아 있음).
 
 ---
 
@@ -72,17 +78,17 @@ Python은 **3.11 또는 3.12**를 권합니다. 3.13에서는 `pandas`/`pykrx` �
 
 ```bash
 mkdir -p ~/Projects
-git clone https://github.com/Jinyoung-Kang/Local_macro_dashboard_v2.git \
-  ~/Projects/Local-macro-dashboard-v2
+git clone https://github.com/Jinyoung-Kang/Local_macro_dashboard_v3.git \
+  ~/Projects/Local-macro-dashboard-v3
 
-cd ~/Projects/Local-macro-dashboard-v2
+cd ~/Projects/Local-macro-dashboard-v3
 ls          # README.md · docker-compose.yml · Makefile · backend · collector · frontend
 ```
 
 이미 받아 둔 폴더를 최신으로 맞출 때:
 
 ```bash
-cd ~/Projects/Local-macro-dashboard-v2
+cd ~/Projects/Local-macro-dashboard-v3
 make update      # git pull 대신 — 아래 이유를 꼭 읽어 주세요
 make up          # 받은 코드로 다시 빌드·기동
 ```
@@ -260,21 +266,21 @@ make backup             # DB 백업 → backups/
 >
 > 이 절은 **코드를 고치면서 핫 리로드로 보고 싶을 때**만 쓰는 경로입니다.
 
-터미널 4개를 씁니다. 아래 명령은 모두 **저장소 최상위(`~/Projects/Local-macro-dashboard-v2`)
+터미널 4개를 씁니다. 아래 명령은 모두 **저장소 최상위(`~/Projects/Local-macro-dashboard-v3`)
 에서 새 터미널을 연 상태**를 가정합니다. 이미 하위 폴더에 들어가 있다면
-`cd ~/Projects/Local-macro-dashboard-v2` 로 먼저 돌아가세요
+`cd ~/Projects/Local-macro-dashboard-v3` 로 먼저 돌아가세요
 (`cd frontend`를 프런트 폴더 안에서 또 치면 `no such file or directory`가 납니다).
 
 먼저 DB만 컨테이너로 띄우면 `psql`·`brew services`가 필요 없습니다.
 
 ```bash
-cd ~/Projects/Local-macro-dashboard-v2
+cd ~/Projects/Local-macro-dashboard-v3
 make infra      # postgres만 기동 (기본 스키마 자동 적용, 이후 버전은 수집기가 기동할 때 적용)
 ```
 
 ```bash
 # --- 터미널 1: 수집기 ---
-cd ~/Projects/Local-macro-dashboard-v2
+cd ~/Projects/Local-macro-dashboard-v3
 
 # 가상환경을 collector/.venv 에 만듭니다. Makefile도 이 경로를 먼저 찾습니다.
 python3.11 -m venv collector/.venv
@@ -290,7 +296,7 @@ make dev-collector      # 내부적으로 collector/.venv/bin/python -m uvicorn 
 
 ```bash
 # --- 터미널 2: 백엔드 (Java 21 필요) ---
-cd ~/Projects/Local-macro-dashboard-v2
+cd ~/Projects/Local-macro-dashboard-v3
 java -version           # 21 이상인지 먼저 확인하세요
 
 DATABASE_URL="jdbc:postgresql://localhost:5432/macrodash" \
@@ -310,7 +316,7 @@ COLLECTOR_URL="http://localhost:8000" \
 
 ```bash
 # --- 터미널 3: 화면 ---
-cd ~/Projects/Local-macro-dashboard-v2
+cd ~/Projects/Local-macro-dashboard-v3
 npm --prefix frontend install
 make dev-frontend
 ```
@@ -335,14 +341,14 @@ Docker 없이 쓸 때, 맥이 켜져 있는 동안 수집기가 계속 돌게 �
 
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/jinyoung/Projects/Local-macro-dashboard-v2/collector/.venv/bin/uvicorn</string>
+    <string>/Users/jinyoung/Projects/Local-macro-dashboard-v3/collector/.venv/bin/uvicorn</string>
     <string>app.main:app</string>
     <string>--host</string><string>127.0.0.1</string>
     <string>--port</string><string>8000</string>
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/jinyoung/Projects/Local-macro-dashboard-v2/collector</string>
+  <string>/Users/jinyoung/Projects/Local-macro-dashboard-v3/collector</string>
 
   <key>EnvironmentVariables</key>
   <dict>
@@ -356,16 +362,16 @@ Docker 없이 쓸 때, 맥이 켜져 있는 동안 수집기가 계속 돌게 �
   <key>KeepAlive</key><true/>
 
   <key>StandardOutPath</key>
-  <string>/Users/jinyoung/Projects/Local-macro-dashboard-v2/collector.log</string>
+  <string>/Users/jinyoung/Projects/Local-macro-dashboard-v3/collector.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/jinyoung/Projects/Local-macro-dashboard-v2/collector.log</string>
+  <string>/Users/jinyoung/Projects/Local-macro-dashboard-v3/collector.log</string>
 </dict>
 </plist>
 ```
 
 ```bash
 launchctl load -w ~/Library/LaunchAgents/com.local.macro-dashboard.collector.plist
-tail -f ~/Projects/Local-macro-dashboard-v2/collector.log
+tail -f ~/Projects/Local-macro-dashboard-v3/collector.log
 
 # 해제
 launchctl unload -w ~/Library/LaunchAgents/com.local.macro-dashboard.collector.plist
@@ -427,7 +433,7 @@ make db-test           # 테스트 전용 DB 준비 (위 명령들이 자동으�
 
 | 증상 | 원인 / 해결 |
 |---|---|
-| `git clone` 후 폴더 이름이 `Local_macro_dashboard_v2` | clone 뒤에 목적지 경로를 지정하지 않았습니다. `mv Local_macro_dashboard_v2 Local-macro-dashboard-v2` |
+| `git clone` 후 폴더 이름이 `Local_macro_dashboard_v3` | clone 뒤에 목적지 경로를 지정하지 않았습니다. `mv Local_macro_dashboard_v3 Local-macro-dashboard-v3` |
 | `Cannot connect to the Docker daemon` | Docker Desktop이 꺼져 있습니다. `open -a Docker` 후 30초 |
 | 포트 5432 충돌 | 맥에 PostgreSQL이 이미 돌고 있습니다. `.env`의 `DATABASE_PORT=5433`으로 바꾸고 `make up` |
 | 포트 3000 충돌 | 다른 개발 서버가 씁니다. `.env`에서 `FRONTEND_PORT=3001`. `FRONTEND_ORIGIN`을 `.env`에 직접 적어 두셨다면 `http://localhost:3001`로 함께 고치거나 그 줄을 지우세요(지우면 포트를 따라감) |
@@ -476,6 +482,6 @@ make restore F=backups/macrodash-….sql   # 복원 (DB 전체를 백업 시점�
   도중에 실패하거나 입력이 끊겨도(창을 닫음·Ctrl-C) 전부 되돌려 DB는 복원 전과 같습니다. 잘못 복원했다면
   `make restore F=backups/pre-restore-….sql`로 되돌리면 됩니다.
 
-Time Machine을 쓴다면 `~/Projects/Local-macro-dashboard-v2/backups`가 백업
+Time Machine을 쓴다면 `~/Projects/Local-macro-dashboard-v3/backups`가 백업
 대상에 포함되는지 확인해 두세요. Docker 볼륨 자체(`postgres-data`)는 Time
 Machine이 온전히 담지 못할 수 있어, SQL 덤프를 남기는 편이 안전합니다.

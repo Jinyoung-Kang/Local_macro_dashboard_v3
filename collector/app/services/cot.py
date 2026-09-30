@@ -130,7 +130,7 @@ def _get_with_retry(params: dict, max_attempts: int = 3):
                 timeout=(5, 30),
                 headers={
                     "User-Agent": (
-                        "local-macro-dashboard-v2/2.0 "
+                        "local-macro-dashboard-v3/3.0 "
                         "(data research contact: admin@example.com)"
                     )
                 },

@@ -30,7 +30,7 @@ fail()  { printf '  %s✗%s %s\n' "$RED" "$RESET" "$1"; }
 note()  { printf '    %s%s%s\n' "$DIM" "$1" "$RESET"; }
 title() { printf '\n%s%s%s\n' "$BOLD" "$1" "$RESET"; }
 
-printf '%s\n' "${BOLD}Local Macro Dashboard v2 — 준비${RESET}"
+printf '%s\n' "${BOLD}Local Macro Dashboard v3 — 준비${RESET}"
 printf '%s\n' "${DIM}경로: $REPO_ROOT${RESET}"
 
 # ==============================================================================

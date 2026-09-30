@@ -140,7 +140,7 @@ export function Sidebar({ readMode }: { readMode?: string }) {
           값이 없으면(직접 docker compose로 띄운 경우) 표시하지 않습니다.
         */}
         <p className="text-[11px] text-muted">
-          © 2026 Local Macro Dashboard v2
+          © 2026 Local Macro Dashboard v3
           {APP_VERSION && (
             <span className="ml-1 tabular-nums" title="실행 중인 코드의 브랜치@커밋">
               · {APP_VERSION}

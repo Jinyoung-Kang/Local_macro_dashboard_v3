@@ -49,7 +49,7 @@ export APP_VERSION := $(if $(GIT_BRANCH),$(GIT_BRANCH)@$(GIT_COMMIT),)
 
 help: ## 사용 가능한 명령 목록
 	@echo ""
-	@echo "Local Macro Dashboard v2"
+	@echo "Local Macro Dashboard v3"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
