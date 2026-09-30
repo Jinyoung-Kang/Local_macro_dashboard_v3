@@ -473,7 +473,7 @@ make restore F=backups/macrodash-….sql   # 복원 (DB 전체를 백업 시점�
   4. 수집기·백엔드를 잠시 멈추고 **한 트랜잭션**으로 교체합니다.
   5. 멈췄던 서비스를 다시 켭니다.
 
-  도중에 실패하면 전부 되돌려 DB는 복원 전과 같습니다. 잘못 복원했다면
+  도중에 실패하거나 입력이 끊겨도(창을 닫음·Ctrl-C) 전부 되돌려 DB는 복원 전과 같습니다. 잘못 복원했다면
   `make restore F=backups/pre-restore-….sql`로 되돌리면 됩니다.
 
 Time Machine을 쓴다면 `~/Projects/Local-macro-dashboard-v2/backups`가 백업

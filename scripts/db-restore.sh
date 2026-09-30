@@ -8,7 +8,8 @@
 #   2. 확인을 받습니다(--yes가 없으면 터미널에서 y를 눌러야 함).
 #   3. 지금 DB를 backups/pre-restore-….sql로 먼저 백업합니다 — 잘못 복원해도 되돌릴 수 있게.
 #   4. 수집기·백엔드를 잠시 멈추고(쓰기 경합 방지), **한 트랜잭션 안에서** public 스키마를 비운 뒤
-#      백업을 적재합니다. 도중에 한 문장이라도 실패하면 전부 되돌려 DB는 3번 시점 그대로입니다.
+#      백업을 적재합니다. 도중에 한 문장이라도 실패하거나 입력이 끊기면(창을 닫음·Ctrl-C) 전부
+#      되돌려 DB는 3번 시점 그대로입니다.
 #   5. 멈췄던 서비스를 다시 켭니다(실패해도).
 #
 # 예전 `make restore`는 데이터가 있는 DB에 덤프를 그대로 부었습니다. 덤프에는 기존 표를 지우는
@@ -69,15 +70,26 @@ if [ -n "$stopped" ]; then
 fi
 
 echo "2/3 복원합니다 (한 트랜잭션 — 실패하면 전부 되돌립니다)…"
+# 트랜잭션은 psql의 --single-transaction이 아니라 입력 안의 BEGIN … COMMIT으로 엽니다.
+# --single-transaction은 입력이 오류 없이 끝나기만 하면(EOF) COMMIT을 보내서, 복원 중에 창을 닫거나
+# Ctrl-C를 누르거나 파일 읽기가 끊기면 "스키마를 지우고 일부만 적재한" 상태가 확정됐습니다.
+# 이제 COMMIT은 덤프를 끝까지 보낸 뒤에만 입력에 들어 있고, 그 전에 끊기면 연결이 닫히면서
+# 서버가 되돌립니다. 성공 여부는 COMMIT 뒤에 찍는 표시로 판단합니다(끊겨도 psql은 0으로 끝날 수 있음).
+#
 # 덤프 자체가 `SET lock_timeout = 0`을 넣으므로, 잠금 대기 한도는 스키마를 지우는 문장 앞에 둡니다.
 # 새로 만드는 public 스키마의 소유자·권한은 PostgreSQL 15+ 기본값과 같게 맞춥니다.
-if ! {
+committed_marker="__restore_committed__"
+output="$({
     printf "SET lock_timeout = '30s';\n"
+    printf "BEGIN;\n"
     printf "DROP SCHEMA public CASCADE;\n"
     printf "CREATE SCHEMA public AUTHORIZATION pg_database_owner;\n"
     printf "GRANT USAGE ON SCHEMA public TO PUBLIC;\n"
     cat "$file"
-} | run_psql -q -v ON_ERROR_STOP=1 --single-transaction -f - >/dev/null; then
+    printf "COMMIT;\n"
+    printf '\\echo %s\n' "$committed_marker"
+} | run_psql -q -v ON_ERROR_STOP=1 -f -)" || true
+if [ "${output##*$'\n'}" != "$committed_marker" ]; then
     die "복원에 실패해 전부 되돌렸습니다. DB는 복원 전과 같습니다(복원 전 백업: $safety)."
 fi
 

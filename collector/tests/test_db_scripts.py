@@ -11,6 +11,7 @@ DB 백업·복원 스크립트(scripts/db-backup.sh · scripts/db-restore.sh).
   - 복원하면 DB가 **백업 시점과 같아진다** (값·행 수 모두)
   - 복원 전에 지금 DB를 먼저 백업해 둔다
   - 복원 도중 실패하면 **아무것도 바뀌지 않는다** (한 트랜잭션)
+  - 입력이 중간에 끊겨도(창을 닫음·Ctrl-C·읽기 오류) 반쯤 복원된 상태를 확정하지 않는다
   - 끝까지 기록되지 않은 백업·확인 없는 실행은 거부한다
   - 백업이 실패하면 파일을 남기지 않고 0이 아닌 코드로 끝난다
 
@@ -183,3 +184,37 @@ def test_확인_없이는_복원하지_않는다(database_url, scratch_db, tmp_p
 
     assert result.returncode != 0
     assert _snapshot_values(db_url) == {"macro": "changed"}
+
+
+def test_입력이_중간에_끊기면_반쯤_복원된_상태를_확정하지_않는다(database_url, scratch_db, tmp_path):
+    """
+    psql은 --single-transaction이어도 입력이 오류 없이 끝나면(EOF) COMMIT을 보냅니다. 복원 중에
+    터미널을 닫거나 Ctrl-C를 누르면 컨테이너 안의 psql은 입력이 끊긴 채로 남아, 스키마를 지우고
+    일부만 적재한 상태가 확정될 수 있었습니다. 입력을 COPY 한가운데서 끊어 그 상황을 흉내냅니다.
+    """
+    name, db_url = scratch_db
+    env = _env(database_url, name, tmp_path)
+    _set(db_url, "INSERT INTO snapshots(name, payload, collected_at) VALUES "
+                 "('a', '{\"v\":\"1\"}', now()), ('b', '{\"v\":\"2\"}', now())")
+    assert _run(BACKUP, env=env).returncode == 0
+    backup_file = _backups(tmp_path)[0]
+    _set(db_url, "DELETE FROM snapshots; INSERT INTO snapshots(name, payload, collected_at) "
+                 "VALUES ('macro', '{\"v\":\"current\"}', now())")
+
+    # psql에만 표준입력을 "snapshots의 첫 데이터 줄"까지 넘기고 끊습니다(pg_dump는 그대로).
+    wrapper = tmp_path / "cut-stdin.sh"
+    wrapper.write_text(
+        "#!/bin/bash\n"
+        'if [ "$1" = "psql" ]; then\n'
+        "  awk '{print} /^COPY public\\.snapshots /{getline; print; exit}' | \"$@\"\n"
+        "else\n"
+        '  exec "$@"\n'
+        "fi\n", encoding="utf-8")
+    wrapper.chmod(0o755)
+    env["DB_EXEC"] = str(wrapper)
+
+    result = _run(RESTORE, str(backup_file), "--yes", env=env)
+
+    assert result.returncode != 0
+    assert "복원했습니다" not in result.stdout
+    assert _snapshot_values(db_url) == {"macro": "current"}   # 스키마를 지운 것까지 되돌아갔습니다
