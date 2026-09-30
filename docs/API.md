@@ -212,7 +212,7 @@
 | 🔒 `GET /live/ticker/{symbol}?period=` | 티커 시계열 즉시 수집 |
 | 🔒 `GET /live/daum-intraday?minutes=30` | 장중 수급 가속도 |
 | 🔒 `GET /live/radar-history`, `/live/radar-history-dates` | 누적 이력 |
-| 🔒 `GET /verify/readings?market=&investor=&tradeType=` | 검증용 원자료 (판정은 백엔드) |
+| 🔒 `GET /verify/readings?market=&investor=&tradeType=` | 검증용 원자료 (판정은 백엔드, 읽는 코드는 `app/verification.py`) |
 | 🔒 `GET /diagnostics/connections` | KIS·LS·Daum·Naver·PyKrx 진단 |
 | 🔒 `GET /diagnostics/public-apis` | 특일정보·주식시세·DART 진단 (API당 1회) |
 | 🔒 `GET /diagnostics/toss`, `/toss/*` | 토스 진단·조회 |
