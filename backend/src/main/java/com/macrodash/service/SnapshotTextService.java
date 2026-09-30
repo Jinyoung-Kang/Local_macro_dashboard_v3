@@ -455,11 +455,13 @@ public class SnapshotTextService {
             if (rows instanceof JsonNode node && node.isArray()) {
                 int shown = 0;
                 for (JsonNode row : node) {
-                    lines.add("- %s (%s): %s억원 · 현재가 %s (%s%%)".formatted(
+                    // path(..).asDouble()은 값이 없으면 0.0이라 "0.00억원"이 사실처럼 적혔습니다.
+                    // null을 그대로 넘겨 format()이 "데이터 없음"으로 적게 합니다(단위도 함께).
+                    lines.add("- %s (%s): %s · 현재가 %s (%s)".formatted(
                             Json.asText(row, "name"), Json.asText(row, "code"),
-                            format(row.path("netAmountEok").asDouble(), ""),
-                            format(row.path("price").asDouble(), ""),
-                            format(row.path("changePct").asDouble(), "")));
+                            format(Json.asDouble(row, "netAmountEok"), "억원"),
+                            format(Json.asDouble(row, "price"), ""),
+                            format(Json.asDouble(row, "changePct"), "%")));
                     if (++shown >= 10) {
                         break;
                     }
