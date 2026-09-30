@@ -1,7 +1,7 @@
 package com.macrodash.feature.status;
 
 import com.macrodash.collector.CollectorClient;
-import com.macrodash.store.StoreReader;
+import com.macrodash.read.StoreReader;
 import com.macrodash.store.StoreRepository;
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.UpstreamUnavailableException;

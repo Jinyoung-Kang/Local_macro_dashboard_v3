@@ -1,7 +1,10 @@
-package com.macrodash.store;
+package com.macrodash.read;
 
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;
+import com.macrodash.store.Datasets;
+import com.macrodash.store.Snapshot;
+import com.macrodash.store.StoreRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;

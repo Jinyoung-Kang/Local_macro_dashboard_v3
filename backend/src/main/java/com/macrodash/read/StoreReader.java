@@ -1,7 +1,10 @@
-package com.macrodash.store;
+package com.macrodash.read;
 
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;
+import com.macrodash.store.Datasets;
+import com.macrodash.store.Snapshot;
+import com.macrodash.store.StoreRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

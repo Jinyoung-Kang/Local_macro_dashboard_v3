@@ -2,12 +2,12 @@ package com.macrodash.feature.insight;
 
 import com.macrodash.Kst;
 import com.macrodash.analytics.Correlation;
-import com.macrodash.support.Json;
 import com.macrodash.analytics.Regime;
 import com.macrodash.analytics.SeriesMath;
+import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import com.macrodash.store.StoreReader;
+import com.macrodash.support.Json;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 

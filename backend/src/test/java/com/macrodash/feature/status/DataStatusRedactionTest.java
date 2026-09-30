@@ -2,7 +2,7 @@ package com.macrodash.feature.status;
 
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;
-import com.macrodash.store.StoreReader;
+import com.macrodash.read.StoreReader;
 import com.macrodash.store.StoreRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

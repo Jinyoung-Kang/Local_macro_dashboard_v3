@@ -111,7 +111,8 @@ feature/<기능>/  기능 하나의 컨트롤러(HTTP 경계) + 서비스(저장
                  화면용 응답으로 조립). auth · macro · institution · insight · positioning ·
                  publicdata · status · ai
 analytics/       스프링도 DB도 모릅니다. 입력은 숫자와 날짜, 출력도 숫자입니다.
-store/           저장소 접근 · 데이터셋 이름 · 신선도
+read/            읽기 정책(StoreReader) — 저장본이 오래됐으면 읽기 모드에 따라 수집을 요청하고 다시 읽음
+store/           저장소 접근 · 데이터셋 이름 · 신선도 (외부 호출 없음)
 collector/       수집기 호출
 support/         공통 도구(저장본 JSON 읽기, 파라미터 해석, 비밀값 가림, 공통 예외)
 config/ · web/   설정 · 인증 필터 · 공통 오류 응답

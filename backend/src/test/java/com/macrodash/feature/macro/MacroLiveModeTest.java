@@ -2,9 +2,9 @@ package com.macrodash.feature.macro;
 
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;
+import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import com.macrodash.store.StoreReader;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
