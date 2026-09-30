@@ -26,6 +26,7 @@ import type {
 } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
+import { topPairs } from "@/lib/transforms";
 
 /**
  * 🧬 기관 13F 스타일·위험 (옛 이름: 구루 포트폴리오 분석, 주소 /guru → /style).
@@ -173,19 +174,7 @@ function SimilarityCard() {
 
   // 짝 순위는 행렬에서 직접 만듭니다. 서버의 topPairs는 겹침 비중 순이라, 코사인을
   // 고르면 목록과 기준이 어긋납니다. 기관 12곳이면 66쌍이라 브라우저에서 충분합니다.
-  const pairs = useMemo(() => {
-    if (!matrix) return [];
-    const out: { left: string; right: string; value: number }[] = [];
-    for (let row = 0; row < names.length; row += 1) {
-      for (let col = row + 1; col < names.length; col += 1) {
-        const value = matrix[row]?.[col];
-        if (value !== undefined && value !== null) {
-          out.push({ left: shortName(names[row].name), right: shortName(names[col].name), value });
-        }
-      }
-    }
-    return out.sort((a, b) => b.value - a.value).slice(0, 8);
-  }, [matrix, names]);
+  const pairs = useMemo(() => (matrix ? topPairs(names, matrix, shortName, 8) : []), [matrix, names]);
 
   return (
     <Card

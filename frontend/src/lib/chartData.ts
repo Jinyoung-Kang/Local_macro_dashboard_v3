@@ -27,3 +27,26 @@ export function knownBars<T>(
   }
   return { bars, omitted };
 }
+
+/**
+ * 여러 계열을 날짜로 맞춘 차트 행. 날짜는 합집합이고 오래된 날이 앞입니다.
+ *
+ * 계열마다 거래일이 다릅니다(시장별 휴일). 값이 없는 날은 그 계열 칸을 **비워 둡니다** —
+ * 배열 순서로 짝지으면 날짜가 어긋나고, 없는 날을 채우면 실제로는 없던 흐름이 생깁니다.
+ *
+ * @param series 계열마다 차트 키와 (날짜, 값) 목록
+ * @returns `{ date, [key]: value }` 행 목록 (값이 null이면 null 그대로)
+ */
+export function mergeByDate(
+  series: readonly { key: string; points: readonly { date: string; value: number | null }[] }[],
+): Record<string, string | number | null>[] {
+  const byDate = new Map<string, Record<string, string | number | null>>();
+  series.forEach(({ key, points }) => {
+    points.forEach((point) => {
+      const row = byDate.get(point.date) ?? { date: point.date };
+      row[key] = point.value;
+      byDate.set(point.date, row);
+    });
+  });
+  return [...byDate.values()].sort((left, right) => String(left.date).localeCompare(String(right.date)));
+}
