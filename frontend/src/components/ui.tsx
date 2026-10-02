@@ -49,6 +49,7 @@ export function Metric({
   value,
   delta,
   deltaText,
+  deltaDigits,
   caption,
   note,
   source,
@@ -58,6 +59,8 @@ export function Metric({
   value: ReactNode;
   delta?: number | null;
   deltaText?: string;
+  /** deltaText에 찍는 소수 자릿수 — 색도 같은 자릿수로 판단합니다("0.00인데 파란색" 방지). */
+  deltaDigits?: number;
   caption?: ReactNode;
   note?: ReactNode;
   /** 이 지표 하나의 출처 (카드 전체 출처와 다를 때) */
@@ -71,7 +74,7 @@ export function Metric({
         {value}
       </div>
       {(deltaText || delta !== undefined) && (
-        <div className={`mt-1 text-xs tabular-nums ${deltaColor(delta)}`}>
+        <div className={`mt-1 text-xs tabular-nums ${deltaColor(delta, deltaDigits)}`}>
           {deltaText ?? EMPTY}
         </div>
       )}

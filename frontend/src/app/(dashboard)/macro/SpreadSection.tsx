@@ -63,6 +63,7 @@ export function SpreadSection({
               }
               delta={change}
               deltaText={change === null ? EMPTY : `${formatSigned(change, 3)}%p`}
+              deltaDigits={3}
               caption={
                 allPoints.length > 0
                   ? `기준일 ${allPoints[allPoints.length - 1].date}`

@@ -187,6 +187,7 @@ export default function CotPage() {
                 value={formatSigned(detail.data.summary?.ncNet ?? null, 0)}
                 delta={detail.data.summary?.change1w ?? null}
                 deltaText={`1주 ${formatSigned(detail.data.summary?.change1w ?? null, 0)}`}
+                deltaDigits={0}
                 caption={`기준일 ${detail.data.summary?.date ?? EMPTY}`}
               />
               <Metric

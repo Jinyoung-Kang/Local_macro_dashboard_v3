@@ -77,6 +77,7 @@ export function AdvancedSection({
                 ? EMPTY
                 : formatSigned(entry.delta, entry.digits)
             }
+            deltaDigits={entry.digits}
             tone={entry.available ? statusColor(entry.color) : "text-muted"}
             caption={
               entry.available ? (
