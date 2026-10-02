@@ -307,6 +307,7 @@ export function LineSeries({
         />
         {zeroLine && <ReferenceLine y={0} stroke="#8B949E" strokeWidth={1} />}
         <Area
+          isAnimationActive={false}
           type="monotone"
           dataKey="value"
           stroke={color}
@@ -413,6 +414,7 @@ export function MultiLineSeries({
         {zeroLine && <ReferenceLine yAxisId="left" y={0} stroke="#8B949E" strokeWidth={1} />}
         {series.map((entry) => (
           <Line
+            isAnimationActive={false}
             key={entry.key}
             yAxisId={entry.axis ?? "left"}
             type="monotone"
@@ -543,7 +545,7 @@ export function SignedBars({
           formatter={(value: number) => [`${formatNumber(value, 0)}${unit}`, valueName]}
         />
         <ReferenceLine y={0} stroke="#8B949E" />
-        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+        <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
           {data.map((entry) => (
             <Cell key={entry.name} fill={entry.color ?? (entry.value >= 0 ? "#F85149" : "#4493F8")} />
           ))}
