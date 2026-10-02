@@ -1,9 +1,11 @@
 package com.macrodash.analytics;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 13F 분기 대비 액션 분류 — 순수 계산.
@@ -50,10 +52,10 @@ public final class HoldingsDiff {
      * @return 최신 분기 항목마다 한 줄 + 직전 분기에만 있던 항목의 전량 매도 행. 정렬하지 않습니다
      */
     public static List<Change> compare(List<Holding> current, List<Holding> previous) {
-        Map<String, Holding> previousByName = new LinkedHashMap<>();
+        Map<String, Holding> previousByKey = new LinkedHashMap<>();
         if (previous != null) {
             for (Holding holding : previous) {
-                previousByName.put(holding.name(), holding);
+                previousByKey.put(key(holding), holding);
             }
         }
 
@@ -63,7 +65,7 @@ public final class HoldingsDiff {
                 rows.add(new Change(holding, NO_PREVIOUS, null, null));
                 continue;
             }
-            Holding before = previousByName.get(holding.name());
+            Holding before = previousByKey.get(key(holding));
             Double prevWeight = before == null ? Double.valueOf(0.0) : before.weight();
             Double prevShares = before == null ? Double.valueOf(0.0) : before.shares();
             Double weightDiff = subtract(holding.weight(), prevWeight);
@@ -77,12 +79,12 @@ public final class HoldingsDiff {
             rows.add(new Change(holding, action, weightDiff, sharesDiff));
         }
 
-        // 직전 분기에 있었는데 이번에 사라진 종목 = 전량 매도
+        // 직전 분기에 있었는데 이번에 사라진 항목 = 전량 매도
         if (previous != null) {
-            java.util.Set<String> currentNames = new java.util.HashSet<>();
-            current.forEach(h -> currentNames.add(h.name()));
-            for (Holding gone : previousByName.values()) {
-                if (currentNames.contains(gone.name())) {
+            Set<String> currentKeys = new HashSet<>();
+            current.forEach(h -> currentKeys.add(key(h)));
+            for (Holding gone : previousByKey.values()) {
+                if (currentKeys.contains(key(gone))) {
                     continue;
                 }
                 Holding closed = new Holding(gone.name(), gone.cusip(), gone.cls(), 0.0, 0.0, 0.0);
@@ -90,6 +92,22 @@ public final class HoldingsDiff {
             }
         }
         return rows;
+    }
+
+    /**
+     * 분기 사이에 같은 보유분을 잇는 키.
+     *
+     * <p>수집기는 (이름, CUSIP, 종류)로 항목을 나눕니다. 같은 회사가 클래스별로 여러 항목일 수
+     * 있어(ALPHABET A·C주, BERKSHIRE A·B주) 이름으로만 키잉하면 마지막 항목이 이기고, A주가
+     * C주의 직전 값과 비교돼 손대지 않은 보유분에 가짜 '비중 축소/확대'가 붙었습니다. CUSIP이
+     * 가장 정확하고, 없으면 이름+종류입니다.
+     */
+    static String key(Holding holding) {
+        String cusip = holding.cusip() == null ? "" : holding.cusip().trim();
+        if (!cusip.isEmpty()) {
+            return "cusip:" + cusip;
+        }
+        return "name:" + holding.name() + "|" + (holding.cls() == null ? "" : holding.cls().trim());
     }
 
     /** 액션 분류 규칙 (구버전 classify_qoq_action과 동일). */
