@@ -117,6 +117,11 @@ export default function AiReportPage() {
           >
             {busy ? `생성 중… ${elapsed}초 경과` : "🚀 리포트 생성"}
           </Button>
+          {engines.data && !engines.data.enabled && (
+            <span className="text-xs text-muted">
+              사용할 수 있는 AI 엔진이 없습니다 — .env에 NVIDIA·Cloudflare·Cerebras 키 중 하나를 넣고 make up 하세요.
+            </span>
+          )}
           <Button onClick={() => setShowData((value) => !value)}>
             {showData ? "원본 데이터 닫기" : "AI에 전달되는 원본 데이터 보기"}
           </Button>
