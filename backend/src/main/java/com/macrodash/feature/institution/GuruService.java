@@ -38,11 +38,9 @@ public class GuruService {
     public static final List<String> BENCHMARKS = List.of("SPY", "QQQ", "ACWI");
 
     private final StoreReader store;
-    private final Sec13FService sec13f;
 
-    public GuruService(StoreReader store, Sec13FService sec13f) {
+    public GuruService(StoreReader store) {
         this.store = store;
-        this.sec13f = sec13f;
     }
 
     // ==================================================== 🧬 스타일 프로파일
@@ -57,7 +55,7 @@ public class GuruService {
         Map<String, Object> out = new LinkedHashMap<>();
         List<Map<String, Object>> rows = new ArrayList<>();
 
-        for (Map<String, String> institution : Sec13FService.INSTITUTIONS) {
+        for (Map<String, String> institution : Institutions.ALL) {
             String cik = institution.get("cik");
             List<JsonNode> quarters = quartersOf(cik);
             if (quarters.isEmpty()) {
@@ -115,7 +113,7 @@ public class GuruService {
         List<Map<String, String>> institutions = new ArrayList<>();
         List<Map<String, Double>> weights = new ArrayList<>();
 
-        for (Map<String, String> institution : Sec13FService.INSTITUTIONS) {
+        for (Map<String, String> institution : Institutions.ALL) {
             List<JsonNode> quarters = quartersOf(institution.get("cik"));
             if (quarters.isEmpty()) {
                 continue;
@@ -191,7 +189,7 @@ public class GuruService {
         String needle = query.trim().toUpperCase();
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map<String, String> institution : Sec13FService.INSTITUTIONS) {
+        for (Map<String, String> institution : Institutions.ALL) {
             List<JsonNode> quarters = quartersOf(institution.get("cik"));
             if (quarters.isEmpty()) {
                 continue;
@@ -235,14 +233,14 @@ public class GuruService {
      * 전체인 것처럼 보여 주면 안 됩니다.
      */
     public Map<String, Object> risk(String cik, String benchmark, int years) {
-        Sec13FService.requireKnownCik(cik);
+        Institutions.requireKnownCik(cik);
         Map<String, Object> out = new LinkedHashMap<>();
         String benchmarkTicker = BENCHMARKS.contains(benchmark) ? benchmark : "SPY";
         int window = Math.max(1, Math.min(5, years));
         out.put("cik", cik);
         out.put("benchmark", benchmarkTicker);
         out.put("years", window);
-        out.put("institution", sec13f.institutionByCik(cik));
+        out.put("institution", Institutions.byCik(cik));
 
         Optional<Snapshot> priceSnapshot = store.read(
                 Datasets.SNAP_EQUITY_HISTORY, Datasets.MAX_AGE_DAILY, "equity_history");

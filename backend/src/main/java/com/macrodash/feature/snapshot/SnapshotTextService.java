@@ -1,6 +1,7 @@
 package com.macrodash.feature.snapshot;
 
 import com.macrodash.Kst;
+import com.macrodash.feature.institution.Institutions;
 import com.macrodash.feature.institution.Sec13FService;
 import com.macrodash.feature.macro.LiquidityService;
 import com.macrodash.feature.macro.MacroService;
@@ -539,7 +540,7 @@ public class SnapshotTextService {
      * 붙이면 화면의 경고 문구가 따라가지 않기 때문입니다.
      */
     private void appendSec13F(List<String> lines) {
-        List<String> ciks = Sec13FService.INSTITUTIONS.stream()
+        List<String> ciks = Institutions.ALL.stream()
                 .map(entry -> entry.get("cik"))
                 .toList();
         Map<String, Object> consensus = sec13f.consensus(ciks, null, 2, 15);

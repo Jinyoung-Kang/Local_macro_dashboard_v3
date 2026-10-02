@@ -32,7 +32,7 @@ public class InstitutionController {
     // ------------------------------------------------------- 📑 13F
     @GetMapping("/sec13f/institutions")
     public Map<String, Object> institutions() {
-        return sec13f.institutionList();
+        return Institutions.list();
     }
 
     @GetMapping("/sec13f/portfolio")
@@ -96,7 +96,7 @@ public class InstitutionController {
     /** 쉼표로 구분한 CIK 목록. 비어 있으면 추적하는 기관 전체입니다. */
     private static List<String> selectedCiks(String ciks) {
         return (ciks == null || ciks.isBlank())
-                ? Sec13FService.INSTITUTIONS.stream().map(entry -> entry.get("cik")).toList()
+                ? Institutions.ciks()
                 : Arrays.stream(ciks.split(",")).map(String::trim).filter(s -> !s.isBlank()).toList();
     }
 }
