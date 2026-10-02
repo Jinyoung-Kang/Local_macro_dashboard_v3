@@ -7,7 +7,9 @@ import com.macrodash.feature.insight.AnalyticsService;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.Json;
+import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -131,10 +133,22 @@ public class CotService {
      * @param assetName 자산 이름 ({@link #ASSETS}의 키)
      * @param percentile 극단으로 볼 백분위 (예: 95 → 상위 95% 이상, 하위 5% 이하)
      */
+    /** 백분위 구간 상한(주). 10년이면 충분하고, 더 크면 lookback + 8이 int를 넘쳐 표본 검사가 무력화됩니다. */
+    static final int MAX_LOOKBACK_WEEKS = 520;
+
+    /** URL 파라미터를 8~{@value #MAX_LOOKBACK_WEEKS}주로 접습니다. 0 이하는 기본값. */
+    static int effectiveLookback(int lookbackWeeks) {
+        int wanted = lookbackWeeks > 0 ? lookbackWeeks : DEFAULT_LOOKBACK_WEEKS;
+        return Params.clamp(wanted, 8, MAX_LOOKBACK_WEEKS);
+    }
+
     public Map<String, Object> extremes(String assetName, double percentile, int lookbackWeeks) {
+        if (Double.isNaN(percentile) || Double.isInfinite(percentile)) {
+            throw new InvalidRequestException("percentile은 숫자여야 합니다: " + Params.echo(percentile));
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, String> info = ASSETS.get(assetName);
-        int lookback = lookbackWeeks > 0 ? lookbackWeeks : DEFAULT_LOOKBACK_WEEKS;
+        int lookback = effectiveLookback(lookbackWeeks);
         out.put("asset", assetName);
         out.put("percentile", percentile);
         out.put("horizons", List.of(4, 13));
