@@ -1079,7 +1079,7 @@ def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
     try:
         detail = task.run() or ""
     except EmptyResult as exc:
-        status, ok, detail = "empty", False, f"수집 결과 없음: {exc}"
+        status, ok, detail = "empty", False, f"{EMPTY_PREFIX}{exc}"
     except Exception as exc:  # noqa: BLE001
         status, ok = "error", False
         detail = f"{type(exc).__name__}: {exc}"
@@ -1158,7 +1158,7 @@ def run_group(group: str | None = None, task_name: str | None = None) -> dict:
         try:
             store.finish_run(
                 run_id,
-                status="ok" if not failures else ("partial" if ok_count else "fail"),
+                status=_run_status(ok_count, failures),
                 ok_count=ok_count,
                 fail_count=len(failures),
                 detail="; ".join(failures) or None,

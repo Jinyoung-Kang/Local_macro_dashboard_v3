@@ -291,3 +291,15 @@ def test_fred_task_keeps_a_long_snapshot_when_the_response_shrinks(store, monkey
     assert len(store.read_snapshot(catalog.snap_fred_series("T10Y3M")).payload["points"]) == 240
     # 받은 점 자체는 진짜 데이터이므로 누적 시계열에는 들어갑니다.
     assert len(store.read_timeseries(catalog.TS_FRED, "T10Y3M")) == 2
+
+
+def test_run_status_는_태스크_상태에서_유도된다():
+    """실패가 전부 '수집 결과 없음'이면 fail이 아니라 empty — 저장본은 그대로이고 소스가 새 데이터를 안 준 것뿐."""
+    empty = f"fsc_prices: {tasks.EMPTY_PREFIX}새 기준일 데이터가 없습니다"
+    error = "fred_series: HTTPError: 503"
+    assert tasks._run_status(3, []) == "ok"
+    assert tasks._run_status(1, [error]) == "partial"
+    assert tasks._run_status(0, [empty]) == "empty"
+    assert tasks._run_status(0, [empty, empty]) == "empty"
+    assert tasks._run_status(0, [empty, error]) == "fail"
+    assert tasks._run_status(0, [error]) == "fail"
