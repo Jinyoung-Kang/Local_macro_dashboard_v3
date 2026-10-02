@@ -1,0 +1,12 @@
+  242819  /api/macro/overview
+  132894  /api/liquidity?years=3
+  125802  /api/macro/fx?ids=usdkrw,dxy&period=5y&mode=index
+   32652  /api/sec13f/consensus?minHolders=2&topN=40
+   25042  /api/analytics/regime?years=5
+   16214  /api/snapshot/text
+   14407  /api/status
+   12666  /api/krx/futures?days=60
+   10803  /api/radar/ranking
+   10280  /api/sec13f/portfolio?cik=0001608046&quarters=8&topN=30
+    9240  /api/guru/similarity
+    2338  /api/analytics/series

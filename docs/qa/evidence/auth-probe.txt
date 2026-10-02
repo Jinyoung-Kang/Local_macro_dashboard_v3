@@ -1,0 +1,122 @@
+## 1. 쿠키 없이 모든 경로 → 401 (공개 3개 제외)
+  ✓ GET /api/macro/overview                                                401
+  ✓ GET /api/macro/risk                                                    401
+  ✓ GET /api/macro/advanced                                                401
+  ✓ GET /api/macro/usdkrw                                                  401
+  ✓ GET /api/macro/fx                                                      401
+  ✓ GET /api/macro/fx/options                                              401
+  ✓ GET /api/macro/scraped                                                 401
+  ✓ GET /api/macro/spread                                                  401
+  ✓ GET /api/macro/fred/DGS10                                              401
+  ✓ GET /api/macro/ticker                                                  401
+  ✓ GET /api/liquidity                                                     401
+  ✓ GET /api/sector/rotation                                               401
+  ✓ GET /api/sector/momentum                                               401
+  ✓ GET /api/sec13f/institutions                                           401
+  ✓ GET /api/sec13f/portfolio                                              401
+  ✓ GET /api/sec13f/consensus                                              401
+  ✓ GET /api/sec13f/new-buys                                               401
+  ✓ GET /api/guru/profiles                                                 401
+  ✓ GET /api/guru/similarity                                               401
+  ✓ GET /api/guru/holders                                                  401
+  ✓ GET /api/guru/risk                                                     401
+  ✓ GET /api/stock/universe                                                401
+  ✓ GET /api/stock/scorecard                                               401
+  ✓ GET /api/cot/assets                                                    401
+  ✓ GET /api/cot/extremes                                                  401
+  ✓ GET /api/krx/futures                                                   401
+  ✓ GET /api/krx/oi-trend                                                  401
+  ✓ GET /api/krx/investor-trend                                            401
+  ✓ GET /api/krx/intraday                                                  401
+  ✓ GET /api/krx/spot-futures                                              401
+  ✓ GET /api/radar/options                                                 401
+  ✓ GET /api/radar/ranking                                                 401
+  ✓ GET /api/radar/consensus                                               401
+  ✓ GET /api/radar/history                                                 401
+  ✓ GET /api/radar/diagnostics                                             401
+  ✓ GET /api/calendar/kr-holidays                                          401
+  ✓ GET /api/kr/fundamentals                                               401
+  ✓ GET /api/kr/market-totals                                              401
+  ✓ GET /api/kr/investor-flows                                             401
+  ✓ GET /api/kr/stock-flows                                                401
+  ✓ GET /api/status                                                        401
+  ✓ GET /api/status/tasks                                                  401
+  ✓ GET /api/status/history                                                401
+  ✓ POST /api/status/refresh                                               401
+  ✓ POST /api/status/run/fred_series                                       401
+  ✓ POST /api/verification                                                 401
+  ✓ GET /api/status/issues                                                 401
+  ✓ GET /api/status/public-apis                                            401
+  ✓ GET /api/analytics/series                                              401
+  ✓ GET /api/analytics/correlation                                         401
+  ✓ GET /api/analytics/regime                                              401
+  ✓ GET /api/snapshot/text                                                 401
+  ✓ GET /api/ai/engines                                                    401
+  ✓ GET /api/ai/report-types                                               401
+  ✓ GET /api/ai/snapshot-text                                              401
+  ✓ POST /api/ai/report                                                    401
+  ✓ POST /api/ai/test                                                      401
+  ✓ GET /api/ai/toss/diagnostics                                           401
+  ✓ GET /api/ai/toss/exchange-rate                                         401
+  ✓ GET /api/ai/toss/indices                                               401
+  ✓ POST /api/auth/logout                                                  401
+## 2. 경로 변형으로 공개 경로 판정 우회 시도 → 401 (또는 404/400), 200은 실패
+  ✓ GET /api/health/../status                                              401
+  ✓ GET /api/health/..;/status                                             401
+  ✓ GET /api//status                                                       401
+  ✓ GET /API/status                                                        404
+  ✓ GET /api/status/                                                       401
+  ✓ GET /api/status%2f                                                     400
+  ✓ GET /api/health%2F..%2Fstatus                                          400
+  ✓ GET /api/status;x                                                      401
+  ✓ GET /api/status?x=/api/health                                          401
+  ✓ GET //api/status                                                       401
+  ✓ GET /api/./status                                                      401
+  ✓ GET /api/auth/session/../../status                                     401
+## 3. 가짜·조작 쿠키 → 401
+  ✓ session=garbage                                                        401
+  ✓ session=빈 값                                                        401
+  ✓ alg=none JWT                                                           401
+  ✓ 기본 비밀(change-me…)로 서명한 HS256 JWT                     401
+  ✓ Authorization: Bearer 토큰(쿠키 아님)                            401
+## 4. 메서드
+  ✓ HEAD /api/status (쿠키 없음)                                       401
+  ✓ OPTIONS /api/status (preflight 아님)                                 200
+  ✓ PUT /api/status                                                        401
+  ✓ TRACE /api/status                                                      405
+  ✓ POST /api/auth/login 빈 본문                                        401
+  ✓ POST /api/auth/login 5KB 본문                                        413
+  ✓ POST /api/auth/login 깨진 JSON                                       400
+  ✓ POST /api/auth/login 틀린 비밀번호                               401
+## 5. CORS — 다른 출처
+  ✓ evil.example 출처 CORS 불허
+  ✓ LAN 호스트:화면 포트 출처 허용(의도)
+  ✓ 다른 포트 출처 불허
+## 6. 보안 헤더 (/api/health)
+  ✓ x-content-type-options: nosniff
+  ✓ cache-control: no-store
+  ✓ x-frame-options: deny
+  ✓ Server 헤더 없음
+## 7. 화면 응답 헤더 (/login)
+  ! x-content-type-options: nosniff 없음
+  ! x-frame-options: deny 없음
+  ✓ content-security-policy:
+  ✓ referrer-policy:
+  ! 화면 X-Powered-By 노출: X-Powered-By: Next.js
+## 8. 수집기 — 호스트에서 토큰 없이
+  ✗ GET /status 토큰 없음                                              200 (기대 401|403)
+  ✗ GET /tasks 토큰 없음                                               200 (기대 401|403)
+  ✗ GET /catalog 토큰 없음                                             200 (기대 401|403)
+  ✓ GET /live/radar 토큰 없음                                          401
+  ✓ GET /live/ticker/AAPL 토큰 없음                                    401
+  ✗ GET /task-history 토큰 없음                                        200 (기대 401|403)
+  ✓ GET /diagnostics/connections 토큰 없음                             401
+  ✓ POST /collect 토큰 없음                                            401
+  ✓ POST /collect/task/fred_series 토큰 없음                           401
+  ✓ POST /refresh 토큰 없음                                            401
+  ✓ POST /maintenance/purge 토큰 없음                                  401
+  ✓ GET /health 토큰 없음(공개)                                      200
+  ✓ GET /health Host: attacker.example                                     400
+  ✗ GET /status Bearer 틀린 토큰                                       200 (기대 401|403)
+
+실패 5건

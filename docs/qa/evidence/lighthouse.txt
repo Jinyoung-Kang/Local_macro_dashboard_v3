@@ -1,0 +1,12 @@
+페이지        폼팩터 성능 접근성 모범  LCP(ms)  TBT(ms)    CLS
+/login           desktop    100   100   100      408        0  0.000
+/login           mobile     100   100   100     1780       21  0.000
+/macro           desktop     84   100   100     1192      312  0.000
+/macro           mobile      61   100    96     3922     1485  0.005
+/institutions    desktop    100   100   100      740        0  0.024
+/institutions    mobile      95   100    96     2995       56  0.029
+/radar           desktop     81   100   100      802        0  0.392
+/radar           mobile      82   100   100     2939      123  0.234
+/status          desktop     97   100   100      971        0  0.081
+/status          mobile      98   100    96     2325       18  0.005
+EXIT=0
