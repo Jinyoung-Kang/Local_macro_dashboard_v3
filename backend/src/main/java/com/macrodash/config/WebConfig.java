@@ -3,6 +3,14 @@ package com.macrodash.config;
 import com.macrodash.feature.auth.AuthService;
 import com.macrodash.feature.auth.AuthController;
 import jakarta.servlet.FilterChain;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
+import java.io.InputStreamReader;
+import java.io.ByteArrayInputStream;
+import java.io.BufferedReader;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.ServletInputStream;
+import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -75,6 +83,13 @@ public class WebConfig implements WebMvcConfigurer {
         static final Set<String> PUBLIC_PATHS = Set.of(
                 "/api/auth/login", "/api/auth/session", "/api/health");
 
+        /**
+         * 로그인 본문 상한(바이트). 로그인은 인증 없이 받는 유일한 JSON 입력이라, 크기 제한이
+         * 없으면 LAN의 아무나 수 MB짜리 {"password": "AAAA…"}를 보내 힙을 압박할 수 있습니다
+         * (Tomcat의 maxPostSize는 JSON에 적용되지 않습니다). 비밀번호 한 줄에는 4KB면 충분합니다.
+         */
+        static final long MAX_LOGIN_BODY_BYTES = 4096;
+
         private final AuthService authService;
 
         public SessionFilter(AuthService authService) {
@@ -86,6 +101,22 @@ public class WebConfig implements WebMvcConfigurer {
                                         HttpServletResponse response,
                                         FilterChain chain) throws ServletException, IOException {
             addSecurityHeaders(response);
+
+            if (isLoginPost(request)) {
+                // 본문을 상한까지만 읽습니다. Content-Length가 없는(chunked) 요청도 같은 상한을 받습니다.
+                byte[] body = request.getContentLengthLong() > MAX_LOGIN_BODY_BYTES
+                        ? null
+                        : request.getInputStream().readNBytes((int) MAX_LOGIN_BODY_BYTES + 1);
+                if (body == null || body.length > MAX_LOGIN_BODY_BYTES) {
+                    response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write(
+                            "{\"error\":\"too_large\",\"message\":\"로그인 요청이 너무 큽니다.\"}");
+                    return;
+                }
+                chain.doFilter(new CappedBodyRequest(request, body), response);
+                return;
+            }
 
             if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || isPublic(request)) {
                 chain.doFilter(request, response);
@@ -121,11 +152,50 @@ public class WebConfig implements WebMvcConfigurer {
         }
 
         static boolean isPublic(HttpServletRequest request) {
+            return PUBLIC_PATHS.contains(pathOf(request));
+        }
+
+        static boolean isLoginPost(HttpServletRequest request) {
+            return "POST".equalsIgnoreCase(request.getMethod()) && "/api/auth/login".equals(pathOf(request));
+        }
+
+        /** 상한 안에서 미리 읽어 둔 본문을 컨트롤러에 그대로 넘기는 요청. */
+        static final class CappedBodyRequest extends HttpServletRequestWrapper {
+            private final byte[] body;
+
+            CappedBodyRequest(HttpServletRequest request, byte[] body) {
+                super(request);
+                this.body = body;
+            }
+
+            @Override
+            public ServletInputStream getInputStream() {
+                ByteArrayInputStream in = new ByteArrayInputStream(body);
+                return new ServletInputStream() {
+                    @Override public boolean isFinished() { return in.available() == 0; }
+                    @Override public boolean isReady() { return true; }
+                    @Override public void setReadListener(ReadListener listener) { }
+                    @Override public int read() { return in.read(); }
+                };
+            }
+
+            @Override
+            public BufferedReader getReader() {
+                String encoding = getCharacterEncoding();
+                Charset charset = encoding == null ? StandardCharsets.UTF_8 : Charset.forName(encoding);
+                return new BufferedReader(new InputStreamReader(getInputStream(), charset));
+            }
+
+            @Override public int getContentLength() { return body.length; }
+            @Override public long getContentLengthLong() { return body.length; }
+        }
+
+        private static String pathOf(HttpServletRequest request) {
             String path = request.getServletPath();
             if (request.getPathInfo() != null) {
                 path = path + request.getPathInfo();
             }
-            return PUBLIC_PATHS.contains(path);
+            return path;
         }
     }
 }
