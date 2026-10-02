@@ -6,6 +6,7 @@ import com.macrodash.support.UpstreamUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -55,6 +56,18 @@ public class ApiExceptionHandler {
     @ExceptionHandler(UpstreamUnavailableException.class)
     ResponseEntity<ApiError> upstreamUnavailable(UpstreamUnavailableException e) {
         return respond(HttpStatus.BAD_GATEWAY, e.getMessage());
+    }
+
+    /**
+     * DB에 연결하지 못함(QA-009). 코드 결함(500)이 아니라 의존 서비스 장애라 503이고, 사용자가 볼 곳을
+     * 알려 줍니다. {@code CannotGetJdbcConnectionException}이 이 예외의 하위 타입입니다. {@code /api/health}가
+     * 같은 상황에서 503 + database:unreachable을 돌려주는 것과 맞춥니다. 원인 문구(JDBC·SQLState)는 로그에만.
+     */
+    @ExceptionHandler(DataAccessResourceFailureException.class)
+    ResponseEntity<ApiError> databaseUnavailable(DataAccessResourceFailureException e, HttpServletRequest request) {
+        log.warn("DB에 연결하지 못했습니다 ({} {}): {}", request.getMethod(), request.getRequestURI(),
+                e.getMostSpecificCause().getMessage());
+        return respond(HttpStatus.SERVICE_UNAVAILABLE, messageFor(503));
     }
 
     /** {@code topN=abc}처럼 숫자·불리언 자리에 다른 값이 온 경우. 자바 타입 이름은 내보내지 않습니다. */
@@ -118,6 +131,7 @@ public class ApiExceptionHandler {
             case 404 -> "요청한 주소를 찾을 수 없습니다.";
             case 405 -> "허용되지 않는 HTTP 메서드입니다.";
             case 415 -> "지원하지 않는 요청 형식입니다.";
+            case 503 -> "데이터베이스에 연결할 수 없습니다. PostgreSQL이 켜져 있는지 확인하세요 (make logs S=postgres).";
             default -> status >= 500
                     ? "서버 내부 오류가 발생했습니다. 백엔드 로그를 확인하세요."
                     : "요청을 처리할 수 없습니다.";
