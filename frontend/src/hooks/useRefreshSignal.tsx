@@ -34,6 +34,9 @@ interface RefreshState {
   requestRefresh: () => Promise<void>;
   /** 수집 없이 지금 화면만 다시 읽기. */
   reloadAll: () => void;
+  /** 어떤 요청이든 401을 받으면 올라갑니다. 레이아웃이 이것을 보고 로그인으로 보냅니다. */
+  sessionLost: boolean;
+  notifyUnauthorized: () => void;
 }
 
 const FALLBACK: RefreshState = {
@@ -42,13 +45,17 @@ const FALLBACK: RefreshState = {
   message: null,
   requestRefresh: async () => {},
   reloadAll: () => {},
+  sessionLost: false,
+  notifyUnauthorized: () => {},
 };
 
 const RefreshContext = createContext<RefreshState>(FALLBACK);
 
 /** 수집이 끝나기를 기다리는 한도. 넘으면 그냥 다시 읽고 안내합니다. */
 const POLL_TIMEOUT_MS = 90_000;
+/** 확인 간격 — 2초에서 시작해 1.5배씩, 최대 10초. 예전엔 2초 고정이라 무거운 /api/status를 최대 45번 불렀습니다. */
 const POLL_INTERVAL_MS = 2_000;
+const POLL_MAX_INTERVAL_MS = 10_000;
 
 interface StatusShape {
   lastRun?: { id?: number | null; finishedAt?: string | null } | null;
@@ -64,9 +71,11 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState(0);
   const [collecting, setCollecting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [sessionLost, setSessionLost] = useState(false);
   const inFlight = useRef(false);
 
   const reloadAll = useCallback(() => setToken((n) => n + 1), []);
+  const notifyUnauthorized = useCallback(() => setSessionLost(true), []);
 
   const requestRefresh = useCallback(async () => {
     // 연타해도 수집 요청이 겹치지 않게 합니다.
@@ -106,8 +115,8 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
   }, [reloadAll]);
 
   const value = useMemo(
-    () => ({ token, collecting, message, requestRefresh, reloadAll }),
-    [token, collecting, message, requestRefresh, reloadAll],
+    () => ({ token, collecting, message, requestRefresh, reloadAll, sessionLost, notifyUnauthorized }),
+    [token, collecting, message, requestRefresh, reloadAll, sessionLost, notifyUnauthorized],
   );
 
   return (

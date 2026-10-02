@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { MarketClock } from "@/components/MarketClock";
 import { MENUS, Sidebar } from "@/components/Sidebar";
 import { useApi } from "@/hooks/useApi";
-import { API_BASE } from "@/lib/api";
-import { RefreshProvider } from "@/hooks/useRefreshSignal";
+import { apiBase } from "@/lib/api";
+import { RefreshProvider, useRefreshSignal } from "@/hooks/useRefreshSignal";
 import { endpoints } from "@/lib/endpoints";
 
 /**
@@ -67,14 +67,17 @@ function DashboardShell({
     followRefresh: false,
   });
   const { data, loading, unauthorized, error, reload } = session;
+  // 세션은 처음 한 번만 확인합니다. 그 뒤 만료(12시간, 다른 탭 로그아웃)는 화면의 어떤 요청이든
+  // 401을 받았을 때 올라오는 이 신호로 압니다.
+  const { sessionLost } = useRefreshSignal();
 
   const authenticated = data?.authenticated ?? false;
 
   useEffect(() => {
-    if (!loading && (unauthorized || (data && !authenticated))) {
+    if (sessionLost || (!loading && (unauthorized || (data && !authenticated)))) {
       router.replace("/login");
     }
-  }, [loading, unauthorized, data, authenticated, router]);
+  }, [sessionLost, loading, unauthorized, data, authenticated, router]);
 
   // 백엔드에 닿지 못한 이유를 기억해 둡니다. 다시 확인하는 동안(loading) 안내 화면이
   // "세션을 확인하는 중…"으로 깜빡이지 않게, 성공하거나 401을 받을 때만 지웁니다.
@@ -151,7 +154,7 @@ docker compose ps    # backend가 running인지
 make logs S=backend  # 기동 실패 원인`}
         </pre>
         <p className="mt-3 text-xs text-muted">
-          화면이 찾는 주소: <code className="text-body">{API_BASE}</code> ·{" "}
+          화면이 찾는 주소: <code className="text-body">{apiBase()}</code> ·{" "}
           {retrying ? "다시 확인하는 중…" : `${SESSION_RETRY_MS / 1000}초마다 자동으로 다시 확인합니다`}
         </p>
         <button

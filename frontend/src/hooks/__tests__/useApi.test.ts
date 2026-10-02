@@ -17,8 +17,10 @@ const api = vi.hoisted(() => {
 });
 vi.mock("@/lib/api", () => api);
 
-const signal = vi.hoisted(() => ({ token: 0 }));
-vi.mock("@/hooks/useRefreshSignal", () => ({ useRefreshSignal: () => ({ token: signal.token }) }));
+const signal = vi.hoisted(() => ({ token: 0, notifyUnauthorized: vi.fn() }));
+vi.mock("@/hooks/useRefreshSignal", () => ({
+  useRefreshSignal: () => ({ token: signal.token, notifyUnauthorized: signal.notifyUnauthorized }),
+}));
 
 import { useApi } from "@/hooks/useApi";
 
@@ -35,6 +37,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   signal.token = 0;
+  signal.notifyUnauthorized.mockReset();
   api.apiGetShared.mockReset();
 });
 
@@ -152,5 +155,32 @@ describe("useApi", () => {
     visibility = "visible";
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
     expect(api.apiGetShared).toHaveBeenCalledTimes(3);
+  });
+
+  it("경로가 바뀌면 응답이 올 때까지 이전 경로의 값을 내보내지 않는다", async () => {
+    // 예전에는 KOSDAQ 응답이 올 때까지 KOSPI 행이 "KOSDAQ" 제목 아래 보였습니다(로딩 표시도 없이).
+    const second = deferred<{ v: number }>();
+    api.apiGetShared.mockImplementation((path: string) =>
+      path === "/api/a" ? Promise.resolve({ v: 1 }) : second.promise,
+    );
+    const { result, rerender } = renderHook(({ path }) => useApi<{ v: number }>(path), {
+      initialProps: { path: "/api/a" },
+    });
+    await waitFor(() => expect(result.current.data).toEqual({ v: 1 }));
+
+    rerender({ path: "/api/b" });
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.data).toBeNull();
+
+    await act(async () => second.resolve({ v: 2 }));
+    await waitFor(() => expect(result.current.data).toEqual({ v: 2 }));
+  });
+
+  it("401을 받으면 세션이 끊겼다고 알린다 — 레이아웃이 로그인으로 보낸다", async () => {
+    api.apiGetShared.mockRejectedValue(new api.UnauthorizedError());
+    const { result } = renderHook(() => useApi("/api/a"));
+    await waitFor(() => expect(result.current.unauthorized).toBe(true));
+    expect(signal.notifyUnauthorized).toHaveBeenCalledTimes(1);
   });
 });

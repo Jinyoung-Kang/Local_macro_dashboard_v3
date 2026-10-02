@@ -59,7 +59,7 @@ export function useApi<T>(
   options: { timeoutMs?: number; followRefresh?: boolean } = {},
 ) {
   const timeoutMs = options.timeoutMs ?? 0;
-  const { token } = useRefreshSignal();
+  const { token, notifyUnauthorized } = useRefreshSignal();
   const refreshToken = options.followRefresh === false ? 0 : token;
   const [state, setState] = useState<State<T>>({ ...EMPTY_STATE, loading: Boolean(path) });
 
@@ -89,6 +89,9 @@ export function useApi<T>(
       }
       if (error instanceof UnauthorizedError) {
         setState({ ...EMPTY_STATE, unauthorized: true });
+        // 세션이 만료되면(12시간, 다른 탭에서 로그아웃) 레이아웃이 로그인으로 보내게 알립니다.
+        // 예전에는 아무 화면도 이 값을 읽지 않아 "수집기를 실행하세요"라는 틀린 안내만 남았습니다.
+        notifyUnauthorized();
         return;
       }
       const message = error instanceof Error ? error.message : "알 수 없는 오류";
@@ -101,7 +104,7 @@ export function useApi<T>(
     // refreshToken은 값 자체를 쓰지 않습니다. 바뀌면 load가 새로 만들어지고,
     // 아래 effect가 다시 돌아 화면이 갱신됩니다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, refreshToken, timeoutMs]);
+  }, [path, refreshToken, timeoutMs, notifyUnauthorized]);
 
   useEffect(() => {
     void load();
@@ -150,5 +153,9 @@ export function useApi<T>(
     };
   }, [refreshMs, load]);
 
-  return { ...state, reload: load };
+  // 경로가 바뀐 직후에는 이전 경로의 값을 내보내지 않습니다. 그대로 두면 응답이 올 때까지
+  // KOSDAQ 행이 "KOSPI 외국인 순매수" 제목 아래 보이는 식으로, 새 라벨에 옛 숫자가 붙었습니다
+  // (로딩 표시는 `loading && !data`라 뜨지 않음). 같은 경로의 다시 읽기는 값을 유지합니다.
+  const data = state.dataPath === path ? state.data : null;
+  return { ...state, data, reload: load };
 }
