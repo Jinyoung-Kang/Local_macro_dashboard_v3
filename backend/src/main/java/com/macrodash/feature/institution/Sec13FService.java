@@ -1,9 +1,12 @@
 package com.macrodash.feature.institution;
 
+import com.macrodash.analytics.Holding;
+import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.support.InvalidRequestException;
+import com.macrodash.support.HoldingsJson;
 import com.macrodash.support.Json;
 import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
@@ -30,9 +33,6 @@ import java.util.Set;
  */
 @Service
 public class Sec13FService {
-
-    /** 비중 변화가 이 값보다 작으면 "유지"로 봅니다(%p). */
-    private static final double WEIGHT_EPSILON = 0.05;
 
     public static final List<Map<String, String>> INSTITUTIONS = institutions();
 
@@ -146,86 +146,30 @@ public class Sec13FService {
     }
 
     /**
-     * 최신 분기와 직전 분기를 대조해 종목별 액션을 분류합니다.
+     * 최신 분기와 직전 분기를 대조해 종목별 액션을 분류합니다(계산은 {@link HoldingsDiff}).
      *
-     * <p>직전 분기가 없으면 "비교 데이터 없음"입니다 — 신규 매수로 단정하지
-     * 않습니다(수집된 분기가 하나뿐일 수도 있기 때문입니다).
+     * @return 평가액 내림차순, topN까지. 전량 매도 행은 평가액·주식 수·비중이 0입니다
      */
     List<Map<String, Object>> compareQuarters(JsonNode current, JsonNode previous, int topN) {
-        Map<String, JsonNode> previousByName = new LinkedHashMap<>();
-        if (previous != null) {
-            for (JsonNode holding : Json.array(previous, "holdings")) {
-                previousByName.put(Json.asText(holding, "name"), holding);
-            }
-        }
+        List<HoldingsDiff.Change> changes = HoldingsDiff.compare(
+                HoldingsJson.holdings(current),
+                previous == null ? null : HoldingsJson.holdings(previous));
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        List<JsonNode> holdings = Json.array(current, "holdings");
-
-        for (JsonNode holding : holdings) {
-            String name = Json.asText(holding, "name");
-            Double weight = Json.asDouble(holding, "weight");
-            Double shares = Json.asDouble(holding, "shares");
-
+        for (HoldingsDiff.Change change : changes) {
+            Holding holding = change.holding();
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", name);
+            row.put("name", holding.name());
             // CUSIP은 숫자로만 이루어질 수 있어 반드시 문자열로 다룹니다.
-            row.put("cusip", Json.asText(holding, "cusip"));
-            row.put("class", Json.asText(holding, "class"));
-            row.put("value", Json.asDouble(holding, "value"));
-            row.put("shares", shares);
-            row.put("weight", weight);
-
-            if (previous == null) {
-                row.put("action", "⚪ 비교 데이터 없음");
-                row.put("weightDiff", null);
-                row.put("sharesDiff", null);
-            } else {
-                JsonNode before = previousByName.get(name);
-                // ⚠️ Double.valueOf가 꼭 필요합니다. 한쪽이 primitive 0.0이면
-                // 삼항식 전체가 double로 승격되어 반대편 Double이 자동 언박싱되고,
-                // 값이 없을 때 NullPointerException으로 500이 납니다.
-                // 13F 공시에는 shares가 빠진 보유 항목이 실제로 있습니다.
-                Double prevWeight = before == null
-                        ? Double.valueOf(0.0) : Json.asDouble(before, "weight");
-                Double prevShares = before == null
-                        ? Double.valueOf(0.0) : Json.asDouble(before, "shares");
-                Double weightDiff = subtract(weight, prevWeight);
-                row.put("weightDiff", weightDiff);
-                row.put("sharesDiff", subtract(shares, prevShares));
-
-                // 직전 분기에 **있었는데** 주식 수를 모르면 매매를 판정할 수
-                // 없습니다. 0으로 메우면 "신규 매수"로 단정하게 되는데, 그건
-                // 데이터가 없다는 사실을 매매 사실로 바꿔 말하는 것입니다.
-                boolean cannotCompare = before != null && (prevShares == null || shares == null);
-                row.put("action", cannotCompare
-                        ? "⚪ 비교 불가 (주식 수 없음)"
-                        : classify(weightDiff, shares, prevShares));
-            }
+            row.put("cusip", holding.cusip());
+            row.put("class", holding.cls());
+            row.put("value", holding.value());
+            row.put("shares", holding.shares());
+            row.put("weight", holding.weight());
+            row.put("weightDiff", change.weightDiff());
+            row.put("sharesDiff", change.sharesDiff());
+            row.put("action", change.action());
             rows.add(row);
-        }
-
-        // 직전 분기에 있었는데 이번에 사라진 종목 = 전량 매도
-        if (previous != null) {
-            Set<String> currentNames = new LinkedHashSet<>();
-            holdings.forEach(h -> currentNames.add(Json.asText(h, "name")));
-
-            for (Map.Entry<String, JsonNode> entry : previousByName.entrySet()) {
-                if (currentNames.contains(entry.getKey())) {
-                    continue;
-                }
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("name", entry.getKey());
-                row.put("cusip", Json.asText(entry.getValue(), "cusip"));
-                row.put("class", Json.asText(entry.getValue(), "class"));
-                row.put("value", 0.0);
-                row.put("shares", 0.0);
-                row.put("weight", 0.0);
-                row.put("weightDiff", negate(Json.asDouble(entry.getValue(), "weight")));
-                row.put("sharesDiff", negate(Json.asDouble(entry.getValue(), "shares")));
-                row.put("action", "❌ 전량 매도 (Closed)");
-                rows.add(row);
-            }
         }
 
         rows.sort(Comparator.comparingDouble(
@@ -233,27 +177,6 @@ public class Sec13FService {
         ).reversed());
 
         return topN > 0 && rows.size() > topN ? rows.subList(0, topN) : rows;
-    }
-
-    /** 액션 분류 규칙 (구버전 classify_qoq_action과 동일). */
-    static String classify(Double weightDiff, Double currentShares, Double previousShares) {
-        double shares = currentShares == null ? 0.0 : currentShares;
-        double before = previousShares == null ? 0.0 : previousShares;
-        double diff = weightDiff == null ? 0.0 : weightDiff;
-
-        if (before == 0.0 && shares > 0.0) {
-            return "🆕 신규 매수 (New)";
-        }
-        if (shares == 0.0 && before > 0.0) {
-            return "❌ 전량 매도 (Closed)";
-        }
-        if (diff > WEIGHT_EPSILON) {
-            return "📈 비중 확대 (Added)";
-        }
-        if (diff < -WEIGHT_EPSILON) {
-            return "📉 비중 축소 (Reduced)";
-        }
-        return "⚪ 유지 (Unchanged)";
     }
 
     /** 상위 종목의 분기별 비중 추이 (차트용). */
@@ -547,16 +470,7 @@ public class Sec13FService {
                 .orElse(Map.of("cik", cik, "name", cik, "desc", ""));
     }
 
-    private static Double subtract(Double a, Double b) {
-        if (a == null && b == null) {
-            return null;
-        }
-        return (a == null ? 0.0 : a) - (b == null ? 0.0 : b);
-    }
 
-    private static Double negate(Double value) {
-        return value == null ? null : -value;
-    }
 
     private static List<Map<String, String>> institutions() {
         List<Map<String, String>> list = new ArrayList<>();

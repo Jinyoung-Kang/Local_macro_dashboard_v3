@@ -1,5 +1,6 @@
 package com.macrodash.feature.institution;
 
+import com.macrodash.analytics.HoldingsDiff;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -23,27 +24,27 @@ class Sec13FServiceTest {
     @Test
     @DisplayName("직전 분기에 없던 종목은 신규 매수")
     void newPosition() {
-        assertThat(Sec13FService.classify(2.0, 1000.0, 0.0)).contains("신규 매수");
+        assertThat(HoldingsDiff.classify(2.0, 1000.0, 0.0)).contains("신규 매수");
     }
 
     @Test
     @DisplayName("이번 분기에 사라진 종목은 전량 매도")
     void closedPosition() {
-        assertThat(Sec13FService.classify(-2.0, 0.0, 1000.0)).contains("전량 매도");
+        assertThat(HoldingsDiff.classify(-2.0, 0.0, 1000.0)).contains("전량 매도");
     }
 
     @Test
     @DisplayName("비중 증감이 임계치를 넘으면 확대/축소")
     void addedAndReduced() {
-        assertThat(Sec13FService.classify(0.5, 1200.0, 1000.0)).contains("비중 확대");
-        assertThat(Sec13FService.classify(-0.5, 800.0, 1000.0)).contains("비중 축소");
+        assertThat(HoldingsDiff.classify(0.5, 1200.0, 1000.0)).contains("비중 확대");
+        assertThat(HoldingsDiff.classify(-0.5, 800.0, 1000.0)).contains("비중 축소");
     }
 
     @Test
     @DisplayName("미세한 변화는 유지 (반올림 잡음을 매매로 오인하지 않음)")
     void unchangedWithinEpsilon() {
-        assertThat(Sec13FService.classify(0.01, 1000.0, 1000.0)).contains("유지");
-        assertThat(Sec13FService.classify(-0.01, 1000.0, 1000.0)).contains("유지");
+        assertThat(HoldingsDiff.classify(0.01, 1000.0, 1000.0)).contains("유지");
+        assertThat(HoldingsDiff.classify(-0.01, 1000.0, 1000.0)).contains("유지");
     }
 
     @Test
