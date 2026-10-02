@@ -12,7 +12,7 @@ const ENDPOINTS = [
   '/api/macro/overview', '/api/macro/risk', '/api/liquidity?years=3', '/api/sector/momentum',
   '/api/sec13f/portfolio?cik=0001608046&quarters=8&topN=30', '/api/sec13f/consensus?minHolders=2',
   '/api/guru/profiles', '/api/guru/similarity', '/api/stock/scorecard?symbol=AAPL&benchmark=SPY&years=1',
-  '/api/cot/extremes?percentile=95&lookbackWeeks=52', '/api/krx/futures?days=60', '/api/radar/ranking',
+  '/api/cot/extremes?name=S%26P%20500%20E-Mini&percentile=95&lookbackWeeks=52', '/api/krx/futures?days=60', '/api/radar/ranking',
   '/api/kr/investor-flows', '/api/analytics/regime?years=5', '/api/status', '/api/snapshot/text',
 ];
 const perEndpoint = {};

@@ -83,7 +83,12 @@ if printf '%s' "$fh" | grep -qi '^x-powered-by:'; then echo "  ! 화면 X-Powere
 
 echo "## 8. 수집기 — 호스트에서 토큰 없이"
 CPORT="$(grep -s '^COLLECTOR_PORT=' "$ROOT/.env.qa" | cut -d= -f2)"; CPORT="${CPORT:-18000}"
-for p in /status /tasks /catalog "/live/radar" "/live/ticker/AAPL" "/task-history" "/diagnostics/connections"; do
+# 읽기 전용 진단 경로(/status·/tasks·/catalog·/task-history)는 설계상 토큰 없이 열려 있습니다(doctor·make status가
+# 씁니다). 127.0.0.1에만 열려 있고 Host 검증이 있어 외부에서는 닿지 않습니다 — 결함이 아니라 설계로 기록합니다.
+for p in /status /tasks /catalog /task-history; do
+  check "GET $p 토큰 없음 (읽기 전용 진단 — 설계상 공개)" "200" "$(code "http://127.0.0.1:$CPORT$p")"
+done
+for p in "/live/radar" "/live/ticker/AAPL" "/diagnostics/connections"; do
   check "GET $p 토큰 없음" "401|403" "$(code "http://127.0.0.1:$CPORT$p")"
 done
 for p in /collect "/collect/task/fred_series" /refresh /maintenance/purge; do
@@ -91,6 +96,6 @@ for p in /collect "/collect/task/fred_series" /refresh /maintenance/purge; do
 done
 check "GET /health 토큰 없음(공개)" "200" "$(code "http://127.0.0.1:$CPORT/health")"
 check "GET /health Host: attacker.example" "400" "$(code -H 'Host: attacker.example' "http://127.0.0.1:$CPORT/health")"
-check "GET /status Bearer 틀린 토큰" "401|403" "$(code -H 'Authorization: Bearer wrong' "http://127.0.0.1:$CPORT/status")"
+check "GET /live/radar Bearer 틀린 토큰" "401|403" "$(code -H 'Authorization: Bearer wrong' "http://127.0.0.1:$CPORT/live/radar")"
 
 echo; echo "실패 $fails건"; exit $(( fails > 0 ))
