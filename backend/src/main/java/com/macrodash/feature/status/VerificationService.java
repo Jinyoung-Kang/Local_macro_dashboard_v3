@@ -5,6 +5,7 @@ import com.macrodash.analytics.FlowIntegrity;
 import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Verification;
 import com.macrodash.collector.CollectorClient;
+import com.macrodash.feature.publicdata.CalendarService;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
@@ -53,15 +54,17 @@ public class VerificationService {
 
     private final StoreReader store;
     private final CollectorClient collector;
+    private final CalendarService calendar;
 
     /** 원/달러: Yahoo는 역외 시세, 토스는 은행 매매기준율이라 둘이 늘 조금 다릅니다. */
     static final double TOLERANCE_FX_PCT = 0.5;
     /** 화면 저장본이 이보다 오래됐으면 지금 환율과 비교하지 않습니다. */
     static final long FX_MAX_AGE_SECONDS = 60 * 60;
 
-    public VerificationService(StoreReader store, CollectorClient collector) {
+    public VerificationService(StoreReader store, CollectorClient collector, CalendarService calendar) {
         this.store = store;
         this.collector = collector;
+        this.calendar = calendar;
     }
 
     public Map<String, Object> run() {
@@ -81,7 +84,8 @@ public class VerificationService {
         boolean hasToss = Json.asBoolean(keys, "toss");
 
         List<Verification.Result> results = new ArrayList<>();
-        Verification.Gate settled = Verification.settledGate(now);
+        boolean holiday = calendar.holidayDates().contains(now.toLocalDate().toString());
+        Verification.Gate settled = Verification.settledGate(now, holiday);
 
         if (!hasKrx && !hasKis) {
             results.add(Verification.skipped("KOSPI200 선물 종가",

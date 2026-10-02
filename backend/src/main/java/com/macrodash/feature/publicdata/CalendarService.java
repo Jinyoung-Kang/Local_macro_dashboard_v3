@@ -9,9 +9,11 @@ import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -41,6 +43,25 @@ public class CalendarService {
      *         <p>주의사항 — 형식이 YYYY-MM-DD가 아닌 날짜는 버립니다. 화면은 이 값을
      *         문자열 그대로 비교하므로 형식이 다르면 조용히 "거래일"로 보입니다.
      */
+    /** 저장된 공휴일 날짜(YYYY-MM-DD) 전체. 저장본이 없으면 빈 집합. */
+    @SuppressWarnings("unchecked")
+    public Set<String> holidayDates() {
+        Set<String> out = new LinkedHashSet<>();
+        Object years = krHolidays().get("years");
+        if (years instanceof Map<?, ?> byYear) {
+            for (Object year : byYear.values()) {
+                if (year instanceof Map<?, ?> info && info.get("holidays") instanceof List<?> days) {
+                    for (Object day : days) {
+                        if (day instanceof Map<?, ?> entry && entry.get("date") instanceof String date) {
+                            out.add(date);
+                        }
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
     public Map<String, Object> krHolidays() {
         Map<String, Object> out = new LinkedHashMap<>();
         Optional<Snapshot> snapshot = store.read(

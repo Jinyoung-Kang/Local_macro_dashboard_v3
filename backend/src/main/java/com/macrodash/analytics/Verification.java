@@ -187,9 +187,20 @@ public final class Verification {
      * 비교합니다.
      */
     public static Gate settledGate(ZonedDateTime nowKst) {
+        return settledGate(nowKst, false);
+    }
+
+    /**
+     * @param holiday 오늘이 한국 공휴일인가. 평일 공휴일 09:00~16:29를 장중으로 보면 KRX 확정치가
+     *                있는데도 하루 종일 대조를 건너뜁니다
+     */
+    public static Gate settledGate(ZonedDateTime nowKst, boolean holiday) {
         if (nowKst.getDayOfWeek() == DayOfWeek.SATURDAY
                 || nowKst.getDayOfWeek() == DayOfWeek.SUNDAY) {
             return new Gate(true, "주말 (확정 데이터)");
+        }
+        if (holiday) {
+            return new Gate(true, "공휴일 (확정 데이터)");
         }
         LocalTime time = nowKst.toLocalTime();
         if (time.isAfter(LocalTime.of(16, 29))) {

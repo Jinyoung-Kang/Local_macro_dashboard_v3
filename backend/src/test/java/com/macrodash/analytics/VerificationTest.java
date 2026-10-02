@@ -89,6 +89,19 @@ class VerificationTest {
     }
 
     @Test
+    @DisplayName("평일 공휴일은 장중이 아니다 — KRX 확정치가 있으므로 대조한다")
+    void holidayIsSettled() {
+        ZonedDateTime holidayMorning = ZonedDateTime.of(
+                LocalDateTime.of(2026, 1, 1, 11, 0), KST);   // 목요일, 신정
+
+        assertThat(Verification.settledGate(holidayMorning, false).allowed())
+                .as("공휴일을 모르면 장중으로 봄").isFalse();
+        Verification.Gate gate = Verification.settledGate(holidayMorning, true);
+        assertThat(gate.allowed()).isTrue();
+        assertThat(gate.reason()).contains("공휴일");
+    }
+
+    @Test
     @DisplayName("장 마감 후에는 시세 대조가 가능하다")
     void priceComparisonAllowedAfterClose() {
         ZonedDateTime afterClose = ZonedDateTime.of(
