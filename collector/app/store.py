@@ -207,13 +207,18 @@ def put_timeseries(
 
     같은 날짜는 최신 값으로 덮어씁니다. 매일 수집하면 과거는 유지되고
     최근 값만 갱신됩니다.
+
+    값을 모르는 점(None·NaN)은 **쓰지 않습니다.** 외부 소스가 하루 값을 빼먹을
+    때 NULL로 덮으면 전에 받아 둔 확정치가 지워지고, read_timeseries는 NULL을
+    숨기므로 조용히 구멍이 납니다. 반환값에도 세지 않습니다.
     """
     rows = []
     for raw_date, value in points:
         day = _coerce_date(raw_date)
-        if day is None:
+        number = _coerce_float(value)
+        if day is None or number is None:
             continue
-        rows.append((dataset, series_id, day, _coerce_float(value)))
+        rows.append((dataset, series_id, day, number))
 
     if not rows:
         return 0

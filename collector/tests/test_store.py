@@ -353,3 +353,19 @@ def test_replace_observations_with_nothing_to_write_deletes_nothing(store):
     assert store.replace_observations(catalog.OBS_RADAR, "2026-09-11", "K|F|B|T|",
                                       [{"code": "no-entity"}], entity_key="entity") == 0
     assert len(store.read_observations(catalog.OBS_RADAR, obs_date="2026-09-11")) == 1
+
+
+def test_timeseries_never_overwrites_a_value_with_unknown(store):
+    """
+    외부 소스가 하루 값을 빼먹으면(필드 이름 변경·빈 문자열) None이 옵니다.
+    그걸 NULL로 upsert하면 전에 받아 둔 확정치가 지워지고, 읽기는 NULL을 숨기므로
+    조용히 구멍이 납니다. 모르는 값은 쓰지 않고, 쓴 행 수에도 세지 않습니다.
+    """
+    assert store.put_timeseries("demo", "S", [("2026-01-02", 1.0), ("2026-01-03", 2.0)]) == 2
+    assert store.put_timeseries("demo", "S", [("2026-01-02", None), ("2026-01-03", 3.0),
+                                              ("2026-01-04", float("nan"))]) == 1
+
+    assert store.read_timeseries("demo", "S") == [
+        {"date": "2026-01-02", "value": 1.0},
+        {"date": "2026-01-03", "value": 3.0},
+    ]
