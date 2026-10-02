@@ -88,16 +88,16 @@ export default function StatusPage() {
         />
         <Metric
           label="성공 / 실패"
-          value={`${lastRun?.okCount ?? 0} / ${lastRun?.failCount ?? 0}`}
+          value={lastRun ? `${lastRun.okCount} / ${lastRun.failCount}` : "—"}
           caption={lastRun?.detail ?? undefined}
         />
         <Metric
           label="누적 시계열"
-          value={`${formatNumber(data?.timeseriesRows ?? 0, 0)} 행`}
+          value={`${formatNumber(data?.timeseriesRows, 0)} 행`}
         />
         <Metric
           label="누적 수급 레코드"
-          value={`${formatNumber(data?.observationRows ?? 0, 0)} 행`}
+          value={`${formatNumber(data?.observationRows, 0)} 행`}
           caption={`이력 거래일 ${data?.radarHistoryDates?.length ?? 0}일`}
         />
       </div>

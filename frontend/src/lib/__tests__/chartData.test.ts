@@ -5,7 +5,7 @@
  * "순매수 0억" 막대를 그려, 모르는 값을 사실처럼 보여 줬습니다(표는 "—"로 올바름).
  */
 import { describe, expect, it } from "vitest";
-import { knownBars } from "@/lib/chartData";
+import { knownBars, weightHistoryRows } from "@/lib/chartData";
 
 type Row = { name: string; amount: number | null | undefined };
 const rows: Row[] = [
@@ -32,5 +32,19 @@ describe("knownBars", () => {
   it("순서를 바꾸지 않는다(서버가 매긴 순위 그대로)", () => {
     const { bars } = knownBars(rows, (r) => r.name, (r) => r.amount);
     expect(bars[0].name).toBe("삼성전자");
+  });
+});
+
+describe("weightHistoryRows", () => {
+  it("없는 값은 0(미보유)이 아니라 null이다", () => {
+    const rows = weightHistoryRows(["2026-03-31", "2026-06-30", "2026-09-30"], {
+      APPLE: [5, 6],
+      NVIDIA: [null, 2, 3],
+    });
+    expect(rows).toEqual([
+      { date: "2026-03-31", APPLE: 5, NVIDIA: null },
+      { date: "2026-06-30", APPLE: 6, NVIDIA: 2 },
+      { date: "2026-09-30", APPLE: null, NVIDIA: 3 },
+    ]);
   });
 });

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MultiLineSeries, WeightHeatmap } from "@/components/charts";
+import { weightHistoryRows } from "@/lib/chartData";
 import {
   Banner,
   Card,
@@ -55,14 +56,7 @@ export default function InstitutionsPage() {
   const selected = institutions.data?.institutions.find((entry) => entry.cik === cik);
   const history = data?.weightHistory;
 
-  const chartData =
-    history?.dates.map((date, index) => {
-      const row: Record<string, string | number> = { date };
-      Object.entries(history.series).forEach(([name, values]) => {
-        row[name] = values[index] ?? 0;
-      });
-      return row;
-    }) ?? [];
+  const chartData = history ? weightHistoryRows(history.dates, history.series) : [];
 
   const chartSeries = Object.keys(history?.series ?? {})
     .slice(0, 10)

@@ -50,3 +50,23 @@ export function mergeByDate(
   });
   return [...byDate.values()].sort((left, right) => String(left.date).localeCompare(String(right.date)));
 }
+
+/**
+ * 분기별 비중 추이를 차트 행으로. 값이 없는 칸은 null — 0으로 메우지 않습니다.
+ *
+ * 이 차트에서 0은 "미보유"라는 사실입니다(히트맵 범례도 그렇게 읽힘). 백엔드가 분기 수보다
+ * 짧은 배열을 주거나 값이 비어 있을 때 `?? 0`으로 채우면 보유하지 않았다는 거짓 점이 그려집니다.
+ */
+export function weightHistoryRows(
+  dates: string[],
+  series: Record<string, (number | null)[]>,
+): Record<string, string | number | null>[] {
+  return dates.map((date, index) => {
+    const row: Record<string, string | number | null> = { date };
+    for (const [name, values] of Object.entries(series)) {
+      const value = values[index];
+      row[name] = typeof value === "number" && Number.isFinite(value) ? value : null;
+    }
+    return row;
+  });
+}
