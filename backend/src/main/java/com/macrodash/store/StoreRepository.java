@@ -48,17 +48,30 @@ public class StoreRepository {
     }
 
     // ------------------------------------------------------------------ 스냅샷
+    /**
+     * 스냅샷 1건. DB 장애는 그대로 올립니다.
+     *
+     * <p>예전에는 DataAccessException을 삼키고 "없음"으로 답했습니다. 그러면 auto 모드의
+     * StoreReader가 "저장본이 없다"고 보고 수집기를 90초씩 기다렸고, 화면은 "수집기를
+     * 실행하세요"라는 틀린 안내를 냈습니다. 500이 나와야 원인(DB)이 보입니다.
+     */
     public Optional<Snapshot> readSnapshot(String name) {
+        return jdbc.query(
+                "SELECT name, payload, kind, status, error, collected_at "
+                        + "FROM snapshots WHERE name = ?",
+                snapshotMapper(),
+                name
+        ).stream().findFirst();
+    }
+
+    /** DB에 닿는가(헬스체크용). 여기서는 예외를 삼키는 것이 맞습니다 — 답이 곧 상태입니다. */
+    public boolean ping() {
         try {
-            return jdbc.query(
-                    "SELECT name, payload, kind, status, error, collected_at "
-                            + "FROM snapshots WHERE name = ?",
-                    snapshotMapper(),
-                    name
-            ).stream().findFirst();
+            Integer one = jdbc.queryForObject("SELECT 1", Integer.class);
+            return one != null && one == 1;
         } catch (DataAccessException e) {
-            log.warn("스냅샷 읽기 실패 ({}): {}", name, e.getMessage());
-            return Optional.empty();
+            log.warn("DB 연결 확인 실패: {}", e.getMessage());
+            return false;
         }
     }
 

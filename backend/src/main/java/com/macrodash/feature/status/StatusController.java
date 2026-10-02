@@ -1,6 +1,7 @@
 package com.macrodash.feature.status;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,9 +38,19 @@ public class StatusController {
         this.verification = verification;
     }
 
+    /**
+     * 컨테이너 헬스체크·make doctor가 보는 상태.
+     *
+     * <p>예전에는 상수 {"status":"ok"}라 DB 연결이 죽어도 헬스체크가 초록이었습니다. DB에
+     * 닿지 못하면 503입니다(이 앱에서 DB는 가용성이 필수인 유일한 계층).
+     */
     @GetMapping("/health")
-    public Map<String, Object> health() {
-        return Map.of("status", "ok");
+    public ResponseEntity<Map<String, Object>> health() {
+        boolean database = status.databaseReachable();
+        Map<String, Object> body = Map.of(
+                "status", database ? "ok" : "degraded",
+                "database", database ? "ok" : "unreachable");
+        return ResponseEntity.status(database ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE).body(body);
     }
 
     // --------------------------------------------------- 🗄️ 저장소 상태

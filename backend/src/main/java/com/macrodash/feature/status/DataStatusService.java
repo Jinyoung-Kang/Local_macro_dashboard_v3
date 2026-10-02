@@ -147,6 +147,11 @@ public class DataStatusService {
     /** 실행 이력 한 번에 볼 수 있는 최대 행 수 (수집기 {@code /task-history}의 le=200과 같음). */
     static final int MAX_HISTORY_ROWS = 200;
 
+    /** DB에 닿는가 — /api/health가 씁니다. */
+    public boolean databaseReachable() {
+        return repository.ping();
+    }
+
     /**
      * 태스크 실행 이력.
      *
