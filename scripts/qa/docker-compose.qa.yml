@@ -1,0 +1,30 @@
+# QA 스택 override — docker-compose.yml 위에 얹어 씁니다. 직접 쓰지 말고 scripts/qa/qa-stack.sh를 쓰세요.
+#
+# - 수집기의 외부 요청은 전부 qaproxy(차단 프록시)로 보냅니다. 유료·한도 API를 한 번도 부르지 않고,
+#   프록시 모드를 바꿔 "외부가 느리다/먹통이다"를 흉내 냅니다(scripts/qa/blackhole-proxy.py).
+# - 포트·프로젝트 이름·비밀값은 .env.qa가 정합니다(운영 .env와 분리).
+services:
+  qaproxy:
+    image: python:3.11-slim
+    command: ["python", "-u", "/proxy/blackhole-proxy.py", "--listen", "0.0.0.0:8888"]
+    volumes:
+      - ./scripts/qa/blackhole-proxy.py:/proxy/blackhole-proxy.py:ro
+    ports:
+      - "127.0.0.1:${QA_PROXY_PORT:-18888}:8888"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/__mode', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  collector:
+    depends_on:
+      qaproxy:
+        condition: service_healthy
+    environment:
+      HTTP_PROXY: http://qaproxy:8888
+      HTTPS_PROXY: http://qaproxy:8888
+      http_proxy: http://qaproxy:8888
+      https_proxy: http://qaproxy:8888
+      NO_PROXY: localhost,127.0.0.1,postgres,collector,backend,qaproxy
+      no_proxy: localhost,127.0.0.1,postgres,collector,backend,qaproxy

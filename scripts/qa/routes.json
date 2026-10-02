@@ -1,0 +1,404 @@
+{
+  "_comment": "백엔드 API 경로와 파라미터 종류(docs/API.md 기준). auth-probe.sh·fuzz-api.py가 읽습니다. kind: int|str|date|list|enum|bool|path",
+  "public": [
+    "GET /api/health",
+    "GET /api/auth/session",
+    "POST /api/auth/login"
+  ],
+  "routes": [
+    {
+      "m": "GET",
+      "p": "/api/macro/overview",
+      "q": {
+        "live": "bool"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/risk"
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/advanced"
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/usdkrw"
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/fx",
+      "q": {
+        "ids": "list",
+        "period": "enum",
+        "mode": "enum"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/fx/options"
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/scraped"
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/spread",
+      "q": {
+        "longId": "str",
+        "shortId": "str"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/fred/{seriesId}",
+      "path": {
+        "seriesId": "str"
+      },
+      "q": {
+        "years": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/macro/ticker",
+      "q": {
+        "symbol": "str",
+        "period": "enum"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/liquidity",
+      "q": {
+        "years": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/sector/rotation",
+      "q": {
+        "period": "enum"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/sector/momentum"
+    },
+    {
+      "m": "GET",
+      "p": "/api/sec13f/institutions"
+    },
+    {
+      "m": "GET",
+      "p": "/api/sec13f/portfolio",
+      "q": {
+        "cik": "str",
+        "quarters": "int",
+        "topN": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/sec13f/consensus",
+      "q": {
+        "ciks": "list",
+        "reportDate": "date",
+        "minHolders": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/sec13f/new-buys",
+      "q": {
+        "ciks": "list",
+        "reportDate": "date",
+        "minHolders": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/guru/profiles"
+    },
+    {
+      "m": "GET",
+      "p": "/api/guru/similarity"
+    },
+    {
+      "m": "GET",
+      "p": "/api/guru/holders",
+      "q": {
+        "q": "str"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/guru/risk",
+      "q": {
+        "cik": "str",
+        "benchmark": "str",
+        "years": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/stock/universe"
+    },
+    {
+      "m": "GET",
+      "p": "/api/stock/scorecard",
+      "q": {
+        "symbol": "str",
+        "benchmark": "str",
+        "years": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/cot/assets"
+    },
+    {
+      "m": "GET",
+      "p": "/api/cot/extremes",
+      "q": {
+        "name": "str",
+        "percentile": "int",
+        "lookbackWeeks": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/krx/futures",
+      "q": {
+        "days": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/krx/oi-trend"
+    },
+    {
+      "m": "GET",
+      "p": "/api/krx/investor-trend"
+    },
+    {
+      "m": "GET",
+      "p": "/api/krx/intraday",
+      "q": {
+        "minutes": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/krx/spot-futures"
+    },
+    {
+      "m": "GET",
+      "p": "/api/radar/options"
+    },
+    {
+      "m": "GET",
+      "p": "/api/radar/ranking",
+      "q": {
+        "market": "enum",
+        "investor": "enum",
+        "tradeType": "enum",
+        "topN": "int",
+        "intervalType": "enum",
+        "targetDate": "date"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/radar/consensus",
+      "q": {
+        "market": "enum",
+        "tradeType": "enum",
+        "topN": "int",
+        "intervalType": "enum"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/radar/history",
+      "q": {
+        "market": "enum",
+        "investor": "enum",
+        "tradeType": "enum",
+        "latest": "bool",
+        "obsDate": "date"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/radar/diagnostics"
+    },
+    {
+      "m": "GET",
+      "p": "/api/calendar/kr-holidays"
+    },
+    {
+      "m": "GET",
+      "p": "/api/kr/fundamentals",
+      "q": {
+        "codes": "list"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/kr/market-totals",
+      "q": {
+        "days": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/kr/investor-flows"
+    },
+    {
+      "m": "GET",
+      "p": "/api/kr/stock-flows",
+      "q": {
+        "codes": "list"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/status"
+    },
+    {
+      "m": "GET",
+      "p": "/api/status/tasks"
+    },
+    {
+      "m": "GET",
+      "p": "/api/status/history",
+      "q": {
+        "task": "str",
+        "limit": "int"
+      }
+    },
+    {
+      "m": "POST",
+      "p": "/api/status/refresh",
+      "q": {
+        "runFast": "bool"
+      },
+      "mutating": true
+    },
+    {
+      "m": "POST",
+      "p": "/api/status/run/{taskName}",
+      "path": {
+        "taskName": "str"
+      },
+      "mutating": true
+    },
+    {
+      "m": "POST",
+      "p": "/api/verification",
+      "mutating": true
+    },
+    {
+      "m": "GET",
+      "p": "/api/status/issues"
+    },
+    {
+      "m": "GET",
+      "p": "/api/status/public-apis"
+    },
+    {
+      "m": "GET",
+      "p": "/api/analytics/series"
+    },
+    {
+      "m": "GET",
+      "p": "/api/analytics/correlation",
+      "q": {
+        "x": "str",
+        "y": "str",
+        "window": "int",
+        "years": "int",
+        "mode": "enum"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/analytics/regime",
+      "q": {
+        "years": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/snapshot/text"
+    },
+    {
+      "m": "GET",
+      "p": "/api/ai/engines"
+    },
+    {
+      "m": "GET",
+      "p": "/api/ai/report-types"
+    },
+    {
+      "m": "GET",
+      "p": "/api/ai/snapshot-text"
+    },
+    {
+      "m": "POST",
+      "p": "/api/ai/report",
+      "body": {
+        "engineId": "str",
+        "reportType": "str",
+        "prompt": "str"
+      },
+      "mutating": true
+    },
+    {
+      "m": "POST",
+      "p": "/api/ai/test",
+      "q": {
+        "engineId": "str",
+        "prompt": "str"
+      },
+      "mutating": true
+    },
+    {
+      "m": "GET",
+      "p": "/api/ai/toss/diagnostics"
+    },
+    {
+      "m": "GET",
+      "p": "/api/ai/toss/exchange-rate",
+      "q": {
+        "base": "str",
+        "quote": "str"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/ai/toss/indices",
+      "q": {
+        "symbols": "list"
+      }
+    },
+    {
+      "m": "POST",
+      "p": "/api/auth/logout",
+      "mutating": true
+    },
+    {
+      "m": "GET",
+      "p": "/api/cot/overview"
+    },
+    {
+      "m": "GET",
+      "p": "/api/cot/asset",
+      "q": {
+        "name": "str"
+      }
+    }
+  ]
+}

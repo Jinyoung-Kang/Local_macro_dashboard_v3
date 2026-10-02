@@ -1,5 +1,6 @@
 # 비밀 값
 .env
+.env.qa
 *.env.local
 secrets.toml
 
