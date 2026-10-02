@@ -179,7 +179,7 @@ config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 |---|---|---|
 | XSS로 토큰 탈취 | 쿠키 `HttpOnly` (스크립트가 읽지 못함) | `AuthController` |
 | CSRF | 쿠키 `SameSite=Strict`. 화면(:3000)과 API(:8080)는 포트만 달라 같은 사이트 | `AuthController` |
-| 비밀번호 대입 | 연속 5회 실패 뒤에는 그 주소의 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 맞는 비밀번호는 통과(잠금이 아니라 지연 — Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 막음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제 | `LoginThrottle` |
+| 비밀번호 대입 | 연속 5회 실패 뒤에는 그 주소의 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 잠금이 아니라 지연이라 맞는 비밀번호가 **잠기지는 않지만**, 공격자가 느린 차선을 계속 차지하는 순간에는 주인도 429를 받을 수 있고 1초 뒤 다시 시도하면 통과(Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 영구히 막았음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제 | `LoginThrottle` |
 | 타이밍 공격 | 비밀번호 `MessageDigest.isEqual`, 수집기 토큰 `hmac.compare_digest` | `AuthService`, `collector/app/main.py` |
 | 공개된 기본 서명 키로 토큰 위조 | JWT_SECRET이 기본값·32바이트 미만이면 실행마다 무작위 키 | `AuthService.signingSecret` |
 | 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단) | `WebConfig.SessionFilter` |
@@ -187,9 +187,10 @@ config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 | 유료 AI API 비용 폭주 | 사용자 입력 2,000자 상한(400) | `AiController` |
 | 로그로 API 키 유출 | 로깅 계층에서 키 파라미터 가림(`serviceKey`·`crtfc_key`·`key` 등 포함) | `collector/app/logredact.py` |
 
-**주의** — 잠금은 접속 주소(remoteAddr) 기준입니다. X-Forwarded-For는 위조할 수
+**주의** — 실패 횟수는 접속 주소(remoteAddr) 기준입니다. X-Forwarded-For는 위조할 수
 있어 믿지 않습니다. 도커 포트 포워딩에서는 모든 접속이 같은 주소로 보일 수 있어
-사실상 전체 공통 잠금이 됩니다(1인용이라 더 안전한 쪽).
+사실상 전체 공통 지연이 됩니다(1인용이라 더 안전한 쪽). 공격이 계속되는 동안 주인이
+429를 받을 수 있는 것은 남은 위험이며, 재시도로 풀립니다.
 
 ## 7. 장애 시 동작
 
