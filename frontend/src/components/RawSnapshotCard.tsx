@@ -69,7 +69,7 @@ export function RawSnapshotCard() {
                 수집 실패 항목은 숫자를 만들어내지 않고 &apos;수집 실패&apos;로 적습니다.
                 &apos;추정치&apos;로 표시된 값은 공식 확정치가 아닙니다.
               </p>
-              <pre className="max-h-[560px] overflow-auto whitespace-pre-wrap rounded border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
+              <pre tabIndex={0} className="max-h-[560px] overflow-auto whitespace-pre-wrap rounded border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
                 {snapshot.data.text}
               </pre>
             </>

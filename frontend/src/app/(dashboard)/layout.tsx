@@ -114,7 +114,7 @@ function DashboardShell({
       {/* 읽기 모드는 세션 응답에 함께 옵니다. 예전에는 이 한 줄 때문에 페이지를 열 때마다
           무거운 /api/status(수집기 상태 + DB 집계)를 불렀습니다. */}
       <Sidebar readMode={data?.readMode} />
-      <main className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:h-screen lg:overflow-y-auto">
+      <main tabIndex={-1} id="main" className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:h-screen lg:overflow-y-auto">
         <div className="mb-5">
           <MarketClock />
         </div>

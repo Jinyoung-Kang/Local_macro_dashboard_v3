@@ -242,7 +242,7 @@ function SimilarityCard() {
       )}
 
       {matrix && names.length > 0 && (
-        <div className="mt-5 overflow-x-auto">
+        <div className="mt-5 overflow-x-auto" tabIndex={0} role="region" aria-label="기관 간 유사도 행렬 (좌우 스크롤)">
           <table className="w-full min-w-[720px] border-collapse text-xs">
             <thead>
               <tr className="text-[11px] text-muted">
@@ -282,6 +282,8 @@ function SimilarityCard() {
                           backgroundColor: self
                             ? "rgba(139, 148, 158, 0.12)"
                             : `rgba(88, 166, 255, ${0.08 + intensity * 0.55})`,
+                          // 진한 칸은 밝은 글자와 대비가 모자라(WCAG AA) 어두운 글자로.
+                          color: !self && intensity > 0.5 ? "#0d1117" : undefined,
                         }}
                       >
                         {value === undefined

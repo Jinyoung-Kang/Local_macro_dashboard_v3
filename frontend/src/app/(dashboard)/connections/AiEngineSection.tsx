@@ -87,6 +87,7 @@ export function AiEngineSection() {
         </div>
 
         <textarea
+          aria-label="호출 테스트에 보낼 프롬프트"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           rows={3}

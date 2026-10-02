@@ -435,7 +435,7 @@ function IssuesPanel() {
             <Banner tone="warn">수집기에 연결하지 못해 DB 기록만으로 만들었습니다(누락 데이터셋·없앤 태스크 거르기 제외).</Banner>
           )}
           {hasIssues ? (
-            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded border border-border bg-canvas p-3 text-[11px] leading-relaxed text-body">
+            <pre tabIndex={0} className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded border border-border bg-canvas p-3 text-[11px] leading-relaxed text-body">
               {data.text}
             </pre>
           ) : (

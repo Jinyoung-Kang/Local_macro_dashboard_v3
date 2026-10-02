@@ -514,6 +514,9 @@ export function ScatterPlot({
   }
 
   return (
+    // 점 하나하나가 role="img"로 노출돼 스크린리더에 수백 개의 이름 없는 그림이 됩니다. 산점도는 장식이고
+    // 상관계수·표본 수는 옆에 글자로 있으므로 보조기기에는 통째로 숨깁니다.
+    <div aria-hidden="true">
     <ResponsiveContainer width="100%" height={height}>
       <ScatterChart margin={{ top: 8, right: 16, bottom: 28, left: 8 }}>
         <CartesianGrid stroke={GRID} />
@@ -552,6 +555,7 @@ export function ScatterPlot({
         <Scatter data={data} fill={color} fillOpacity={0.55} />
       </ScatterChart>
     </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -581,7 +585,7 @@ export function WeightHeatmap({
   const max = Math.max(...values.filter((v): v is number => typeof v === "number"), 0);
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="비중 히트맵 (좌우 스크롤)">
       <table className="w-full min-w-[640px] border-collapse text-xs">
         <thead>
           <tr className="text-[11px] text-muted">
@@ -609,6 +613,8 @@ export function WeightHeatmap({
                         typeof value === "number" && value > 0
                           ? `rgba(57, 135, 229, ${0.08 + ratio * 0.62})`
                           : "transparent",
+                      // 진한 칸은 바탕이 밝아져 밝은 글자와 대비가 모자랍니다(WCAG AA 4.5:1 미달) — 어두운 글자로.
+                      color: ratio > 0.5 ? "#0d1117" : undefined,
                     }}
                     title={`${name} · ${dates[index] ?? ""}`}
                   >
