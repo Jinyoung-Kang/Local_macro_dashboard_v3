@@ -201,7 +201,9 @@ def collect_radar_ranking(
 
         cursor -= timedelta(days=1)
 
-    history = read_from_history(target_day, market, investor, trade_type, top_n)
+    history = read_from_history(
+        target_day, market, investor, trade_type, top_n, interval_type
+    )
     if history:
         logger.info(
             "수급 레이더: 외부 소스가 모두 실패해 누적 이력으로 대체합니다 (%s행)",
@@ -777,32 +779,34 @@ def read_from_history(
     investor: str,
     trade_type: str,
     top_n: int,
+    interval_type: str = "TODAY",
 ) -> dict | None:
     """
     누적 이력에서 해당 조건의 랭킹을 꺼냅니다.
 
-    요청한 날짜에 이력이 없으면 **그보다 앞선 가장 가까운 거래일**을 씁니다.
-    어느 날짜를 썼는지 source에 남겨 화면이 밝힐 수 있게 합니다.
+    요청한 날짜에 이력이 없으면 **그 조합의 이력이 있는, 그보다 앞선 가장 가까운
+    거래일**을 씁니다. 어느 날짜를 썼는지 source에 남겨 화면이 밝힐 수 있게 합니다.
+
+    기간 구간(interval_type)도 조건입니다. 당일 백업에 5·20거래일 누적 금액이
+    섞이면 10~20배 큰 값이 "오늘 순매수" 1위로 올라갑니다.
     """
     try:
         target_str = target_day.isoformat()
+        combo = {
+            "market": market,
+            "investor": investor,
+            "tradeType": trade_type,
+            "intervalType": interval_type,
+        }
         available = [
-            day for day in store.list_observation_dates(catalog.OBS_RADAR)
+            day for day in store.list_observation_dates(catalog.OBS_RADAR, filters=combo)
             if day <= target_str
         ]
         if not available:
             return None
 
         picked = max(available)
-        rows = store.read_observations(
-            catalog.OBS_RADAR,
-            obs_date=picked,
-            filters={
-                "market": market,
-                "investor": investor,
-                "tradeType": trade_type,
-            },
-        )
+        rows = store.read_observations(catalog.OBS_RADAR, obs_date=picked, filters=combo)
         if not rows:
             return None
 

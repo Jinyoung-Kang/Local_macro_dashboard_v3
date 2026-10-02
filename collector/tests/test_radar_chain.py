@@ -230,3 +230,16 @@ def test_toss_runs_after_ls_and_before_pykrx(monkeypatch):
 
     assert result["sourceKind"] == "toss"
     assert order == ["ls", "toss"], "토스가 성공하면 PyKrx는 부르지 않습니다"
+
+
+def test_history_fallback_receives_the_requested_interval(monkeypatch):
+    """체인이 끝까지 실패하면 이력도 같은 기간 구간으로 읽어야 합니다(DAYS_5 요청에 TODAY 이력을 주지 않도록)."""
+    seen = {}
+
+    def history(target_day, market, investor, trade_type, top_n, interval_type="TODAY"):
+        seen["interval"] = interval_type
+        return None
+
+    monkeypatch.setattr(radar, "read_from_history", history)
+    radar.collect_radar_ranking(date(2026, 9, 11), interval_type="DAYS_5")
+    assert seen["interval"] == "DAYS_5"

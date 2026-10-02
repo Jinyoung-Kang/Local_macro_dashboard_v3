@@ -416,13 +416,21 @@ def delete_observations_before(dataset: str, before: str) -> int:
         return cur.rowcount or 0
 
 
-def list_observation_dates(dataset: str) -> list[str]:
+def list_observation_dates(
+    dataset: str, *, filters: dict[str, str] | None = None,
+) -> list[str]:
+    """
+    레코드가 있는 날짜(YYYY-MM-DD) 오름차순. filters를 주면 payload가 그 값을
+    모두 포함하는 레코드가 있는 날짜만 — "이 조합의 이력이 실제로 있는 날".
+    """
+    sql = "SELECT DISTINCT obs_date FROM observations WHERE dataset = %s"
+    params: list[Any] = [dataset]
+    if filters:
+        sql += " AND payload @> %s"
+        params.append(Jsonb(filters))
+    sql += " ORDER BY obs_date"
     with connection() as conn:
-        rows = conn.execute(
-            "SELECT DISTINCT obs_date FROM observations "
-            "WHERE dataset = %s ORDER BY obs_date",
-            (dataset,),
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [r["obs_date"].isoformat() for r in rows]
 
 
