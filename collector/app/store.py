@@ -43,6 +43,11 @@ STALE_RUN_SECONDS = 30 * 60
 
 _pool: ConnectionPool | None = None
 
+# 풀에서 연결을 기다리는 최대 시간. 기본값 30초면 PostgreSQL이 끊겼을 때 요청 하나가 30초를 삼키고
+# (백엔드의 제어 타임아웃 3초를 넘겨 상태 화면이 "수집기에 연결하지 못함"으로 바뀜), 스케줄러 태스크도
+# 연결 하나당 30초씩 묶입니다. 백엔드의 DB 확인 시간(5초)과 맞춥니다. (QA-010)
+POOL_WAIT_SECONDS = 5.0
+
 
 def get_pool() -> ConnectionPool:
     global _pool
@@ -53,11 +58,18 @@ def get_pool() -> ConnectionPool:
             max_size=8,
             kwargs={"row_factory": dict_row},
             open=True,
+            timeout=POOL_WAIT_SECONDS,
             # PostgreSQL이 재시작하면 풀의 연결이 전부 죽습니다. 검사 없이 나눠 주면 첫 사용에서야
             # 터져 태스크 최대 8개가 연달아 실패하고, 실패 기록 자체도 유실됐습니다. 빌려줄 때 확인합니다.
             check=ConnectionPool.check_connection,
         )
     return _pool
+
+
+def ping() -> None:
+    """DB에 닿는지 확인합니다(SELECT 1). 닿지 못하면 psycopg 예외가 그대로 올라옵니다."""
+    with connection() as conn:
+        conn.execute("SELECT 1").fetchone()
 
 
 def close_pool() -> None:

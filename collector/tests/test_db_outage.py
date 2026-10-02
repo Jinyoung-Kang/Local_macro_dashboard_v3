@@ -21,7 +21,6 @@ def client(monkeypatch):
     return TestClient(main.app, raise_server_exceptions=False)
 
 
-@pytest.mark.xfail(strict=True, reason="QA-010: 수정 전")
 def test_QA010_health_reports_database_unreachable(client, monkeypatch):
     def refuse():
         raise psycopg.OperationalError("connection refused")
@@ -34,7 +33,6 @@ def test_QA010_health_reports_database_unreachable(client, monkeypatch):
     assert response.json()["status"] == "degraded"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-010: 수정 전")
 def test_QA010_database_error_is_503_json_not_plain_500(client, monkeypatch):
     def refuse(**kwargs):
         raise psycopg.OperationalError("connection refused")
@@ -48,7 +46,6 @@ def test_QA010_database_error_is_503_json_not_plain_500(client, monkeypatch):
     assert "connection refused" not in response.text        # 원문·스택은 로그에만
 
 
-@pytest.mark.xfail(strict=True, reason="QA-010: 수정 전")
 def test_QA010_pool_wait_is_short():
     """연결을 기다리는 시간이 30초면 DB 장애 때 요청 하나가 30초를 삼킵니다(백엔드의 제어 타임아웃 3초 초과)."""
     assert store.POOL_WAIT_SECONDS <= 5.0

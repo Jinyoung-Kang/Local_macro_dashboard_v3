@@ -30,7 +30,10 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
+import psycopg
+from psycopg_pool import PoolTimeout
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import catalog, indicators, krcalendar, logredact, settings, store, tasks, verification, webguard
@@ -203,8 +206,33 @@ def _parse_date(value: str | None) -> date | None:
 # 상태
 # ==============================================================================
 @app.get("/health")
-def health() -> dict:
-    return {"status": "ok", "schedulerEnabled": settings.scheduler_enabled()}
+def health() -> JSONResponse:
+    """
+    DB 연결까지 확인합니다(QA-010). 예전에는 PostgreSQL이 끊겨도 {"status": "ok"}였습니다 — 백엔드의
+    /api/health처럼 닿지 못하면 503 + database:unreachable로 답해 doctor·compose가 원인을 바로 보게 합니다.
+    """
+    body = {"status": "ok", "database": "ok", "schedulerEnabled": settings.scheduler_enabled()}
+    try:
+        store.ping()
+    except (psycopg.Error, PoolTimeout) as exc:
+        logger.warning("헬스체크: DB에 닿지 못했습니다: %s", exc)
+        body.update(status="degraded", database="unreachable")
+        return JSONResponse(body, status_code=503)
+    return JSONResponse(body)
+
+
+@app.exception_handler(psycopg.OperationalError)
+@app.exception_handler(PoolTimeout)
+def database_unavailable(request, exc):   # noqa: ARG001
+    """
+    DB에 연결하지 못한 요청은 평문 500이 아니라 503 JSON으로(QA-010). 원문·스택은 로그에만 남깁니다.
+    """
+    logger.warning("DB에 연결하지 못했습니다 (%s %s): %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        {"error": "database_unavailable",
+         "detail": "데이터베이스에 연결할 수 없습니다. PostgreSQL이 켜져 있는지 확인하세요 (make logs S=postgres)."},
+        status_code=503,
+    )
 
 
 @app.get("/status")
