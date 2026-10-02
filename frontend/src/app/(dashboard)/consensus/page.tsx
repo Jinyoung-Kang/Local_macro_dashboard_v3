@@ -167,13 +167,13 @@ export default function ConsensusPage() {
                   key: "avgWeight",
                   header: "평균 비중",
                   align: "right",
-                  render: (row) => `${formatNumber(row.avgWeight, 2)}%`,
+                  render: (row) => (row.avgWeight == null ? "—" : `${formatNumber(row.avgWeight, 2)}%`),
                 },
                 {
                   key: "maxWeight",
                   header: "최대 비중",
                   align: "right",
-                  render: (row) => `${formatNumber(row.maxWeight, 2)}%`,
+                  render: (row) => (row.maxWeight == null ? "—" : `${formatNumber(row.maxWeight, 2)}%`),
                 },
                 {
                   key: "totalValue",
@@ -273,7 +273,7 @@ function NewBuysCard({ reportDate }: { reportDate: string }) {
                 key: "avgWeight",
                 header: "평균 비중",
                 align: "right",
-                render: (row) => `${formatNumber(row.avgWeight, 2)}%`,
+                render: (row) => (row.avgWeight == null ? "—" : `${formatNumber(row.avgWeight, 2)}%`),
               },
               {
                 key: "totalValue",

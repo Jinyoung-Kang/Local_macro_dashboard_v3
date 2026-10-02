@@ -209,9 +209,10 @@ export interface ConsensusRow {
   holders: string[];
   actions: string[];
   holderCount: number;
-  totalValue: number;
-  avgWeight: number;
-  maxWeight: number;
+  /** 평가액·비중을 아는 기관만 더한 값. 하나도 모르면 null */
+  totalValue: number | null;
+  avgWeight: number | null;
+  maxWeight: number | null;
   buyCount: number;
   sellCount: number;
 }
