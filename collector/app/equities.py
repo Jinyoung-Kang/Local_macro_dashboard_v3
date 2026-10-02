@@ -149,7 +149,7 @@ EQUITY_MAP: dict[str, tuple[str, str]] = {
     "S&P GLOBAL INC": ("SPGI", "금융"),
     "PROGRESSIVE CORP": ("PGR", "금융"),
     "CHUBB LTD": ("CB", "금융"),
-    "MARSH & MCLENNAN COS INC": ("MMC", "금융"),
+    "MARSH & MCLENNAN COS INC": ("MRSH", "금융"),   # 2026 회사명·티커 변경(Marsh McLennan). MMC는 야후에서 폐지
     "PAYPAL HLDGS INC": ("PYPL", "금융"),
 
     # ── 산업재 ──────────────────────────────────────────────────────────

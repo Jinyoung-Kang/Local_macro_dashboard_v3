@@ -290,7 +290,12 @@ def task_sector_history() -> str:
         )
 
     store.put_snapshot(catalog.SNAP_SECTOR_HISTORY, payload)
-    return f"{len(collected)}/{len(tickers)} 티커"
+    detail = f"{len(collected)}/{len(tickers)} 티커"
+    if len(collected) < len(tickers) and payload.get("error"):
+        # 어느 티커가 왜 빠졌는지 상태 화면에 남깁니다. "136/137"만으로는 매시간 ERROR 로그를 내는
+        # 폐지 티커(MMC)를 아무도 알아채지 못했습니다.
+        detail += f" — 실패: {payload['error']}"
+    return detail
 
 
 def task_fx_history() -> str:
