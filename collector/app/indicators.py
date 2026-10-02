@@ -128,6 +128,11 @@ def fx_history_specs() -> list[dict]:
 # 스프레드 계산이 모두 같은 값을 보게 합니다.
 BOND_SCANNER_KEYS = ("us02y", "us10y", "us30y")
 
+# 이 가운데 yfinance 원본이 **선물 가격**이라 보정 없이는 수익률로 쓸 수 없는 키.
+# 보정에 실패하면 카드를 '수집 실패'로 둡니다 — 101.5(가격)를 101.5%(수익률)로
+# 보여 주는 것보다 낫습니다. 10년·30년의 원본(^TNX·^TYX)은 이미 수익률입니다.
+BOND_PRICE_ONLY_KEYS = ("us02y",)
+
 # 보정 실패 시 전일 종가를 채워 줄 FRED 공식 일별 확정치.
 BOND_FRED_FALLBACK = {
     "us02y": "DGS2",

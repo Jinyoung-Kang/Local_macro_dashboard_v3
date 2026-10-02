@@ -59,9 +59,10 @@ def apply_bond_override(payload: dict) -> dict:
             }
         except Exception as exc:  # noqa: BLE001
             logger.warning("국채 보정용 스크래핑 실패: %s", exc)
-            return payload
+            return _fail_unconverted_price_cards(payload, overridden=set())
 
     now_text = market_service.now_kst_text()
+    overridden: set[str] = set()
 
     for category in payload["categories"]:
         for item in category["items"]:
@@ -78,6 +79,7 @@ def apply_bond_override(payload: dict) -> dict:
                 continue
 
             price = float(price)
+            overridden.add(key)
             item.update({
                 "price": price,
                 "priceStr": f"{price:,.3f}",
@@ -123,6 +125,27 @@ def apply_bond_override(payload: dict) -> dict:
                 "previous": item.get("prevValue"),
             }
 
+    return _fail_unconverted_price_cards(payload, overridden)
+
+
+def _fail_unconverted_price_cards(payload: dict, overridden: set[str]) -> dict:
+    """
+    보정을 못 받은 선물 가격 카드(indicators.BOND_PRICE_ONLY_KEYS)를 '수집 실패'로 둡니다.
+
+    ZT=F는 2년 국채 선물 **가격**(~100pt)입니다. 보정이 실패했을 때 그 값을 그대로 두면
+    "미국채 2년물 수익률(%)" 라벨 아래 101.5가 ok로 남고, AI 텍스트와 스프레드 계산까지
+    가격을 수익률로 읽습니다. 모르는 값은 모른다고 적습니다.
+    """
+    for category in payload.get("categories") or []:
+        for item in category.get("items") or []:
+            key = item.get("key")
+            if key in indicators.BOND_PRICE_ONLY_KEYS and key not in overridden:
+                item.update({
+                    "status": "fail",
+                    "price": None, "priceStr": "N/A",
+                    "delta": None, "pct": None, "prevStr": "N/A", "prevValue": None, "deltaStr": "N/A",
+                    "note": "수익률 보정 실패 — 원본(ZT=F)은 선물 가격이라 수익률로 쓰지 않습니다",
+                })
     return payload
 
 

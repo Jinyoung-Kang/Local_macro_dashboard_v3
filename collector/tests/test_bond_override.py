@@ -82,3 +82,38 @@ def test_failed_scrape_leaves_key_out_of_rates(no_snapshot, monkeypatch):
 
     assert "us30y" not in result.get("rates", {})
     assert set(result["rates"]) == {"us02y", "us10y"}
+
+
+def test_scrape_unavailable_does_not_pass_futures_price_off_as_a_yield(no_snapshot, monkeypatch):
+    """
+    2년물 카드의 yfinance 원본은 ZT=F(국채 **선물 가격**, ~100pt)입니다. 보정이 통째로
+    실패하면 그 가격이 "미국채 2년물 수익률(%)" 라벨 아래 ok로 남아 101.5%처럼 읽혔고,
+    AI 텍스트에도 그대로 들어갔습니다. 수익률을 못 구했으면 '수집 실패'입니다.
+    10년·30년은 원본(^TNX·^TYX)이 이미 수익률이라 그대로 둡니다.
+    """
+    def boom():
+        raise RuntimeError("TradingView 차단")
+
+    monkeypatch.setattr(macro_cards.scraper_service, "collect_scraped_markets", boom)
+
+    result = macro_cards.apply_bond_override(_payload())
+
+    cards = {item["key"]: item for item in result["categories"][0]["items"]}
+    assert cards["us02y"]["status"] == "fail"
+    assert cards["us02y"]["price"] is None
+    assert "선물 가격" in cards["us02y"]["note"]
+    assert cards["us10y"]["status"] == "ok" and cards["us10y"]["price"] == pytest.approx(4.10)
+    assert "rates" not in result
+
+
+def test_single_key_override_failure_also_fails_the_futures_card(no_snapshot, monkeypatch):
+    monkeypatch.setattr(
+        macro_cards.scraper_service, "collect_scraped_markets",
+        lambda: _scraped(us02y={"status": "fail", "price": None}),
+    )
+
+    result = macro_cards.apply_bond_override(_payload())
+
+    cards = {item["key"]: item for item in result["categories"][0]["items"]}
+    assert cards["us02y"]["status"] == "fail"
+    assert set(result["rates"]) == {"us10y", "us30y"}
