@@ -66,16 +66,22 @@ public final class HoldingsDiff {
                 continue;
             }
             Holding before = previousByKey.get(key(holding));
-            Double prevWeight = before == null ? Double.valueOf(0.0) : before.weight();
-            Double prevShares = before == null ? Double.valueOf(0.0) : before.shares();
-            Double weightDiff = subtract(holding.weight(), prevWeight);
-            Double sharesDiff = subtract(holding.shares(), prevShares);
+            if (before == null) {
+                // 직전 분기에 없었다는 사실은 압니다. 주식 수·비중을 몰라도 신규 매수입니다 —
+                // 비어 있다고 '비중 확대'로 읽으면 없던 보유분을 늘린 것처럼 말하는 셈입니다.
+                rows.add(new Change(holding, NEW,
+                        subtract(holding.weight(), 0.0), subtract(holding.shares(), 0.0)));
+                continue;
+            }
+            Double weightDiff = subtract(holding.weight(), before.weight());
+            Double sharesDiff = subtract(holding.shares(), before.shares());
 
-            // 직전 분기에 **있었는데** 주식 수를 모르면 매매를 판정할 수 없습니다. 0으로
-            // 메우면 "신규 매수"로 단정하게 되는데, 그건 데이터가 없다는 사실을 매매 사실로
-            // 바꿔 말하는 것입니다.
-            boolean cannotCompare = before != null && (prevShares == null || holding.shares() == null);
-            String action = cannotCompare ? CANNOT_COMPARE : classify(weightDiff, holding.shares(), prevShares);
+            // 직전 분기에 **있었는데** 주식 수나 비중을 모르면 매매를 판정할 수 없습니다. 0으로
+            // 메우면 "신규 매수"나 "유지"로 단정하게 되는데, 그건 데이터가 없다는 사실을 매매
+            // 사실로 바꿔 말하는 것입니다.
+            boolean cannotCompare = before.shares() == null || holding.shares() == null
+                    || before.weight() == null || holding.weight() == null;
+            String action = cannotCompare ? CANNOT_COMPARE : classify(weightDiff, holding.shares(), before.shares());
             rows.add(new Change(holding, action, weightDiff, sharesDiff));
         }
 
@@ -131,11 +137,9 @@ public final class HoldingsDiff {
         return UNCHANGED;
     }
 
+    /** a − b. 한쪽이라도 모르면 모릅니다(0으로 메우지 않습니다). */
     static Double subtract(Double a, Double b) {
-        if (a == null && b == null) {
-            return null;
-        }
-        return (a == null ? 0.0 : a) - (b == null ? 0.0 : b);
+        return (a == null || b == null) ? null : a - b;
     }
 
     static Double negate(Double value) {

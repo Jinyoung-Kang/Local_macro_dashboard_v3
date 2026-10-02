@@ -67,4 +67,29 @@ class HoldingsDiffTest {
         assertThat(changes).hasSize(1);
         assertThat(changes.get(0).action()).isEqualTo(HoldingsDiff.ADDED);
     }
+
+    @Test
+    @DisplayName("직전 분기에 없던 항목은 주식 수를 몰라도 신규 매수다")
+    void absentBeforeIsNewEvenWithoutShares() {
+        // 직전 분기에 없었다는 사실은 압니다. 주식 수가 비어 있다고 '비중 확대'로 읽으면
+        // 없던 보유분을 늘린 것처럼 말하는 셈입니다.
+        List<Holding> previous = List.of(h("COCA COLA CO", "191216100", "COM", 400.0, 50.0, 40.0));
+        List<Holding> current = List.of(h("APPLE INC", "037833100", "COM", 600.0, null, 60.0));
+
+        Map<String, HoldingsDiff.Change> changes = byCusip(HoldingsDiff.compare(current, previous));
+
+        assertThat(changes.get("037833100").action()).isEqualTo(HoldingsDiff.NEW);
+    }
+
+    @Test
+    @DisplayName("비중을 모르면 변화도 모른다 — 0으로 메워 '유지'라고 하지 않는다")
+    void unknownWeightGivesUnknownDiff() {
+        List<Holding> previous = List.of(h("APPLE INC", "037833100", "COM", 500.0, 100.0, 50.0));
+        List<Holding> current = List.of(h("APPLE INC", "037833100", "COM", 600.0, 100.0, null));
+
+        HoldingsDiff.Change change = HoldingsDiff.compare(current, previous).get(0);
+
+        assertThat(change.weightDiff()).isNull();
+        assertThat(change.action()).isEqualTo(HoldingsDiff.CANNOT_COMPARE);
+    }
 }

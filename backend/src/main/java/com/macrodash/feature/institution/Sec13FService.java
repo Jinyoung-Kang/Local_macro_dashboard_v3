@@ -116,10 +116,11 @@ public class Sec13FService {
         JsonNode latest = selected.get(0);
         JsonNode previous = selected.size() > 1 ? selected.get(1) : null;
 
-        out.put("latest", Map.of(
-                "reportDate", String.valueOf(Json.asText(latest, "reportDate")),
-                "filingDate", String.valueOf(Json.asText(latest, "filingDate")),
-                "totalValue", Json.asDouble(latest, "totalValue")));
+        Map<String, Object> latestBlock = new LinkedHashMap<>();   // Map.of는 null(모르는 평가액)을 거부합니다
+        latestBlock.put("reportDate", String.valueOf(Json.asText(latest, "reportDate")));
+        latestBlock.put("filingDate", String.valueOf(Json.asText(latest, "filingDate")));
+        latestBlock.put("totalValue", Json.asDouble(latest, "totalValue"));
+        out.put("latest", latestBlock);
         out.put("holdings", compareQuarters(latest, previous, topN));
         out.put("weightHistory", weightHistory(selected, topN));
         return out;
@@ -277,9 +278,10 @@ public class Sec13FService {
                     fresh.put("cusip", holding.get("cusip"));
                     fresh.put("holders", new ArrayList<String>());
                     fresh.put("actions", new ArrayList<String>());
-                    fresh.put("totalValue", 0.0);
-                    fresh.put("weightSum", 0.0);
-                    fresh.put("maxWeight", 0.0);
+                    fresh.put("totalValue", null);
+                    fresh.put("weightSum", null);
+                    fresh.put("weightCount", 0);
+                    fresh.put("maxWeight", null);
                     return fresh;
                 });
 
@@ -290,12 +292,9 @@ public class Sec13FService {
 
                 holders.add(institution);
                 actions.add(String.valueOf(holding.get("action")));
-
-                double value = holding.get("value") instanceof Double d ? d : 0.0;
-                double weight = holding.get("weight") instanceof Double w ? w : 0.0;
-                entry.put("totalValue", (double) entry.get("totalValue") + value);
-                entry.put("weightSum", (double) entry.get("weightSum") + weight);
-                entry.put("maxWeight", Math.max((double) entry.get("maxWeight"), weight));
+                // 모르는 평가액·비중은 더하지 않고, 평균의 분모에도 넣지 않습니다. 0으로 더하면
+                // 합계와 평균이 실제보다 작아지고 정렬 순서까지 바뀝니다.
+                addKnown(entry, holding);
             }
         }
 
@@ -312,7 +311,8 @@ public class Sec13FService {
 
             Map<String, Object> row = new LinkedHashMap<>(entry);
             row.put("holderCount", holders.size());
-            row.put("avgWeight", (double) entry.get("weightSum") / holders.size());
+            row.put("avgWeight", averageKnownWeight(entry));
+            row.remove("weightCount");
             row.put("buyCount", actions.stream()
                     .filter(a -> a.contains("신규 매수") || a.contains("비중 확대")).count());
             row.put("sellCount", actions.stream()
@@ -323,7 +323,7 @@ public class Sec13FService {
 
         rows.sort(Comparator
                 .comparingInt((Map<String, Object> row) -> (int) row.get("holderCount"))
-                .thenComparingDouble(row -> (double) row.get("totalValue"))
+                .thenComparingDouble(Sec13FService::knownTotalValue)
                 .reversed());
 
         out.put("participants", participants);
@@ -399,8 +399,9 @@ public class Sec13FService {
                     fresh.put("name", key);
                     fresh.put("cusip", holding.get("cusip"));
                     fresh.put("buyers", new ArrayList<String>());
-                    fresh.put("totalValue", 0.0);
-                    fresh.put("weightSum", 0.0);
+                    fresh.put("totalValue", null);
+                    fresh.put("weightSum", null);
+                    fresh.put("weightCount", 0);
                     fresh.put("reportDate", Json.asText(current, "reportDate"));
                     return fresh;
                 });
@@ -408,11 +409,7 @@ public class Sec13FService {
                 @SuppressWarnings("unchecked")
                 List<String> buyers = (List<String>) entry.get("buyers");
                 buyers.add(institution);
-
-                double value = holding.get("value") instanceof Double d ? d : 0.0;
-                double weight = holding.get("weight") instanceof Double w ? w : 0.0;
-                entry.put("totalValue", (double) entry.get("totalValue") + value);
-                entry.put("weightSum", (double) entry.get("weightSum") + weight);
+                addKnown(entry, holding);
             }
         }
 
@@ -425,14 +422,15 @@ public class Sec13FService {
             }
             Map<String, Object> row = new LinkedHashMap<>(entry);
             row.put("buyerCount", buyers.size());
-            row.put("avgWeight", (double) entry.get("weightSum") / buyers.size());
+            row.put("avgWeight", averageKnownWeight(entry));
             row.remove("weightSum");
+            row.remove("weightCount");
             rows.add(row);
         }
 
         rows.sort(Comparator
                 .comparingInt((Map<String, Object> row) -> (int) row.get("buyerCount"))
-                .thenComparingDouble(row -> (double) row.get("totalValue"))
+                .thenComparingDouble(Sec13FService::knownTotalValue)
                 .reversed());
 
         out.put("participants", participants);
@@ -461,6 +459,34 @@ public class Sec13FService {
             return snapshot;
         }
         return store.read(Datasets.sec13f(cik, quarters), Datasets.MAX_AGE_SLOW, "sec_13f");
+    }
+
+    /** 집계 항목에 알려진 평가액·비중만 더합니다(모르는 값은 합계·분모·최대에서 제외). */
+    private static void addKnown(Map<String, Object> entry, Map<String, Object> holding) {
+        if (holding.get("value") instanceof Double value) {
+            Double total = (Double) entry.get("totalValue");
+            entry.put("totalValue", total == null ? value : total + value);
+        }
+        if (holding.get("weight") instanceof Double weight) {
+            Double sum = (Double) entry.get("weightSum");
+            entry.put("weightSum", sum == null ? weight : sum + weight);
+            entry.put("weightCount", (int) entry.get("weightCount") + 1);
+            Double max = (Double) entry.get("maxWeight");
+            if (entry.containsKey("maxWeight")) {
+                entry.put("maxWeight", max == null ? weight : Math.max(max, weight));
+            }
+        }
+    }
+
+    /** 비중을 아는 기관들의 평균. 하나도 모르면 null. */
+    private static Double averageKnownWeight(Map<String, Object> entry) {
+        int count = (int) entry.get("weightCount");
+        return count == 0 ? null : (Double) entry.get("weightSum") / count;
+    }
+
+    /** 정렬용 — 모르는 합계는 가장 뒤로. */
+    private static double knownTotalValue(Map<String, Object> row) {
+        return row.get("totalValue") instanceof Double d ? d : Double.NEGATIVE_INFINITY;
     }
 
     public Map<String, String> institutionByCik(String cik) {
