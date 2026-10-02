@@ -5,6 +5,8 @@ import tools.jackson.databind.JsonNode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeMap;
+import java.util.NavigableMap;
 
 /**
  * 수집기가 적재한 JSON을 안전하게 읽는 헬퍼.
@@ -99,6 +101,43 @@ public final class Json {
             }
         }
         return dates;
+    }
+
+    /**
+     * {@code {"dates":[…], "<valuesField>":[…]}} 짝을 날짜 → 값 지도로. 같은 칸의 날짜·값이
+     * 하나라도 비면 그 칸은 통째로 버립니다(배열이 한 칸씩 밀리지 않도록). cutoff 이전은 버립니다.
+     *
+     * <p>구루·스코어카드·환율·섹터·상관 화면이 저마다 같은 루프를 들고 있었습니다(4벌).
+     */
+    public static NavigableMap<LocalDate, Double> dateValueSeries(JsonNode entry, String datesField,
+                                                                   String valuesField, LocalDate cutoff) {
+        NavigableMap<LocalDate, Double> out = new TreeMap<>();
+        JsonNode dates = child(entry, datesField);
+        JsonNode values = child(entry, valuesField);
+        if (dates == null || values == null || !dates.isArray() || !values.isArray()) {
+            return out;
+        }
+        int size = Math.min(dates.size(), values.size());
+        for (int i = 0; i < size; i++) {
+            LocalDate date = parseDate(dates.get(i).asString(""));
+            JsonNode value = values.get(i);
+            if (date != null && value != null && value.isNumber()
+                    && (cutoff == null || !date.isBefore(cutoff))) {
+                out.put(date, value.asDouble());
+            }
+        }
+        return out;
+    }
+
+    /** {@code {"points":[{"date","value"|"close"}]}} 형태를 날짜 → 값 지도로(값이 있는 점만). */
+    public static NavigableMap<LocalDate, Double> pointSeries(JsonNode payload) {
+        NavigableMap<LocalDate, Double> out = new TreeMap<>();
+        List<LocalDate> dates = pointDates(payload);
+        List<Double> values = pointValues(payload);
+        for (int i = 0; i < Math.min(dates.size(), values.size()); i++) {
+            out.put(dates.get(i), values.get(i));
+        }
+        return out;
     }
 
     public static LocalDate parseDate(String text) {

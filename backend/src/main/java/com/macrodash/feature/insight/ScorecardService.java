@@ -1,8 +1,8 @@
 package com.macrodash.feature.insight;
 
 import com.macrodash.Kst;
+import com.macrodash.analytics.Benchmarks;
 import com.macrodash.analytics.Scorecard;
-import com.macrodash.feature.institution.GuruService;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
@@ -92,7 +92,7 @@ public class ScorecardService {
      */
     public Map<String, Object> scorecard(String symbol, String benchmark, int years) {
         Map<String, Object> out = new LinkedHashMap<>();
-        String benchmarkTicker = GuruService.BENCHMARKS.contains(benchmark) ? benchmark : "SPY";
+        String benchmarkTicker = Benchmarks.resolve(benchmark);
         int window = Math.max(1, Math.min(5, years));
         out.put("symbol", symbol);
         out.put("benchmark", benchmarkTicker);
@@ -126,9 +126,9 @@ public class ScorecardService {
         }
 
         LocalDate cutoff = Kst.today().minusYears(window);
-        NavigableMap<LocalDate, Double> series = GuruService.closes(tickers.get(symbol), cutoff);
+        NavigableMap<LocalDate, Double> series = Json.dateValueSeries(tickers.get(symbol), "dates", "close", cutoff);
         NavigableMap<LocalDate, Double> benchmarkSeries =
-                GuruService.closes(tickers.get(benchmarkTicker), cutoff);
+                Json.dateValueSeries(tickers.get(benchmarkTicker), "dates", "close", cutoff);
 
         Scorecard.Raw raw = Scorecard.measure(series, benchmarkSeries);
         if (raw.samples() == null || raw.samples() < 30) {
@@ -148,7 +148,7 @@ public class ScorecardService {
         List<Double> uDrawdown = new ArrayList<>();
         List<Double> uTrend = new ArrayList<>();
         tickers.propertyNames().forEach(ticker -> {
-            NavigableMap<LocalDate, Double> other = GuruService.closes(tickers.get(ticker), cutoff);
+            NavigableMap<LocalDate, Double> other = Json.dateValueSeries(tickers.get(ticker), "dates", "close", cutoff);
             Scorecard.Raw one = Scorecard.measure(other, null);
             if (one.momentum12m() != null) {
                 uMomentum12m.add(one.momentum12m());

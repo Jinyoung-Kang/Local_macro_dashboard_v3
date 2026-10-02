@@ -113,4 +113,17 @@ class SeriesMathTest {
         assertThat(SeriesMath.changeOverWeeks(weekly, 8)).as("8주 전 값 없음").isNull();
         assertThat(SeriesMath.changeOverWeeks(new java.util.TreeMap<>(), 4)).isNull();
     }
+
+    @Test
+    @DisplayName("두 계열의 차는 양쪽에 값이 있는 날짜에서만 — 한쪽 날짜만 있으면 버린다")
+    void subtractAlignedKeepsCommonDatesOnly() {
+        java.util.Map<LocalDate, Double> a = new java.util.TreeMap<>(java.util.Map.of(
+                LocalDate.of(2026, 1, 2), 4.1, LocalDate.of(2026, 1, 3), 4.2, LocalDate.of(2026, 1, 6), 4.0));
+        java.util.Map<LocalDate, Double> b = new java.util.TreeMap<>(java.util.Map.of(
+                LocalDate.of(2026, 1, 2), 3.6, LocalDate.of(2026, 1, 6), 3.5, LocalDate.of(2026, 1, 7), 3.4));
+
+        assertThat(SeriesMath.subtractAligned(a, b)).containsExactly(
+                java.util.Map.entry(LocalDate.of(2026, 1, 2), 4.1 - 3.6),
+                java.util.Map.entry(LocalDate.of(2026, 1, 6), 4.0 - 3.5));
+    }
 }

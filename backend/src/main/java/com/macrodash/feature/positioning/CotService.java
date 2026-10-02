@@ -3,7 +3,6 @@ package com.macrodash.feature.positioning;
 import com.macrodash.Kst;
 import com.macrodash.analytics.CotExtremes;
 import com.macrodash.analytics.SeriesMath;
-import com.macrodash.feature.insight.AnalyticsService;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
@@ -20,6 +19,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 
 /**
@@ -73,11 +73,9 @@ public class CotService {
             "GLD", "SPDR Gold Shares");
 
     private final StoreReader store;
-    private final AnalyticsService analytics;
 
-    public CotService(StoreReader store, AnalyticsService analytics) {
+    public CotService(StoreReader store) {
         this.store = store;
-        this.analytics = analytics;
     }
 
     public Map<String, Object> assetList() {
@@ -186,9 +184,7 @@ public class CotService {
             }
         }
 
-        var prices = proxy == null
-                ? new java.util.TreeMap<LocalDate, Double>()
-                : new java.util.TreeMap<>(analytics.etfSeries(proxy));
+        var prices = proxy == null ? new java.util.TreeMap<LocalDate, Double>() : proxyCloses(proxy);
 
         if (prices.isEmpty()) {
             out.put("available", false);
@@ -356,5 +352,14 @@ public class CotService {
         map.put("금", Map.of("code", "088691", "category", "원자재"));
         // Map.copyOf는 JVM마다 반복 순서가 달라집니다. 정해 둔 순서를 지키려고 LinkedHashMap을 그대로 감쌉니다.
         return Collections.unmodifiableMap(map);
+    }
+
+    /** 가격 대용 ETF 종가 — 섹터 화면이 쓰는 저장본에서 한 종목만. */
+    private NavigableMap<LocalDate, Double> proxyCloses(String symbol) {
+        Optional<Snapshot> snapshot = store.read(
+                Datasets.SNAP_SECTOR_HISTORY, Datasets.MAX_AGE_DAILY, "sector_history");
+        JsonNode tickers = snapshot.filter(s -> s.payload() != null)
+                .map(s -> Json.child(s.payload(), "tickers")).orElse(null);
+        return Json.dateValueSeries(tickers == null ? null : tickers.get(symbol), "dates", "close", null);
     }
 }

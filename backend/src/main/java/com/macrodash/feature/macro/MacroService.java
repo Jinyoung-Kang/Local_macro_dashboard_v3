@@ -165,18 +165,12 @@ public class MacroService {
     public Map<String, Object> officialSpread(String longId, String shortId) {
         requireKnownFredSeries(longId, false);
         requireKnownFredSeries(shortId, false);
-        Map<LocalDate, Double> longSeries = seriesMap(longId);
-        Map<LocalDate, Double> shortSeries = seriesMap(shortId);
-
         List<Map<String, Object>> points = new ArrayList<>();
-        for (Map.Entry<LocalDate, Double> entry : longSeries.entrySet()) {
-            Double shortValue = shortSeries.get(entry.getKey());
-            if (shortValue == null) {
-                continue;
-            }
+        for (Map.Entry<LocalDate, Double> entry
+                : SeriesMath.subtractAligned(seriesMap(longId), seriesMap(shortId)).entrySet()) {
             Map<String, Object> point = new LinkedHashMap<>();
             point.put("date", entry.getKey().toString());
-            point.put("value", entry.getValue() - shortValue);
+            point.put("value", entry.getValue());
             points.add(point);
         }
 
@@ -224,34 +218,15 @@ public class MacroService {
         if (parts == null) {
             return seriesMap(seriesId);
         }
-        Map<LocalDate, Double> left = seriesMap(parts[0]);
-        Map<LocalDate, Double> right = seriesMap(parts[1]);
-
-        Map<LocalDate, Double> out = new java.util.TreeMap<>();
-        for (Map.Entry<LocalDate, Double> entry : left.entrySet()) {
-            Double other = right.get(entry.getKey());
-            if (entry.getValue() != null && other != null) {
-                out.put(entry.getKey(), entry.getValue() - other);
-            }
-        }
-        return out;
+        return SeriesMath.subtractAligned(seriesMap(parts[0]), seriesMap(parts[1]));
     }
 
     private Map<LocalDate, Double> seriesMap(String seriesId) {
-        Map<LocalDate, Double> out = new LinkedHashMap<>();
         Optional<Snapshot> snapshot = store.read(
                 Datasets.fredSeries(seriesId), Datasets.MAX_AGE_DAILY, "fred_series");
-        if (snapshot.isEmpty() || snapshot.get().payload() == null) {
-            return out;
-        }
-        for (JsonNode point : Json.array(snapshot.get().payload(), "points")) {
-            LocalDate date = Json.parseDate(Json.asText(point, "date"));
-            Double value = Json.asDouble(point, "value");
-            if (date != null && value != null) {
-                out.put(date, value);
-            }
-        }
-        return out;
+        return snapshot.filter(s -> s.payload() != null)
+                .<Map<LocalDate, Double>>map(s -> Json.pointSeries(s.payload()))
+                .orElseGet(LinkedHashMap::new);
     }
 
     /**
@@ -453,19 +428,9 @@ public class MacroService {
      * 흉내 내면 숫자가 그럴듯해 보여도 의미가 없습니다.
      */
     private Map<String, Object> cpSpreadEntry() {
-        Map<LocalDate, Double> cp = seriesMap("CPF3M");
-        Map<LocalDate, Double> tb = seriesMap("DGS3MO");
-
-        List<Double> spread = new ArrayList<>();
-        List<LocalDate> dates = new ArrayList<>();
-        for (Map.Entry<LocalDate, Double> entry : cp.entrySet()) {
-            Double bill = tb.get(entry.getKey());
-            if (bill == null) {
-                continue;
-            }
-            dates.add(entry.getKey());
-            spread.add(entry.getValue() - bill);
-        }
+        Map<LocalDate, Double> aligned = SeriesMath.subtractAligned(seriesMap("CPF3M"), seriesMap("DGS3MO"));
+        List<LocalDate> dates = new ArrayList<>(aligned.keySet());
+        List<Double> spread = new ArrayList<>(aligned.values());
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("seriesId", "CPF3M-DGS3MO");

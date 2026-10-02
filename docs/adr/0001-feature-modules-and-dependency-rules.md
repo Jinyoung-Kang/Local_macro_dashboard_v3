@@ -44,7 +44,8 @@ config · web ─▶ feature/<기능> ─▶ read ─▶ store
 2. 컨트롤러는 자기 기능의 서비스와 `support`·`config`만 씁니다. 입력 검증(길이·형식)까지가 컨트롤러 몫이고,
    규칙과 조립은 서비스에 둡니다.
 3. 기능끼리는 서비스만 가져다 씁니다(컨트롤러는 안 됨). 기능 사이 의존에 순환이 없어야 합니다.
-   지금 의존: `ai → snapshot → macro·positioning·institution`, `positioning → insight → institution`.
+   지금 의존: `ai → snapshot → macro·positioning·institution`. (예전의 `positioning → insight → institution`은
+   JSON→시계열 헬퍼를 빌려 쓰려고 생긴 의존이었고, 헬퍼를 `support.Json`으로 옮기며 없어졌습니다.)
 4. 새 인터페이스·추상화 계층은 만들지 않습니다. 구현이 하나뿐인 인터페이스는 읽는 비용만 늘립니다.
 5. 스냅샷은 `read.StoreReader`로만 읽습니다(`read`·`store` 밖에서 `readSnapshot(` 금지). `StoreRepository`를
    직접 쓰면 "오래됐으면 수집을 요청한다"는 정책이 빠집니다 — 레이더 선택지가 토스 저장본을 그렇게 읽어

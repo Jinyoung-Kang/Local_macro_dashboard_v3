@@ -1,6 +1,7 @@
 package com.macrodash.feature.institution;
 
 import com.macrodash.Kst;
+import com.macrodash.analytics.Benchmarks;
 import com.macrodash.analytics.GuruStyle;
 import com.macrodash.analytics.PortfolioRisk;
 import com.macrodash.read.StoreReader;
@@ -35,7 +36,6 @@ import java.util.TreeMap;
 public class GuruService {
 
     /** 위험 분석에 쓸 벤치마크. 저장본에 함께 실려 오는 티커여야 합니다. */
-    public static final List<String> BENCHMARKS = List.of("SPY", "QQQ", "ACWI");
 
     private final StoreReader store;
 
@@ -235,7 +235,7 @@ public class GuruService {
     public Map<String, Object> risk(String cik, String benchmark, int years) {
         Institutions.requireKnownCik(cik);
         Map<String, Object> out = new LinkedHashMap<>();
-        String benchmarkTicker = BENCHMARKS.contains(benchmark) ? benchmark : "SPY";
+        String benchmarkTicker = Benchmarks.resolve(benchmark);
         int window = Math.max(1, Math.min(5, years));
         out.put("cik", cik);
         out.put("benchmark", benchmarkTicker);
@@ -319,13 +319,13 @@ public class GuruService {
         LocalDate cutoff = Kst.today().minusYears(window);
         Map<String, NavigableMap<LocalDate, Double>> prices = new LinkedHashMap<>();
         for (String ticker : weights.keySet()) {
-            NavigableMap<LocalDate, Double> series = closes(tickers.get(ticker), cutoff);
+            NavigableMap<LocalDate, Double> series = Json.dateValueSeries(tickers.get(ticker), "dates", "close", cutoff);
             if (series.size() >= 2) {
                 prices.put(ticker, series);
             }
         }
         NavigableMap<LocalDate, Double> benchmarkSeries =
-                closes(tickers.get(benchmarkTicker), cutoff);
+                Json.dateValueSeries(tickers.get(benchmarkTicker), "dates", "close", cutoff);
 
         PortfolioRisk.Returns portfolio = PortfolioRisk.weightedReturns(weights, prices);
         if (portfolio.size() < 20) {
@@ -427,29 +427,6 @@ public class GuruService {
             Double weight = Json.asDouble(holding, "weight");
             if (cusip != null && !cusip.isBlank() && weight != null && weight > 0) {
                 out.merge(cusip, weight, Double::sum);
-            }
-        }
-        return out;
-    }
-
-    /** 저장본의 {dates, close}를 날짜 지도로. cutoff 이전은 버립니다. */
-    public static NavigableMap<LocalDate, Double> closes(JsonNode entry, LocalDate cutoff) {
-        NavigableMap<LocalDate, Double> out = new TreeMap<>();
-        if (entry == null) {
-            return out;
-        }
-        JsonNode dates = Json.child(entry, "dates");
-        JsonNode closes = Json.child(entry, "close");
-        if (dates == null || closes == null || !dates.isArray() || !closes.isArray()) {
-            return out;
-        }
-        int size = Math.min(dates.size(), closes.size());
-        for (int i = 0; i < size; i++) {
-            LocalDate date = Json.parseDate(dates.get(i).asString(""));
-            JsonNode close = closes.get(i);
-            if (date != null && close != null && close.isNumber()
-                    && (cutoff == null || !date.isBefore(cutoff))) {
-                out.put(date, close.asDouble());
             }
         }
         return out;

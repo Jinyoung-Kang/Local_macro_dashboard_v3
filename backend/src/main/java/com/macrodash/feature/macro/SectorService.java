@@ -212,26 +212,8 @@ public class SectorService {
      * @return 같은 길이의 (날짜, 값) 목록. 한쪽이라도 비면 그 칸은 통째로 버립니다.
      */
     private Series alignedSeries(JsonNode series, String field) {
-        List<LocalDate> dates = new ArrayList<>();
-        List<Double> values = new ArrayList<>();
-
-        JsonNode dateArray = Json.child(series, "dates");
-        JsonNode valueArray = Json.child(series, field);
-        if (dateArray == null || valueArray == null
-                || !dateArray.isArray() || !valueArray.isArray()) {
-            return new Series(dates, values);
-        }
-
-        int size = Math.min(dateArray.size(), valueArray.size());
-        for (int i = 0; i < size; i++) {
-            LocalDate date = Json.parseDate(dateArray.get(i).asString(""));
-            JsonNode value = valueArray.get(i);
-            if (date != null && value != null && value.isNumber()) {
-                dates.add(date);
-                values.add(value.asDouble());
-            }
-        }
-        return new Series(dates, values);
+        var aligned = Json.dateValueSeries(series, "dates", field, null);
+        return new Series(new ArrayList<>(aligned.keySet()), new ArrayList<>(aligned.values()));
     }
 
     /** 길이가 같음이 보장된 (날짜, 종가) 한 쌍. */

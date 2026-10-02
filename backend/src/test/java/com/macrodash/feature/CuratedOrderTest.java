@@ -24,7 +24,7 @@ class CuratedOrderTest {
     @DisplayName("COT 자산 목록은 정해 둔 순서 그대로 나간다")
     @SuppressWarnings("unchecked")
     void cotAssetsKeepCuratedOrder() {
-        CotService service = new CotService(null, null);
+        CotService service = new CotService(null);
 
         List<Map<String, String>> assets = (List<Map<String, String>>) service.assetList().get("assets");
 

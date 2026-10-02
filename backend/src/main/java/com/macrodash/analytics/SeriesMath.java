@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.Map;
 
 /**
@@ -122,6 +123,24 @@ public final class SeriesMath {
     /** {@link #changeOverWeeks(NavigableMap, int)}를 임의의 기준일에서. */
     public static Double changeOverWeeks(NavigableMap<LocalDate, Double> series, LocalDate asOf, int weeks) {
         return difference(valueAsOf(series, asOf), valueAsOf(series, asOf.minusWeeks(weeks)));
+    }
+
+    /**
+     * 두 계열의 차(a − b)를 <b>양쪽에 값이 있는 날짜에서만</b> 계산합니다.
+     *
+     * <p>한쪽 날짜만 있는 날은 버립니다 — 0으로 메우면 없는 스프레드가 생깁니다.
+     * 금리차·CP 스프레드·파생 계열이 같은 루프를 세 벌 들고 있었습니다.
+     */
+    public static NavigableMap<LocalDate, Double> subtractAligned(Map<LocalDate, Double> a,
+                                                                  Map<LocalDate, Double> b) {
+        NavigableMap<LocalDate, Double> out = new TreeMap<>();
+        for (Map.Entry<LocalDate, Double> entry : a.entrySet()) {
+            Double other = b.get(entry.getKey());
+            if (entry.getValue() != null && other != null) {
+                out.put(entry.getKey(), entry.getValue() - other);
+            }
+        }
+        return out;
     }
 
     /** 그 날짜 또는 그보다 앞선 가장 가까운 날짜의 값. 없으면 null. */

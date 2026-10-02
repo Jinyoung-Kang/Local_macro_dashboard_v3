@@ -282,45 +282,18 @@ public class AnalyticsService {
     }
 
     private NavigableMap<LocalDate, Double> points(Optional<Snapshot> snapshot) {
-        NavigableMap<LocalDate, Double> out = new TreeMap<>();
-        if (snapshot.isEmpty() || snapshot.get().payload() == null) {
-            return out;
-        }
-        List<Double> values = Json.pointValues(snapshot.get().payload());
-        List<LocalDate> dates = Json.pointDates(snapshot.get().payload());
-        for (int i = 0; i < Math.min(values.size(), dates.size()); i++) {
-            out.put(dates.get(i), values.get(i));
-        }
-        return out;
+        return snapshot.filter(s -> s.payload() != null)
+                .map(s -> Json.pointSeries(s.payload()))
+                .orElseGet(TreeMap::new);
     }
 
     /** 섹터 화면이 쓰는 ETF 종가 저장본에서 한 종목만 꺼냅니다. */
-    public NavigableMap<LocalDate, Double> etfSeries(String symbol) {
-        NavigableMap<LocalDate, Double> out = new TreeMap<>();
+    private NavigableMap<LocalDate, Double> etfSeries(String symbol) {
         Optional<Snapshot> snapshot = store.read(
                 Datasets.SNAP_SECTOR_HISTORY, Datasets.MAX_AGE_DAILY, "sector_history");
-        if (snapshot.isEmpty() || snapshot.get().payload() == null) {
-            return out;
-        }
-        JsonNode tickers = Json.child(snapshot.get().payload(), "tickers");
-        JsonNode series = tickers == null ? null : tickers.get(symbol);
-        if (series == null) {
-            return out;
-        }
-        JsonNode dates = Json.child(series, "dates");
-        JsonNode closes = Json.child(series, "close");
-        if (dates == null || closes == null || !dates.isArray() || !closes.isArray()) {
-            return out;
-        }
-        int size = Math.min(dates.size(), closes.size());
-        for (int i = 0; i < size; i++) {
-            LocalDate date = Json.parseDate(dates.get(i).asString(""));
-            JsonNode close = closes.get(i);
-            if (date != null && close != null && close.isNumber()) {
-                out.put(date, close.asDouble());
-            }
-        }
-        return out;
+        JsonNode tickers = snapshot.filter(s -> s.payload() != null)
+                .map(s -> Json.child(s.payload(), "tickers")).orElse(null);
+        return Json.dateValueSeries(tickers == null ? null : tickers.get(symbol), "dates", "close", null);
     }
 
     /**

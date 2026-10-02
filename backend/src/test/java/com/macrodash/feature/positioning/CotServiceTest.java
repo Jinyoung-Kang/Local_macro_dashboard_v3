@@ -1,6 +1,5 @@
 package com.macrodash.feature.positioning;
 
-import com.macrodash.feature.insight.AnalyticsService;
 import com.macrodash.read.StoreReader;
 import com.macrodash.support.InvalidRequestException;
 import org.junit.jupiter.api.DisplayName;
@@ -26,7 +25,7 @@ class CotServiceTest {
     @Test
     @DisplayName("percentile이 NaN이면 400 — 조용히 이벤트 0건으로 끝내지 않는다")
     void nanPercentileIsRejected() {
-        CotService service = new CotService(mock(StoreReader.class), mock(AnalyticsService.class));
+        CotService service = new CotService(mock(StoreReader.class));
 
         assertThatThrownBy(() -> service.extremes("Gold", Double.NaN, 52))
                 .isInstanceOf(InvalidRequestException.class);

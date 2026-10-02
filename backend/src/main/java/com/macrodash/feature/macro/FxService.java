@@ -112,7 +112,7 @@ public class FxService {
             if (entry == null) {
                 continue;
             }
-            NavigableMap<LocalDate, Double> values = sliceFrom(closes(entry), cutoff);
+            NavigableMap<LocalDate, Double> values = Json.dateValueSeries(entry, "dates", "close", cutoff);
             FxIndex.Rebased rebased = FxIndex.rebase(values);
 
             Map<String, Object> one = new LinkedHashMap<>();
@@ -158,24 +158,6 @@ public class FxService {
                 if (known.contains(id)) {
                     out.add(id);
                 }
-            }
-        }
-        return out;
-    }
-
-    private NavigableMap<LocalDate, Double> closes(JsonNode entry) {
-        NavigableMap<LocalDate, Double> out = new TreeMap<>();
-        JsonNode dates = Json.child(entry, "dates");
-        JsonNode closes = Json.child(entry, "close");
-        if (dates == null || closes == null || !dates.isArray() || !closes.isArray()) {
-            return out;
-        }
-        int size = Math.min(dates.size(), closes.size());
-        for (int i = 0; i < size; i++) {
-            LocalDate date = Json.parseDate(dates.get(i).asString(""));
-            JsonNode close = closes.get(i);
-            if (date != null && close != null && close.isNumber()) {
-                out.put(date, close.asDouble());
             }
         }
         return out;
