@@ -297,7 +297,7 @@ public class GuruService {
             // 같은 회사가 클래스별로 두 줄 들어오면 비중을 합칩니다.
             weights.merge(ticker, weight, Double::sum);
             labels.putIfAbsent(ticker, name);
-            sectors.putIfAbsent(ticker, String.valueOf(Json.asText(mapped, "sector")));
+            sectors.putIfAbsent(ticker, sectorLabel(mapped));
         }
 
         uncovered.sort(Comparator.comparingDouble(
@@ -455,5 +455,11 @@ public class GuruService {
             }
         }
         return out;
+    }
+
+    /** 매핑표의 섹터. 없으면 "미분류" — String.valueOf(null)은 문자열 "null"을 만들어 화면에 그대로 나갔습니다. */
+    static String sectorLabel(JsonNode mapped) {
+        String sector = Json.asText(mapped, "sector");
+        return sector == null || sector.isBlank() ? "미분류" : sector;
     }
 }
