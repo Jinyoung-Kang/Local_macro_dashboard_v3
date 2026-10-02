@@ -734,12 +734,18 @@ def accumulate_history(
     기준일은 수집 시각이 아니라 latest_completed_session()이 계산한 거래일을
     씁니다. Naver/Daum이 "가장 최근에 끝난 거래일"만 주기 때문에, 수집 시각으로
     찍으면 토요일 새벽에 받은 금요일 데이터가 토요일로 기록됩니다.
+
+    같은 날·같은 조합은 **교체**합니다. 장중에는 5분마다 수집하므로 상위 N의
+    구성이 계속 바뀌는데, upsert만 하면 밀려난 종목이 옛 시각의 값으로 남아
+    하루치가 N행이 아니라 합집합(실제로 30행이 55~57행)이 됐습니다. 그러면
+    백업 읽기가 시각이 다른 값을 섞어 "그날의 상위 N"이라고 돌려줍니다.
     """
     if not rows:
         return 0
 
     session_str = latest_completed_session()
     obs_date = f"{session_str[:4]}-{session_str[4:6]}-{session_str[6:8]}"
+    prefix = f"{market}|{investor}|{trade_type}|{interval_type}|"
 
     records = []
     for row in rows:
@@ -752,13 +758,11 @@ def accumulate_history(
         })
         # 같은 거래일에 조건별로 여러 건이 들어오므로 entity에 조건을 포함해야
         # 서로 덮어쓰지 않습니다.
-        record["entity"] = (
-            f"{market}|{investor}|{trade_type}|{interval_type}|{record.get('code', '?')}"
-        )
+        record["entity"] = f"{prefix}{record.get('code', '?')}"
         records.append(record)
 
-    saved = store.put_observations(
-        catalog.OBS_RADAR, obs_date, records, entity_key="entity"
+    saved = store.replace_observations(
+        catalog.OBS_RADAR, obs_date, prefix, records, entity_key="entity"
     )
     logger.info(
         "수급 레이더 이력 누적: date=%s, rows=%s (%s/%s/%s/%s)",

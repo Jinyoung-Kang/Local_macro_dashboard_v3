@@ -319,3 +319,37 @@ def test_purge_run_logs_only_touches_old_run_logs(store):
     assert [row["date"] for row in store.read_timeseries("demo", "S")] == [old_day]
     assert len(store.read_observations("demo_obs")) == 1
     assert store.purge_run_logs(90) == {"taskRuns": 0, "collectorRuns": 0}
+
+
+def test_replace_observations_swaps_only_the_matching_prefix_for_that_day(store):
+    def rec(entity, code, amount):
+        return {"entity": entity, "code": code, "netAmountEok": amount}
+
+    store.put_observations(catalog.OBS_RADAR, "2026-09-11", [
+        rec("K|F|B|T|A", "A", 10.0), rec("K|F|B|T|B", "B", 9.0),
+        rec("K|I|B|T|Z", "Z", 5.0),                      # 다른 조합, 같은 날
+    ], entity_key="entity")
+    store.put_observations(catalog.OBS_RADAR, "2026-09-10", [
+        rec("K|F|B|T|A", "A", 1.0),                      # 같은 조합, 다른 날
+    ], entity_key="entity")
+
+    written = store.replace_observations(
+        catalog.OBS_RADAR, "2026-09-11", "K|F|B|T|",
+        [rec("K|F|B|T|B", "B", 50.0), rec("K|F|B|T|C", "C", 40.0)],
+        entity_key="entity",
+    )
+
+    assert written == 2
+    today = {r["code"]: r["netAmountEok"]
+             for r in store.read_observations(catalog.OBS_RADAR, obs_date="2026-09-11")}
+    assert today == {"B": 50.0, "C": 40.0, "Z": 5.0}
+    assert [r["code"] for r in store.read_observations(catalog.OBS_RADAR, obs_date="2026-09-10")] == ["A"]
+
+
+def test_replace_observations_with_nothing_to_write_deletes_nothing(store):
+    store.put_observations(catalog.OBS_RADAR, "2026-09-11",
+                           [{"entity": "K|F|B|T|A", "code": "A"}], entity_key="entity")
+
+    assert store.replace_observations(catalog.OBS_RADAR, "2026-09-11", "K|F|B|T|",
+                                      [{"code": "no-entity"}], entity_key="entity") == 0
+    assert len(store.read_observations(catalog.OBS_RADAR, obs_date="2026-09-11")) == 1

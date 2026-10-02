@@ -297,6 +297,54 @@ def put_observations(
     return len(rows)
 
 
+def replace_observations(
+    dataset: str,
+    obs_date: str,
+    entity_prefix: str,
+    records: Iterable[dict],
+    *,
+    entity_key: str,
+) -> int:
+    """
+    같은 날짜·같은 entity 접두어의 레코드를 **통째로 교체**합니다. 반영된 행 수.
+
+    put_observations(upsert)는 이전에 있던 행을 지우지 않습니다. 하루에 여러 번
+    받는 "상위 N" 같은 데이터는 구성이 바뀌므로, 밀려난 행이 옛 값으로 남아
+    그날 데이터가 N행이 아니라 합집합이 됩니다. 삭제와 삽입을 한 트랜잭션에서
+    해, 중간에 끊겨도 반쯤 지워진 날은 생기지 않습니다.
+
+    레코드가 비어 있으면 아무것도 지우지 않습니다 — 빈 수집 결과로 이력을
+    날리는 것이 가장 나쁜 결과입니다.
+    """
+    rows = []
+    for rec in records:
+        entity = rec.get(entity_key)
+        if entity is None:
+            continue
+        rows.append((dataset, obs_date, str(entity), Jsonb(rec)))
+
+    if not rows:
+        return 0
+
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM observations "
+            "WHERE dataset = %s AND obs_date = %s AND starts_with(entity, %s)",
+            (dataset, obs_date, entity_prefix),
+        )
+        cur.executemany(
+            """
+            INSERT INTO observations (dataset, obs_date, entity, payload, updated_at)
+            VALUES (%s, %s, %s, %s, now())
+            ON CONFLICT (dataset, obs_date, entity) DO UPDATE SET
+                payload    = EXCLUDED.payload,
+                updated_at = EXCLUDED.updated_at
+            """,
+            rows,
+        )
+    return len(rows)
+
+
 def read_observations(
     dataset: str,
     *,
