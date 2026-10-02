@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -56,12 +57,54 @@ public class StoreRepository {
      * 실행하세요"라는 틀린 안내를 냈습니다. 500이 나와야 원인(DB)이 보입니다.
      */
     public Optional<Snapshot> readSnapshot(String name) {
-        return jdbc.query(
-                "SELECT name, payload, kind, status, error, collected_at "
-                        + "FROM snapshots WHERE name = ?",
-                snapshotMapper(),
+        Snapshot cached = parsed.get(name);
+        if (cached != null) {
+            Instant current = collectedAt(name);
+            if (current != null && current.equals(cached.collectedAt())) {
+                return Optional.of(cached);
+            }
+            parsed.remove(name);
+            if (current == null) {
+                return Optional.empty();
+            }
+        }
+        Optional<Loaded> loaded = jdbc.query(
+                "SELECT name, payload, kind, status, error, collected_at, "
+                        + "pg_column_size(payload) AS bytes FROM snapshots WHERE name = ?",
+                loadedMapper(),
                 name
         ).stream().findFirst();
+        loaded.filter(l -> l.bytes() >= CACHE_MIN_BYTES && l.snapshot().payload() != null)
+                .ifPresent(l -> parsed.put(name, l.snapshot()));
+        return loaded.map(Loaded::snapshot);
+    }
+
+    /**
+     * 큰 스냅샷의 파싱 결과 캐시.
+     *
+     * <p>13F 분기 저장본(최대 2.5MB)과 종목 종가 저장본(2.2MB)을 요청마다 DB에서 읽어 다시
+     * 파싱했습니다 — 구루 화면이 요청 하나에 그런 저장본 12개를 파싱해 300~450ms였습니다.
+     * 이름별로 파싱 결과를 들고, 읽을 때 collected_at 한 값만 조회해 바뀌지 않았으면 그대로
+     * 씁니다(새 수집이 들어오면 collected_at이 바뀌어 자동으로 다시 읽음). 작은 저장본은
+     * 파싱이 싸고 수가 많아 캐시하지 않습니다. 캐시한 JsonNode는 읽기 전용으로만 씁니다.
+     */
+    static final long CACHE_MIN_BYTES = 32 * 1024;
+    private final Map<String, Snapshot> parsed = new ConcurrentHashMap<>();
+
+    record Loaded(Snapshot snapshot, long bytes) {
+    }
+
+    private Instant collectedAt(String name) {
+        List<Timestamp> rows = jdbc.query(
+                "SELECT collected_at FROM snapshots WHERE name = ?",
+                (rs, rowNum) -> rs.getTimestamp("collected_at"),
+                name);
+        return rows.isEmpty() ? null : toInstant(rows.get(0));
+    }
+
+    private RowMapper<Loaded> loadedMapper() {
+        RowMapper<Snapshot> base = snapshotMapper();
+        return (rs, rowNum) -> new Loaded(base.mapRow(rs, rowNum), rs.getLong("bytes"));
     }
 
     /** DB에 닿는가(헬스체크용). 여기서는 예외를 삼키는 것이 맞습니다 — 답이 곧 상태입니다. */
