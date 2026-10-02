@@ -29,15 +29,29 @@ public class CollectorClient {
 
     private static final Logger log = LoggerFactory.getLogger(CollectorClient.class);
 
+    /**
+     * 제어용 호출(상태 조회·백그라운드 실행 요청)의 읽기 타임아웃.
+     *
+     * <p>수집기가 연결은 받는데 응답을 못 하면(스레드가 외부 소스에 묶임) 90초 타임아웃의
+     * 호출이 그만큼 화면을 멈춥니다. 저장본이 있는데 "수집해 두라"고 알리는 호출과 상태
+     * 화면의 호출은 수 초면 충분합니다 — 오래 걸리는 것은 실제 수집(wait=true·live 조회)뿐입니다.
+     */
+    static final Duration CONTROL_READ_TIMEOUT = Duration.ofSeconds(3);
+
     private final RestClient client;
+    private final RestClient controlClient;
     private final AppProperties properties;
 
     public CollectorClient(AppProperties properties) {
         this.properties = properties;
+        this.client = build(properties, Duration.ofSeconds(properties.getCollectorTimeoutSeconds()));
+        this.controlClient = build(properties, CONTROL_READ_TIMEOUT);
+    }
 
+    private static RestClient build(AppProperties properties, Duration readTimeout) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(5));
-        factory.setReadTimeout(Duration.ofSeconds(properties.getCollectorTimeoutSeconds()));
+        factory.setReadTimeout(readTimeout);
 
         RestClient.Builder builder = RestClient.builder()
                 .baseUrl(properties.getCollectorUrl())
@@ -46,7 +60,7 @@ public class CollectorClient {
         if (!properties.getCollectorToken().isBlank()) {
             builder = builder.defaultHeader("X-Service-Token", properties.getCollectorToken());
         }
-        this.client = builder.build();
+        return builder.build();
     }
 
     /**
@@ -57,33 +71,33 @@ public class CollectorClient {
      *             기다리면 그만큼 화면이 멈춥니다(sec_13f 31.8초, fred_series 11.5초).
      */
     public Optional<JsonNode> runTask(String taskName, boolean wait) {
-        return post(uri -> uri.path("/collect/task/{task}")
+        return post(wait ? client : controlClient, uri -> uri.path("/collect/task/{task}")
                 .queryParam("wait", wait)
                 .build(taskName), Map.of(), "/collect/task/" + taskName);
     }
 
     /** 작업군 전체 실행 (수동 새로고침 버튼 등). */
     public Optional<JsonNode> runGroup(String group, boolean wait) {
-        return post(uri -> uri.path("/collect")
+        return post(wait ? client : controlClient, uri -> uri.path("/collect")
                 .queryParam("group", group)
                 .queryParam("wait", wait)
                 .build(), Map.of(), "/collect");
     }
 
     public Optional<JsonNode> requestRefresh() {
-        return post("/refresh", Map.of());
+        return post(controlClient, builder -> builder.path("/refresh").build(), Map.of(), "/refresh");
     }
 
     public Optional<JsonNode> status() {
-        return get("/status");
+        return get(controlClient, builder -> builder.path("/status").build(), "/status");
     }
 
     public Optional<JsonNode> tasks() {
-        return get("/tasks");
+        return get(controlClient, builder -> builder.path("/tasks").build(), "/tasks");
     }
 
     public Optional<JsonNode> taskHistory(String task, int limit) {
-        return get(uri -> uri.path("/task-history")
+        return get(controlClient, uri -> uri.path("/task-history")
                 .queryParam("limit", limit)
                 .queryParamIfPresent("task", Optional.ofNullable(task))
                 .build(), "/task-history");
@@ -165,9 +179,13 @@ public class CollectorClient {
     // 투자주체"로 처리했고, 화면에는 "수급 데이터를 얻지 못했습니다"만 떴습니다.
     // ASCII만 쓰는 호출은 멀쩡해서 한글이 들어가는 조합에서만 터졌습니다.
     private Optional<JsonNode> get(Function<UriBuilder, URI> uriFunction, String label) {
+        return get(client, uriFunction, label);
+    }
+
+    private Optional<JsonNode> get(RestClient via, Function<UriBuilder, URI> uriFunction, String label) {
         try {
             return Optional.ofNullable(
-                    client.get().uri(uriFunction).retrieve().body(JsonNode.class));
+                    via.get().uri(uriFunction).retrieve().body(JsonNode.class));
         } catch (Exception e) {
             log.warn("수집기 호출 실패 (GET {}): {}", label, e.getMessage());
             return Optional.empty();
@@ -178,19 +196,15 @@ public class CollectorClient {
         return get(builder -> builder.path(uri).build(), uri);
     }
 
-    private Optional<JsonNode> post(Function<UriBuilder, URI> uriFunction,
+    private Optional<JsonNode> post(RestClient via, Function<UriBuilder, URI> uriFunction,
                                     Object body,
                                     String label) {
         try {
             return Optional.ofNullable(
-                    client.post().uri(uriFunction).body(body).retrieve().body(JsonNode.class));
+                    via.post().uri(uriFunction).body(body).retrieve().body(JsonNode.class));
         } catch (Exception e) {
             log.warn("수집기 호출 실패 (POST {}): {}", label, e.getMessage());
             return Optional.empty();
         }
-    }
-
-    private Optional<JsonNode> post(String uri, Object body) {
-        return post(builder -> builder.path(uri).build(), body, uri);
     }
 }
