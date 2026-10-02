@@ -691,9 +691,14 @@ def fetch_pykrx_ranking(
     if frame.empty:
         return []
 
+    # 날짜 하나 + market= 로 불러야 "그날 전 종목" 표가 옵니다. YYYYMMDD 인자를
+    # 두 개 주면 pykrx는 '한 종목의 기간 조회'(ticker=시장 이름)로 분기해 빈 결과나
+    # 오류를 돌려주고, 그러면 모든 종목이 가격 0으로 저장됐습니다.
     try:
-        prices = pykrx_stock.get_market_ohlcv(target_date, target_date, market_code)
-    except Exception:  # noqa: BLE001
+        with contextlib.redirect_stdout(io.StringIO()):
+            prices = pykrx_stock.get_market_ohlcv(target_date, market=market_code)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("PyKrx 가격 조회 실패 (%s): %s — 가격 없이 저장합니다", target_date, exc)
         prices = None
 
     collected_at = kst.stamp()
@@ -701,11 +706,14 @@ def fetch_pykrx_ranking(
 
     for _, row in frame.iterrows():
         code = str(row["종목코드"]).zfill(6)
-        price, change_pct = 0.0, 0.0
+        # 가격을 모르면 None입니다. 0.0은 "0원에 거래됐다"로 읽히고 이력에도 그대로 남습니다.
+        price = change_pct = None
         if prices is not None and not prices.empty and code in prices.index:
             price_row = prices.loc[code]
-            price = float(price_row["종가"])
-            change_pct = float(price_row["등락률"])
+            if getattr(price_row, "ndim", 1) == 2:      # 같은 종목이 두 번 있으면 첫 행
+                price_row = price_row.iloc[0]
+            price = _optional_float(price_row.get("종가"))
+            change_pct = _optional_float(price_row.get("등락률"))
 
         records.append({
             "code": code,
@@ -918,3 +926,14 @@ def _to_float(value) -> float:
         return float(str(value).replace(",", "").strip())
     except (TypeError, ValueError):
         return 0.0
+
+
+def _optional_float(value) -> float | None:
+    """숫자가 아니거나 NaN이면 None — 모르는 값을 0으로 바꾸지 않습니다."""
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if number != number else number
