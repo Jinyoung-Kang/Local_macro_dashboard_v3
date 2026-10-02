@@ -97,4 +97,20 @@ class SeriesMathTest {
         assertThat(SeriesMath.periodDays("5y")).isEqualTo(1827);
         assertThat(SeriesMath.periodDays("max")).isNull();
     }
+
+    @Test
+    @DisplayName("n주 변화는 날짜로 재고, 기준일에 값이 없으면 그 앞의 가장 가까운 값을 쓴다")
+    void changeOverWeeksUsesDates() {
+        java.util.NavigableMap<LocalDate, Double> weekly = new java.util.TreeMap<>();
+        weekly.put(LocalDate.of(2026, 1, 7), 100.0);    // 수요일 발표 계열
+        weekly.put(LocalDate.of(2026, 1, 14), 110.0);
+        weekly.put(LocalDate.of(2026, 1, 21), 120.0);
+        weekly.put(LocalDate.of(2026, 2, 4), 150.0);    // 1/28 결측
+
+        assertThat(SeriesMath.changeOverWeeks(weekly, 4)).isEqualTo(50.0);      // 2/4 − 1/7
+        assertThat(SeriesMath.changeOverWeeks(weekly, 2)).isEqualTo(30.0);      // 2/4 − (1/21: 1/21 기준일 그대로)
+        assertThat(SeriesMath.changeOverWeeks(weekly, 1)).isEqualTo(30.0);      // 1/28 결측 → 1/21 값
+        assertThat(SeriesMath.changeOverWeeks(weekly, 8)).as("8주 전 값 없음").isNull();
+        assertThat(SeriesMath.changeOverWeeks(new java.util.TreeMap<>(), 4)).isNull();
+    }
 }

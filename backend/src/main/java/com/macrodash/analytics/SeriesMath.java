@@ -3,6 +3,8 @@ package com.macrodash.analytics;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NavigableMap;
+import java.util.Map;
 
 /**
  * 시계열 공통 계산 (기간 수익률 · 백분위 · 변화량).
@@ -100,6 +102,32 @@ public final class SeriesMath {
      */
     public static Double difference(Double a, Double b) {
         return (a == null || b == null) ? null : a - b;
+    }
+
+    /**
+     * 날짜 기준 n주 변화: 마지막 날짜의 값 − (마지막 날짜 − n주)의 값.
+     *
+     * <p>행 개수로 세지 않습니다. 일 단위 시계열에서 "4행 전"은 4거래일 전이지 4주 전이
+     * 아닙니다(순유동성 화면이 실제로 그렇게 계산해 국면 화면과 다른 값을 보여 줬습니다).
+     * 기준일에 값이 없으면 그보다 앞선 가장 가까운 날의 값을 씁니다(주간 발표 계열 대응).
+     *
+     * @param series 날짜 → 값
+     * @param weeks  몇 주 전과 비교할지
+     * @return 변화량. 시계열이 비었거나 n주 전 값이 없으면 null
+     */
+    public static Double changeOverWeeks(NavigableMap<LocalDate, Double> series, int weeks) {
+        return series.isEmpty() ? null : changeOverWeeks(series, series.lastKey(), weeks);
+    }
+
+    /** {@link #changeOverWeeks(NavigableMap, int)}를 임의의 기준일에서. */
+    public static Double changeOverWeeks(NavigableMap<LocalDate, Double> series, LocalDate asOf, int weeks) {
+        return difference(valueAsOf(series, asOf), valueAsOf(series, asOf.minusWeeks(weeks)));
+    }
+
+    /** 그 날짜 또는 그보다 앞선 가장 가까운 날짜의 값. 없으면 null. */
+    public static Double valueAsOf(NavigableMap<LocalDate, Double> series, LocalDate date) {
+        Map.Entry<LocalDate, Double> entry = series.floorEntry(date);
+        return entry == null ? null : entry.getValue();
     }
 
     /**

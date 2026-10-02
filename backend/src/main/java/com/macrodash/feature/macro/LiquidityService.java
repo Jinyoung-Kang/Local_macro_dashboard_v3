@@ -15,6 +15,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.NavigableMap;
 
 /**
  * 🏢 연준 순유동성 트래커.
@@ -60,10 +62,15 @@ public class LiquidityService {
         }
 
         List<Double> netValues = new ArrayList<>();
+        NavigableMap<LocalDate, Double> netByDate = new TreeMap<>();
         for (JsonNode row : rows) {
             Double value = Json.asDouble(row, "netLiquidityT");
             if (value != null) {
                 netValues.add(value);
+                LocalDate date = Json.parseDate(Json.asText(row, "date"));
+                if (date != null) {
+                    netByDate.put(date, value);
+                }
             }
         }
 
@@ -92,19 +99,13 @@ public class LiquidityService {
         }
         out.put("latest", latestBlock);
 
-        // 4주/12주 변화 — 유동성은 방향과 속도가 함께 중요합니다.
+        // 4주/12주 변화 — 유동성은 방향과 속도가 함께 중요합니다. 행은 WALCL(주간)·TGA·RRP(일간)
+        // 날짜의 합집합이라 일 단위이므로, 행 수가 아니라 날짜로 셉니다(국면 화면과 같은 계산).
         Map<String, Object> momentum = new LinkedHashMap<>();
-        momentum.put("change4w", changeOver(netValues, 4));
-        momentum.put("change12w", changeOver(netValues, 12));
+        momentum.put("change4w", SeriesMath.changeOverWeeks(netByDate, 4));
+        momentum.put("change12w", SeriesMath.changeOverWeeks(netByDate, 12));
         out.put("momentum", momentum);
 
         return out;
-    }
-
-    private Double changeOver(List<Double> values, int periods) {
-        if (values.size() <= periods) {
-            return null;
-        }
-        return values.get(values.size() - 1) - values.get(values.size() - 1 - periods);
     }
 }

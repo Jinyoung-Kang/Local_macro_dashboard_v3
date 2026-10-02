@@ -381,15 +381,13 @@ public class AnalyticsService {
         return entry == null ? null : entry.getValue();
     }
 
-    /** 순유동성 4주 변화. 4주 전 값이 없으면 null입니다. */
+    /** 순유동성 4주 변화. 4주 전 값이 없으면 null입니다(유동성 화면과 같은 계산). */
     private Double change4w(NavigableMap<LocalDate, Double> series) {
-        return series.isEmpty() ? null : change4wAsOf(series, series.lastKey());
+        return SeriesMath.changeOverWeeks(series, 4);
     }
 
     private Double change4wAsOf(NavigableMap<LocalDate, Double> series, LocalDate date) {
-        Double now = valueAsOf(series, date);
-        Double past = valueAsOf(series, date.minusWeeks(4));
-        return SeriesMath.difference(now, past);
+        return SeriesMath.changeOverWeeks(series, date, 4);
     }
 
     /** 주 단위 날짜 목록 (금리차 계열을 기준으로 잡습니다). */
