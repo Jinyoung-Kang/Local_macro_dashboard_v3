@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -407,8 +408,10 @@ public class MacroService {
         }
 
         JsonNode payload = snapshot.get().payload();
-        List<Double> values = Json.pointValues(payload);
-        List<LocalDate> dates = Json.pointDates(payload);
+        // 점 단위로 읽습니다 — 날짜·값 목록을 따로 뽑으면 날짜가 깨진 점 하나에 asOf와 value가
+        // 서로 다른 점을 가리킵니다.
+        NavigableMap<LocalDate, Double> series = Json.pointSeries(payload);
+        List<Double> values = new ArrayList<>(series.values());
         Double latest = SeriesMath.last(values);
         Double previous = SeriesMath.previous(values);
 
@@ -416,7 +419,7 @@ public class MacroService {
         entry.put("value", latest);
         entry.put("previous", previous);
         entry.put("delta", SeriesMath.difference(latest, previous));
-        entry.put("asOf", dates.isEmpty() ? null : dates.get(dates.size() - 1).toString());
+        entry.put("asOf", series.isEmpty() ? null : series.lastKey().toString());
         entry.put("percentile", SeriesMath.percentile(values));
         return entry;
     }

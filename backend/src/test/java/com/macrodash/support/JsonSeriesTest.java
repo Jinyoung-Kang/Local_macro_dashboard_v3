@@ -41,4 +41,17 @@ class JsonSeriesTest {
                 java.util.Map.entry(LocalDate.of(2026, 1, 2), 1.5),
                 java.util.Map.entry(LocalDate.of(2026, 1, 4), 2.5));
     }
+
+    @Test
+    @DisplayName("날짜가 깨진 점이 끼어도 뒤의 값이 한 칸씩 밀리지 않는다")
+    void pointSeriesDoesNotShiftAfterBrokenDate() {
+        // 날짜 목록과 값 목록을 따로 뽑아 zip하면, 날짜가 없는 두 번째 점이 날짜 목록에서만 빠져
+        // 1월 4일에 2.0(두 번째 점의 값)이 붙습니다. 점 단위로 읽어야 합니다.
+        var payload = MAPPER.readTree("""
+                {"points":[{"date":"2026-01-02","value":1.0},{"value":2.0},{"date":"2026-01-04","value":3.0}]}
+                """);
+        assertThat(Json.pointSeries(payload)).containsExactly(
+                java.util.Map.entry(LocalDate.of(2026, 1, 2), 1.0),
+                java.util.Map.entry(LocalDate.of(2026, 1, 4), 3.0));
+    }
 }

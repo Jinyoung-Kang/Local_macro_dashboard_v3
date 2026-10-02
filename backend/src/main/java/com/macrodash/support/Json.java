@@ -84,25 +84,6 @@ public final class Json {
         return values;
     }
 
-    /** {"points":[{"date",...}]} 형태에서 날짜만 추립니다(값이 있는 점만). */
-    public static List<LocalDate> pointDates(JsonNode payload) {
-        List<LocalDate> dates = new ArrayList<>();
-        for (JsonNode point : array(payload, "points")) {
-            Double value = asDouble(point, "value");
-            if (value == null) {
-                value = asDouble(point, "close");
-            }
-            if (value == null) {
-                continue;
-            }
-            LocalDate date = parseDate(asText(point, "date"));
-            if (date != null) {
-                dates.add(date);
-            }
-        }
-        return dates;
-    }
-
     /**
      * {@code {"dates":[…], "<valuesField>":[…]}} 짝을 날짜 → 값 지도로. 같은 칸의 날짜·값이
      * 하나라도 비면 그 칸은 통째로 버립니다(배열이 한 칸씩 밀리지 않도록). cutoff 이전은 버립니다.
@@ -129,13 +110,21 @@ public final class Json {
         return out;
     }
 
-    /** {@code {"points":[{"date","value"|"close"}]}} 형태를 날짜 → 값 지도로(값이 있는 점만). */
+    /**
+     * {@code {"points":[{"date","value"|"close"}]}} 형태를 날짜 → 값 지도로. 날짜와 값이 둘 다 있는
+     * 점만 넣습니다 — 점 단위로 읽어야 날짜가 깨진 점 하나가 뒤의 값을 한 칸씩 밀지 않습니다.
+     */
     public static NavigableMap<LocalDate, Double> pointSeries(JsonNode payload) {
         NavigableMap<LocalDate, Double> out = new TreeMap<>();
-        List<LocalDate> dates = pointDates(payload);
-        List<Double> values = pointValues(payload);
-        for (int i = 0; i < Math.min(dates.size(), values.size()); i++) {
-            out.put(dates.get(i), values.get(i));
+        for (JsonNode point : array(payload, "points")) {
+            Double value = asDouble(point, "value");
+            if (value == null) {
+                value = asDouble(point, "close");
+            }
+            LocalDate date = parseDate(asText(point, "date"));
+            if (date != null && value != null) {
+                out.put(date, value);
+            }
         }
         return out;
     }
