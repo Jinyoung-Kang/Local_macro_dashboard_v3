@@ -20,7 +20,9 @@ class AuthControllerTest {
     AuthControllerTest() {
         properties.setPassword("right-password");
         properties.setJwtSecret("controller-test-secret-key-32-bytes!!");
-        controller = new AuthController(new AuthService(properties), new LoginThrottle(), properties);
+        // 느린 차선의 대기를 실제로 기다리지 않습니다(동작은 LoginThrottleTest가 고정).
+        controller = new AuthController(new AuthService(properties),
+                new LoginThrottle(java.time.Clock.systemUTC(), millis -> { }), properties);
     }
 
     private ResponseEntity<Map<String, Object>> login(String password, String ip) {
@@ -39,17 +41,18 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("연속 실패하면 429 + Retry-After, 잠긴 동안에는 맞는 비밀번호도 거절")
-    void bruteForceIsThrottled() {
+    @DisplayName("연속 실패하면 429 + Retry-After, 그래도 맞는 비밀번호는 통과한다")
+    void bruteForceIsThrottledButOwnerStillGetsIn() {
         for (int i = 0; i < 5; i++) {   // 무료 시도 5회 (LoginThrottle.FREE_ATTEMPTS)
             assertThat(login("wrong", "10.0.0.2").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
-        ResponseEntity<Map<String, Object>> locked = login("wrong", "10.0.0.2");
-        assertThat(locked.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
-        assertThat(locked.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
+        ResponseEntity<Map<String, Object>> slowed = login("wrong", "10.0.0.2");
+        assertThat(slowed.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(slowed.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
 
-        assertThat(login("right-password", "10.0.0.2").getStatusCode())
-                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        // Docker Desktop에서는 모든 접속이 같은 주소로 보입니다. 잠금이었다면 공격자가
+        // 15분마다 한 번 틀려 주는 것만으로 주인을 영구히 막을 수 있었습니다.
+        assertThat(login("right-password", "10.0.0.2").getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(login("right-password", "10.0.0.3").getStatusCode())
                 .as("다른 주소는 영향 없음").isEqualTo(HttpStatus.OK);
     }

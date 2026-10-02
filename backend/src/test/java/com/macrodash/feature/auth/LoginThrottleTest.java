@@ -7,6 +7,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,42 +26,92 @@ class LoginThrottleTest {
         void advance(Duration d) { now = now.plus(d); }
     }
 
-    @Test
-    @DisplayName("무료 시도까지는 잠그지 않고, 그다음 실패부터 잠근다")
-    void locksAfterFreeAttempts() {
-        MutableClock clock = new MutableClock();
-        LoginThrottle throttle = new LoginThrottle(clock);
+    private final MutableClock clock = new MutableClock();
+    private final List<Long> sleeps = new ArrayList<>();
+    private final LoginThrottle throttle = new LoginThrottle(clock, sleeps::add);
 
+    private LoginThrottle.Outcome wrong(String client) {
+        return throttle.attempt(client, () -> false);
+    }
+
+    private LoginThrottle.Outcome right(String client) {
+        return throttle.attempt(client, () -> true);
+    }
+
+    @Test
+    @DisplayName("무료 시도까지는 바로 확인하고, 그다음부터는 느리게 확인한다")
+    void slowsDownAfterFreeAttempts() {
         for (int i = 0; i < LoginThrottle.FREE_ATTEMPTS; i++) {
-            assertThat(throttle.recordFailure("a")).isZero();
-            assertThat(throttle.retryAfter("a")).isZero();
+            assertThat(wrong("a").retryAfter()).isZero();
         }
-        assertThat(throttle.recordFailure("a")).isEqualTo(Duration.ofSeconds(30));
-        assertThat(throttle.retryAfter("a")).isEqualTo(Duration.ofSeconds(30));
-        assertThat(throttle.retryAfter("b")).as("다른 주소는 영향 없음").isZero();
+        assertThat(sleeps).as("무료 시도는 기다리지 않음").isEmpty();
+
+        LoginThrottle.Outcome sixth = wrong("a");
+        assertThat(sixth.accepted()).isFalse();
+        assertThat(sixth.retryAfter()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(sleeps).containsExactly(LoginThrottle.SLOW_DELAY_MS);
+        assertThat(throttle.isSlowed("b")).as("다른 주소는 영향 없음").isFalse();
     }
 
     @Test
-    @DisplayName("잠금 시간은 두 배씩 늘고 15분에서 멈춘다")
-    void backoffDoublesAndCaps() {
-        assertThat(LoginThrottle.lockFor(6)).isEqualTo(Duration.ofSeconds(30));
-        assertThat(LoginThrottle.lockFor(7)).isEqualTo(Duration.ofSeconds(60));
-        assertThat(LoginThrottle.lockFor(8)).isEqualTo(Duration.ofSeconds(120));
-        assertThat(LoginThrottle.lockFor(50)).isEqualTo(Duration.ofMinutes(15));
+    @DisplayName("실패가 쌓인 뒤에도 맞는 비밀번호는 통과한다 — 잠금이 아니라 지연이다")
+    void correctPasswordAlwaysPasses() {
+        for (int i = 0; i < 20; i++) {
+            wrong("a");
+        }
+        LoginThrottle.Outcome outcome = right("a");
+
+        assertThat(outcome.accepted()).isTrue();
+        assertThat(throttle.isSlowed("a")).as("성공하면 기록이 지워짐").isFalse();
     }
 
     @Test
-    @DisplayName("잠금이 끝나면 다시 시도할 수 있고, 성공하면 기록이 지워진다")
-    void unlocksAfterWaitAndResetsOnSuccess() {
-        MutableClock clock = new MutableClock();
-        LoginThrottle throttle = new LoginThrottle(clock);
+    @DisplayName("대기 힌트는 두 배씩 늘고 15분에서 멈춘다")
+    void hintDoublesAndCaps() {
+        assertThat(LoginThrottle.hintFor(6)).isEqualTo(Duration.ofSeconds(30));
+        assertThat(LoginThrottle.hintFor(7)).isEqualTo(Duration.ofSeconds(60));
+        assertThat(LoginThrottle.hintFor(8)).isEqualTo(Duration.ofSeconds(120));
+        assertThat(LoginThrottle.hintFor(50)).isEqualTo(Duration.ofMinutes(15));
+    }
+
+    @Test
+    @DisplayName("마지막 실패에서 15분이 지나면 실패 기록을 잊는다")
+    void forgetsFailuresAfterQuietPeriod() {
         for (int i = 0; i <= LoginThrottle.FREE_ATTEMPTS; i++) {
-            throttle.recordFailure("a");
+            wrong("a");
         }
-        clock.advance(Duration.ofSeconds(31));
-        assertThat(throttle.retryAfter("a")).isZero();
+        assertThat(throttle.isSlowed("a")).isTrue();
 
-        throttle.recordSuccess("a");
-        assertThat(throttle.recordFailure("a")).as("성공 후에는 처음부터 다시 셈").isZero();
+        clock.advance(LoginThrottle.FORGET_AFTER.plusSeconds(1));
+        assertThat(throttle.isSlowed("a")).isFalse();
+        assertThat(wrong("a").retryAfter()).as("오타 한 번이 다시 긴 대기가 되지 않음").isZero();
+    }
+
+    @Test
+    @DisplayName("느린 시도는 한 번에 하나만 받고, 겹치면 기다리지 않고 혼잡으로 답한다")
+    void onlyOneSlowAttemptAtATime() throws Exception {
+        CountDownLatch inside = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        LoginThrottle blocking = new LoginThrottle(clock, millis -> {
+            inside.countDown();
+            release.await();
+        });
+        for (int i = 0; i < LoginThrottle.FREE_ATTEMPTS; i++) {
+            blocking.attempt("attacker", () -> false);
+        }
+
+        AtomicReference<LoginThrottle.Outcome> first = new AtomicReference<>();
+        Thread thread = new Thread(() -> first.set(blocking.attempt("attacker", () -> false)));
+        thread.start();
+        inside.await();
+
+        LoginThrottle.Outcome second = blocking.attempt("attacker", () -> false);
+        assertThat(second.busy()).isTrue();
+        assertThat(second.retryAfter()).isEqualTo(LoginThrottle.BUSY_RETRY);
+
+        release.countDown();
+        thread.join();
+        assertThat(first.get().accepted()).isFalse();
+        assertThat(first.get().busy()).isFalse();
     }
 }

@@ -179,7 +179,7 @@ config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 |---|---|---|
 | XSS로 토큰 탈취 | 쿠키 `HttpOnly` (스크립트가 읽지 못함) | `AuthController` |
 | CSRF | 쿠키 `SameSite=Strict`. 화면(:3000)과 API(:8080)는 포트만 달라 같은 사이트 | `AuthController` |
-| 비밀번호 대입 | 연속 5회 실패 후 30초→2배씩→최대 15분 잠금, 429 + `Retry-After` | `LoginThrottle` |
+| 비밀번호 대입 | 연속 5회 실패 뒤에는 그 주소의 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 맞는 비밀번호는 통과(잠금이 아니라 지연 — Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 막음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제 | `LoginThrottle` |
 | 타이밍 공격 | 비밀번호 `MessageDigest.isEqual`, 수집기 토큰 `hmac.compare_digest` | `AuthService`, `collector/app/main.py` |
 | 공개된 기본 서명 키로 토큰 위조 | JWT_SECRET이 기본값·32바이트 미만이면 실행마다 무작위 키 | `AuthService.signingSecret` |
 | 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단) | `WebConfig.SessionFilter` |

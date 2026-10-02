@@ -7,6 +7,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.function.BooleanSupplier;
 
 /**
  * 로그인 비밀번호 대입(brute force)을 늦춥니다.
@@ -14,15 +16,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>화면·API는 기본으로 같은 와이파이의 다른 기기에도 열려 있고(WEB_BIND_HOST=0.0.0.0),
  * 비밀번호는 한 개뿐입니다. 제한이 없으면 초당 수백 번 대입할 수 있습니다.
  *
- * <p>규칙 — 연속 실패가 {@value #FREE_ATTEMPTS}회를 넘으면 잠급니다. 잠금 시간은
- * 30초에서 시작해 실패할 때마다 두 배, 최대 15분입니다. 성공하면 기록을 지웁니다.
+ * <p>규칙 — 한 주소의 연속 실패가 {@value #FREE_ATTEMPTS}회를 넘으면 그 주소의 시도는
+ * <b>느리게</b> 처리합니다. 느린 시도는 한 번에 하나만(전역) 받고, 받은 시도는
+ * {@value #SLOW_DELAY_MS}ms 뒤에 비밀번호를 확인합니다. 다른 느린 시도가 진행 중이면
+ * 즉시 429입니다. 그래서 공격자는 전체적으로 초당 한 번 정도만 대입할 수 있고(하루 8만여
+ * 번 — {@code make setup}이 만드는 16자 무작위 비밀번호에는 의미 없는 횟수), 요청 스레드를
+ * 잠그고 기다리는 시도도 하나뿐입니다.
+ *
+ * <p><b>맞는 비밀번호는 언제나 통과합니다.</b> 예전에는 실패가 쌓이면 주소를 잠그고
+ * 비밀번호를 보지도 않았습니다. Docker Desktop은 모든 접속을 같은 게이트웨이 주소로
+ * 보여 주므로 잠금이 사실상 전역이었고, 같은 와이파이의 누구든 15분마다 틀린 비밀번호
+ * 한 번으로 주인의 로그인을 영구히 막을 수 있었습니다. 실패 횟수도 성공 전엔 줄지 않아
+ * 한 번 잠긴 뒤에는 오타 한 번에 15분이었습니다. 지금은 마지막 실패에서 {@value}분이
+ * 지나면 기록이 사라집니다.
  *
  * <p>주의사항
  * <ul>
  *   <li>키는 접속 주소(remoteAddr)입니다. X-Forwarded-For는 클라이언트가 마음대로
- *       쓸 수 있어 믿지 않습니다. 도커 포트 포워딩 환경에서는 모든 접속이 같은
- *       게이트웨이 주소로 보일 수 있어, 그때는 사실상 <b>전체 공통</b> 제한이 됩니다.
- *       1인용 대시보드라 그쪽이 더 안전한 기본값입니다(최악의 경우 주인도 최대 15분 대기).</li>
+ *       쓸 수 있어 믿지 않습니다.</li>
  *   <li>상태는 메모리에만 둡니다. 재시작하면 초기화됩니다(단일 인스턴스 전제).</li>
  * </ul>
  */
@@ -30,75 +41,119 @@ import java.util.concurrent.ConcurrentHashMap;
 public class LoginThrottle {
 
     static final int FREE_ATTEMPTS = 5;
-    static final Duration BASE_LOCK = Duration.ofSeconds(30);
-    static final Duration MAX_LOCK = Duration.ofMinutes(15);
+    static final long SLOW_DELAY_MS = 1000;
+    /** 마지막 실패에서 이만큼 지나면 그 주소의 실패 기록을 잊습니다. */
+    static final Duration FORGET_AFTER = Duration.ofMinutes(15);
+    /** 느린 시도가 겹쳤을 때 돌려주는 Retry-After. */
+    static final Duration BUSY_RETRY = Duration.ofSeconds(1);
 
     /** 기록이 이보다 많아지면 오래된 것을 정리합니다(주소를 바꿔 가며 메모리를 채우는 공격 대비). */
     private static final int MAX_TRACKED = 10_000;
 
-    private record Record(int failures, Instant lockedUntil, Instant lastFailure) {
+    /** 시도 결과. {@code busy}면 비밀번호를 보지 않았습니다. */
+    public record Outcome(boolean accepted, boolean busy, Duration retryAfter) {
+        static final Outcome ACCEPTED = new Outcome(true, false, Duration.ZERO);
+        static final Outcome BUSY = new Outcome(false, true, BUSY_RETRY);
+
+        static Outcome rejected(Duration retryAfter) {
+            return new Outcome(false, false, retryAfter);
+        }
+    }
+
+    private record Record(int failures, Instant lastFailure) {
     }
 
     private final Map<String, Record> records = new ConcurrentHashMap<>();
+    private final Semaphore slowLane = new Semaphore(1);
     private final Clock clock;
+    private final Sleeper sleeper;
 
-    public LoginThrottle() {
-        this(Clock.systemUTC());
+    /** 테스트가 실제로 기다리지 않도록 대기를 바꿔 끼울 수 있게 합니다. */
+    interface Sleeper {
+        void sleep(long millis) throws InterruptedException;
     }
 
-    LoginThrottle(Clock clock) {
+    public LoginThrottle() {
+        this(Clock.systemUTC(), Thread::sleep);
+    }
+
+    LoginThrottle(Clock clock, Sleeper sleeper) {
         this.clock = clock;
+        this.sleeper = sleeper;
     }
 
     /**
-     * 지금 로그인 시도를 받아도 되는지 확인합니다.
+     * 로그인 시도를 처리합니다. 비밀번호 확인은 {@code passwordMatches}가 합니다.
      *
-     * @param client 접속 주소
-     * @return 잠겨 있으면 남은 시간, 아니면 {@link Duration#ZERO}
+     * @param client          접속 주소
+     * @param passwordMatches 비밀번호가 맞으면 true
+     * @return 통과·거절(Retry-After 힌트 포함)·혼잡
      */
-    public Duration retryAfter(String client) {
-        Record record = records.get(client);
-        if (record == null || record.lockedUntil() == null) {
-            return Duration.ZERO;
+    public Outcome attempt(String client, BooleanSupplier passwordMatches) {
+        boolean slow = isSlowed(client);
+        if (slow && !slowLane.tryAcquire()) {
+            return Outcome.BUSY;
         }
-        Duration left = Duration.between(clock.instant(), record.lockedUntil());
-        return left.isNegative() ? Duration.ZERO : left;
+        try {
+            if (slow) {
+                sleeper.sleep(SLOW_DELAY_MS);
+            }
+            if (passwordMatches.getAsBoolean()) {
+                records.remove(client);
+                return Outcome.ACCEPTED;
+            }
+            return Outcome.rejected(recordFailure(client));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Outcome.BUSY;
+        } finally {
+            if (slow) {
+                slowLane.release();
+            }
+        }
+    }
+
+    /** 이 주소의 다음 시도가 느린 차선으로 가는가(무료 시도를 넘겼고 아직 잊히지 않음). */
+    boolean isSlowed(String client) {
+        Record record = records.get(client);
+        if (record == null) {
+            return false;
+        }
+        if (record.lastFailure().plus(FORGET_AFTER).isBefore(clock.instant())) {
+            records.remove(client, record);
+            return false;
+        }
+        return record.failures() >= FREE_ATTEMPTS;
     }
 
     /**
      * 실패를 기록합니다.
      *
-     * @param client 접속 주소
-     * @return 이번 실패로 걸린 잠금 시간. 아직 무료 시도가 남았으면 {@link Duration#ZERO}
+     * @return 화면에 보여 줄 대기 힌트. 무료 시도가 남았으면 {@link Duration#ZERO}
      */
-    public Duration recordFailure(String client) {
+    Duration recordFailure(String client) {
         pruneIfLarge();
         Instant now = clock.instant();
         Record next = records.compute(client, (key, old) -> {
-            int failures = (old == null ? 0 : old.failures()) + 1;
-            Instant lockedUntil = failures > FREE_ATTEMPTS ? now.plus(lockFor(failures)) : null;
-            return new Record(failures, lockedUntil, now);
+            boolean forgotten = old == null || old.lastFailure().plus(FORGET_AFTER).isBefore(now);
+            int failures = (forgotten ? 0 : old.failures()) + 1;
+            return new Record(failures, now);
         });
-        return next.lockedUntil() == null ? Duration.ZERO : Duration.between(now, next.lockedUntil());
+        return next.failures() > FREE_ATTEMPTS ? hintFor(next.failures()) : Duration.ZERO;
     }
 
-    /** 로그인 성공 — 해당 주소의 기록을 지웁니다. */
-    public void recordSuccess(String client) {
-        records.remove(client);
-    }
-
-    /** 무료 시도를 넘긴 n번째 실패의 잠금 시간: 30초 × 2^(n-무료-1), 최대 15분. */
-    static Duration lockFor(int failures) {
+    /** 무료 시도를 넘긴 n번째 실패의 대기 힌트: 30초 × 2^(n-무료-1), 최대 15분. 강제가 아니라 안내입니다. */
+    static Duration hintFor(int failures) {
         int exponent = Math.min(failures - FREE_ATTEMPTS - 1, 10);
-        Duration lock = BASE_LOCK.multipliedBy(1L << exponent);
-        return lock.compareTo(MAX_LOCK) > 0 ? MAX_LOCK : lock;
+        Duration hint = Duration.ofSeconds(30).multipliedBy(1L << exponent);
+        return hint.compareTo(FORGET_AFTER) > 0 ? FORGET_AFTER : hint;
     }
 
     private void pruneIfLarge() {
         if (records.size() < MAX_TRACKED) {
             return;
         }
-        Instant cutoff = clock.instant().minus(MAX_LOCK);
+        Instant cutoff = clock.instant().minus(FORGET_AFTER);
         records.entrySet().removeIf(entry -> entry.getValue().lastFailure().isBefore(cutoff));
     }
 }

@@ -49,27 +49,32 @@ public class AuthController {
     /**
      * 비밀번호를 확인하고 세션 쿠키를 내려 줍니다.
      *
-     * @return 200 성공 · 401 비밀번호 틀림 · 429 연속 실패로 잠김(Retry-After 헤더에 남은 초)
+     * <p>연속 실패가 쌓인 주소의 시도는 {@link LoginThrottle}이 느리게 처리합니다. 맞는
+     * 비밀번호는 그래도 통과합니다 — 잠금이 아니라 지연입니다.
+     *
+     * @return 200 성공 · 401 비밀번호 틀림 · 429 연속 실패(Retry-After에 권장 대기 초) 또는
+     *         다른 느린 시도가 진행 중
      */
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody(required = false) LoginRequest request,
                                                      HttpServletRequest http) {
         String client = http.getRemoteAddr();
-        Duration wait = throttle.retryAfter(client);
-        if (!wait.isZero()) {
-            return tooMany(wait);
-        }
+        String password = request == null ? null : request.password();
+        LoginThrottle.Outcome outcome = throttle.attempt(client, () -> authService.passwordMatches(password));
 
-        if (request == null || !authService.passwordMatches(request.password())) {
-            Duration lock = throttle.recordFailure(client);
-            if (!lock.isZero()) {
-                return tooMany(lock);
+        if (outcome.busy()) {
+            return tooMany(outcome.retryAfter(), "다른 로그인 시도를 처리하는 중입니다. 잠시 후 다시 시도하세요.");
+        }
+        if (!outcome.accepted()) {
+            if (!outcome.retryAfter().isZero()) {
+                long seconds = seconds(outcome.retryAfter());
+                return tooMany(outcome.retryAfter(),
+                        "로그인 실패가 반복됐습니다. " + seconds + "초 뒤에 다시 시도하세요.");
             }
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("ok", false, "message", "비밀번호가 올바르지 않습니다."));
         }
 
-        throttle.recordSuccess(client);
         ResponseCookie cookie = sessionCookie(authService.issueToken(), authService.sessionSeconds());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -113,12 +118,15 @@ public class AuthController {
                 .build();
     }
 
-    private static ResponseEntity<Map<String, Object>> tooMany(Duration wait) {
-        long seconds = Math.max(1, (wait.toMillis() + 999) / 1000);
+    private static long seconds(Duration wait) {
+        return Math.max(1, (wait.toMillis() + 999) / 1000);
+    }
+
+    private static ResponseEntity<Map<String, Object>> tooMany(Duration wait, String message) {
+        long seconds = seconds(wait);
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(seconds))
-                .body(Map.of("ok", false, "retryAfterSeconds", seconds,
-                        "message", "로그인 실패가 반복돼 " + seconds + "초 동안 잠겼습니다."));
+                .body(Map.of("ok", false, "retryAfterSeconds", seconds, "message", message));
     }
 
     /** 세션 쿠키 값을 꺼냅니다. 없으면 null. */
