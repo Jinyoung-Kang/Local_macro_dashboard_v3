@@ -324,3 +324,83 @@ def test_recent_points_keeps_everything_on_first_run():
     points = [("2026-01-01", 1.0), ("2026-06-01", 2.0)]
     assert tasks._recent_points(points, None) == points
     assert tasks._recent_points(points, "2026-06-05") == [("2026-06-01", 2.0)]
+
+
+# ---- QA-001: 일부 소스만 실패해도 나머지 카드의 마지막 정상 값이 사라지던 문제 ---------------------
+def _card(key: str, price: float | None, *, status: str = "ok", last_ts: str = "2026-10-02 17:58 KST") -> dict:
+    item = {"key": key, "name": key, "note": "실시간", "market": "fx", "source": "Yahoo", "status": status}
+    if price is not None:
+        item.update({"price": price, "priceStr": f"{price:,.2f}", "lastTs": last_ts})
+    return item
+
+
+@pytest.mark.xfail(strict=True, reason="QA-001: 수정 전 — 실패한 카드의 이전 값을 버립니다")
+def test_QA001_partial_failure_keeps_previous_card_values(store, monkeypatch):
+    """
+    QA-001 (S2). 외부 시세 소스가 끊겼을 때 카드 21개 중 3개(다른 소스)만 살아남으면
+    task_macro_collected가 저장본 전체를 새 결과로 덮어, 실패한 18개 카드의 마지막 정상 값이
+    화면에서 사라졌습니다("데이터 수집 실패"). 전부 실패하면 저장본을 유지하면서(EmptyResult)
+    일부만 실패하면 버리는 것은 일관되지 않습니다. 실패한 카드는 직전 저장본의 값을 그 시각
+    그대로 이어받고 '이전 값'으로 표시해야 합니다.
+    """
+    store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, {
+        "updatedAt": "2026-10-02 17:58 KST",
+        "categories": [{"id": "fx", "items": [_card("dxy", 98.1), _card("usdkrw", 1401.5)]},
+                       {"id": "ust", "items": [_card("us10y", 4.12)]}],
+        "rates": {"us10y": {"current": 4.12, "previous": 4.10}},
+    })
+    monkeypatch.setattr(tasks.market_service, "collect_macro_cards", lambda categories: {
+        "categories": [{"id": "fx", "items": [_card("dxy", 98.4, last_ts="2026-10-02 20:14 KST"),
+                                              _card("usdkrw", None, status="fail")]},
+                       {"id": "ust", "items": [_card("us10y", None, status="fail")]}],
+        "rates": {"us10y": {"current": None, "previous": None}},
+    })
+    monkeypatch.setattr(tasks.market_service, "now_kst_text", lambda: "2026-10-02 20:14 KST")
+    monkeypatch.setattr(tasks.macro_cards, "apply_bond_override", lambda payload: payload)
+    monkeypatch.setattr(tasks.macro_cards, "inject_scraped_indices", lambda payload: payload)
+
+    detail = tasks.task_macro_collected()
+
+    saved = store.read_snapshot(catalog.SNAP_MACRO_COLLECTED).payload
+    items = {item["key"]: item for category in saved["categories"] for item in category["items"]}
+    assert items["dxy"]["price"] == 98.4                         # 새로 받은 값은 새 값
+    assert items["usdkrw"]["price"] == 1401.5                    # 실패한 카드는 마지막 정상 값
+    assert items["usdkrw"]["lastTs"] == "2026-10-02 17:58 KST"   # 그 값의 시각 그대로(새 시각으로 꾸미지 않음)
+    assert items["usdkrw"]["status"] == "ok"
+    assert items["usdkrw"]["isStale"] is True
+    assert "이전 값" in items["usdkrw"]["note"]
+    assert saved["rates"]["us10y"] == {"current": 4.12, "previous": 4.10}   # 스프레드용 금리도 이어받음
+    assert "이전 값" in detail
+
+
+def test_QA001_failed_card_without_previous_value_stays_failed(store, monkeypatch):
+    """직전 저장본에도 없던 카드는 그대로 실패입니다 — 없는 숫자를 만들지 않습니다."""
+    store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, {"categories": [{"id": "fx", "items": [_card("dxy", 98.1)]}], "rates": {}})
+    monkeypatch.setattr(tasks.market_service, "collect_macro_cards", lambda categories: {
+        "categories": [{"id": "fx", "items": [_card("dxy", 98.4), _card("usdkrw", None, status="fail")]}], "rates": {}})
+    monkeypatch.setattr(tasks.market_service, "now_kst_text", lambda: "now")
+    monkeypatch.setattr(tasks.macro_cards, "apply_bond_override", lambda payload: payload)
+    monkeypatch.setattr(tasks.macro_cards, "inject_scraped_indices", lambda payload: payload)
+
+    tasks.task_macro_collected()
+
+    saved = store.read_snapshot(catalog.SNAP_MACRO_COLLECTED).payload
+    usdkrw = saved["categories"][0]["items"][1]
+    assert usdkrw["status"] == "fail" and "price" not in usdkrw
+
+
+@pytest.mark.xfail(strict=True, reason="QA-001: 수정 전")
+def test_QA001_scraped_markets_partial_failure_keeps_previous_items(store, monkeypatch):
+    """같은 문제가 scraper_markets(지수·선물 폴백 소스)에도 있었습니다."""
+    store.put_snapshot(catalog.SNAP_SCRAPER_MARKETS, {"updatedAt": "t0", "items": [
+        {"key": "us10y", "status": "ok", "price": 4.12, "provider": "TradingView Scanner"},
+        {"key": "nikkei_fut", "status": "ok", "price": 66370.0, "provider": "TradingView Scanner"}]})
+    monkeypatch.setattr(tasks.scraper_service, "collect_scraped_markets", lambda: {"updatedAt": "t1", "items": [
+        {"key": "us10y", "status": "ok", "price": 4.15, "provider": "TradingView Scanner"},
+        {"key": "nikkei_fut", "status": "fail", "price": None, "error": "timeout", "provider": "TradingView Scanner"}]})
+
+    tasks.task_scraper_markets()
+
+    items = {item["key"]: item for item in store.read_snapshot(catalog.SNAP_SCRAPER_MARKETS).payload["items"]}
+    assert items["us10y"]["price"] == 4.15
+    assert items["nikkei_fut"]["price"] == 66370.0 and items["nikkei_fut"]["isStale"] is True
