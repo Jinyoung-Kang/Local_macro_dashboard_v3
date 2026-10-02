@@ -36,6 +36,9 @@ WORKDIR /app
 ENV NODE_ENV=production TZ=Asia/Seoul
 
 COPY --from=build /app/package.json ./
+# next start는 실행 시점에 이 파일을 읽습니다. 빠지면 poweredByHeader: false 같은 실행 설정이 무시돼
+# X-Powered-By: Next.js가 다시 붙습니다(QA-002). headers()는 빌드 산출물에 들어가 영향이 없었습니다.
+COPY --from=build /app/next.config.mjs ./
 COPY --from=prod-deps /app/node_modules ./node_modules
 # next start가 .next/cache에 쓰므로 그 폴더만 실행 사용자에게 줍니다. 나머지는 읽기 전용.
 COPY --from=build --chown=node:node /app/.next ./.next
