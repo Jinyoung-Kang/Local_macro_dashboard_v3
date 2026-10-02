@@ -104,14 +104,24 @@ public final class Scorecard {
         return average <= 0 ? null : (values.get(values.size() - 1) / average - 1.0) * 100.0;
     }
 
+    /**
+     * 일간 수익률. 0 이하·결측 종가가 낀 구간은 <b>표본에서 뺍니다</b>.
+     *
+     * <p>예전에는 그 구간을 0.0(변화 없음)으로 넣었습니다. 0원 종가는 거래가 아니라 깨진
+     * 데이터인데, 0% 수익률 표본이 변동성을 낮추고 백분위를 밀었습니다.
+     */
     static double[] dailyReturns(NavigableMap<LocalDate, Double> series) {
         List<Double> values = new ArrayList<>(series.values());
-        double[] out = new double[Math.max(0, values.size() - 1)];
+        List<Double> out = new ArrayList<>();
         for (int i = 1; i < values.size(); i++) {
-            double previous = values.get(i - 1);
-            out[i - 1] = previous <= 0 ? 0.0 : values.get(i) / previous - 1.0;
+            Double previous = values.get(i - 1);
+            Double current = values.get(i);
+            if (previous == null || current == null || previous <= 0 || current <= 0) {
+                continue;
+            }
+            out.add(current / previous - 1.0);
         }
-        return out;
+        return out.stream().mapToDouble(Double::doubleValue).toArray();
     }
 
     private static List<LocalDate> commonDates(NavigableMap<LocalDate, Double> a,
