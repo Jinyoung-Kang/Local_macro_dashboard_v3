@@ -402,3 +402,31 @@ def test_QA001_scraped_markets_partial_failure_keeps_previous_items(store, monke
     items = {item["key"]: item for item in store.read_snapshot(catalog.SNAP_SCRAPER_MARKETS).payload["items"]}
     assert items["us10y"]["price"] == 4.15
     assert items["nikkei_fut"]["price"] == 66370.0 and items["nikkei_fut"]["isStale"] is True
+
+
+# ---- QA-011: 외부가 응답하지 않으면 태스크가 상한 없이 돌던 문제 -----------------------------------
+@pytest.mark.xfail(strict=True, reason="QA-011: 수정 전 — 태스크에 시간 상한이 없습니다")
+def test_QA011_task_exceeding_deadline_is_recorded_as_failed_and_runner_moves_on(store, monkeypatch):
+    """
+    QA-011 (S3). QA 스택에서 외부 소스를 '응답 없음'(연결은 받고 답하지 않음)으로 두자 scraper_markets·
+    macro_collected·fred_series가 7분 넘게 돌았습니다(평소 2초). 요청마다 timeout이 있어도 재시도 × 소스 수만큼
+    곱해져 상한이 없고, 그동안 heartbeat도 멈춥니다. 태스크에는 속도군별 시간 상한이 있어야 하고, 넘기면
+    실패로 기록한 뒤 다음 태스크로 넘어가야 합니다(늦게 끝난 작업은 로그만 남깁니다).
+    """
+    import time
+
+    monkeypatch.setitem(tasks.TASK_DEADLINE_SECONDS, "fast", 0.3)
+
+    def hanging() -> str:
+        time.sleep(2.0)
+        return "늦은 결과"
+
+    started = time.perf_counter()
+    ok, detail = tasks.run_task(tasks.Task("hanging_task", "fast", hanging, ""))
+
+    assert ok is False
+    assert "시간 초과" in detail
+    assert time.perf_counter() - started < 1.5                 # 2초짜리 작업을 기다리지 않았다
+    summary = {row["task"]: row for row in store.read_task_summary()}
+    assert summary["hanging_task"]["status"] == "error"
+    assert tasks.deadline_for(tasks.Task("x", "weekly", hanging, "")) >= 600   # 13F는 10분 넘게 걸립니다
