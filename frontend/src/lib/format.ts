@@ -8,6 +8,16 @@
 
 export const EMPTY = "—";
 
+/** 값이 없거나 숫자로 쓸 수 없는가(null·undefined·NaN·±Infinity). Infinity는 "∞"로 찍혀 나갔습니다. */
+function missing(value: number | null | undefined): value is null | undefined {
+  return value === null || value === undefined || !Number.isFinite(value);
+}
+
+/** 보이는 숫자에 0이 아닌 자리가 있는가 — 부호는 보이는 숫자 기준으로 붙입니다. */
+function hasNonZeroDigit(text: string): boolean {
+  return /[1-9]/.test(text);
+}
+
 /**
  * 표시 자릿수로 반올림합니다. `-0`은 `0`으로 정규화합니다.
  *
@@ -27,7 +37,7 @@ export function formatNumber(
   value: number | null | undefined,
   digits = 2,
 ): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (missing(value)) {
     return EMPTY;
   }
   return roundForDisplay(value, digits).toLocaleString("ko-KR", {
@@ -41,7 +51,7 @@ export function formatSigned(
   digits = 2,
   suffix = "",
 ): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (missing(value)) {
     return EMPTY;
   }
   // 부호도 반올림 후 값으로 정합니다. 그래야 "+0.00"·"-0.00"이 안 나옵니다.
@@ -54,7 +64,7 @@ export function formatPercent(
   value: number | null | undefined,
   digits = 2,
 ): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (missing(value)) {
     return EMPTY;
   }
   return `${formatSigned(value, digits)}%`;
@@ -74,7 +84,7 @@ export function deltaColor(
   value: number | null | undefined,
   digits = 2,
 ): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (missing(value)) {
     return "text-muted";
   }
   const shown = roundForDisplay(value, digits);
@@ -113,7 +123,8 @@ export function formatKrw(value: number | null | undefined): string {
 /** 순매수처럼 부호가 뜻을 갖는 원화 금액. 양수에 +를 붙입니다(예: "+1,234억 원"). */
 export function formatSignedKrw(value: number | null | undefined): string {
   const text = formatKrw(value);
-  return value !== null && value !== undefined && value > 0 && text !== EMPTY ? `+${text}` : text;
+  // 0.4원은 "0 원"으로 찍히는데 원래 값이 양수라고 "+0 원"을 만들면 안 됩니다(roundForDisplay와 같은 이유).
+  return !missing(value) && value > 0 && hasNonZeroDigit(text) ? `+${text}` : text;
 }
 
 /**
@@ -122,14 +133,15 @@ export function formatSignedKrw(value: number | null | undefined): string {
  * @returns 예: `"+29.2만 주"`, `"-1,250 주"`, 값이 없으면 `"—"`
  */
 export function formatShares(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (missing(value)) {
     return EMPTY;
   }
   const magnitude = Math.abs(value);
-  const sign = value > 0 ? "+" : "";
-  if (magnitude >= 1e8) return `${sign}${formatNumber(value / 1e8, 2)}억 주`;
-  if (magnitude >= 1e4) return `${sign}${formatNumber(value / 1e4, 1)}만 주`;
-  return `${sign}${formatNumber(value, 0)} 주`;
+  const body =
+    magnitude >= 1e8 ? `${formatNumber(value / 1e8, 2)}억 주`
+    : magnitude >= 1e4 ? `${formatNumber(value / 1e4, 1)}만 주`
+    : `${formatNumber(value, 0)} 주`;
+  return value > 0 && hasNonZeroDigit(body) ? `+${body}` : body;
 }
 
 /**
@@ -140,25 +152,46 @@ export function formatShares(value: number | null | undefined): string {
  * @returns 단위가 붙은 문자열
  */
 function formatKoreanScale(value: number | null | undefined, suffix: string): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (missing(value)) {
     return EMPTY;
   }
   const magnitude = Math.abs(value);
-  if (magnitude >= 1e12) {
-    // 자릿수가 커질수록 소수는 의미를 잃습니다. "8,607.639조 원"에서 뒤 세
-    // 자리는 6,390억인데, 8,607조 옆에 붙어 있으면 읽는 사람이 자릿수를 다시
-    // 세게 만들 뿐입니다. 1,000조를 넘으면 정수로 적습니다.
-    const digits = magnitude >= 1e15 ? 0 : magnitude >= 1e14 ? 1 : 3;
-    return `${formatNumber(value / 1e12, digits)}조 ${suffix}`;
+  let index = SCALE_UNITS.findIndex(([unit]) => magnitude >= unit);
+  if (index < 0) {
+    index = SCALE_UNITS.length - 1;
   }
-  if (magnitude >= 1e8) {
-    // 억 단위는 소수점을 거의 쓰지 않습니다. 1,000억이 넘으면 정수로 충분합니다.
-    return `${formatNumber(value / 1e8, magnitude >= 1e11 ? 0 : 1)}억 ${suffix}`;
+  for (;;) {
+    const [unit, label] = SCALE_UNITS[index];
+    const digits = scaleDigits(unit, magnitude);
+    const rounded = roundForDisplay(value / unit, digits);
+    // 반올림이 다음 단위에 닿으면 올립니다. 9,999.95억을 "10,000.0억"이라고 적지 않고 "1.000조"로.
+    if (index > 0 && Math.abs(rounded) >= SCALE_UNITS[index - 1][0] / unit) {
+      index -= 1;
+      continue;
+    }
+    const number = formatNumber(rounded, digits);
+    return label ? `${number}${label} ${suffix}` : `${number} ${suffix}`;
   }
-  if (magnitude >= 1e4) {
-    return `${formatNumber(value / 1e4, 0)}만 ${suffix}`;
-  }
-  return `${formatNumber(value, 0)} ${suffix}`;
+}
+
+const SCALE_UNITS: readonly (readonly [number, string])[] = [
+  [1e12, "조"],
+  [1e8, "억"],
+  [1e4, "만"],
+  [1, ""],
+];
+
+/**
+ * 단위별 소수 자릿수.
+ *
+ * 조: 자릿수가 커질수록 소수는 의미를 잃습니다. "8,607.639조 원"에서 뒤 세 자리는 6,390억인데,
+ *     8,607조 옆에 붙어 있으면 읽는 사람이 자릿수를 다시 세게 만들 뿐입니다. 1,000조를 넘으면 정수.
+ * 억: 소수점을 거의 쓰지 않습니다. 1,000억이 넘으면 정수로 충분합니다.
+ */
+function scaleDigits(unit: number, magnitude: number): number {
+  if (unit === 1e12) return magnitude >= 1e15 ? 0 : magnitude >= 1e14 ? 1 : 3;
+  if (unit === 1e8) return magnitude >= 1e11 ? 0 : 1;
+  return 0;
 }
 
 /**
@@ -174,10 +207,7 @@ export function formatUsdWithKrw(
   rate: number | null | undefined,
 ): string {
   const dollars = formatUsd(usd);
-  if (
-    usd === null || usd === undefined || Number.isNaN(usd)
-    || rate === null || rate === undefined || !Number.isFinite(rate) || rate <= 0
-  ) {
+  if (missing(usd) || missing(rate) || rate <= 0) {
     return dollars;
   }
   return `${dollars} (약 ${formatKrw(usd * rate)})`;
@@ -190,8 +220,7 @@ export function formatUsdWithKrw(
  * @returns 예: 0.012 → `"120억 달러"`
  */
 export function formatTrillionUsd(valueInTrillions: number | null | undefined): string {
-  if (valueInTrillions === null || valueInTrillions === undefined
-      || Number.isNaN(valueInTrillions)) {
+  if (missing(valueInTrillions)) {
     return EMPTY;
   }
   return formatUsd(valueInTrillions * 1e12);
@@ -204,8 +233,7 @@ export function formatTrillionUsd(valueInTrillions: number | null | undefined): 
  * @returns 예: 877.0 → `"8,770억 달러"`
  */
 export function formatBillionUsd(valueInBillions: number | null | undefined): string {
-  if (valueInBillions === null || valueInBillions === undefined
-      || Number.isNaN(valueInBillions)) {
+  if (missing(valueInBillions)) {
     return EMPTY;
   }
   return formatUsd(valueInBillions * 1e9);
@@ -221,7 +249,7 @@ export function formatBillionUsd(valueInBillions: number | null | undefined): st
  * 크기에 맞는 단위로 내려 적습니다(같은 값입니다).
  */
 export function formatTrillionDelta(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (missing(value)) {
     return EMPTY;
   }
   // 부호가 중요한 값이라 +/-를 앞에 붙이고, 단위는 억·조로 통일합니다.
@@ -236,9 +264,11 @@ export function formatTrillionDelta(value: number | null | undefined): string {
  * @returns 예: `"3분 전"`. 값이 없으면 `"—"`
  */
 export function formatAge(seconds: number | null | undefined): string {
-  if (seconds === null || seconds === undefined) {
+  if (missing(seconds)) {
     return EMPTY;
   }
+  // 시계가 어긋나 음수가 와도 "-5초 전"을 찍지 않습니다.
+  seconds = Math.max(0, seconds);
   if (seconds < 60) {
     return `${Math.round(seconds)}초 전`;
   }
