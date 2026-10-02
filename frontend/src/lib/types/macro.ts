@@ -1,0 +1,220 @@
+/**
+ * 백엔드 응답 계약 — 거시·금리·유동성·섹터·환율.
+ *
+ * 값이 없을 수 있는 필드는 전부 `| null`입니다. 프런트는 그 null을 그대로 "—"로 표시하고,
+ * 절대 0으로 바꾸지 않습니다. 가져올 때는 `@/lib/types`(배럴)를 그대로 쓰면 됩니다.
+ */
+export interface MacroItem {
+  key: string;
+  name: string;
+  note?: string | null;
+  /** 거래되는 시장 id — 개장/마감 판정용 (lib/marketSessions MARKETS의 키) */
+  market?: string | null;
+  ticker?: string | null;
+  status: "ok" | "single" | "fail";
+  price?: number | null;
+  priceStr?: string | null;
+  delta?: number | null;
+  pct?: number | null;
+  deltaStr?: string | null;
+  prevStr?: string | null;
+  prevValue?: number | null;
+  prevSource?: string | null;
+  lastTs?: string | null;
+  source?: string | null;
+  isReference?: boolean;
+}
+
+export interface MacroCategory {
+  id: string;
+  title: string;
+  note?: string | null;
+  items: MacroItem[];
+}
+
+export interface SpreadBlock {
+  longId: string;
+  shortId: string;
+  points: { date: string; value: number }[];
+  latest: number | null;
+  previous: number | null;
+  /** 같은 쌍을 스크래핑 시세로 계산한 "지금" 값. 공식 확정치와 함께 보여 줍니다. */
+  scraped?: ScrapedSpread;
+}
+
+export interface MacroOverview {
+  available: boolean;
+  readMode: string;
+  message?: string;
+  collectedAtKst?: string;
+  ageSeconds?: number;
+  stale?: boolean;
+  categories: MacroCategory[];
+  rates?: Record<string, { current: number | null; previous: number | null }>;
+  spreads?: {
+    realtime: ScrapedSpread;
+    official10y2y: SpreadBlock;
+    official30y2y: SpreadBlock;
+  };
+}
+
+/** 스크래핑 수익률로 계산한 "지금" 스프레드 (공식 확정치와 성격이 다릅니다). */
+export interface ScrapedSpread {
+  /** 만기 키(us02y·us10y·us30y). 값 자체는 longValue/shortValue에만 있습니다. */
+  longKey?: string;
+  shortKey?: string;
+  longValue: number | null;
+  shortValue: number | null;
+  spread: number | null;
+  previousSpread: number | null;
+  delta: number | null;
+}
+
+export interface RiskEntry {
+  available: boolean;
+  label?: string;
+  unit?: string;
+  value?: number | null;
+  previous?: number | null;
+  delta?: number | null;
+  pct?: number | null;
+  asOf?: string | null;
+  percentile?: number | null;
+  isProxy?: boolean;
+  sourceLabel?: string | null;
+  points?: { date: string; value: number }[];
+}
+
+export interface RiskIndicators {
+  vix: RiskEntry;
+  move: RiskEntry;
+  hyOas: RiskEntry;
+  cpSpread: RiskEntry;
+  stlfsi: RiskEntry;
+}
+
+export interface AdvancedEntry {
+  id: string;
+  label: string;
+  unit: string;
+  digits: number;
+  group: string;
+  why: string;
+  source: string;
+  available: boolean;
+  value?: number | null;
+  prev?: number | null;
+  delta?: number | null;
+  asOf?: string | null;
+  percentile?: number | null;
+  status?: string;
+  color?: string;
+  note?: string;
+}
+
+export interface AdvancedIndicators {
+  order: string[];
+  latest: Record<string, AdvancedEntry>;
+  derived: { impliedNominal10y?: number; decomposition?: string };
+}
+
+export interface LiquidityRow {
+  date: string;
+  walcl: number;
+  wtregen: number;
+  rrpM: number;
+  rrpB: number;
+  netLiquidityM: number;
+  netLiquidityT: number;
+  walclT: number;
+  wtregenB: number;
+}
+
+export interface LiquidityResponse {
+  available: boolean;
+  isEstimated?: boolean;
+  message?: string;
+  collectedAtKst?: string;
+  ageSeconds?: number;
+  stale?: boolean;
+  rows: LiquidityRow[];
+  latest?: {
+    date?: string;
+    netLiquidityT: number | null;
+    previousT: number | null;
+    deltaT: number | null;
+    pct: number | null;
+    walclT?: number | null;
+    tgaB?: number | null;
+    rrpB?: number | null;
+  };
+  momentum?: { change4w: number | null; change12w: number | null };
+}
+
+export interface SectorRow {
+  ticker: string;
+  name: string;
+  kind: string;
+  price: number | null;
+  returns: Record<string, number | null>;
+  alpha?: Record<string, number | null>;
+  ranks?: Record<string, number>;
+}
+
+export interface SectorResponse {
+  available: boolean;
+  message?: string;
+  period: string;
+  periods: string[];
+  collectedAtKst?: string;
+  ageSeconds?: number;
+  stale?: boolean;
+  benchmark: string;
+  benchmarkReturns: Record<string, number | null>;
+  sectors: SectorRow[];
+  assetClasses: SectorRow[];
+}
+
+/** 💱 환율·달러인덱스 비교 차트. */
+export interface FxSeriesResponse {
+  available: boolean;
+  message?: string;
+  period: string;
+  /** index = 기준일 100 · raw = 원래 단위 */
+  mode: "index" | "raw";
+  /** 단위가 섞인 계열을 raw로 겹쳐 그리는 중인지. 화면이 경고를 띄웁니다. */
+  mixedUnits?: boolean;
+  selected?: string[];
+  catalog: { id: string; label: string; unit: string | null; ticker: string | null }[];
+  series: FxSeries[];
+  collectedAtKst?: string;
+  ageSeconds?: number;
+  stale?: boolean;
+}
+
+export interface FxSeries {
+  id: string;
+  label: string;
+  unit: string | null;
+  ticker: string | null;
+  available: boolean;
+  latest: number | null;
+  latestDate: string | null;
+  /** 기준일은 계열마다 다를 수 있습니다(시장별 휴일이 다릅니다). */
+  baseDate: string | null;
+  baseValue: number | null;
+  changePct: number | null;
+  points: { date: string; value: number | null }[];
+}
+
+/** 💱 원/달러 (달러 금액을 원화로 병기할 때). */
+export interface UsdKrwResponse {
+  available: boolean;
+  /** 값이 없으면 available=false이고 rate는 없습니다(기본 환율을 지어내지 않습니다). */
+  rate?: number;
+  name?: string;
+  lastTs?: string | null;
+  source?: string | null;
+  collectedAtKst?: string;
+  message?: string;
+}
