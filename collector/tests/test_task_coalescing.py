@@ -135,3 +135,31 @@ def test_다른_태스크는_서로를_막지_않는다():
 
     assert len(counter_a) == 1
     assert len(counter_b) == 1
+
+
+def test_기다리다_한도를_넘기면_실패가_아니라_합류다(monkeypatch):
+    """
+    백엔드가 요청한 13F가 주간 수집(10분 넘게)과 겹치면 180초 뒤 (False, …)가 돌아와
+    collector_runs에 'fail' 행이 남고 make status가 "마지막 실행: 실패"라고 말했습니다.
+    수집은 앞선 호출이 계속 진행 중이고 결과는 다음 조회에 반영되므로 실패가 아닙니다.
+    """
+    import threading
+    from app import tasks
+
+    monkeypatch.setattr(tasks, "_COALESCE_WAIT_SECONDS", 0.05)
+    release = threading.Event()
+    task = tasks.Task("slow_one", "fast", lambda: release.wait(5) or "끝", "느린 태스크")
+
+    leader = threading.Thread(target=lambda: tasks.run_task(task))
+    leader.start()
+    deadline = time.time() + 2
+    while task.name not in tasks._inflight and time.time() < deadline:
+        time.sleep(0.005)
+
+    ok, detail = tasks.run_task(task)      # 두 번째 호출: 기다리다 한도 초과
+
+    assert ok is True
+    assert "합류" in detail
+    release.set()
+    leader.join(timeout=5)
+    assert tasks._inflight == {}

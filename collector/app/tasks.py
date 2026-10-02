@@ -1034,13 +1034,38 @@ def _wait_for_inflight(task: Task, entry: "_InFlight") -> tuple[bool, str]:
     logger.info("%s: 이미 실행 중입니다. 새로 시작하지 않고 결과를 기다립니다.", task.name)
 
     if not entry.done.wait(timeout=_COALESCE_WAIT_SECONDS):
-        return False, (
-            f"이미 실행 중인 수집을 {int(_COALESCE_WAIT_SECONDS)}초 기다렸지만 "
-            "끝나지 않았습니다"
+        # 실패가 아닙니다 — 수집은 앞선 호출이 계속 진행 중이고 결과는 다음 조회에 반영됩니다.
+        # 예전엔 False를 돌려줘 백엔드가 요청한 13F(10분 넘게 걸림)가 주간 수집과 겹칠 때마다
+        # collector_runs에 'fail' 행이 남고 make status가 "마지막 실행: 실패"라고 말했습니다.
+        return True, (
+            f"이미 실행 중인 수집에 합류 — {int(_COALESCE_WAIT_SECONDS)}초 안에 끝나지 않아 "
+            "결과는 그 수집이 끝난 뒤 반영됩니다"
         )
 
     ok, detail = entry.result
     return ok, f"{detail} (동시에 실행 중이던 수집 결과를 함께 사용)"
+
+
+EMPTY_PREFIX = "수집 결과 없음: "
+
+
+def _run_status(ok_count: int, failures: list[str]) -> str:
+    """
+    실행(run) 상태를 태스크 결과에서 유도합니다.
+
+    ok      전부 성공            partial  일부 성공
+    empty   실패가 전부 '수집 결과 없음'(소스가 새 데이터를 안 줌 — 저장본 유지)
+    fail    오류가 하나라도 있음
+    예전에는 empty를 fail로 적어, 금융위 시세가 '새 기준일 없음'으로 끝난 평일마다 make status가
+    "마지막 실행: 실패"라고 말했습니다. 태스크 화면은 같은 것을 '데이터 없음'이라고 부릅니다.
+    """
+    if not failures:
+        return "ok"
+    if ok_count:
+        return "partial"
+    if all(f.split(": ", 1)[-1].startswith(EMPTY_PREFIX) for f in failures):
+        return "empty"
+    return "fail"
 
 
 def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
