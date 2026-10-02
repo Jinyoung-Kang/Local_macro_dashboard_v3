@@ -27,4 +27,5 @@ USER app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --no-access-log: 20초마다 오는 헬스체크 GET /health가 로그의 2/3를 차지해 실제 오류를 묻었습니다.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

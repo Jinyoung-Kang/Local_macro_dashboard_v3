@@ -23,9 +23,20 @@
 # WEB_BIND_HOST=127.0.0.1을 넣어 완전히 닫을 수 있습니다.
 # =============================================================================
 
+# 컨테이너 로그는 기본이 무제한(json-file)입니다. 서비스마다 10MB×3으로 돌립니다.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     restart: unless-stopped
+    logging: *logging
+    # 메모리 상한을 두지 않으면 JVM이 Docker VM 전체(수 GB)의 70%를 힙 상한으로 잡고, 다른
+    # 프로젝트의 컨테이너와 한 VM을 나눠 쓰다 OOM 킬러가 아무 컨테이너나(postgres 포함) 고릅니다.
+    mem_limit: 512m
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${DATABASE_USER:-macro}
@@ -42,13 +53,17 @@ services:
     ports:
       - "127.0.0.1:${DATABASE_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-macro} -d ${DATABASE_NAME:-macrodash}"]
+      # -h localhost: 소켓만 보면 최초 initdb(TCP가 아직 안 열림) 중에도 healthy로 나와
+      # 수집기·백엔드가 몇 초 동안 연결 거부를 받습니다.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U ${DATABASE_USER:-macro} -d ${DATABASE_NAME:-macrodash}"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   collector:
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 768m
     build: ./collector
     depends_on:
       postgres:
@@ -94,6 +109,8 @@ services:
 
   backend:
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 1g
     build: ./backend
     depends_on:
       postgres:

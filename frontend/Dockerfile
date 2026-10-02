@@ -45,4 +45,5 @@ COPY --from=build /app/public ./public
 USER node
 
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+# npm을 거치지 않습니다 — npm이 PID 1이면 docker stop의 SIGTERM이 한 단계 더 거쳐 느리게 전달됩니다.
+CMD ["node", "node_modules/next/dist/bin/next", "start"]
