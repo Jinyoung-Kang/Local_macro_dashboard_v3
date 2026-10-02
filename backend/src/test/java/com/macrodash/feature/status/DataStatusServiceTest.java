@@ -120,4 +120,14 @@ class DataStatusServiceTest {
         assertThatThrownBy(() -> service.startTask("sec_13f"))
                 .isInstanceOf(UpstreamUnavailableException.class);
     }
+
+    @Test
+    @DisplayName("수집기 응답에 키가 빠져도 500이 아니라 빈 목록이다 (Map.of는 null을 거부한다)")
+    void missingKeysInCollectorResponseDoNotCrash() {
+        when(collector.taskHistory("x", 10)).thenReturn(Optional.of(mapper.createObjectNode()));
+        when(collector.tasks()).thenReturn(Optional.of(mapper.createObjectNode()));
+
+        assertThat(service.taskHistory("x", 10)).containsEntry("history", List.of());
+        assertThat(service.tasks()).containsEntry("tasks", List.of());
+    }
 }

@@ -156,11 +156,16 @@ public class DataStatusService {
     public Map<String, Object> taskHistory(String task, int limit) {
         int rows = Params.clamp(limit, 1, MAX_HISTORY_ROWS);
         Optional<JsonNode> payload = collector.taskHistory(task, rows);
+        Map<String, Object> out = new LinkedHashMap<>();
         if (payload.isPresent()) {
-            return Map.of("history", redactDetails(payload.get().get("history")));
+            // Map.of는 null 값을 거부합니다(NPE → 500). 수집기 응답에 키가 빠지면 빈 목록입니다.
+            JsonNode history = payload.get().get("history");
+            out.put("history", history == null ? List.of() : redactDetails(history));
+            return out;
         }
-        return Map.of("history",
+        out.put("history",
                 repository.readTaskHistory(task, rows).stream().map(DataStatusService::taskView).toList());
+        return out;
     }
 
     // ------------------------------------------------------------ 실패 사유의 비밀값 가림
@@ -306,8 +311,15 @@ public class DataStatusService {
     /** 수집 작업 목록 (화면에서 개별 실행 버튼을 그리기 위해). */
     public Map<String, Object> tasks() {
         Optional<JsonNode> payload = collector.tasks();
-        return payload.<Map<String, Object>>map(node -> Map.of("tasks", node.get("tasks")))
-                .orElseGet(() -> Map.of("tasks", List.of(), "collectorReachable", false));
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (payload.isPresent()) {
+            JsonNode tasks = payload.get().get("tasks");
+            out.put("tasks", tasks == null ? List.of() : tasks);
+            return out;
+        }
+        out.put("tasks", List.of());
+        out.put("collectorReachable", false);
+        return out;
     }
 
     /**
