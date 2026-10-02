@@ -1,0 +1,42 @@
+  █ THRESHOLDS 
+    http_req_duration
+    ✗ 'p(95)<1500' p(95)=1.91s
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+  █ TOTAL RESULTS 
+    checks_total.......: 5099    83.929114/s
+    checks_succeeded...: 100.00% 5099 out of 5099
+    checks_failed......: 0.00%   0 out of 5099
+    ✓ status 200
+    CUSTOM
+    t__api_analytics_regime_years_5..................................: avg=285.7ms  min=19.6ms   med=189.9ms  max=1.76s    p(90)=643.15ms p(95)=888.21ms
+    t__api_cot_extremes_name_S_26P_20500_20E_Mini_percentile_95_lo...: avg=147.82ms min=3.46ms   med=96.53ms  max=1.34s    p(90)=320.21ms p(95)=442.87ms
+    t__api_guru_profiles.............................................: avg=545.71ms min=10.6ms   med=403.32ms max=2.43s    p(90)=1.22s    p(95)=1.58s   
+    t__api_guru_similarity...........................................: avg=1.04s    min=156.8ms  med=826.75ms max=3.28s    p(90)=2.05s    p(95)=2.43s   
+    t__api_kr_investor_flows.........................................: avg=131.03ms min=3.67ms   med=78.24ms  max=1.45s    p(90)=303.93ms p(95)=448.35ms
+    t__api_krx_futures_days_60.......................................: avg=123.91ms min=2.6ms    med=75.58ms  max=984.78ms p(90)=280.83ms p(95)=408.56ms
+    t__api_liquidity_years_3.........................................: avg=178.1ms  min=10.01ms  med=121.53ms max=1.53s    p(90)=409.77ms p(95)=560.33ms
+    t__api_macro_overview............................................: avg=471.75ms min=23.51ms  med=353.78ms max=2.16s    p(90)=994.3ms  p(95)=1.21s   
+    t__api_macro_risk................................................: avg=335.96ms min=9.76ms   med=233.64ms max=1.78s    p(90)=793.52ms p(95)=969.05ms
+    t__api_radar_ranking.............................................: avg=158.29ms min=1.69ms   med=88.27ms  max=1.44s    p(90)=371.85ms p(95)=604.29ms
+    t__api_sec13f_consensus_minHolders_2.............................: avg=713.46ms min=42.01ms  med=576.59ms max=2.34s    p(90)=1.46s    p(95)=1.78s   
+    t__api_sec13f_portfolio_cik_0001608046_quarters_8_topN_30........: avg=153.4ms  min=4.92ms   med=95.95ms  max=1.46s    p(90)=310.83ms p(95)=558.4ms 
+    t__api_sector_momentum...........................................: avg=270.11ms min=12.1ms   med=166.95ms max=1.24s    p(90)=604.86ms p(95)=953.89ms
+    t__api_snapshot_text.............................................: avg=2.11s    min=164.24ms med=1.99s    max=5.26s    p(90)=3.73s    p(95)=4.15s   
+    t__api_status....................................................: avg=287.98ms min=20.03ms  med=190.8ms  max=2.11s    p(90)=633.46ms p(95)=866.37ms
+    t__api_stock_scorecard_symbol_AAPL_benchmark_SPY_years_1.........: avg=934.05ms min=114.18ms med=688.77ms max=3.56s    p(90)=1.91s    p(95)=2.3s    
+    HTTP
+    http_req_duration................................................: avg=490.63ms min=1.69ms   med=224.17ms max=5.26s    p(90)=1.31s    p(95)=1.91s   
+      { expected_response:true }.....................................: avg=490.63ms min=1.69ms   med=224.17ms max=5.26s    p(90)=1.31s    p(95)=1.91s   
+    http_req_failed..................................................: 0.00%  0 out of 5100
+    http_reqs........................................................: 5100   83.945574/s
+    EXECUTION
+    iteration_duration...............................................: avg=591.37ms min=102.66ms med=324.72ms max=5.36s    p(90)=1.41s    p(95)=2.01s   
+    iterations.......................................................: 5099   83.929114/s
+    vus..............................................................: 50     min=50        max=50
+    vus_max..........................................................: 50     min=50        max=50
+    NETWORK
+    data_received....................................................: 166 MB 2.7 MB/s
+    data_sent........................................................: 2.0 MB 33 kB/s
+time="2026-10-02T21:09:52+09:00" level=error msg="thresholds on metrics 'http_req_duration' have been crossed"
+EXIT=99
