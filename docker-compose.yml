@@ -111,6 +111,8 @@ services:
       # 비워 두면 FRONTEND_PORT를 따라갑니다. 예전에는 3000으로 고정이라 포트만 바꾸면
       # 로그인(CORS)이 조용히 막혔습니다.
       FRONTEND_ORIGIN: "${FRONTEND_ORIGIN:-http://localhost:${FRONTEND_PORT:-3000}}"
+      # 어느 호스트에서 열든 이 포트의 origin은 허용합니다(휴대폰이 LAN IP로 접속할 때).
+      FRONTEND_PORT: "${FRONTEND_PORT:-3000}"
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
       AI_TIMEOUT_SECONDS: "${AI_TIMEOUT_SECONDS:-240}"
       # .env.example에 적혀 있었지만 전달되지 않아 값을 바꿔도 무시되던 두 항목
@@ -130,20 +132,29 @@ services:
 
   frontend:
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 256m
     build:
       context: ./frontend
       args:
-        # 비워 두면 BACKEND_PORT를 따라갑니다(8080이 막혀 포트를 바꿀 때 한 곳만 고치면 됨).
-        # 빌드할 때 번들에 들어가는 값이라 여기(빌드 인자)에만 둡니다. 실행 중 환경변수로는
-        # 바뀌지 않습니다 — 바꾼 뒤에는 make up(다시 빌드)이 필요합니다.
-        NEXT_PUBLIC_API_BASE: "${NEXT_PUBLIC_API_BASE:-http://localhost:${BACKEND_PORT:-8080}}"
+        # 화면은 실행 시점에 "열린 호스트 + 백엔드 포트"로 백엔드를 찾습니다 — 맥에서는 localhost,
+        # 휴대폰에서는 LAN IP. 전체 주소를 고정해야 할 때(리버스 프록시)만 NEXT_PUBLIC_API_BASE를
+        # 적으세요. 둘 다 빌드할 때 번들에 들어가므로 바꾼 뒤에는 make up(다시 빌드)이 필요합니다.
+        NEXT_PUBLIC_API_BASE: "${NEXT_PUBLIC_API_BASE:-}"
+        NEXT_PUBLIC_BACKEND_PORT: "${BACKEND_PORT:-8080}"
         # 'make up'이 현재 브랜치@커밋을 넣어 줍니다. 직접 docker compose로
         # 띄우면 비어 있고, 그때는 화면에 버전이 표시되지 않습니다.
         NEXT_PUBLIC_APP_VERSION: "${APP_VERSION:-}"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "${WEB_BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/login"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres-data:

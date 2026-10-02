@@ -17,8 +17,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # 백엔드 주소는 빌드 시점에 번들에 들어갑니다(NEXT_PUBLIC_ 접두사).
-ARG NEXT_PUBLIC_API_BASE=http://localhost:8080
+# 비워 두면 화면이 열린 호스트 + 백엔드 포트를 실행 시점에 씁니다(휴대폰도 같은 호스트의 백엔드를 찾음).
+ARG NEXT_PUBLIC_API_BASE=
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+ARG NEXT_PUBLIC_BACKEND_PORT=8080
+ENV NEXT_PUBLIC_BACKEND_PORT=$NEXT_PUBLIC_BACKEND_PORT
 
 # 이 이미지가 "어느 코드"로 빌드됐는지 화면에 새겨 둡니다(브랜치@커밋).
 # git pull을 했는데 화면이 그대로일 때, 코드를 안 받은 것인지 화면이 안 바뀐

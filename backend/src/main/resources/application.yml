@@ -51,6 +51,7 @@ dashboard:
   collector-timeout-seconds: ${COLLECTOR_TIMEOUT_SECONDS:90}
 
   frontend-origin: ${FRONTEND_ORIGIN:http://localhost:3000}
+  frontend-port: ${FRONTEND_PORT:3000}
 
   ai:
     nvidia-api-key: ${NVIDIA_API_KEY:}

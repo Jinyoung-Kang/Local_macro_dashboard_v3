@@ -9,8 +9,30 @@
 import { endpoints } from "./endpoints.ts";
 import { createSharedFetcher } from "./sharedRequest.ts";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
+/** 빌드 시점에 명시한 전체 주소(리버스 프록시 등). 비어 있으면 실행 시점에 정합니다. */
+const BUILD_TIME_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+const BACKEND_PORT = process.env.NEXT_PUBLIC_BACKEND_PORT || "8080";
+
+/**
+ * 백엔드 주소.
+ *
+ * 예전에는 빌드 시점의 `http://localhost:8080`이 번들에 박혔습니다. 휴대폰에서
+ * `http://192.168.x.x:3000`을 열면 **휴대폰 자신의** localhost:8080을 찾아 실패했고,
+ * 문서대로 LAN IP를 박아 다시 빌드하면 이번엔 맥의 localhost:3000에서 쿠키(SameSite=Strict)가
+ * 다른 사이트라 보내지지 않아 로그인이 깨졌습니다 — 둘 중 하나만 됐습니다.
+ *
+ * 화면을 연 주소(hostname)에 백엔드 포트만 붙이면 어느 기기에서 열어도 같은 호스트의
+ * 백엔드를 부르고, 쿠키도 같은 사이트가 됩니다. 전체 주소를 꼭 고정해야 하면(프록시)
+ * NEXT_PUBLIC_API_BASE로 덮어씁니다.
+ */
+export function apiBase(): string {
+  if (BUILD_TIME_BASE) return BUILD_TIME_BASE;
+  if (typeof window === "undefined") return `http://localhost:${BACKEND_PORT}`;
+  return `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`;
+}
+
+/** @deprecated 실행 시점 주소는 apiBase()를 쓰세요. 남아 있는 안내 문구용. */
+export const API_BASE = apiBase();
 
 export class ApiError extends Error {
   constructor(
@@ -66,9 +88,10 @@ async function request<T>(
       }, timeoutMs)
     : null;
 
+  const base = apiBase();
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${base}${path}`, {
       ...init,
       signal: controller.signal,
       credentials: "include",
@@ -80,13 +103,13 @@ async function request<T>(
   } catch (error) {
     if (timedOut) {
       throw new NetworkError(
-        `백엔드가 ${Math.round(timeoutMs / 1000)}초 안에 응답하지 않았습니다 (${API_BASE})`,
+        `백엔드가 ${Math.round(timeoutMs / 1000)}초 안에 응답하지 않았습니다 (${base})`,
       );
     }
     if (external?.aborted) {
       throw error; // 호출자가 취소 — 그대로 올려 호출자가 무시하게 둡니다
     }
-    throw new NetworkError(`백엔드 API(${API_BASE})에 연결하지 못했습니다`);
+    throw new NetworkError(`백엔드 API(${base})에 연결하지 못했습니다`);
   } finally {
     if (timer !== null) clearTimeout(timer);
     external?.removeEventListener("abort", forwardAbort);

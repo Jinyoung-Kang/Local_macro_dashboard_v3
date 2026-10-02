@@ -22,10 +22,11 @@ const nextConfig = {
   reactStrictMode: true,
   // "X-Powered-By: Next.js"로 프레임워크를 광고하지 않습니다.
   poweredByHeader: false,
-  // 백엔드 주소는 **빌드할 때** 번들에 들어갑니다(NEXT_PUBLIC_ 접두사). 실행 중인 컨테이너의
-  // 환경변수를 바꿔도 반영되지 않으므로, 바꾼 뒤에는 이미지를 다시 빌드하세요(make up).
+  // 백엔드 주소는 실행 시점에 화면을 연 호스트 + 백엔드 포트로 정합니다(lib/api.ts). 아래 두 값은
+  // **빌드할 때** 번들에 들어갑니다(NEXT_PUBLIC_ 접두사) — 바꾼 뒤에는 다시 빌드하세요(make up).
   env: {
-    NEXT_PUBLIC_API_BASE: process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080",
+    NEXT_PUBLIC_API_BASE: process.env.NEXT_PUBLIC_API_BASE ?? "",
+    NEXT_PUBLIC_BACKEND_PORT: process.env.NEXT_PUBLIC_BACKEND_PORT ?? "8080",
   },
   // 합쳐진 메뉴의 옛 주소. 즐겨찾기·공유 링크가 404가 되지 않게 새 화면으로 보냅니다.
   async redirects() {

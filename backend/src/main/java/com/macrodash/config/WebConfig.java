@@ -46,16 +46,28 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         // 쿠키를 주고받아야 하므로 allowCredentials가 필요하고,
         // 그 경우 오리진에 와일드카드를 쓸 수 없습니다.
-        List<String> origins = Arrays.stream(properties.getFrontendOrigin().split(","))
-                .map(String::trim)
-                .filter(origin -> !origin.isBlank())
-                .toList();
-
         registry.addMapping("/api/**")
-                .allowedOrigins(origins.toArray(String[]::new))
+                // 패턴에는 정확한 origin도 들어갑니다. 화면 포트의 origin은 호스트와 무관하게
+                // 허용합니다 — 휴대폰이 http://192.168.x.x:3000으로 열면 API도 같은 호스트의
+                // 백엔드 포트를 부르므로(lib/api.ts) origin이 LAN IP가 됩니다. 쿠키는 SameSite=Strict라
+                // 다른 사이트의 요청에는 애초에 실리지 않아, 패턴을 넓혀도 인증이 새지 않습니다.
+                .allowedOriginPatterns(allowedOriginPatterns(properties).toArray(String[]::new))
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowCredentials(true)
                 .maxAge(3600);
+    }
+
+    /** FRONTEND_ORIGIN의 명시 목록 + 화면 포트의 모든 호스트(http://*:포트). */
+    static List<String> allowedOriginPatterns(AppProperties properties) {
+        List<String> patterns = new java.util.ArrayList<>(Arrays.stream(properties.getFrontendOrigin().split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isBlank())
+                .toList());
+        String anyHost = "http://*:" + properties.getFrontendPort();
+        if (!patterns.contains(anyHost)) {
+            patterns.add(anyHost);
+        }
+        return patterns;
     }
 
     @Bean

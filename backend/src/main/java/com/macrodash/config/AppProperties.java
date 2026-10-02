@@ -49,6 +49,8 @@ public class AppProperties {
 
     /** 프런트엔드 오리진 (CORS 허용). */
     private String frontendOrigin = "http://localhost:3000";
+    /** 화면 포트. 어느 호스트에서 열든 이 포트의 origin은 허용합니다(휴대폰에서 LAN IP로 접속). */
+    private int frontendPort = 3000;
 
     public ReadMode resolvedReadMode() {
         return ReadMode.from(readMode);
@@ -135,6 +137,14 @@ public class AppProperties {
 
     public String getFrontendOrigin() {
         return frontendOrigin;
+    }
+
+    public int getFrontendPort() {
+        return frontendPort;
+    }
+
+    public void setFrontendPort(int frontendPort) {
+        this.frontendPort = frontendPort;
     }
 
     public void setFrontendOrigin(String frontendOrigin) {

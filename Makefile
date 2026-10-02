@@ -176,10 +176,10 @@ dev-backend: ## 백엔드 개발 서버
 	cd backend && mvn spring-boot:run
 
 dev-frontend: ## 화면 개발 서버 (핫 리로드)
-	cd frontend && NEXT_PUBLIC_API_BASE=http://localhost:$(BACKEND_PORT) npm run dev
+	cd frontend && NEXT_PUBLIC_BACKEND_PORT=$(BACKEND_PORT) npm run dev
 
 db: ## PostgreSQL 셸
-	$(COMPOSE) exec postgres psql -U macro -d macrodash
+	$(COMPOSE) exec postgres psql -U $${DATABASE_USER:-macro} -d $${DATABASE_NAME:-macrodash}
 
 # ------------------------------------------------------------------ 백업·정리
 backup: ## 데이터베이스 백업 (backups/ 폴더에 저장 · 실패하면 파일을 남기지 않음)
