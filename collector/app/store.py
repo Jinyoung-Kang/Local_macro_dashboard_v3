@@ -53,6 +53,9 @@ def get_pool() -> ConnectionPool:
             max_size=8,
             kwargs={"row_factory": dict_row},
             open=True,
+            # PostgreSQL이 재시작하면 풀의 연결이 전부 죽습니다. 검사 없이 나눠 주면 첫 사용에서야
+            # 터져 태스크 최대 8개가 연달아 실패하고, 실패 기록 자체도 유실됐습니다. 빌려줄 때 확인합니다.
+            check=ConnectionPool.check_connection,
         )
     return _pool
 
