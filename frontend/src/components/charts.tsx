@@ -417,7 +417,7 @@ export function HorizontalBars({
         <Tooltip
           {...tooltipStyle()}
           cursor={BAR_CURSOR}
-          formatter={(value: number) => [`${formatNumber(value, 2)}${unit}`, valueName]}
+          formatter={(value: number) => [`${formatNumber(value, digits)}${unit}`, valueName]}
         />
         <ReferenceLine x={0} stroke="#8B949E" />
         {/* 한국 관행: 양수(순매수·상승) 빨강, 음수 파랑 */}
