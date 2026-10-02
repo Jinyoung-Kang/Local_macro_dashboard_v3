@@ -48,6 +48,7 @@ class RadarServiceNonBlockingTest {
         StoreReader store = mock(StoreReader.class);
         when(store.readMode()).thenReturn(AppProperties.ReadMode.AUTO);
         // StoreReader.read는 오래된 저장본이면 수집기에 비동기로 알리고 저장본을 돌려줍니다.
+        when(store.readStored(eq(name))).thenReturn(Optional.of(stale));
         when(store.read(eq(name), anyLong(), anyString())).thenReturn(Optional.of(stale));
         CollectorClient collector = mock(CollectorClient.class);
 
@@ -77,5 +78,29 @@ class RadarServiceNonBlockingTest {
                 .ranking("KOSPI", "연기금", "순매수", 30, "TODAY", null);
 
         assertThat(out).containsEntry("available", true).containsEntry("sourceKind", "pykrx");
+    }
+
+    @Test
+    @DisplayName("저장본이 없는 기본 조합은 radar_rankings 수집을 기다리지 않고 바로 지금 받는다")
+    void missingSnapshotDoesNotAwaitScheduledTask() throws Exception {
+        // StoreReader.read는 저장본이 **없으면** 태스크를 기다립니다(수집기 읽기 타임아웃 90초).
+        // radar_rankings는 스케줄 조합 3개만 수집하므로 '개인·순매수' 같은 조합은 기다려도 결과가
+        // 없습니다 — 그 경로를 타면 이 테스트는 실패해야 합니다.
+        StoreReader store = mock(StoreReader.class);
+        when(store.readMode()).thenReturn(AppProperties.ReadMode.AUTO);
+        when(store.readStored(anyString())).thenReturn(Optional.empty());
+        when(store.read(anyString(), anyLong(), anyString()))
+                .thenThrow(new AssertionError("저장본이 없는데 StoreReader.read(수집 대기)를 불렀습니다"));
+        CollectorClient collector = mock(CollectorClient.class);
+        when(collector.liveRadar(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt(), anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(MAPPER.readTree("""
+                        {"source":"Daum","sourceKind":"daum","isHistorical":false,"rows":[{"code":"005930"}]}
+                        """)));
+
+        Map<String, Object> out = new RadarService(store, mock(StoreRepository.class), collector)
+                .ranking("KOSPI", "개인", "순매수", 30, "TODAY", null);
+
+        assertThat(out).containsEntry("available", true).containsEntry("sourceKind", "daum");
+        verify(store, never()).read(anyString(), anyLong(), anyString());
     }
 }

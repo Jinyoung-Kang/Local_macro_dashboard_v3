@@ -121,9 +121,15 @@ public class RadarService {
         // 비동기로 요청하고 저장본을 돌려줍니다("화면은 수집을 기다리지 않습니다").
         // 예전에는 15분 지난 저장본에서 수집기를 동기로 불러(읽기 타임아웃 90초), 수집기가
         // 응답을 못 하면 랭킹 90초·교집합 180초·AI 리포트 270초가 멈췄습니다.
-        Optional<Snapshot> snapshot = custom
-                ? Optional.empty()
-                : store.read(snapshotName, Datasets.MAX_AGE_REALTIME, "radar_rankings");
+        //
+        // 저장본이 **없으면** StoreReader.read를 거치지 않습니다. 그 경로는 radar_rankings
+        // 태스크가 끝날 때까지 기다리는데(최대 90초), 그 태스크는 스케줄 조합 3개만 수집하므로
+        // 다른 조합(개인·연기금·순매도×기관·5일/20일 …)은 기다려 봐야 결과가 없습니다.
+        // 그런 조합은 아래에서 바로 지금 받습니다.
+        Optional<Snapshot> snapshot = Optional.empty();
+        if (!custom && store.readStored(snapshotName).isPresent()) {
+            snapshot = store.read(snapshotName, Datasets.MAX_AGE_REALTIME, "radar_rankings");
+        }
 
         if (snapshot.isPresent() && snapshot.get().payload() != null) {
             return fillFromSnapshot(out, snapshot.get());
