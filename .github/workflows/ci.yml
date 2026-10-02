@@ -52,6 +52,13 @@ jobs:
         working-directory: collector
         run: ruff check app tests
 
+      # 알려진 취약점 점검. 실패해도 빌드를 막지 않고 경고로 남깁니다 — 고치는 쪽이 사람이고,
+      # 새 공시가 올라올 때마다 모든 PR이 빨개지면 아무도 보지 않게 됩니다.
+      - name: 취약점 점검 (pip-audit)
+        working-directory: collector
+        continue-on-error: true
+        run: pip install pip-audit && pip-audit -r requirements.txt
+
       - name: 스키마 적용 (번호 순서)
         env:
           PGPASSWORD: macro
@@ -142,6 +149,11 @@ jobs:
       - name: 린트
         working-directory: frontend
         run: npm run lint
+
+      - name: 취약점 점검 (npm audit)
+        working-directory: frontend
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
 
       - name: 빌드 (타입 검사 포함)
         working-directory: frontend

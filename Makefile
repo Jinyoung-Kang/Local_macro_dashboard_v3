@@ -152,8 +152,9 @@ db-test: ## 테스트 전용 DB 준비 (없으면 만들고 스키마 적용)
 	done
 	@echo "✅ 테스트 DB 준비: $(TEST_DB_NAME) (운영 DB는 건드리지 않습니다)"
 
-test-collector: db-test ## 수집기 테스트 (PostgreSQL 필요)
+test-collector: db-test ## 수집기 린트(ruff) + 테스트 (PostgreSQL 필요)
 	@test -x $(VENV_PY) || echo "ℹ️  collector/.venv가 없어 $(PY)로 실행합니다. 'No module named pytest'가 나오면 docs/LOCAL_SETUP.md의 가상환경 절을 보세요."
+	cd collector && $(if $(filter $(VENV_PY),$(PY)),.venv/bin/python,python3) -m ruff check app tests
 	cd collector && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgresql://macro:macro@localhost:$(DATABASE_PORT)/$(TEST_DB_NAME)} \
 		$(if $(filter $(VENV_PY),$(PY)),.venv/bin/python,python3) -m pytest tests -q
 
