@@ -94,3 +94,37 @@ def test_pykrx가_응답하지_않으면_정해진_시간_뒤에_포기한다(mo
 
     assert rows == []
     assert time.perf_counter() - started < 3.0
+
+
+def test_pykrx가_한_번_응답하지_않으면_한동안_바로_건너뛴다(monkeypatch, pykrx_available):
+    """
+    응답 없는 호출 두 번이면 워커 2개가 영구히 묶여, 그 뒤 모든 pykrx 호출이 실행도 못 한 채
+    제한 시간(20초)만 소비했습니다 — 조합당 커서 7일이면 140초, fast 그룹이면 주기마다 7분.
+    응답이 없었으면 정해진 시간 동안 pykrx를 바로 건너뛰고(다른 폴백은 계속), 그동안 묶인 워커 뒤에
+    줄 서지 않도록 풀을 새로 만듭니다.
+    """
+    import threading
+    import time
+
+    started_calls: list[str] = []
+
+    class _Hanging:
+        def get_market_net_purchases_of_equities_by_ticker(self, *a, **k):
+            started_calls.append("hang")
+            threading.Event().wait(5)
+            return None
+
+    monkeypatch.setattr(radar, "pykrx_stock", _Hanging())
+    monkeypatch.setattr(radar, "PYKRX_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(radar, "_pykrx_blocked_until", 0.0)
+
+    assert radar.fetch_pykrx_ranking("20260911", "KOSPI", "외국인", "순매수", 30) == []   # 0.2초 뒤 포기
+
+    started = time.perf_counter()
+    assert radar.fetch_pykrx_ranking("20260910", "KOSPI", "외국인", "순매수", 30) == []
+    assert time.perf_counter() - started < 0.1                 # 기다리지 않고 건너뛴다
+    assert started_calls == ["hang"]                           # pykrx를 다시 부르지 않았다
+
+    monkeypatch.setattr(radar, "_pykrx_blocked_until", 0.0)    # 차단 시간이 지나면
+    radar.fetch_pykrx_ranking("20260909", "KOSPI", "외국인", "순매수", 30)
+    assert started_calls == ["hang", "hang"]                   # 다시 시도한다 (새 풀이라 실행된다)

@@ -28,6 +28,7 @@ import io
 import logging
 import os
 import re
+import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -694,6 +695,9 @@ def fetch_pykrx_ranking(
                 pykrx_stock.get_market_net_purchases_of_equities_by_ticker,
                 target_date, target_date, market_code, investor_name,
             )
+    except PykrxSkipped as exc:
+        logger.debug("PyKrx 건너뜀 (%s): %s", target_date, exc)
+        return []
     except Exception as exc:  # noqa: BLE001
         logger.warning("PyKrx 조회 실패 (%s): %s", target_date, exc)
         return []
@@ -756,15 +760,32 @@ def fetch_pykrx_ranking(
 # fast 수집이 전부 건너뛰어집니다. 별도 스레드에서 돌리고 시간이 지나면 포기합니다
 # (스레드는 pykrx가 돌아올 때까지 남지만, 수집은 계속됩니다).
 PYKRX_TIMEOUT_SECONDS = 20.0
+# 응답이 없었으면 이 시간 동안 pykrx를 바로 건너뜁니다. 묶인 워커 2개 뒤에 줄을 서면 그 뒤 모든
+# 호출이 실행도 못 한 채 제한 시간만 소비했습니다(조합당 커서 7일 × 20초 = 140초).
+PYKRX_BACKOFF_SECONDS = 600.0
 _pykrx_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pykrx")
+_pykrx_blocked_until = 0.0
+
+
+class PykrxSkipped(RuntimeError):
+    """최근 응답이 없어 pykrx를 잠시 건너뛰는 중입니다(실패가 아니라 생략)."""
 
 
 def _pykrx_call(fn, *args, **kwargs):
-    """pykrx 함수를 시간 제한 안에서 부릅니다. 넘기면 TimeoutError."""
+    """pykrx 함수를 시간 제한 안에서 부릅니다. 넘기면 TimeoutError, 차단 중이면 PykrxSkipped."""
+    global _pykrx_pool, _pykrx_blocked_until
+    remaining = _pykrx_blocked_until - time.monotonic()
+    if remaining > 0:
+        raise PykrxSkipped(f"pykrx 최근 응답 없음 — {remaining:.0f}초 동안 건너뜀")
     future = _pykrx_pool.submit(fn, *args, **kwargs)
     try:
         return future.result(timeout=PYKRX_TIMEOUT_SECONDS)
     except FuturesTimeoutError as exc:
+        _pykrx_blocked_until = time.monotonic() + PYKRX_BACKOFF_SECONDS
+        # 묶인 워커는 pykrx가 돌아올 때까지 남습니다. 풀을 새로 만들어 두어야 차단이 풀린 뒤의
+        # 호출이 그 뒤에 줄 서지 않습니다.
+        _pykrx_pool.shutdown(wait=False)
+        _pykrx_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pykrx")
         raise TimeoutError(f"pykrx 응답 없음 ({PYKRX_TIMEOUT_SECONDS:.0f}초)") from exc
 
 
