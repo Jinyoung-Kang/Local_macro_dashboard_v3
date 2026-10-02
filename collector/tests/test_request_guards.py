@@ -13,6 +13,8 @@ from app import main
 @pytest.fixture()
 def client(monkeypatch):
     monkeypatch.setattr(main, "API_TOKEN", "")
+    # /health는 DB까지 확인합니다(QA-010). 이 테스트들은 요청 경계만 보므로 DB 없이 돌게 둡니다(CI에는 운영 DB가 없음).
+    monkeypatch.setattr(main.store, "ping", lambda: None)
     return TestClient(main.app, raise_server_exceptions=False)
 
 

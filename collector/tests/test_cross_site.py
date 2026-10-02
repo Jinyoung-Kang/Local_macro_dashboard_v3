@@ -30,6 +30,8 @@ from app import main
 def client(monkeypatch):
     # 토큰을 비운 기본 상태에서도 막혀야 합니다.
     monkeypatch.setattr(main, "API_TOKEN", "")
+    # /health는 DB까지 확인합니다(QA-010). 이 테스트들은 요청 경계만 보므로 DB 없이 돌게 둡니다(CI에는 운영 DB가 없음).
+    monkeypatch.setattr(main.store, "ping", lambda: None)
     return TestClient(main.app, raise_server_exceptions=False)
 
 
@@ -111,6 +113,7 @@ def test_자기_자신의_Origin은_통과한다(client):
 
 def test_토큰을_설정해도_교차_출처는_막는다(monkeypatch, spies):
     monkeypatch.setattr(main, "API_TOKEN", "test-token")
+    monkeypatch.setattr(main.store, "ping", lambda: None)
     client = TestClient(main.app, raise_server_exceptions=False)
     response = client.post(
         "/refresh",
