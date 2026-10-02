@@ -1,6 +1,7 @@
 "use client";
 
 import { stableCodesKey } from "@/lib/transforms";
+import { sortBySourceOrder, sourceLabel, splitFundamentals } from "@/lib/radar";
 import { useState } from "react";
 import { HorizontalBars } from "@/components/charts";
 import { knownBars } from "@/lib/chartData";
@@ -279,16 +280,6 @@ export default function RadarPage() {
 /** Daum이 주지 않아 토스 공식 폴백으로만 받는 투자주체. */
 const TOSS_ONLY = ["개인", "연기금", "금융투자", "투신"];
 
-/** 진단 표의 소스 이름 — 폴백 체인과 같은 이름으로. */
-const SOURCE_LABELS: Record<string, string> = {
-  kis: "KIS (장중 가집계)",
-  daum: "Daum",
-  naver: "Naver",
-  ls: "LS",
-  toss: "토스증권 (공식)",
-  pykrx: "PyKrx",
-};
-const SOURCE_ORDER = ["kis", "daum", "naver", "ls", "toss", "pykrx"];
 
 /** 금액을 몰라 차트에서 뺀 종목 수. 표에는 그대로 "—"로 남아 있습니다. */
 function OmittedNote({ count }: { count: number }) {
@@ -313,12 +304,10 @@ function DiagnosticsPanel() {
       {data && !data.available && <Banner tone="warn">{data.message}</Banner>}
       {data?.sources && (
         <Table
-          rows={Object.entries(data.sources)
-            .map(([name, value]) => ({ name, ...value }))
-            .sort((a, b) => SOURCE_ORDER.indexOf(a.name) - SOURCE_ORDER.indexOf(b.name))}
+          rows={sortBySourceOrder(data.sources)}
           rowKey={(row) => row.name}
           columns={[
-            { key: "name", header: "소스 (체인 순서)", render: (row) => SOURCE_LABELS[row.name] ?? row.name.toUpperCase() },
+            { key: "name", header: "소스 (체인 순서)", render: (row) => sourceLabel(row.name) },
             {
               key: "status",
               header: "상태",
@@ -361,13 +350,7 @@ function FundamentalsPanel({ codes }: { codes: string[] }) {
   const { data, loading, error, reload } = useApi<KrFundamentalsResponse>(
     key ? endpoints.publicData.fundamentals(key) : null,
   );
-  const byCode = new Map((data?.companies ?? []).map((company) => [company.code, company]));
-  const all = codes.map((code) => byCode.get(code) ?? { code, available: false });
-  // 재무도 시세도 없는 종목을 "—"로 가득 찬 줄로 늘어놓으면 정작 볼 줄이 묻힙니다.
-  // 자료가 있는 종목만 표에 두고, 나머지는 한 줄로 알립니다.
-  const rows = all.filter((row) => row.available || row.marketCap != null);
-  const empty = all.filter((row) => !row.available && row.marketCap == null);
-  const covered = all.filter((row) => row.available).length;
+  const { all, rows, empty, covered } = splitFundamentals(codes, data?.companies ?? []);
 
   const percent = (value: number | null | undefined) =>
     value === null || value === undefined ? EMPTY : `${formatNumber(value, 1)}%`;

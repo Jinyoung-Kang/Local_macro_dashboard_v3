@@ -1,6 +1,7 @@
 "use client";
 
 import { stableCodesKey } from "@/lib/transforms";
+import { streakText } from "@/lib/flows";
 import { SignedBars } from "@/components/charts";
 import { Banner, Card, Freshness, Loading, SourceBadge, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
@@ -29,14 +30,6 @@ function WindowCell({ value, format }: { value: FlowWindow; format: (n: number |
       )}
     </span>
   );
-}
-
-function streakText(streak: number | undefined, records: number): string {
-  if (!streak) return EMPTY;
-  const days = Math.abs(streak);
-  // 받은 기록 전부가 같은 방향이면 실제로는 더 길 수 있습니다.
-  const label = days >= records ? `${days}일+` : `${days}일`;
-  return `${label} ${streak > 0 ? "순매수" : "순매도"}`;
 }
 
 // ------------------------------------------------------------------ 시장 전체

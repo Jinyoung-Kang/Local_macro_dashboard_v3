@@ -12,6 +12,7 @@ import {
   Select,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { liquidityChartSeries } from "@/lib/liquidity";
 import { useUsdKrw } from "@/hooks/useUsdKrw";
 import {
   formatBillionUsd,
@@ -60,30 +61,8 @@ export default function LiquidityPage() {
   // 기간은 머리말의 '조회 기간' 하나가 두 차트를 함께 좁힙니다.
   // 카드마다 따로 두면 화면에 기간 컨트롤이 셋이 되고, 어느 것이 무엇에
   // 걸리는지 읽는 사람이 추적해야 합니다.
-  const netLiquidity = rows.map((row) => ({
-    date: row.date,
-    value: row.netLiquidityT,
-  }));
-  //
-  // 단위는 위 KPI 타일과 **같게** 맞춥니다.
-  //   총자산 = 조 달러 / TGA·RRP = 억 달러
-  // 예전에는 차트만 셋 다 조 달러로 그렸습니다. 그러면 (a) 같은 화면에서
-  // 타일은 "5.2 십억 달러", 차트는 "0.01T"로 서로 다른 단위를 쓰고,
-  // (b) ON RRP 실제 수준(약 0.005조)에서는 눈금이 전부 "0.00T"가 됩니다.
-  // 패널을 나눈 목적(각자 제 범위를 갖게 하는 것)이 그대로 사라집니다.
-  // 저장본 단위는 조 달러(walclT)와 십억 달러(wtregenB·rrpB)로 서로 다릅니다.
-  // 화면 표기는 조·억으로 통일하므로, 십억 단위 계열은 10을 곱해 억으로 옮깁니다.
-  const componentSeries = {
-    walcl: rows.map((row) => ({ date: row.date, value: row.walclT ?? null })),
-    tga: rows.map((row) => ({
-      date: row.date,
-      value: row.wtregenB === null || row.wtregenB === undefined ? null : row.wtregenB * 10,
-    })),
-    rrp: rows.map((row) => ({
-      date: row.date,
-      value: row.rrpB === null || row.rrpB === undefined ? null : row.rrpB * 10,
-    })),
-  };
+  // 단위는 위 KPI 타일과 같게(총자산 = 조 달러 / TGA·RRP = 억 달러) — 규칙은 lib/liquidity.ts.
+  const { netLiquidity, components: componentSeries } = liquidityChartSeries(rows);
 
   return (
     <div className="flex flex-col gap-6">
