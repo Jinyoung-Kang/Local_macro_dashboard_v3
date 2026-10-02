@@ -96,7 +96,9 @@ async function request<T>(
       signal: controller.signal,
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
+        // 본문이 있을 때만 Content-Type을 보냅니다. GET에도 붙이면 '단순 요청'이 아니게 되어
+        // 브라우저가 URL마다 OPTIONS(preflight)를 먼저 보내, 필터 조합마다 요청이 두 배였습니다.
+        ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(init.headers ?? {}),
       },
     });

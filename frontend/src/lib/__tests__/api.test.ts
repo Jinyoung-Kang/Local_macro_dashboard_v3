@@ -5,7 +5,7 @@
  * localhost를 찾고, LAN IP를 박으면 맥의 localhost:3000에서 쿠키가 다른 사이트가 됩니다.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiBase } from "@/lib/api";
+import { apiBase, apiGet, apiPost } from "@/lib/api";
 
 describe("apiBase", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -21,5 +21,25 @@ describe("apiBase", () => {
   it("서버(SSR)에서는 localhost", () => {
     vi.stubGlobal("window", undefined);
     expect(apiBase()).toBe("http://localhost:8080");
+  });
+});
+
+describe("요청 헤더", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("GET에는 Content-Type을 붙이지 않는다 — 붙이면 URL마다 preflight(OPTIONS)가 먼저 나간다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("window", { location: { protocol: "http:", hostname: "localhost" } });
+
+    await apiGet("/api/x");
+    const getHeaders = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(getHeaders["Content-Type"]).toBeUndefined();
+
+    await apiPost("/api/y", { a: 1 });
+    const postHeaders = fetchMock.mock.calls[1][1].headers as Record<string, string>;
+    expect(postHeaders["Content-Type"]).toBe("application/json");
   });
 });
