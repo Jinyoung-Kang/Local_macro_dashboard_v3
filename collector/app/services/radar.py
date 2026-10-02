@@ -357,13 +357,40 @@ def fetch_daum_ranking(
         logger.warning("Daum 랭킹 JSON 해석 실패: %s", exc)
         return []
 
-    data = payload.get("data") or {}
-    rows = data.get("BUY" if trade_type == "순매수" else "SELL") or []
-    if not rows:
+    records = parse_daum_ranking(
+        payload, investor=investor, trade_type=trade_type, top_n=top_n,
+        target_date=target_date, interval_type=interval_type,
+    )
+    if not records:
         logger.warning(
             "Daum 랭킹 빈 결과: market=%s, investor=%s, direction=%s, interval=%s",
             market_param, investor, trade_type, interval_type,
         )
+    return records
+
+
+def parse_daum_ranking(
+    payload: dict,
+    *,
+    investor: str,
+    trade_type: str,
+    top_n: int,
+    target_date: str,
+    interval_type: str = "TODAY",
+) -> list[dict]:
+    """
+    Daum investor_purchase 응답(JSON)을 랭킹 행으로. 네트워크를 모르는 순수 변환입니다.
+
+    - symbolCode "A005930" → "005930" (문자열 유지)
+    - changeRate는 0.0238 = 2.38% 형태의 소수 비율 → %로
+    - straightPurchasePrice(원) → 억 원. 응답 부호가 방향과 어긋나면 방향에 맞춥니다
+    - dataDate: 소스가 밝힌 데이터 기준일(toDate). 이력에 쌓을 때 추정 거래일보다 우선
+    """
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data") or {}
+    rows = data.get("BUY" if trade_type == "순매수" else "SELL") or []
+    if not rows:
         return []
 
     from_date = payload.get("fromDate") or ""
@@ -389,11 +416,9 @@ def fetch_daum_ranking(
             continue
 
         price = _to_float(row.get("tradePrice"))
-        # Daum changeRate는 0.0238 = 2.38% 형태의 소수 비율입니다.
         change_pct = round(_to_float(row.get("changeRate")) * 100.0, 2)
         net_eok = round(_to_float(row.get("straightPurchasePrice")) / 100_000_000.0, 1)
 
-        # 응답 부호가 방향과 어긋나는 경우를 방어합니다.
         if trade_type == "순매도" and net_eok > 0:
             net_eok = -abs(net_eok)
         if trade_type == "순매수" and net_eok < 0:
@@ -407,7 +432,6 @@ def fetch_daum_ranking(
             "netAmountEok": net_eok,
             "source": source,
             "collectedAt": collected_at,
-            # 소스가 밝힌 데이터 기준일. 이력에 쌓을 때 수집 시각으로 추정한 거래일보다 이것을 믿습니다.
             "dataDate": _iso_date(to_date) if interval_type == "TODAY" else None,
         })
 
@@ -462,16 +486,28 @@ def fetch_naver_ranking(
         _NAVER_LAST_REASON["value"] = f"HTTP {res.status_code}"
         return []
 
+    records, reason = parse_naver_ranking(html, trade_type=trade_type, top_n=top_n, target_date=target_date)
+    _NAVER_LAST_REASON["value"] = reason
+    return records
+
+
+def parse_naver_ranking(
+    html: str, *, trade_type: str, top_n: int, target_date: str,
+) -> tuple[list[dict], str | None]:
+    """
+    Naver 투자자별 매매상위 iframe HTML을 랭킹 행으로. 네트워크를 모르는 순수 변환입니다.
+
+    :returns: (행, 비어 있을 때의 사유). 행이 있으면 사유는 None
+    """
     soup = BeautifulSoup(html, "html.parser")
     tables = soup.find_all("table", {"class": "type_1"}) or soup.find_all("table")
     if not tables:
         # "표가 아예 없다"와 "표는 있는데 행이 없다"는 원인이 다릅니다.
         # 전자는 차단·JS 렌더링 요구, 후자는 휴장·구조 변경 쪽입니다.
-        _NAVER_LAST_REASON["value"] = (
+        return [], (
             f"응답에 표가 없습니다 (본문 {len(html):,}자). 차단이거나 "
             "이 페이지가 JS 렌더링을 요구하게 바뀐 경우입니다."
         )
-        return []
 
     table = max(
         tables,
@@ -514,15 +550,12 @@ def fetch_naver_ranking(
         if len(records) >= top_n:
             break
 
-    if records:
-        _NAVER_LAST_REASON["value"] = None
-    else:
-        _NAVER_LAST_REASON["value"] = (
+    if not records:
+        return [], (
             f"표 {len(tables)}개는 받았지만 종목 행이 없습니다 "
             "(휴장일이거나 표 구조가 바뀐 경우입니다)."
         )
-
-    return _rank(records, trade_type, top_n)
+    return _rank(records, trade_type, top_n), None
 
 
 # 토스 투자자 매매 레코드에서 각 투자주체가 있는 자리. 기관 세부 셋은 breakdown 안에 있습니다.
