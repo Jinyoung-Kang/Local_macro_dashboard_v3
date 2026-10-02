@@ -210,7 +210,7 @@ public class Sec13FService {
                                          int minHolders, int topN) {
         ciks.forEach(Institutions::requireKnownCik);   // 저장본을 찾기 전에 전부 확인합니다
         Map<String, Object> out = new LinkedHashMap<>();
-        Map<String, Map<String, Object>> aggregate = new LinkedHashMap<>();
+        Map<String, Tally> aggregate = new LinkedHashMap<>();
         List<String> participants = new ArrayList<>();
         Set<String> availableDates = new LinkedHashSet<>();
 
@@ -248,52 +248,27 @@ public class Sec13FService {
 
             for (Map<String, Object> holding : compareQuarters(current, previous, 100)) {
                 String name = String.valueOf(holding.get("name"));
-                Map<String, Object> entry = aggregate.computeIfAbsent(name, key -> {
-                    Map<String, Object> fresh = new LinkedHashMap<>();
-                    fresh.put("name", key);
-                    fresh.put("cusip", holding.get("cusip"));
-                    fresh.put("holders", new ArrayList<String>());
-                    fresh.put("actions", new ArrayList<String>());
-                    fresh.put("totalValue", null);
-                    fresh.put("weightSum", null);
-                    fresh.put("weightCount", 0);
-                    fresh.put("maxWeight", null);
-                    return fresh;
-                });
-
-                @SuppressWarnings("unchecked")
-                List<String> holders = (List<String>) entry.get("holders");
-                @SuppressWarnings("unchecked")
-                List<String> actions = (List<String>) entry.get("actions");
-
-                holders.add(institution);
-                actions.add(String.valueOf(holding.get("action")));
-                // 모르는 평가액·비중은 더하지 않고, 평균의 분모에도 넣지 않습니다. 0으로 더하면
-                // 합계와 평균이 실제보다 작아지고 정렬 순서까지 바뀝니다.
-                addKnown(entry, holding);
+                aggregate.computeIfAbsent(name, key -> new Tally(key, holding.get("cusip"), null))
+                        .add(institution, holding);
             }
         }
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map<String, Object> entry : aggregate.values()) {
-            @SuppressWarnings("unchecked")
-            List<String> holders = (List<String>) entry.get("holders");
-            @SuppressWarnings("unchecked")
-            List<String> actions = (List<String>) entry.get("actions");
-
-            if (holders.size() < minHolders) {
+        for (Tally tally : aggregate.values()) {
+            if (tally.holders.size() < minHolders) {
                 continue;
             }
-
-            Map<String, Object> row = new LinkedHashMap<>(entry);
-            row.put("holderCount", holders.size());
-            row.put("avgWeight", averageKnownWeight(entry));
-            row.remove("weightCount");
-            row.put("buyCount", actions.stream()
-                    .filter(a -> a.contains("신규 매수") || a.contains("비중 확대")).count());
-            row.put("sellCount", actions.stream()
-                    .filter(a -> a.contains("전량 매도") || a.contains("비중 축소")).count());
-            row.remove("weightSum");
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", tally.name);
+            row.put("cusip", tally.cusip);
+            row.put("holders", new ArrayList<>(tally.holders));
+            row.put("actions", tally.actions);
+            row.put("totalValue", tally.totalValue);
+            row.put("maxWeight", tally.maxWeight());
+            row.put("holderCount", tally.holders.size());
+            row.put("avgWeight", tally.avgWeight());
+            row.put("buyCount", (long) tally.buyers.size());
+            row.put("sellCount", (long) tally.sellers.size());
             rows.add(row);
         }
 
@@ -328,7 +303,7 @@ public class Sec13FService {
     public Map<String, Object> newBuys(List<String> ciks, String reportDate, int minHolders) {
         ciks.forEach(Institutions::requireKnownCik);   // 저장본을 찾기 전에 전부 확인합니다
         Map<String, Object> out = new LinkedHashMap<>();
-        Map<String, Map<String, Object>> aggregate = new LinkedHashMap<>();
+        Map<String, Tally> aggregate = new LinkedHashMap<>();
         List<String> participants = new ArrayList<>();
         Set<String> availableDates = new LinkedHashSet<>();
 
@@ -370,37 +345,25 @@ public class Sec13FService {
                     continue;
                 }
                 String name = String.valueOf(holding.get("name"));
-                Map<String, Object> entry = aggregate.computeIfAbsent(name, key -> {
-                    Map<String, Object> fresh = new LinkedHashMap<>();
-                    fresh.put("name", key);
-                    fresh.put("cusip", holding.get("cusip"));
-                    fresh.put("buyers", new ArrayList<String>());
-                    fresh.put("totalValue", null);
-                    fresh.put("weightSum", null);
-                    fresh.put("weightCount", 0);
-                    fresh.put("reportDate", Json.asText(current, "reportDate"));
-                    return fresh;
-                });
-
-                @SuppressWarnings("unchecked")
-                List<String> buyers = (List<String>) entry.get("buyers");
-                buyers.add(institution);
-                addKnown(entry, holding);
+                aggregate.computeIfAbsent(name,
+                                key -> new Tally(key, holding.get("cusip"), Json.asText(current, "reportDate")))
+                        .add(institution, holding);
             }
         }
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map<String, Object> entry : aggregate.values()) {
-            @SuppressWarnings("unchecked")
-            List<String> buyers = (List<String>) entry.get("buyers");
-            if (buyers.size() < Math.max(1, minHolders)) {
+        for (Tally tally : aggregate.values()) {
+            if (tally.holders.size() < Math.max(1, minHolders)) {
                 continue;
             }
-            Map<String, Object> row = new LinkedHashMap<>(entry);
-            row.put("buyerCount", buyers.size());
-            row.put("avgWeight", averageKnownWeight(entry));
-            row.remove("weightSum");
-            row.remove("weightCount");
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", tally.name);
+            row.put("cusip", tally.cusip);
+            row.put("buyers", new ArrayList<>(tally.holders));
+            row.put("totalValue", tally.totalValue);
+            row.put("reportDate", tally.reportDate);
+            row.put("buyerCount", tally.holders.size());
+            row.put("avgWeight", tally.avgWeight());
             rows.add(row);
         }
 
@@ -437,27 +400,60 @@ public class Sec13FService {
         return store.read(Datasets.sec13f(cik, quarters), Datasets.MAX_AGE_SLOW, "sec_13f");
     }
 
-    /** 집계 항목에 알려진 평가액·비중만 더합니다(모르는 값은 합계·분모·최대에서 제외). */
-    private static void addKnown(Map<String, Object> entry, Map<String, Object> holding) {
-        if (holding.get("value") instanceof Double value) {
-            Double total = (Double) entry.get("totalValue");
-            entry.put("totalValue", total == null ? value : total + value);
+    /**
+     * 회사(이름) 하나의 집계. <b>기관 단위</b>로 셉니다 — 한 기관이 같은 회사를 두 클래스(ALPHABET A·C주,
+     * BERKSHIRE A·B주)로 들어도 보유 기관 1곳이고, 그 기관의 비중은 두 항목의 합입니다. 항목 단위로
+     * 세면 그 기관이 두 번 들어가 holderCount·minHolders·정렬이 틀어졌습니다.
+     *
+     * <p>모르는 평가액·비중은 더하지 않고 평균의 분모에도 넣지 않습니다. 0으로 더하면 합계와
+     * 평균이 실제보다 작아지고 정렬 순서까지 바뀝니다.
+     */
+    private static final class Tally {
+        final String name;
+        final Object cusip;
+        final String reportDate;
+        final Set<String> holders = new LinkedHashSet<>();
+        final List<String> actions = new ArrayList<>();
+        final Set<String> buyers = new LinkedHashSet<>();
+        final Set<String> sellers = new LinkedHashSet<>();
+        /** 기관 → 그 회사 비중의 합(아는 것만). */
+        final Map<String, Double> weightByHolder = new LinkedHashMap<>();
+        Double totalValue;
+
+        Tally(String name, Object cusip, String reportDate) {
+            this.name = name;
+            this.cusip = cusip;
+            this.reportDate = reportDate;
         }
-        if (holding.get("weight") instanceof Double weight) {
-            Double sum = (Double) entry.get("weightSum");
-            entry.put("weightSum", sum == null ? weight : sum + weight);
-            entry.put("weightCount", (int) entry.get("weightCount") + 1);
-            Double max = (Double) entry.get("maxWeight");
-            if (entry.containsKey("maxWeight")) {
-                entry.put("maxWeight", max == null ? weight : Math.max(max, weight));
+
+        void add(String institution, Map<String, Object> holding) {
+            holders.add(institution);
+            String action = String.valueOf(holding.get("action"));
+            actions.add(action);
+            if (action.contains("신규 매수") || action.contains("비중 확대")) {
+                buyers.add(institution);
+            }
+            if (action.contains("전량 매도") || action.contains("비중 축소")) {
+                sellers.add(institution);
+            }
+            if (holding.get("value") instanceof Double value) {
+                totalValue = totalValue == null ? value : totalValue + value;
+            }
+            if (holding.get("weight") instanceof Double weight) {
+                weightByHolder.merge(institution, weight, Double::sum);
             }
         }
-    }
 
-    /** 비중을 아는 기관들의 평균. 하나도 모르면 null. */
-    private static Double averageKnownWeight(Map<String, Object> entry) {
-        int count = (int) entry.get("weightCount");
-        return count == 0 ? null : (Double) entry.get("weightSum") / count;
+        /** 비중을 아는 기관들의 평균. 하나도 모르면 null. */
+        Double avgWeight() {
+            return weightByHolder.isEmpty() ? null
+                    : weightByHolder.values().stream().mapToDouble(Double::doubleValue).sum() / weightByHolder.size();
+        }
+
+        Double maxWeight() {
+            return weightByHolder.isEmpty() ? null
+                    : weightByHolder.values().stream().mapToDouble(Double::doubleValue).max().orElse(Double.NaN);
+        }
     }
 
     /** 정렬용 — 모르는 합계는 가장 뒤로. */

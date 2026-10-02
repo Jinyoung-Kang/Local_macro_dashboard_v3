@@ -89,4 +89,54 @@ class Sec13FConsensusTest {
         assertThat(rows.get(0).get("totalValue")).isNull();
         assertThat(rows.get(0).get("avgWeight")).isNull();
     }
+
+    private static final String ALPHABET_TWO_CLASSES = """
+        [{"reportDate":"2026-06-30","holdings":[
+            {"name":"ALPHABET INC","cusip":"02079K305","class":"CL A","value":600,"shares":10,"weight":6.0},
+            {"name":"ALPHABET INC","cusip":"02079K107","class":"CL C","value":400,"shares":10,"weight":4.0}]},
+         {"reportDate":"2026-03-31","holdings":[
+            {"name":"ALPHABET INC","cusip":"02079K305","class":"CL A","value":500,"shares":10,"weight":5.0},
+            {"name":"ALPHABET INC","cusip":"02079K107","class":"CL C","value":300,"shares":10,"weight":3.0}]}]
+        """;
+
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("한 기관이 같은 회사를 두 클래스(A·C주)로 들어도 기관 수·매수 기관 수는 1이고 비중은 기관 단위 합이다")
+    void sameInstitutionHoldingTwoClassesCountsOnce() {
+        Sec13FService service = service(Map.of(NPS, ALPHABET_TWO_CLASSES));
+
+        List<Map<String, Object>> rows =
+                (List<Map<String, Object>>) service.consensus(List.of(NPS), null, 1, 10).get("rows");
+
+        assertThat(rows).hasSize(1);
+        Map<String, Object> alphabet = rows.get(0);
+        assertThat(alphabet.get("holderCount")).as("기관 1곳 — 항목 수(2)가 아니다").isEqualTo(1);
+        assertThat((List<String>) alphabet.get("holders")).containsExactly(Institutions.byCik(NPS).get("name"));
+        assertThat(alphabet.get("buyCount")).as("두 클래스 모두 비중 확대지만 기관은 1곳").isEqualTo(1L);
+        assertThat(alphabet.get("totalValue")).isEqualTo(1000.0);
+        assertThat(alphabet.get("avgWeight")).as("기관의 ALPHABET 비중 = 6 + 4").isEqualTo(10.0);
+        assertThat(alphabet.get("maxWeight")).isEqualTo(10.0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("공통 신규 매수도 기관 단위로 센다")
+    void newBuysCountInstitutionsNotHoldings() {
+        Sec13FService service = service(Map.of(NPS, """
+            [{"reportDate":"2026-06-30","holdings":[
+                {"name":"ALPHABET INC","cusip":"02079K305","class":"CL A","value":600,"shares":10,"weight":6.0},
+                {"name":"ALPHABET INC","cusip":"02079K107","class":"CL C","value":400,"shares":10,"weight":4.0}]},
+             {"reportDate":"2026-03-31","holdings":[
+                {"name":"APPLE INC","cusip":"037833100","class":"COM","value":900,"shares":10,"weight":9.0}]}]
+            """));
+
+        List<Map<String, Object>> rows =
+                (List<Map<String, Object>>) service.newBuys(List.of(NPS), null, 1).get("rows");
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("buyerCount")).isEqualTo(1);
+        assertThat((List<String>) rows.get(0).get("buyers")).containsExactly(Institutions.byCik(NPS).get("name"));
+        assertThat(rows.get(0).get("totalValue")).isEqualTo(1000.0);
+        assertThat(rows.get(0).get("avgWeight")).isEqualTo(10.0);
+    }
 }
