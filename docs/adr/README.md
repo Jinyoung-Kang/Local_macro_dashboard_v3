@@ -9,3 +9,5 @@
 | [0002](0002-spring-boot-4-and-jackson-3.md) | Spring Boot 4.1 · Jackson 3 전환 |
 | [0003](0003-backup-and-restore.md) | 백업·복원: 끝 표시 확인과 한 트랜잭션 통째 교체 |
 | [0004](0004-frontend-layering.md) | 프런트엔드: 그리기 · 훅 · 순수 함수 · API 클라이언트 나누기 |
+| [0005](0005-radar-history-replace-write.md) | 수급 레이더 이력: 조합·날짜 단위 교체 쓰기, 소스가 밝힌 기준일, 거래소 달력 |
+| [0006](0006-frontend-api-base-at-runtime.md) | 화면이 백엔드 주소를 실행 시점에 정함 (휴대폰·LAN 접속), CORS는 화면 포트의 모든 호스트 |

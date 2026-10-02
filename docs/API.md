@@ -11,9 +11,12 @@
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| POST | `/api/auth/login` | `{"password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict). 틀리면 401, 연속 5회 실패 후 **429 + `Retry-After`**(30초부터 2배씩, 최대 15분) |
+| POST | `/api/auth/login` | `{"password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict). 틀리면 401. 연속 5회 실패 뒤에는 그 주소의 시도를 느리게(전역 1초에 1건) 처리하며 틀리면 **429 + `Retry-After`**(안내값 30초부터 2배씩, 최대 15분) — 맞는 비밀번호는 그래도 통과. 다른 느린 시도가 진행 중이면 즉시 429(1초). 본문은 4KB까지(초과 413) |
 | GET | `/api/auth/session` | `{"authenticated": bool, "readMode": "auto" \| "store_only" \| "live_only"}`. `readMode`는 로그인한 경우에만 옵니다(사이드바 표시용 — 이 한 줄 때문에 무거운 `/api/status`를 부르지 않도록 여기에 둡니다) |
 | POST | `/api/auth/logout` | 쿠키 만료 + 그 세션 토큰을 서버에서도 거부(만료 시각까지, 백엔드 재시작 전까지) |
+
+`GET /api/health`는 DB 연결을 확인해 `{"status":"ok","database":"ok"}`(200) 또는
+`{"status":"degraded","database":"unreachable"}`(503)로 답합니다 — 컨테이너 헬스체크·`make doctor`가 봅니다.
 
 로그인·세션·헬스체크를 제외한 모든 `/api/**`는 유효한 세션 쿠키를 요구합니다
 (없으면 401). `.env`의 `APP_PASSWORD`를 바꾸고 재시작하면 그전에 받은 세션은 모두 무효가

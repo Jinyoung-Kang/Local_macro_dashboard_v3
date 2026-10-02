@@ -41,7 +41,7 @@ make logs S=backend
 
 ```bash
 make test              # 세 가지 전부
-make test-collector    # pytest
+make test-collector    # ruff(린트) + pytest
 make test-backend      # JUnit (실제 PostgreSQL 사용)
 make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(타입 검사)
 ```
