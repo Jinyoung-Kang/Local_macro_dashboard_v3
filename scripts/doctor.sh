@@ -123,14 +123,22 @@ fi
 # ==============================================================================
 title "4. 백엔드 (Java) — 화면이 읽는 API"
 # ==============================================================================
-HEALTH=$(curl -fsS --max-time 10 "http://localhost:$BACKEND_PORT/api/health" 2>/dev/null)
-if [ -z "$HEALTH" ]; then
-  fail "백엔드에 연결하지 못했습니다 (http://localhost:$BACKEND_PORT/api/health)"
-  note "make logs S=backend"
-  problem "백엔드 기동 실패 — make logs S=backend"
-else
-  ok "백엔드 응답함: $(printf '%s' "$HEALTH" | cut -c1-120)"
-fi
+# 헬스체크는 DB에 닿지 못하면 503(본문 "database": "unreachable")을 돌려줍니다 — 기동 실패와 다릅니다.
+HEALTH_RESPONSE=$(curl -s -w '\n%{http_code}' --max-time 10 "http://localhost:$BACKEND_PORT/api/health" 2>/dev/null)
+HEALTH_CODE=${HEALTH_RESPONSE##*$'\n'}
+HEALTH=${HEALTH_RESPONSE%$'\n'*}
+case "$HEALTH_CODE" in
+  200)
+    ok "백엔드 응답함: $(printf '%s' "$HEALTH" | cut -c1-120)" ;;
+  503)
+    fail "백엔드는 떠 있지만 DB에 닿지 못합니다: $(printf '%s' "$HEALTH" | cut -c1-120)"
+    note "make logs S=postgres · make logs S=backend"
+    problem "백엔드가 DB에 닿지 못함 — make logs S=postgres" ;;
+  *)
+    fail "백엔드에 연결하지 못했습니다 (http://localhost:$BACKEND_PORT/api/health)"
+    note "make logs S=backend"
+    problem "백엔드 기동 실패 — make logs S=backend" ;;
+esac
 
 # ==============================================================================
 title "5. 화면 (Next.js)"

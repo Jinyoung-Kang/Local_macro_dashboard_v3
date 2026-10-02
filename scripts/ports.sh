@@ -149,17 +149,36 @@ wait_http() {
   return 1
 }
 
+# 백엔드 헬스체크는 DB에 닿지 못하면 503을 돌려줍니다(본문에 "database": "unreachable").
+# 그건 "연결 못 함"이 아니라 "떠 있는데 DB가 문제"이므로 사유를 그대로 보여 줍니다.
+wait_backend_health() {
+  local url="$1" seconds="$2" i=0 code
+  while [ "$i" -lt "$seconds" ]; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$url" 2>/dev/null)
+    case "$code" in
+      200) return 0 ;;
+      503) BACKEND_HEALTH_BODY=$(curl -s --max-time 3 "$url" 2>/dev/null); return 2 ;;
+    esac
+    sleep 2; i=$((i + 2))
+  done
+  return 1
+}
+
 cmd_wait() {
   printf '%s기동 확인%s\n' "$BOLD" "$RESET"
   local bad=0
   # 백엔드는 JVM 기동에 20~40초가 걸립니다.
-  if wait_http "http://localhost:$BACKEND_PORT/api/health" 120; then
-    ok "백엔드 응답함 — http://localhost:$BACKEND_PORT/api/health"
-  else
-    bad=1
-    fail "백엔드가 2분 안에 응답하지 않았습니다"
-    note "make logs S=backend  로 기동 실패 원인을 확인하세요"
-  fi
+  BACKEND_HEALTH_BODY=""
+  wait_backend_health "http://localhost:$BACKEND_PORT/api/health" 120
+  case $? in
+    0) ok "백엔드 응답함 — http://localhost:$BACKEND_PORT/api/health" ;;
+    2) bad=1
+       fail "백엔드는 떠 있지만 DB에 닿지 못합니다: $(printf '%s' "$BACKEND_HEALTH_BODY" | cut -c1-120)"
+       note "make logs S=postgres · make logs S=backend" ;;
+    *) bad=1
+       fail "백엔드가 2분 안에 응답하지 않았습니다"
+       note "make logs S=backend  로 기동 실패 원인을 확인하세요" ;;
+  esac
   if wait_http "http://localhost:$FRONTEND_PORT/login" 60; then
     ok "화면 응답함 — http://localhost:$FRONTEND_PORT"
   else
