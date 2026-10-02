@@ -282,8 +282,8 @@ function SimilarityCard() {
                           backgroundColor: self
                             ? "rgba(139, 148, 158, 0.12)"
                             : `rgba(88, 166, 255, ${0.08 + intensity * 0.55})`,
-                          // 진한 칸은 밝은 글자와 대비가 모자라(WCAG AA) 어두운 글자로.
-                          color: !self && intensity > 0.5 ? "#0d1117" : undefined,
+                          // 진한 칸은 본문색과 대비가 모자라(WCAG AA 4.5:1) 흰 글자로. 어두운 글자는 더 나쁩니다(axe 실측 3.0:1).
+                          color: !self && intensity > 0.5 ? "#ffffff" : undefined,
                         }}
                       >
                         {value === undefined

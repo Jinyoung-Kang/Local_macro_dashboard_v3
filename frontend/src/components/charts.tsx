@@ -613,8 +613,9 @@ export function WeightHeatmap({
                         typeof value === "number" && value > 0
                           ? `rgba(57, 135, 229, ${0.08 + ratio * 0.62})`
                           : "transparent",
-                      // 진한 칸은 바탕이 밝아져 밝은 글자와 대비가 모자랍니다(WCAG AA 4.5:1 미달) — 어두운 글자로.
-                      color: ratio > 0.5 ? "#0d1117" : undefined,
+                      // 진한 칸(#2d62a3 부근)은 본문색(#c9d1d9)과 3.9:1로 WCAG AA(4.5:1) 미달 — 흰 글자(6.2:1)로.
+                      // 어두운 글자는 3.0:1로 더 나쁩니다(axe 실측).
+                      color: ratio > 0.5 ? "#ffffff" : undefined,
                     }}
                     title={`${name} · ${dates[index] ?? ""}`}
                   >
