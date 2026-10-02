@@ -176,6 +176,19 @@ class AiServiceContentTypeTest {
     }
 
     @Test
+    @DisplayName("오류 문구의 요청 주소는 지운다 — Cloudflare 주소에는 계정 ID가 들어 있다")
+    void requestUrlIsScrubbedFromErrors() {
+        String raw = "I/O error on POST request for "
+                + "\"https://api.cloudflare.com/client/v4/accounts/0123456789abcdef/ai/run/@cf/meta/llama\": "
+                + "Connection refused";
+
+        String message = new AiService().describe(new RuntimeException(raw));
+
+        assertThat(message).doesNotContain("0123456789abcdef").doesNotContain("api.cloudflare.com");
+        assertThat(message).contains("<url>").contains("Connection refused");
+    }
+
+    @Test
     @DisplayName("대기 한도는 설정으로 바꿀 수 있고 최소값이 있다")
     void timeoutIsConfigurableWithFloor() {
         assertThat(new AiService(600).describe(new RuntimeException("Read timed out")))

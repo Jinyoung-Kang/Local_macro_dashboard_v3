@@ -503,7 +503,9 @@ public class AiService {
 
     /** @param waitedSeconds 이번 호출에 실제로 걸었던 대기 한도 */
     String describe(Exception e, int waitedSeconds) {
-        String raw = String.valueOf(e.getMessage());
+        // 스프링의 I/O 예외 문구에는 요청 URL 전체가 들어갑니다. Cloudflare 주소에는 계정 ID가
+        // 경로에 있어, DNS 실패·연결 거부 때 그 ID가 화면과 로그로 나갔습니다. 주소는 지웁니다.
+        String raw = String.valueOf(e.getMessage()).replaceAll("https?://\\S+", "<url>");
         String lowered = raw.toLowerCase();
 
         if (lowered.contains("timed out") || lowered.contains("timeout")) {
