@@ -381,4 +381,31 @@ class StoreReaderNonBlockingTest {
         }
         assertThat(collector.waits).containsExactly(true);
     }
+
+    @Test
+    @DisplayName("한 HTTP 요청 안에서 저장본을 여러 개 읽어도 새로고침 기준 시각은 한 번만 조회한다")
+    void refreshTimestampIsReadOncePerRequest() {
+        StoreRepository repository = mock(StoreRepository.class);
+        Snapshot fresh = new Snapshot("test.dataset", null, "json", "ok", null, Instant.now());
+        when(repository.readSnapshot(anyString())).thenReturn(Optional.of(fresh));
+        when(repository.refreshRequestedAt("global")).thenReturn(null);
+        StoreReader reader = reader(repository, new RecordingCollector());
+
+        // 원본 텍스트처럼 한 요청이 저장본 여러 개를 읽는 상황
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(
+                        new org.springframework.mock.web.MockHttpServletRequest()));
+        try {
+            for (int i = 0; i < 10; i++) {
+                reader.read("test.dataset", 3600, "some_task");
+            }
+        } finally {
+            org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        }
+        org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(1)).refreshRequestedAt("global");
+
+        // 요청 밖에서는 매번 조회합니다(새로고침 직후 옛 값을 보지 않도록).
+        reader.read("test.dataset", 3600, "some_task");
+        org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(2)).refreshRequestedAt("global");
+    }
 }

@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -219,13 +221,37 @@ public class StoreReader {
     }
 
     /**
+     * 수동 새로고침 기준 시각 — HTTP 요청 하나 안에서는 한 번만 조회합니다.
+     *
+     * <p>신선한 저장본을 읽을 때마다 refresh_requests를 조회했습니다. 원본 텍스트 한 번에
+     * 저장본 ~45개를 읽으니 같은 한 줄을 ~45번 읽었습니다. 요청 속성에 기억해 두면 같은
+     * 요청의 반복 조회만 사라지고, 다음 요청은 새 값을 봅니다(시간 기반 캐시처럼 새로고침
+     * 직후 옛 값을 볼 일이 없음). 요청 밖(테스트·배치)에서는 매번 조회합니다.
+     */
+    static final String REFRESH_MEMO_ATTRIBUTE = StoreReader.class.getName() + ".refreshRequestedAt";
+
+    private Instant refreshRequestedAt() {
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        if (request == null) {
+            return repository.refreshRequestedAt("global");
+        }
+        Object memo = request.getAttribute(REFRESH_MEMO_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+        if (memo instanceof Optional<?> cached) {
+            return (Instant) cached.orElse(null);
+        }
+        Instant value = repository.refreshRequestedAt("global");
+        request.setAttribute(REFRESH_MEMO_ATTRIBUTE, Optional.ofNullable(value), RequestAttributes.SCOPE_REQUEST);
+        return value;
+    }
+
+    /**
      * 이 저장본이 수동 새로고침 요청보다 먼저 수집됐는지.
      *
      * <p>store_only 모드에서는 이 검사를 하지 않습니다. 외부를 부르지 않는다는
      * 약속이 우선이기 때문입니다(그 모드에서 새로고침은 저장본 재조회입니다).
      */
     private boolean supersededByRefresh(Snapshot snapshot, long maxAgeSeconds) {
-        Instant requestedAt = repository.refreshRequestedAt("global");
+        Instant requestedAt = refreshRequestedAt();
         if (requestedAt == null || snapshot.collectedAt() == null) {
             return false;
         }
