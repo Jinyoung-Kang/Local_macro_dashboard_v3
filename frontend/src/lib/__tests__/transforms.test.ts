@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { knownBars, mergeByDate } from "../chartData";
-import { sortDescUnknownLast, topPairs } from "../transforms";
+import { sortDescUnknownLast, stableCodesKey, topPairs } from "../transforms";
 
 describe("mergeByDate", () => {
   it("날짜 합집합·오래된 날이 앞, 값이 없는 날은 그 계열 칸이 비어 있다", () => {
@@ -59,5 +59,20 @@ describe("knownBars (섹터 막대에도 씀)", () => {
       (row) => row.r,
     );
     expect(bars).toEqual([{ name: "정보기술", value: 3 }, { name: "금융", value: 5 }]);
+  });
+});
+
+describe("sortDescUnknownLast — 비교자는 대칭이어야 한다", () => {
+  it("둘 다 모르는 행끼리는 같다(0)", () => {
+    const rows = [{ v: null }, { v: 3 }, { v: null }, { v: 7 }];
+    expect(sortDescUnknownLast(rows, (r) => r.v).map((r) => r.v)).toEqual([7, 3, null, null]);
+  });
+});
+
+describe("stableCodesKey", () => {
+  it("순서·중복과 무관하게 같은 키", () => {
+    expect(stableCodesKey(["005930", "000660", "005930"])).toBe("000660,005930");
+    expect(stableCodesKey(["000660", "005930"])).toBe("000660,005930");
+    expect(stableCodesKey([])).toBe("");
   });
 });

@@ -39,12 +39,26 @@ export function sortDescUnknownLast<T>(rows: readonly T[], value: (row: T) => nu
   return [...rows].sort((a, b) => {
     const left = value(a);
     const right = value(b);
-    if (left === null || left === undefined) {
+    const leftUnknown = left === null || left === undefined;
+    const rightUnknown = right === null || right === undefined;
+    // 둘 다 모르면 같다(0). 한쪽만 1을 돌려주면 비교가 비대칭이 되어 정렬 결과가 엔진마다 달라집니다.
+    if (leftUnknown && rightUnknown) {
+      return 0;
+    }
+    if (leftUnknown) {
       return 1;
     }
-    if (right === null || right === undefined) {
+    if (rightUnknown) {
       return -1;
     }
     return right - left;
   });
+}
+
+/**
+ * 종목코드 목록을 요청 키로. 순서를 정렬하고 중복을 없애, 랭킹 순서만 바뀌어도 같은 키가 나와
+ * 다시 요청하지 않게 합니다(60초마다 순위가 바뀌는 레이더에서 재무·수급 패널이 매번 다시 읽었음).
+ */
+export function stableCodesKey(codes: readonly string[]): string {
+  return [...new Set(codes)].sort().join(",");
 }

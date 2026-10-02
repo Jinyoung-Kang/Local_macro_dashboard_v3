@@ -1,5 +1,6 @@
 "use client";
 
+import { stableCodesKey } from "@/lib/transforms";
 import { SignedBars } from "@/components/charts";
 import { Banner, Card, Freshness, Loading, SourceBadge, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
@@ -101,7 +102,7 @@ export function MarketFlowsPanel({ market }: { market: string }) {
 
 // ------------------------------------------------------------------ 종목 지속성
 export function StockFlowsPanel({ rows }: { rows: { code: string; name: string }[] }) {
-  const codes = rows.map((row) => row.code).join(",");
+  const codes = stableCodesKey(rows.map((row) => row.code));
   const { data, loading, error } = useApi<StockFlowsResponse>(
     codes ? endpoints.positioning.stockFlows(codes) : null,
     300_000,

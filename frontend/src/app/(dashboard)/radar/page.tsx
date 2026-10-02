@@ -1,5 +1,6 @@
 "use client";
 
+import { stableCodesKey } from "@/lib/transforms";
 import { useState } from "react";
 import { HorizontalBars } from "@/components/charts";
 import { knownBars } from "@/lib/chartData";
@@ -356,7 +357,7 @@ function DiagnosticsPanel() {
  */
 function FundamentalsPanel({ codes }: { codes: string[] }) {
   // 순서를 정렬해 키를 고정합니다. 랭킹 순서만 바뀌어도 다시 요청하지 않게.
-  const key = [...new Set(codes)].sort().join(",");
+  const key = stableCodesKey(codes);
   const { data, loading, error, reload } = useApi<KrFundamentalsResponse>(
     key ? endpoints.publicData.fundamentals(key) : null,
   );
