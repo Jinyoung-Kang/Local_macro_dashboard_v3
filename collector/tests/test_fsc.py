@@ -15,6 +15,7 @@ tests/test_fsc.py
 """
 from __future__ import annotations
 
+import contextlib
 from types import SimpleNamespace
 
 import pytest
@@ -166,6 +167,10 @@ class _FakeStore:
     def delete_observations_before(self, dataset, before):
         return 0
 
+    @contextlib.contextmanager
+    def transaction(self):
+        yield None
+
 
 def test_이미_최신이면_호출_0회(monkeypatch):
     from datetime import datetime, timedelta
@@ -198,3 +203,56 @@ def test_발표_전이면_하루_더_거슬러_올라가_저장한다(monkeypatc
     assert ("KOSPI.marketCap", [(fake.observations[0][0], 7100000.0)]) in fake.timeseries
     assert fake.snapshots[catalog.SNAP_FSC_PRICES_META]["endpoint"] == fsc.URL
     assert "1종목" in result
+
+
+def test_빠진_영업일을_오래된_날부터_전부_메운다(monkeypatch):
+    """
+    수집기가 며칠 꺼져 있다 켜지면 예전 코드는 가장 최근 하루만 받고 멈춰, 그 사이
+    날들은 영영 받지 않았습니다. 저장된 마지막 기준일 이후의 영업일을 전부 받되,
+    메타 스냅샷의 latestBasDt는 가장 최근 날이어야 합니다.
+    """
+    from datetime import datetime
+
+    from app import catalog, tasks
+
+    today = datetime.now(tasks.KST).date()
+    candidates = tasks._fsc_candidate_dates(today)        # 어제부터 과거로
+    fake = _FakeStore(latest=candidates[2].isoformat())   # 3영업일 전까지 저장됨
+    monkeypatch.setattr(tasks, "store", fake)
+    calls = []
+
+    def fetch(bas_dt, budget):
+        budget.take()
+        calls.append(bas_dt)
+        return [fsc.normalize(SAMSUNG)], fsc.URL
+
+    monkeypatch.setattr(tasks.fsc_service, "fetch_day", fetch)
+    result = tasks.task_fsc_prices()
+
+    expected = [candidates[1].strftime("%Y%m%d"), candidates[0].strftime("%Y%m%d")]
+    assert calls == expected, "오래된 날부터, 저장된 날은 건너뛴다"
+    assert [d for d, _ in fake.observations] == [candidates[1].isoformat(), candidates[0].isoformat()]
+    assert fake.snapshots[catalog.SNAP_FSC_PRICES_META]["latestBasDt"] == candidates[0].isoformat()
+    assert "2일 보충" in result
+
+
+def test_하루치는_한_트랜잭션이라_중간에_실패하면_종목도_남지_않는다(store, monkeypatch):
+    """
+    종목 3천 행을 커밋한 뒤 시장 합계나 메타 저장에서 멈추면 latest_observation_date가
+    그날로 잡혀 다음 실행이 '최신 상태'라며 건너뛰고, 합계는 영영 비었습니다.
+    """
+    from app import catalog, tasks
+
+    monkeypatch.setattr(tasks.fsc_service, "fetch_day",
+                        lambda bas_dt, budget: ([fsc.normalize(SAMSUNG)], fsc.URL))
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("메타 저장 실패")
+
+    monkeypatch.setattr(tasks.store, "put_snapshot", boom)
+
+    with pytest.raises(RuntimeError):
+        tasks.task_fsc_prices()
+
+    assert store.latest_observation_date(catalog.OBS_FSC_PRICE) is None
+    assert store.read_timeseries(catalog.TS_FSC_MARKET, "KOSPI.marketCap") == []

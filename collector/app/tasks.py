@@ -595,8 +595,12 @@ def task_fsc_prices() -> str:
     🏛️ 금융위 공식 일별 시세 — 전 종목 종가·시가총액 + 시장별 합계.
 
     규칙
-      - 가장 최근 기준일부터 확인하고, 이미 저장된 날을 만나면 멈춥니다.
-        최신 상태면 호출 0회로 끝납니다(1시간마다 돌아도 한도를 쓰지 않음).
+      - 저장된 마지막 기준일 **이후의 영업일을 전부** 받습니다(오래된 날부터). 수집기가
+        며칠 꺼져 있었어도 빠진 날이 생기지 않습니다. 최신 상태면 호출 0회로 끝납니다
+        (1시간마다 돌아도 한도를 쓰지 않음). 저장본이 아예 없으면 가장 최근 하루만 받습니다.
+      - 하루치(종목별 observations + 시장 합계 timeseries + 메타 스냅샷)는 한 트랜잭션입니다.
+        따로 커밋하면 중간에 멈췄을 때 '종목은 있는데 합계는 없는 날'이 생기고, 다음
+        실행은 그날을 이미 받은 날로 보고 건너뜁니다.
       - 종목별 값은 observations(종목코드 = entity)에 쌓습니다. 한 스냅샷에 3천 행을
         넣으면 화면 요청마다 그 전체를 읽어야 합니다. 인덱스로 필요한 종목만 읽습니다.
       - 400일이 지난 행은 정리합니다.
@@ -606,9 +610,18 @@ def task_fsc_prices() -> str:
     budget = publicapi.CallBudget(FSC_CALL_BUDGET)
     reasons: list[str] = []
 
-    for day in _fsc_candidate_dates(today):
-        if stored_latest and day.isoformat() <= stored_latest:
-            return f"최신 상태 (기준일 {stored_latest}, 호출 {budget.used}회)"
+    pending = [d for d in _fsc_candidate_dates(today) if not stored_latest or d.isoformat() > stored_latest]
+    if not pending:
+        return f"최신 상태 (기준일 {stored_latest}, 호출 {budget.used}회)"
+
+    # 저장본이 있으면 빠진 날을 오래된 순서로 전부 메웁니다(메타 스냅샷의 latestBasDt가
+    # 가장 최근 날이 되도록). 저장본이 없으면 시작점을 잡는 것이라, 최신부터 보다가
+    # 처음 발표된 하루만 받습니다.
+    order = list(reversed(pending)) if stored_latest else pending
+    only_first = not stored_latest
+
+    written: list[tuple[str, int]] = []
+    for day in order:
         try:
             rows, url = fsc_service.fetch_day(day.strftime("%Y%m%d"), budget)
         except publicapi.MissingKey:
@@ -619,26 +632,34 @@ def task_fsc_prices() -> str:
                 break
             continue
         if not rows:
-            continue  # 아직 발표 전이거나 휴장일 — 하루 더 거슬러 올라감
+            continue  # 아직 발표 전이거나 휴장일
 
         obs_date = day.isoformat()
-        saved = store.put_observations(catalog.OBS_FSC_PRICE, obs_date, rows, entity_key="code")
         totals = fsc_service.market_totals(rows)
-        for market, agg in totals.items():
-            store.put_timeseries(catalog.TS_FSC_MARKET, f"{market}.marketCap", [(obs_date, agg["marketCap"])])
-            store.put_timeseries(catalog.TS_FSC_MARKET, f"{market}.tradingValue", [(obs_date, agg["tradingValue"])])
-        store.put_snapshot(catalog.SNAP_FSC_PRICES_META, {
-            "source": "금융위원회 주식시세정보 (거래소 확정치, 기준일 다음 영업일 13시 이후 갱신)",
-            "latestBasDt": obs_date,
-            "rows": saved,
-            "markets": totals,
-            "endpoint": url,
-        })
-        cutoff = (today - timedelta(days=FSC_RETENTION_DAYS)).isoformat()
-        store.delete_observations_before(catalog.OBS_FSC_PRICE, cutoff)
-        return f"{obs_date} {saved}종목 · 시장 {len(totals)}개 (호출 {budget.used}회)"
+        with store.transaction():
+            saved = store.put_observations(catalog.OBS_FSC_PRICE, obs_date, rows, entity_key="code")
+            for market, agg in totals.items():
+                store.put_timeseries(catalog.TS_FSC_MARKET, f"{market}.marketCap", [(obs_date, agg["marketCap"])])
+                store.put_timeseries(catalog.TS_FSC_MARKET, f"{market}.tradingValue", [(obs_date, agg["tradingValue"])])
+            store.put_snapshot(catalog.SNAP_FSC_PRICES_META, {
+                "source": "금융위원회 주식시세정보 (거래소 확정치, 기준일 다음 영업일 13시 이후 갱신)",
+                "latestBasDt": obs_date,
+                "rows": saved,
+                "markets": totals,
+                "endpoint": url,
+            })
+        written.append((obs_date, saved))
+        if only_first:
+            break
 
-    raise EmptyResult("새 기준일 데이터가 없습니다 — 기존 저장본 유지" + _reason_suffix(reasons))
+    if not written:
+        raise EmptyResult("새 기준일 데이터가 없습니다 — 기존 저장본 유지" + _reason_suffix(reasons))
+
+    cutoff = (today - timedelta(days=FSC_RETENTION_DAYS)).isoformat()
+    store.delete_observations_before(catalog.OBS_FSC_PRICE, cutoff)
+    latest_date, latest_rows = written[-1]
+    days = f" · {len(written)}일 보충" if len(written) > 1 else ""
+    return f"{latest_date} {latest_rows}종목{days} (호출 {budget.used}회)" + _reason_suffix(reasons)
 
 
 # DART 재무를 받을 종목 수 상한과 대상 기간. 호출 수 = 상한 / BATCH (+ 이전 연도 재시도).

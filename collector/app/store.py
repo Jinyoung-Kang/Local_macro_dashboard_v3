@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import socket
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -63,10 +64,43 @@ def close_pool() -> None:
         _pool = None
 
 
+_current = threading.local()
+
+
 @contextmanager
 def connection():
+    """
+    풀에서 연결을 하나 빌립니다. 블록이 정상으로 끝나면 커밋, 예외면 롤백입니다.
+
+    transaction() 블록 안에서 불리면 새 연결 대신 **그 트랜잭션의 연결**을 돌려주고
+    커밋도 하지 않습니다 — 블록 안의 put_* 호출이 전부 한 트랜잭션에 묶입니다.
+    """
+    current = getattr(_current, "conn", None)
+    if current is not None:
+        yield current
+        return
     with get_pool().connection() as conn:
         yield conn
+
+
+@contextmanager
+def transaction():
+    """
+    여러 put_* 호출을 한 트랜잭션으로 묶습니다. 중첩되면 바깥 트랜잭션에 합류합니다.
+
+    예: 금융위 하루치는 observations + timeseries + 메타 스냅샷을 함께 써야 합니다.
+    따로 커밋하면 중간에 멈췄을 때 '종목은 있는데 시장 합계는 없는 날'이 생기고,
+    다음 실행은 그날을 이미 받은 날로 보고 건너뜁니다.
+    """
+    if getattr(_current, "conn", None) is not None:
+        yield _current.conn
+        return
+    with get_pool().connection() as conn:
+        _current.conn = conn
+        try:
+            yield conn
+        finally:
+            _current.conn = None
 
 
 def init_schema(path: str | None = None) -> None:
