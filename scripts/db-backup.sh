@@ -10,8 +10,10 @@ set -euo pipefail
 # shellcheck source=scripts/db-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/db-common.sh"
 
-file="$(new_backup_path "${1:-$DB_NAME}")"
+prefix="${1:-$DB_NAME}"
+file="$(new_backup_path "$prefix")"
 dump_to "$file"
+prune_backups "$prefix"
 
 echo ""
 printf "  파일     : %s (%s)\n" "$file" "$(du -h "$file" | cut -f1)"

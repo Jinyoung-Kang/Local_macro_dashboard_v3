@@ -63,6 +63,9 @@ dump_is_complete() {
 # 남으면, 나중에 그 파일로 복원해도 아무것도 돌아오지 않습니다.
 dump_to() {
     local file="$1" partial="$1.partial"
+    # 덤프에는 개인 데이터(누적 수급 이력)가 통째로 들어갑니다. 이 맥의 다른 계정·프로세스가
+    # 읽지 못하게 소유자만 읽고 쓰는 권한(600)으로 만듭니다.
+    umask 077
     if ! run_pg_dump > "$partial"; then
         rm -f "$partial"
         echo "❌ 백업 실패: pg_dump가 오류로 끝났습니다(위 메시지 참고). 파일을 남기지 않았습니다." >&2
@@ -80,4 +83,16 @@ dump_to() {
 new_backup_path() {
     mkdir -p "$BACKUP_DIR"
     echo "$BACKUP_DIR/$1-$(date +%Y%m%d-%H%M%S).sql"
+}
+
+# 같은 접두어의 백업을 최근 N개만 남기고 지웁니다(BACKUP_KEEP, 기본 10). 매번 25~40MB씩
+# 쌓여 지우지 않으면 끝없이 늘어납니다. 방금 만든 파일은 가장 최근이므로 항상 남습니다.
+prune_backups() {
+    local prefix="$1" keep="${BACKUP_KEEP:-10}" old
+    [ "$keep" -gt 0 ] 2>/dev/null || return 0
+    # ls -t: 최근 파일이 앞. keep개 뒤부터가 지울 대상.
+    old="$(ls -t "$BACKUP_DIR/$prefix"-*.sql 2>/dev/null | tail -n +"$((keep + 1))")" || true
+    [ -n "$old" ] || return 0
+    printf '%s\n' "$old" | while IFS= read -r f; do rm -f "$f"; done
+    echo "  정리     : 오래된 $prefix 백업 $(printf '%s\n' "$old" | wc -l | tr -d ' ')개 삭제 (최근 $keep개 보존)"
 }
