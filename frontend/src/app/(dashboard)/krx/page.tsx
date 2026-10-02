@@ -27,6 +27,8 @@ import { mergeByDate } from "@/lib/chartData";
  *  - 추정치 모드면 경고를 띄웁니다.
  *  - Daum 선물 수급은 계약수 기준입니다(금액 기준은 제공되지 않습니다).
  */
+const MEASURE_LABELS: Record<string, string> = { CONTRACT: "계약 수 기준", AMOUNT: "금액 기준" };
+
 export default function KrxPage() {
   const futures = useApi<KrxFuturesResponse>(endpoints.positioning.krxFutures(60), 300_000);
   const trend = useApi<InvestorTrendResponse>(endpoints.positioning.krxInvestorTrend, 300_000);
@@ -199,7 +201,12 @@ export default function KrxPage() {
             ? `${trend.data.unit} 기준 · 기준일 ${trend.data.dataDate ?? EMPTY}`
             : undefined
         }
-        actions={trend.data?.measure ? <SourceBadge>{trend.data.measure}</SourceBadge> : undefined}
+        actions={
+          trend.data?.measure ? (
+            // measure는 소스의 코드값(CONTRACT·AMOUNT)입니다. 화면에는 뜻을 적습니다(QA-005).
+            <SourceBadge>{MEASURE_LABELS[trend.data.measure] ?? trend.data.measure}</SourceBadge>
+          ) : undefined
+        }
       >
         {trend.loading && !trend.data && <Loading />}
         {trend.data && !trend.data.available && (
