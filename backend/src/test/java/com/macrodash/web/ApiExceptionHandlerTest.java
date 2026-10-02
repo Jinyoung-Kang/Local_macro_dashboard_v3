@@ -1,12 +1,23 @@
 package com.macrodash.web;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,6 +55,33 @@ class ApiExceptionHandlerTest {
     @DisplayName("클라이언트가 연결을 끊었으면 아무것도 쓰지 않는다(오류 로그도 남기지 않음)")
     void clientDisconnectWritesNothing() {
         assertThat(handler.unexpected(new AsyncRequestNotUsableException("Broken pipe"), request)).isNull();
+    }
+
+    @Test
+    @Disabled("QA-009: 수정 전 — DB 연결 실패가 500 '서버 내부 오류'로 나갑니다")
+    @DisplayName("QA-009: DB에 연결하지 못하면 500 '내부 오류'가 아니라 503과 DB 안내를 돌려준다")
+    void databaseOutageIs503WithGuidance() throws Exception {
+        // QA 스택에서 postgres를 멈추자 모든 데이터 API가 500 "서버 내부 오류가 발생했습니다. 백엔드 로그를
+        // 확인하세요"로 답했습니다(화면도 그대로 표시). 코드 결함이 아니라 의존 서비스 장애이므로 503이어야
+        // 하고, 사용자가 볼 곳(postgres)을 알려 줘야 합니다. /api/health는 이미 503 + database:unreachable입니다.
+        var mvc = MockMvcBuilders.standaloneSetup(new DatabaseDownController())
+                .setControllerAdvice(handler).build();
+
+        mvc.perform(get("/boom"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").value("service_unavailable"))
+                .andExpect(jsonPath("$.message", containsString("데이터베이스")))
+                .andExpect(jsonPath("$.message", containsString("postgres")))
+                .andExpect(jsonPath("$.message", not(containsString("JDBC"))));
+    }
+
+    @RestController
+    static class DatabaseDownController {
+        @GetMapping("/boom")
+        String boom() {
+            throw new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection",
+                    new java.sql.SQLException("Connection refused"));
+        }
     }
 
     @Test
