@@ -248,6 +248,10 @@ def put_timeseries(
     값을 모르는 점(None·NaN)은 **쓰지 않습니다.** 외부 소스가 하루 값을 빼먹을
     때 NULL로 덮으면 전에 받아 둔 확정치가 지워지고, read_timeseries는 NULL을
     숨기므로 조용히 구멍이 납니다. 반환값에도 세지 않습니다.
+
+    값이 같은 행은 갱신하지 않습니다(DO UPDATE … WHERE IS DISTINCT FROM). 같은 값을 다시
+    쓰면 PostgreSQL은 새 행 버전을 만들어 WAL과 죽은 행이 생깁니다 — 31k행 테이블에
+    갱신 346만 번이 쌓인 원인입니다. 반환값은 '보낸 점 수'입니다(갱신된 행 수가 아님).
     """
     rows = []
     for raw_date, value in points:
@@ -268,10 +272,21 @@ def put_timeseries(
             ON CONFLICT (dataset, series_id, obs_date) DO UPDATE SET
                 value      = EXCLUDED.value,
                 updated_at = EXCLUDED.updated_at
+            WHERE timeseries.value IS DISTINCT FROM EXCLUDED.value
             """,
             rows,
         )
     return len(rows)
+
+
+def latest_timeseries_date(dataset: str, series_id: str) -> str | None:
+    """그 시리즈의 가장 최근 obs_date (YYYY-MM-DD). 없으면 None."""
+    with connection() as conn:
+        row = conn.execute(
+            "SELECT MAX(obs_date) AS d FROM timeseries WHERE dataset = %s AND series_id = %s",
+            (dataset, series_id),
+        ).fetchone()
+    return row["d"].isoformat() if row and row["d"] else None
 
 
 def read_timeseries(
@@ -333,6 +348,7 @@ def put_observations(
             ON CONFLICT (dataset, obs_date, entity) DO UPDATE SET
                 payload    = EXCLUDED.payload,
                 updated_at = EXCLUDED.updated_at
+            WHERE observations.payload IS DISTINCT FROM EXCLUDED.payload
             """,
             rows,
         )

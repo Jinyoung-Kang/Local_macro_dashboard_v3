@@ -369,3 +369,23 @@ def test_timeseries_never_overwrites_a_value_with_unknown(store):
         {"date": "2026-01-02", "value": 1.0},
         {"date": "2026-01-03", "value": 3.0},
     ]
+
+
+def test_timeseries_same_value_does_not_create_a_new_row_version(store):
+    """
+    값이 같은 점을 다시 쓰면 PostgreSQL은 새 행 버전을 만듭니다(WAL·죽은 행). 매시간 10년치를
+    다시 upsert해 31k행 테이블에 갱신이 346만 번 쌓였습니다. 같은 값은 건드리지 않습니다.
+    """
+    store.put_timeseries("demo", "S", [("2026-01-02", 1.0), ("2026-01-03", 2.0)])
+    with store.connection() as conn:
+        before = conn.execute("SELECT xmin FROM timeseries WHERE dataset='demo' ORDER BY obs_date").fetchall()
+
+    store.put_timeseries("demo", "S", [("2026-01-02", 1.0), ("2026-01-03", 2.5)])   # 하나만 바뀜
+    with store.connection() as conn:
+        after = conn.execute("SELECT xmin FROM timeseries WHERE dataset='demo' ORDER BY obs_date").fetchall()
+
+    assert after[0]["xmin"] == before[0]["xmin"], "같은 값은 새 버전을 만들지 않는다"
+    assert after[1]["xmin"] != before[1]["xmin"], "바뀐 값은 갱신된다"
+    assert store.read_timeseries("demo", "S")[1]["value"] == 2.5
+    assert store.latest_timeseries_date("demo", "S") == "2026-01-03"
+    assert store.latest_timeseries_date("demo", "none") is None

@@ -303,3 +303,24 @@ def test_run_status_는_태스크_상태에서_유도된다():
     assert tasks._run_status(0, [empty, empty]) == "empty"
     assert tasks._run_status(0, [empty, error]) == "fail"
     assert tasks._run_status(0, [error]) == "fail"
+
+
+def test_fred_task_sends_only_points_near_the_stored_tail(store, monkeypatch):
+    """매시간 10년치 2,600점을 전부 보내지 않고, 저장된 마지막 날짜 − 7일부터만 보냅니다."""
+    monkeypatch.setattr(tasks.indicators, "FRED_ALL_SERIES", ("T10Y3M",), raising=False)
+    store.put_timeseries(catalog.TS_FRED, "T10Y3M", [("2026-09-01", 1.0), ("2026-09-20", 1.1)])
+    points = [{"date": f"2026-0{m}-{d:02d}", "value": 0.5} for m in (7, 8, 9) for d in range(1, 29)]
+    monkeypatch.setattr(tasks.fred_service, "collect_series_with_reason",
+                        lambda series_id, period_years=10: (points, None))
+
+    detail = tasks.task_fred_series()
+
+    # 2026-09-13(= 09-20 − 7일)부터 09-28까지 16점만 보냅니다.
+    assert "누적 16행" in detail
+    assert len(store.read_timeseries(catalog.TS_FRED, "T10Y3M")) == 2 + 16 - 1   # 09-20은 겹침(값 갱신)
+
+
+def test_recent_points_keeps_everything_on_first_run():
+    points = [("2026-01-01", 1.0), ("2026-06-01", 2.0)]
+    assert tasks._recent_points(points, None) == points
+    assert tasks._recent_points(points, "2026-06-05") == [("2026-06-01", 2.0)]

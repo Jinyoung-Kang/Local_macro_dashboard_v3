@@ -26,7 +26,7 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -177,11 +177,13 @@ def task_fred_series() -> str:
                 reasons.append(reason)
             continue
 
-        # 받은 점은 진짜 데이터이므로 누적 시계열에는 그대로 넣습니다.
+        # 받은 점은 진짜 데이터이므로 누적 시계열에는 그대로 넣습니다. 다만 매시간 10년치
+        # 2,600점을 전부 보내지 않고, 저장된 마지막 날짜 근처(개정 반영 7일)부터만 보냅니다.
         accumulated += store.put_timeseries(
             catalog.TS_FRED,
             series_id,
-            [(p["date"], p["value"]) for p in points],
+            _recent_points([(p["date"], p["value"]) for p in points],
+                           store.latest_timeseries_date(catalog.TS_FRED, series_id)),
         )
 
         # 백엔드는 스냅샷을 읽습니다. 저장본보다 훨씬 짧은 응답(부분 장애·CSV 잘림)으로
@@ -205,6 +207,19 @@ def task_fred_series() -> str:
             f"0/{len(series_ids)} 시리즈 — 기존 저장본 유지{_reason_suffix(reasons)}"
         )
     return f"{ok}/{len(series_ids)} 시리즈, 누적 {accumulated}행"
+
+
+# 시계열 증분 적재: 저장된 마지막 날짜에서 이만큼 거슬러 올라간 날부터만 보냅니다.
+# FRED는 최근 값을 며칠 뒤 개정하므로 겹치는 구간을 둡니다. 첫 수집(저장본 없음)은 전부.
+TIMESERIES_OVERLAP_DAYS = 7
+
+
+def _recent_points(points: list[tuple], latest_stored: str | None) -> list[tuple]:
+    """저장된 마지막 날짜 − 겹침 일수 이후의 점만. 저장본이 없으면 전부."""
+    if not latest_stored:
+        return points
+    cutoff = (date.fromisoformat(latest_stored[:10]) - timedelta(days=TIMESERIES_OVERLAP_DAYS)).isoformat()
+    return [(d, v) for d, v in points if str(d)[:10] >= cutoff]
 
 
 FRED_SHRINK_MIN_STORED = 50      # 이보다 짧은 저장본은 비교 대상이 아닙니다(첫 수집 등)
@@ -244,7 +259,8 @@ def task_fed_liquidity() -> str:
         accumulated += store.put_timeseries(
             catalog.TS_LIQUIDITY,
             column,
-            [(row["date"], row[column]) for row in rows],
+            _recent_points([(row["date"], row[column]) for row in rows],
+                           store.latest_timeseries_date(catalog.TS_LIQUIDITY, column)),
         )
     return f"{len(rows)}행, 누적 {accumulated}행"
 
