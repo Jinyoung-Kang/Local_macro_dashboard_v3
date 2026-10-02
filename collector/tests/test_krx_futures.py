@@ -147,3 +147,22 @@ def test_daum_trend_is_contract_based_only():
     payload = krx._empty_trend()
     assert payload["measure"] == "CONTRACT"
     assert payload["unit"] == "계약"
+
+
+def test_missing_volume_or_open_interest_is_unknown_not_zero():
+    """
+    KRX가 필드 이름을 바꾸거나 빈 값을 주면 0.0으로 메워졌고, 그 0.0이 40일 이력 위에
+    upsert돼 미결제약정 이력이 0으로 덮였습니다. 0.0 - 직전 OI = 음수 → "롱 청산"처럼
+    국면까지 지어냈습니다. 모르면 None이고 국면은 '판정 불가'입니다.
+    """
+    parsed = krx._parse_futures_day("20260911", [
+        {"ISU_NM": "코스피200 F 202609", "TDD_CLSPRC": "1,088.30", "ACC_TRDVOL": ""},
+    ])
+    assert parsed["volume"] is None
+    assert parsed["openInterest"] is None
+
+    rows = _rows(1100.0, 1088.3, open_interest=[300000.0, None])
+    krx._derive_series(rows)
+    assert rows[1]["oiChange"] is None
+    assert rows[1]["marketPhase"] == krx.PHASE_UNKNOWN
+    assert rows[1]["cotOiIndex"] is None

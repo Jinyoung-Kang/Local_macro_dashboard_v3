@@ -266,11 +266,13 @@ def _parse_futures_day(date_str: str, rows: list[dict]) -> dict | None:
             reported = _to_float(raw)
             break
 
+    # 거래량·미결제약정도 모르면 None입니다. 0.0으로 메우면 (1) 40일 이력 위에
+    # 0이 upsert돼 확정치가 덮이고 (2) 0 - 직전 OI로 국면을 지어냅니다.
     return {
         "close": close,
         "reportedPct": reported,
-        "volume": _to_float(_pick(row, "ACC_TRDVOL", "TRDVOL")) or 0.0,
-        "openInterest": _to_float(_pick(row, "ACC_OPNINT_QTY", "OPNINT_QTY")) or 0.0,
+        "volume": _to_float(_pick(row, "ACC_TRDVOL", "TRDVOL")),
+        "openInterest": _to_float(_pick(row, "ACC_OPNINT_QTY", "OPNINT_QTY")),
         "contractName": str(_pick(row, "ISU_NM", "PROD_NM") or "KOSPI 200 선물"),
     }
 
