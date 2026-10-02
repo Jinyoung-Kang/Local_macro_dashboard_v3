@@ -309,12 +309,18 @@ def live_radar(
     기다리게 되기 때문입니다.
     """
     _check_token(x_service_token)
-    day = _parse_date(targetDate) or datetime.now(KST).date()
+    market = _normalize_market(market)
+    requested = _parse_date(targetDate)
+    day = requested or datetime.now(KST).date()
     result = radar_service.collect_radar_ranking(
         day, market, investor, tradeType, topN, intervalType
     )
 
-    if result.get("rows"):
+    # 저장은 스케줄러와 같은 조건(오늘·상위 30)일 때만 합니다. 백엔드는 topN≠30이나
+    # 과거 날짜 요청이면 저장본을 건너뛰지만, 그 결과를 기본 이름에 저장하면 다음
+    # 15분 동안 5행짜리나 과거 랭킹이 '현재 랭킹'으로 나가고 이력에도 쌓입니다.
+    is_default_query = requested is None and topN == RADAR_DEFAULT_TOP_N
+    if result.get("rows") and is_default_query:
         store.put_snapshot(
             catalog.snap_radar_scanner(market, investor, tradeType, intervalType),
             result,
@@ -324,6 +330,23 @@ def live_radar(
                 result["rows"], market, investor, tradeType, intervalType
             )
     return result
+
+
+RADAR_DEFAULT_TOP_N = 30
+RADAR_MARKETS = ("KOSPI", "KOSDAQ")
+
+
+def _normalize_market(market: str) -> str:
+    """
+    시장 이름을 KOSPI/KOSDAQ로 맞춥니다. 소문자나 한글이 그대로 저장본 이름·이력 payload에
+    들어가면 같은 시장이 다른 키로 갈라져 이력 조회가 빗나갑니다.
+    """
+    text = (market or "").strip().upper()
+    if "코스닥" in text or text == "KOSDAQ":
+        return "KOSDAQ"
+    if "코스피" in text or text == "KOSPI":
+        return "KOSPI"
+    raise HTTPException(status_code=400, detail=f"market은 {' 또는 '.join(RADAR_MARKETS)}여야 합니다: {market!r}")
 
 
 @app.get("/live/ticker/{symbol:path}")
