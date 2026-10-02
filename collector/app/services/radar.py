@@ -27,13 +27,12 @@ import io
 import logging
 import os
 import re
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
 
-from .. import catalog, store
-from .. import kst
+from .. import catalog, krcalendar, kst, store
 from ..http import get_session
 from . import kis, ls, toss
 
@@ -91,28 +90,15 @@ if PYKRX_AVAILABLE and not PYKRX_LOGGED_IN:
 
 
 # ==============================================================================
-# 1. 거래일 계산
+# 1. 거래일 계산 — app/krcalendar.py가 공휴일까지 보고 판정합니다. 이름은 호환을 위해 남깁니다.
 # ==============================================================================
 def latest_completed_session(now: datetime | None = None) -> str:
-    """
-    지금 이 시점에 Naver/Daum이 '현재 데이터'로 보여주는 거래일(YYYYMMDD).
-
-    - 평일 09:00 이후: 오늘
-    - 그 외(장 시작 전·주말): 가장 최근 평일
-    """
-    now = now or datetime.now(KST)
-    if now.weekday() < 5 and now.time() >= time(9, 0):
-        return now.strftime("%Y%m%d")
-
-    day = now.date() - timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day.strftime("%Y%m%d")
+    """지금 이 시점에 Naver/Daum이 '현재 데이터'로 보여주는 거래일(YYYYMMDD)."""
+    return krcalendar.latest_completed_session(now)
 
 
 def is_regular_session(now: datetime | None = None) -> bool:
-    now = now or datetime.now(KST)
-    return now.weekday() < 5 and time(9, 0) <= now.time() < time(15, 30)
+    return krcalendar.is_regular_session(now)
 
 
 # ==============================================================================
@@ -420,6 +406,8 @@ def fetch_daum_ranking(
             "netAmountEok": net_eok,
             "source": source,
             "collectedAt": collected_at,
+            # 소스가 밝힌 데이터 기준일. 이력에 쌓을 때 수집 시각으로 추정한 거래일보다 이것을 믿습니다.
+            "dataDate": _iso_date(to_date) if interval_type == "TODAY" else None,
         })
 
     return _rank(records, trade_type, top_n)
@@ -753,8 +741,10 @@ def accumulate_history(
     if not rows:
         return 0
 
-    session_str = latest_completed_session()
-    obs_date = f"{session_str[:4]}-{session_str[4:6]}-{session_str[6:8]}"
+    obs_date = _iso_date(rows[0].get("dataDate"))
+    if obs_date is None:
+        session_str = latest_completed_session()
+        obs_date = f"{session_str[:4]}-{session_str[4:6]}-{session_str[6:8]}"
     prefix = f"{market}|{investor}|{trade_type}|{interval_type}|"
 
     records = []
@@ -926,6 +916,17 @@ def _to_float(value) -> float:
         return float(str(value).replace(",", "").strip())
     except (TypeError, ValueError):
         return 0.0
+
+
+def _iso_date(value) -> str | None:
+    """'YYYY-MM-DD' 또는 'YYYYMMDD'를 'YYYY-MM-DD'로. 날짜가 아니면 None."""
+    text = str(value or "").strip()[:10].replace("-", "")
+    if len(text) != 8 or not text.isdigit():
+        return None
+    try:
+        return date(int(text[:4]), int(text[4:6]), int(text[6:8])).isoformat()
+    except ValueError:
+        return None
 
 
 def _optional_float(value) -> float | None:

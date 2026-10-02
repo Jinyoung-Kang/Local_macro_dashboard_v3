@@ -100,3 +100,17 @@ def test_이력_읽기는_그_조합이_실제로_있는_가장_가까운_날짜
     assert result is not None
     assert result["historyDate"] == "2026-09-10"
     assert [r["code"] for r in result["rows"]] == ["A"]
+
+
+def test_소스가_밝힌_데이터_기준일이_있으면_그_날짜로_쌓는다(store, session_20260911):
+    """
+    Daum은 응답에 toDate(데이터 기준일)를 줍니다. 공휴일 아침처럼 수집 시각으로 추정한
+    거래일이 어긋날 수 있는 때에도, 소스가 말한 날짜가 맞습니다.
+    """
+    rows = _rows(("A", 10.0))
+    rows[0]["dataDate"] = "2026-09-10"
+
+    radar.accumulate_history(rows, "KOSPI", "외국인", "순매수", "TODAY")
+
+    assert _codes(store, {"investor": "외국인"}, obs_date="2026-09-10") == {"A"}
+    assert _codes(store, {"investor": "외국인"}, obs_date="2026-09-11") == set()

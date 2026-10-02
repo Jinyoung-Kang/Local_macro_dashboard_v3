@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from . import catalog, equities, http, indicators, macro_cards, publicapi, settings, store
+from . import catalog, equities, http, indicators, krcalendar, macro_cards, publicapi, settings, store
 from .services import (
     cot as cot_service,
     dart as dart_service,
@@ -563,6 +563,10 @@ def task_kr_holidays() -> str:
         "source": "한국천문연구원 특일정보 (getRestDeInfo, isHoliday=Y)",
         "years": stored,
     })
+    # 거래일 판정(수급 레이더 기준일·금융위 후보일)이 바로 새 목록을 쓰게 합니다.
+    krcalendar.set_holidays(
+        day["date"] for year in stored.values() for day in (year.get("holidays") or [])
+    )
     counts = ", ".join(f"{y} {len(stored[str(y)]['holidays'])}건" for y in fetched)
     return counts + (f" (유지: {', '.join(map(str, kept))})" if kept else "")
 
@@ -572,22 +576,9 @@ FSC_LOOKBACK_DAYS = 7
 FSC_RETENTION_DAYS = 400
 
 
-def _kr_holiday_dates() -> set[str]:
-    """저장된 공휴일(천문연) — 없으면 빈 집합(주말만 건너뜀)."""
-    snap = store.read_snapshot(catalog.SNAP_KR_HOLIDAYS)
-    years = ((snap.payload or {}).get("years") or {}) if snap else {}
-    return {day["date"] for year in years.values() for day in (year.get("holidays") or [])}
-
-
 def _fsc_candidate_dates(today) -> list:
-    """어제부터 거슬러 올라가며 평일·비공휴일만. 오늘은 아직 발표 전이라 넣지 않습니다."""
-    holidays = _kr_holiday_dates()
-    out = []
-    for back in range(1, FSC_LOOKBACK_DAYS + 1):
-        day = today - timedelta(days=back)
-        if day.weekday() < 5 and day.isoformat() not in holidays:
-            out.append(day)
-    return out
+    """어제부터 거슬러 올라가며 거래일(평일·비공휴일)만. 오늘은 아직 발표 전이라 넣지 않습니다."""
+    return krcalendar.previous_trading_days(today, FSC_LOOKBACK_DAYS)
 
 
 def task_fsc_prices() -> str:

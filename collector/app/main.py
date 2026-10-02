@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
 
-from . import catalog, indicators, logredact, settings, store, tasks, verification, webguard
+from . import catalog, indicators, krcalendar, logredact, settings, store, tasks, verification, webguard
 from .services import (
     kis as kis_service,
     krx as krx_service,
@@ -86,6 +86,10 @@ async def lifespan(app: FastAPI):
         store.mark_stale_runs_interrupted()
     except Exception as exc:  # noqa: BLE001
         logger.warning("오래된 실행 기록 정리 실패: %s", exc)
+
+    # 거래일 판정이 공휴일을 알도록 저장된 공휴일을 올립니다(없으면 주말만 건너뜀).
+    loaded = krcalendar.load_from_store()
+    logger.info("공휴일 %d일 로드 — 거래일 판정에 사용", loaded)
 
     global scheduler
     if settings.scheduler_enabled():
