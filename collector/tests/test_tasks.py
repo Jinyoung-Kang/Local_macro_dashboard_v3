@@ -266,3 +266,28 @@ def test_run_log_retention_task_uses_configured_days(monkeypatch):
         monkeypatch.setenv("COLLECTOR_RUN_LOG_RETENTION_DAYS", raw)
         tasks.task_run_log_retention()
         assert calls[-1] == expected, raw
+
+
+def test_fred_task_keeps_a_long_snapshot_when_the_response_shrinks(store, monkeypatch):
+    """
+    백엔드는 FRED를 timeseries가 아니라 스냅샷에서 읽습니다. 응답이 2개 점만 와도
+    (FRED 부분 장애·CSV 잘림) 그걸로 10년치 스냅샷을 덮으면 다음 성공까지 모든 FRED
+    차트가 두 점으로 무너집니다. 저장본보다 훨씬 짧은 응답은 스냅샷을 덮지 않습니다.
+    """
+    monkeypatch.setattr(tasks.indicators, "FRED_ALL_SERIES", ("T10Y3M",), raising=False)
+    stored = [{"date": f"2016-{m:02d}-01", "value": float(m)} for m in range(1, 13)] * 20
+    store.put_snapshot(catalog.snap_fred_series("T10Y3M"), {"seriesId": "T10Y3M", "points": stored})
+    monkeypatch.setattr(
+        tasks.fred_service, "collect_series_with_reason",
+        lambda series_id, period_years=10: (
+            [{"date": "2026-09-10", "value": 0.42}, {"date": "2026-09-11", "value": 0.38}], None,
+        ),
+    )
+
+    with pytest.raises(tasks.EmptyResult) as exc:
+        tasks.task_fred_series()
+
+    assert "2점" in str(exc.value) and "240점" in str(exc.value)
+    assert len(store.read_snapshot(catalog.snap_fred_series("T10Y3M")).payload["points"]) == 240
+    # 받은 점 자체는 진짜 데이터이므로 누적 시계열에는 들어갑니다.
+    assert len(store.read_timeseries(catalog.TS_FRED, "T10Y3M")) == 2

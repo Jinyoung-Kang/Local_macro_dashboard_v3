@@ -177,14 +177,26 @@ def task_fred_series() -> str:
                 reasons.append(reason)
             continue
 
-        store.put_snapshot(
-            catalog.snap_fred_series(series_id),
-            {"seriesId": series_id, "points": points},
-        )
+        # 받은 점은 진짜 데이터이므로 누적 시계열에는 그대로 넣습니다.
         accumulated += store.put_timeseries(
             catalog.TS_FRED,
             series_id,
             [(p["date"], p["value"]) for p in points],
+        )
+
+        # 백엔드는 스냅샷을 읽습니다. 저장본보다 훨씬 짧은 응답(부분 장애·CSV 잘림)으로
+        # 덮으면 다음 성공까지 10년 차트가 몇 점으로 무너집니다. 그런 응답은 스냅샷을
+        # 두고 실패 사유로 남깁니다.
+        stored = _fred_stored_point_count(series_id)
+        if _is_shrunken(len(points), stored):
+            reason = f"{series_id}: 응답 {len(points)}점이 저장본 {stored}점보다 훨씬 짧아 스냅샷을 덮지 않음"
+            logger.warning("FRED %s", reason)
+            reasons.append(reason)
+            continue
+
+        store.put_snapshot(
+            catalog.snap_fred_series(series_id),
+            {"seriesId": series_id, "points": points},
         )
         ok += 1
 
@@ -193,6 +205,20 @@ def task_fred_series() -> str:
             f"0/{len(series_ids)} 시리즈 — 기존 저장본 유지{_reason_suffix(reasons)}"
         )
     return f"{ok}/{len(series_ids)} 시리즈, 누적 {accumulated}행"
+
+
+FRED_SHRINK_MIN_STORED = 50      # 이보다 짧은 저장본은 비교 대상이 아닙니다(첫 수집 등)
+FRED_SHRINK_RATIO = 0.5          # 응답이 저장본의 이 비율 미만이면 '훨씬 짧다'
+
+
+def _fred_stored_point_count(series_id: str) -> int:
+    snap = store.read_snapshot(catalog.snap_fred_series(series_id))
+    points = (snap.payload or {}).get("points") if snap and isinstance(snap.payload, dict) else None
+    return len(points) if isinstance(points, list) else 0
+
+
+def _is_shrunken(received: int, stored: int) -> bool:
+    return stored >= FRED_SHRINK_MIN_STORED and received < stored * FRED_SHRINK_RATIO
 
 
 def task_fed_liquidity() -> str:
