@@ -23,6 +23,7 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any
@@ -30,6 +31,7 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import catalog, indicators, krcalendar, logredact, settings, store, tasks, verification, webguard
 from .services import (
@@ -57,19 +59,40 @@ KST = ZoneInfo("Asia/Seoul")
 
 scheduler: BackgroundScheduler | None = None
 
-# 내부 서비스 간 호출용 토큰. 설정하지 않으면 검사하지 않습니다
-# (로컬 개발 편의). 운영에서는 반드시 설정하세요.
+# 내부 서비스 간 호출용 토큰. make setup이 무작위 값으로 채웁니다.
+# 비어 있으면 기동하지 않습니다 — COLLECTOR_ALLOW_NO_TOKEN=1을 명시했을 때만 경고하고 기동합니다.
 API_TOKEN = os.environ.get("COLLECTOR_API_TOKEN", "")
+ALLOW_NO_TOKEN = os.environ.get("COLLECTOR_ALLOW_NO_TOKEN", "").lower() in ("1", "true", "yes")
+
+# Host 헤더 허용 목록. 수집기는 127.0.0.1에만 열려 있지만, DNS 리바인딩(공격자 도메인이 나중에
+# 127.0.0.1을 가리킴)으로 브라우저가 '같은 출처' 요청을 보내게 할 수 있습니다. 그 요청의 Host는
+# 공격자 도메인이므로 여기서 걸립니다. 백엔드는 compose 서비스 이름(collector)으로 부릅니다.
+ALLOWED_HOSTS = [
+    h.strip() for h in os.environ.get(
+        "COLLECTOR_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],collector,testserver"
+    ).split(",") if h.strip()
+]
+
+
+def check_token_configured() -> None:
+    """토큰이 비어 있으면 기동을 거부합니다(명시적으로 허용했을 때만 경고로 끝냄)."""
+    if API_TOKEN:
+        return
+    if ALLOW_NO_TOKEN:
+        logger.warning(
+            "COLLECTOR_API_TOKEN이 비어 있어 수집기가 인증 없이 요청을 받습니다 "
+            "(COLLECTOR_ALLOW_NO_TOKEN=1). 로컬 개발용이 아니라면 make setup으로 토큰을 만드세요."
+        )
+        return
+    raise RuntimeError(
+        "COLLECTOR_API_TOKEN이 비어 있습니다. make setup이 .env에 토큰을 만들어 줍니다. "
+        "인증 없이 띄우려면 COLLECTOR_ALLOW_NO_TOKEN=1을 명시하세요."
+    )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not API_TOKEN:
-        # 인증이 꺼진 채 도는 것을 모르고 지나치지 않게 알립니다(make setup이 토큰을 만들어 줍니다).
-        logger.warning(
-            "COLLECTOR_API_TOKEN이 비어 있어 수집기가 인증 없이 요청을 받습니다. "
-            "로컬 개발용이 아니라면 make setup으로 토큰을 만드세요."
-        )
+    check_token_configured()
     store.get_pool()
     if os.environ.get("COLLECTOR_INIT_SCHEMA", "true").lower() in ("1", "true", "yes"):
         store.init_schema()
@@ -129,6 +152,8 @@ app = FastAPI(
 
 # 브라우저에서 온 교차 출처 요청은 토큰 유무와 관계없이 막습니다(webguard 설명 참고).
 app.add_middleware(webguard.CrossSiteRequestGuard)
+# 모르는 Host 헤더는 400 — DNS 리바인딩으로 '같은 출처'가 된 브라우저 요청을 막습니다.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
 
 def _run_group_job(group: str) -> None:
@@ -349,14 +374,19 @@ def _normalize_market(market: str) -> str:
     raise HTTPException(status_code=400, detail=f"market은 {' 또는 '.join(RADAR_MARKETS)}여야 합니다: {market!r}")
 
 
+_TICKER_SYMBOL = re.compile(r"^[A-Za-z0-9^=.\-]{1,24}$")
+
+
 @app.get("/live/ticker/{symbol:path}")
 def live_ticker(
     symbol: str,
     period: str = "1mo",
     x_service_token: str | None = Header(default=None),
 ) -> dict:
-    """저장 대상이 아닌 개별 티커 차트(단일 지표 조회 화면)용."""
+    """저장 대상이 아닌 개별 티커 차트(단일 지표 조회 화면)용. 심볼은 야후 형식(^VIX, ZT=F, BRK-B)만."""
     _check_token(x_service_token)
+    if not _TICKER_SYMBOL.match(symbol):
+        raise HTTPException(status_code=400, detail="심볼 형식이 올바르지 않습니다 (영문·숫자·^=.- 24자 이내).")
     return market_service.collect_ticker(symbol, period)
 
 

@@ -41,8 +41,21 @@ def _token_warnings(caplog) -> list[logging.LogRecord]:
     ]
 
 
-def test_토큰이_비어_있으면_기동할_때_경고한다(monkeypatch, caplog, quiet_lifespan):
+def test_토큰이_비어_있으면_기동하지_않는다(monkeypatch, quiet_lifespan):
+    """
+    토큰이 비면 수집기 API가 인증 없이 열립니다. 예전에는 경고 한 줄만 남기고 떴는데,
+    로그를 보지 않으면 모르는 채로 계속 돌았습니다. 명시적으로 허용하지 않으면 기동 거부.
+    """
     monkeypatch.setattr(main, "API_TOKEN", "")
+    monkeypatch.setattr(main, "ALLOW_NO_TOKEN", False)
+
+    with pytest.raises(RuntimeError, match="COLLECTOR_API_TOKEN"):
+        quiet_lifespan()
+
+
+def test_명시적으로_허용하면_경고만_남기고_기동한다(monkeypatch, caplog, quiet_lifespan):
+    monkeypatch.setattr(main, "API_TOKEN", "")
+    monkeypatch.setattr(main, "ALLOW_NO_TOKEN", True)
 
     with caplog.at_level(logging.INFO):
         quiet_lifespan()
