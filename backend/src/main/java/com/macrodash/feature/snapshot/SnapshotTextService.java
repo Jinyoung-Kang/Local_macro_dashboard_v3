@@ -131,6 +131,11 @@ public class SnapshotTextService {
         lines.add("- 데이터 성격: " + nature);
     }
 
+    /** 계약 수. 모르면 "데이터 없음". */
+    static String contracts(Double value) {
+        return value == null ? "데이터 없음" : "%,d".formatted(value.longValue());
+    }
+
     private void appendMacro(List<String> lines) {
         Map<String, Object> overview = macro.overview();
         sectionHeader(lines, "거시경제 매크로 지표",
@@ -425,12 +430,13 @@ public class SnapshotTextService {
             Object rows = trend.get("rows");
             if (rows instanceof JsonNode node && node.isArray()) {
                 for (JsonNode row : node) {
-                    lines.add("- %s: 당일 %,d · 5일 %,d · 20일 %,d (%s)".formatted(
+                    // 값을 모르면 "데이터 없음". path().asDouble(0)은 0계약으로 적어 AI가 '거래 없음'으로 읽습니다.
+                    lines.add("- %s: 당일 %s · 5일 %s · 20일 %s (%s)".formatted(
                             Json.asText(row, "investor"),
-                            (long) row.path("netToday").asDouble(0),
-                            (long) row.path("net5d").asDouble(0),
-                            (long) row.path("net20d").asDouble(0),
-                            Json.asText(row, "stance")));
+                            contracts(Json.asDouble(row, "netToday")),
+                            contracts(Json.asDouble(row, "net5d")),
+                            contracts(Json.asDouble(row, "net20d")),
+                            orNa(Json.asText(row, "stance"))));
                 }
             }
         } else {

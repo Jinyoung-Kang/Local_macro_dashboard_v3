@@ -474,11 +474,16 @@ def collect_daum_futures_trend(lookback_days: int = 25) -> dict:
 
     records = []
     for label, field in DAUM_INVESTOR_FIELDS:
-        net_today = int(_to_float(today_row.get(field)) or 0)
-        net_5d = int(sum(_to_float(r.get(field)) or 0 for r in window_5))
-        net_20d = int(sum(_to_float(r.get(field)) or 0 for r in window_20))
+        # 모르는 값은 0이 아니라 None입니다. 0으로 메우면 "순매수 0계약"이 되어 AI 텍스트와
+        # 화면이 '거래 없음'으로 읽고, 창 합계도 실제보다 작아집니다. 창 안에 하루라도
+        # 모르는 날이 있으면 그 합계도 모르는 것입니다.
+        net_today = _contracts(today_row.get(field))
+        net_5d = _window_sum(window_5, field)
+        net_20d = _window_sum(window_20, field)
 
-        if net_20d > 0:
+        if net_20d is None:
+            stance = "⚪ 판정 불가"
+        elif net_20d > 0:
             stance = "🟢 매수 우위(Long)"
         elif net_20d < 0:
             stance = "🔴 매도 우위(Short)"
@@ -500,6 +505,20 @@ def collect_daum_futures_trend(lookback_days: int = 25) -> dict:
         "isPlaceholder": False,
         "rows": records,
     }
+
+
+def _contracts(value) -> int | None:
+    """계약 수. 숫자가 아니면 None."""
+    number = _to_float(value)
+    return None if number is None else int(number)
+
+
+def _window_sum(rows: list[dict], field: str) -> int | None:
+    """창 안의 합계. 하루라도 값을 모르면 None."""
+    values = [_contracts(r.get(field)) for r in rows]
+    if not values or any(v is None for v in values):
+        return None
+    return int(sum(values))
 
 
 def _empty_trend() -> dict:
