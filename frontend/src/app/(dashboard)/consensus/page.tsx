@@ -16,6 +16,7 @@ import {
 import { useApi } from "@/hooks/useApi";
 import { useUsdKrw } from "@/hooks/useUsdKrw";
 import { EMPTY, formatCurrency, formatNumber } from "@/lib/format";
+import { isSelected, toggleSelection } from "@/lib/selection";
 import type { ConsensusResponse, NewBuysResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
@@ -31,7 +32,9 @@ export default function ConsensusPage() {
   const institutions = useApi<{ institutions: { name: string; cik: string }[] }>(
     endpoints.institution.institutions,
   );
+  // 빈 목록 = 전체. 화면과 요청은 lib/selection의 유효 선택을 씁니다(QA-003).
   const [selected, setSelected] = useState<string[]>([]);
+  const allCiks = (institutions.data?.institutions ?? []).map((entry) => entry.cik);
   const [reportDate, setReportDate] = useState("");
   const [minHolders, setMinHolders] = useState("2");
 
@@ -43,9 +46,7 @@ export default function ConsensusPage() {
   const usdKrw = useUsdKrw();
 
   const toggle = (cik: string) => {
-    setSelected((previous) =>
-      previous.includes(cik) ? previous.filter((item) => item !== cik) : [...previous, cik],
-    );
+    setSelected((previous) => toggleSelection(allCiks, previous, cik));
   };
 
   const chartData = (data?.rows ?? [])
@@ -64,10 +65,10 @@ export default function ConsensusPage() {
         </p>
       </header>
 
-      <Card title="분석 대상" subtitle="선택하지 않으면 전체 기관을 비교합니다.">
+      <Card title="분석 대상" subtitle="전체 기관이 선택된 상태에서 시작합니다. 빼고 싶은 기관을 누르세요(전부 빼면 다시 전체).">
         <div className="flex flex-wrap gap-2">
           {(institutions.data?.institutions ?? []).map((entry) => {
-            const active = selected.includes(entry.cik);
+            const active = isSelected(allCiks, selected, entry.cik);
             return (
               <button
                 key={entry.cik}
