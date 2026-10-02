@@ -37,7 +37,9 @@ def test_daum_순매도는_부호를_방향에_맞춘다():
     records = radar.parse_daum_ranking(payload, investor="외국인", trade_type="순매도",
                                        top_n=30, target_date="20260911")
     assert records[0]["netAmountEok"] == -500.0
-    assert records[0]["dataDate"] == "2026-09-11"       # toDate가 없으면 요청한 거래일을 기준일로
+    # toDate가 없으면 기준일을 **모릅니다** — 요청한 날짜를 적으면 장 시작 전(08:00) 오늘 날짜로 부른
+    # 조회의 어제 데이터가 오늘 날짜로 이력에 쌓입니다. 비워 두면 이력 누적이 달력으로 정합니다(ADR 0005).
+    assert records[0]["dataDate"] is None
 
 
 def test_daum_기간별_조회는_dataDate를_달지_않는다():

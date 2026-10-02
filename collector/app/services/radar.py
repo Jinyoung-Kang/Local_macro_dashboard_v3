@@ -385,7 +385,8 @@ def parse_daum_ranking(
     - symbolCode "A005930" → "005930" (문자열 유지)
     - changeRate는 0.0238 = 2.38% 형태의 소수 비율 → %로
     - straightPurchasePrice(원) → 억 원. 응답 부호가 방향과 어긋나면 방향에 맞춥니다
-    - dataDate: 소스가 밝힌 데이터 기준일(toDate). 이력에 쌓을 때 추정 거래일보다 우선
+    - dataDate: 소스가 밝힌 데이터 기준일(toDate). 이력에 쌓을 때 추정 거래일보다 우선.
+      toDate가 없으면 None — 요청한 날짜로 메우지 않습니다
     """
     if not isinstance(payload, dict):
         return []
@@ -433,7 +434,9 @@ def parse_daum_ranking(
             "netAmountEok": net_eok,
             "source": source,
             "collectedAt": collected_at,
-            "dataDate": _iso_date(to_date) if interval_type == "TODAY" else None,
+            # 기준일은 소스가 밝힌 toDate만 씁니다. 없으면 모르는 것이고, 이력 누적이 달력으로 정합니다
+            # (ADR 0005). 요청한 날짜를 적으면 장 시작 전 조회의 어제 데이터가 오늘 날짜로 쌓입니다.
+            "dataDate": _iso_date(payload.get("toDate")) if interval_type == "TODAY" else None,
         })
 
     return _rank(records, trade_type, top_n)
