@@ -23,6 +23,9 @@ export interface MacroItem {
   lastTs?: string | null;
   source?: string | null;
   isReference?: boolean;
+  /** 이번 수집이 실패해 직전 저장본의 값·시각을 그대로 이어받은 카드 (note가 "⚠️ 이전 값") */
+  isStale?: boolean;
+  staleReason?: string | null;
 }
 
 export interface MacroCategory {

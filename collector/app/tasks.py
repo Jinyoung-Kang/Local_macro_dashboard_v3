@@ -94,6 +94,47 @@ class Task:
 # ==============================================================================
 # fast
 # ==============================================================================
+STALE_NOTE = "⚠️ 이전 값"
+_USABLE_STATUSES = ("ok", "single")
+
+
+def _carry_over_failed_items(items: list[dict], previous_items: list[dict]) -> list[str]:
+    """
+    이번 수집에서 실패한 항목을 **직전 저장본의 정상 값**으로 채웁니다(QA-001).
+
+    전부 실패하면 EmptyResult로 저장본을 통째로 지키면서, 일부만 실패하면 새 결과로 덮어 실패한
+    항목의 마지막 정상 값이 사라졌습니다 — 외부 소스 하나가 끊기면 다른 소스에서 온 카드 3개
+    때문에 나머지 18개가 "수집 실패"로 바뀌었습니다. 값·시각(lastTs)은 그때 것 그대로 두고
+    isStale과 '이전 값' 배지만 더합니다. 없는 숫자를 만드는 것이 아니라, 있던 숫자를 버리지 않는
+    것입니다. 직전 저장본에도 없던 항목은 그대로 실패입니다.
+
+    :return: 이어받은 항목의 key 목록
+    """
+    previous_by_key = {
+        item.get("key"): item for item in previous_items
+        if isinstance(item, dict) and item.get("status") in _USABLE_STATUSES
+    }
+    carried: list[str] = []
+    for index, item in enumerate(items):
+        if item.get("status") in _USABLE_STATUSES:
+            continue
+        before = previous_by_key.get(item.get("key"))
+        if before is None:
+            continue
+        kept = dict(before)
+        kept["isStale"] = True
+        kept["staleReason"] = item.get("error") or "수집 실패"
+        kept["note"] = STALE_NOTE
+        items[index] = kept
+        carried.append(str(item.get("key")))
+    return carried
+
+
+def _previous_payload(name: str) -> dict:
+    snapshot = store.read_snapshot(name)
+    return snapshot.payload if snapshot and isinstance(snapshot.payload, dict) else {}
+
+
 def task_scraper_markets() -> str:
     result = scraper_service.collect_scraped_markets()
     items = result.get("items", [])
@@ -102,8 +143,9 @@ def task_scraper_markets() -> str:
     if not ok:
         raise EmptyResult(f"0/{len(items)} 소스 — 기존 저장본 유지")
 
+    carried = _carry_over_failed_items(items, _previous_payload(catalog.SNAP_SCRAPER_MARKETS).get("items") or [])
     store.put_snapshot(catalog.SNAP_SCRAPER_MARKETS, result)
-    return f"{ok}/{len(items)} 소스 수집"
+    return f"{ok}/{len(items)} 소스 수집" + (f" (이전 값 유지 {len(carried)})" if carried else "")
 
 
 def task_macro_collected() -> str:
@@ -116,14 +158,28 @@ def task_macro_collected() -> str:
         for category in payload["categories"]
         for item in category["items"]
     ]
-    usable = sum(1 for item in items if item.get("status") in ("ok", "single"))
+    usable = sum(1 for item in items if item.get("status") in _USABLE_STATUSES)
 
     if not usable:
         raise EmptyResult(f"0/{len(items)} 지표 — 기존 저장본 유지")
 
+    previous = _previous_payload(catalog.SNAP_MACRO_COLLECTED)
+    previous_items = [
+        item for category in previous.get("categories") or [] for item in category.get("items") or []
+    ]
+    carried: list[str] = []
+    for category in payload["categories"]:
+        carried += _carry_over_failed_items(category["items"], previous_items)
+    # 스프레드 계산용 금리(rates)도 이어받은 카드는 직전 값으로 — 카드는 살았는데 금리만 비면
+    # 10Y-2Y 스프레드가 "데이터 없음"이 됩니다.
+    previous_rates = previous.get("rates") or {}
+    for key in carried:
+        if key in previous_rates:
+            payload.setdefault("rates", {})[key] = previous_rates[key]
+
     payload["updatedAt"] = market_service.now_kst_text()
     store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, payload)
-    return f"{usable}/{len(items)} 지표 수집"
+    return f"{usable}/{len(items)} 지표 수집" + (f" (이전 값 유지 {len(carried)})" if carried else "")
 
 
 def task_radar_rankings() -> str:

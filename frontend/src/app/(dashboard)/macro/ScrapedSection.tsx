@@ -30,6 +30,9 @@ export function ScrapedSection() {
       previousClose: number | null;
       changePct: number | null;
       error: string | null;
+      /** 이번 수집이 실패해 직전 저장본의 값을 그대로 보여 주는 행 (QA-001) */
+      isStale?: boolean;
+      staleReason?: string | null;
     }[];
   }>(endpoints.macro.scraped, 120_000);
 
@@ -72,7 +75,11 @@ export function ScrapedSection() {
             {
               key: "error",
               header: "비고",
-              render: (row) => <span className="text-xs text-muted">{row.error ?? ""}</span>,
+              render: (row) => (
+                <span className="text-xs text-muted">
+                  {row.isStale ? `⚠️ 이전 값 — ${row.staleReason ?? "수집 실패"}` : (row.error ?? "")}
+                </span>
+              ),
             },
           ]}
         />

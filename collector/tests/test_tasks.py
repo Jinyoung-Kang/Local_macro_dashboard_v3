@@ -334,7 +334,6 @@ def _card(key: str, price: float | None, *, status: str = "ok", last_ts: str = "
     return item
 
 
-@pytest.mark.xfail(strict=True, reason="QA-001: 수정 전 — 실패한 카드의 이전 값을 버립니다")
 def test_QA001_partial_failure_keeps_previous_card_values(store, monkeypatch):
     """
     QA-001 (S2). 외부 시세 소스가 끊겼을 때 카드 21개 중 3개(다른 소스)만 살아남으면
@@ -389,7 +388,6 @@ def test_QA001_failed_card_without_previous_value_stays_failed(store, monkeypatc
     assert usdkrw["status"] == "fail" and "price" not in usdkrw
 
 
-@pytest.mark.xfail(strict=True, reason="QA-001: 수정 전")
 def test_QA001_scraped_markets_partial_failure_keeps_previous_items(store, monkeypatch):
     """같은 문제가 scraper_markets(지수·선물 폴백 소스)에도 있었습니다."""
     store.put_snapshot(catalog.SNAP_SCRAPER_MARKETS, {"updatedAt": "t0", "items": [
