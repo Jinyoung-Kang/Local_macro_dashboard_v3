@@ -23,6 +23,7 @@ app/services/radar.py
 from __future__ import annotations
 
 import contextlib
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import io
 import logging
 import os
@@ -656,8 +657,9 @@ def fetch_pykrx_ranking(
         # 폴백은 날짜를 최대 7번 거슬러 올라가기 때문에, 놔두면 조회 한 번에
         # 같은 줄이 일곱 번 쌓입니다.
         with contextlib.redirect_stdout(io.StringIO()):
-            frame = pykrx_stock.get_market_net_purchases_of_equities_by_ticker(
-                target_date, target_date, market_code, investor_name
+            frame = _pykrx_call(
+                pykrx_stock.get_market_net_purchases_of_equities_by_ticker,
+                target_date, target_date, market_code, investor_name,
             )
     except Exception as exc:  # noqa: BLE001
         logger.warning("PyKrx 조회 실패 (%s): %s", target_date, exc)
@@ -684,7 +686,7 @@ def fetch_pykrx_ranking(
     # 오류를 돌려주고, 그러면 모든 종목이 가격 0으로 저장됐습니다.
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            prices = pykrx_stock.get_market_ohlcv(target_date, market=market_code)
+            prices = _pykrx_call(pykrx_stock.get_market_ohlcv, target_date, market=market_code)
     except Exception as exc:  # noqa: BLE001
         logger.warning("PyKrx 가격 조회 실패 (%s): %s — 가격 없이 저장합니다", target_date, exc)
         prices = None
@@ -714,6 +716,23 @@ def fetch_pykrx_ranking(
         })
 
     return _rank(records, trade_type, top_n)
+
+
+# pykrx 내부의 requests 호출에는 timeout이 없습니다. KRX가 연결만 받고 응답을 안 주면
+# 스케줄러 스레드가 TCP가 포기할 때까지(수 분~수 시간) 묶이고, max_instances=1이라 그 뒤
+# fast 수집이 전부 건너뛰어집니다. 별도 스레드에서 돌리고 시간이 지나면 포기합니다
+# (스레드는 pykrx가 돌아올 때까지 남지만, 수집은 계속됩니다).
+PYKRX_TIMEOUT_SECONDS = 20.0
+_pykrx_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pykrx")
+
+
+def _pykrx_call(fn, *args, **kwargs):
+    """pykrx 함수를 시간 제한 안에서 부릅니다. 넘기면 TimeoutError."""
+    future = _pykrx_pool.submit(fn, *args, **kwargs)
+    try:
+        return future.result(timeout=PYKRX_TIMEOUT_SECONDS)
+    except FuturesTimeoutError as exc:
+        raise TimeoutError(f"pykrx 응답 없음 ({PYKRX_TIMEOUT_SECONDS:.0f}초)") from exc
 
 
 # ==============================================================================

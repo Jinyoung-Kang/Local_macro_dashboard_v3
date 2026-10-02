@@ -74,3 +74,23 @@ def test_가격_표에_같은_종목이_두_번_있어도_깨지지_않는다(mo
     rows = radar.fetch_pykrx_ranking("20260911", "KOSPI", "외국인", "순매수", 30)
 
     assert rows[0]["price"] == 71000.0
+
+
+def test_pykrx가_응답하지_않으면_정해진_시간_뒤에_포기한다(monkeypatch, pykrx_available):
+    """pykrx 내부 requests에는 timeout이 없어 KRX가 응답을 안 주면 스케줄러 스레드가 무한정 묶였습니다."""
+    import threading
+
+    class _Hanging:
+        def get_market_net_purchases_of_equities_by_ticker(self, *a, **k):
+            threading.Event().wait(5)      # 테스트 한도보다 훨씬 긴 '응답 없음'
+            return None
+
+    monkeypatch.setattr(radar, "pykrx_stock", _Hanging())
+    monkeypatch.setattr(radar, "PYKRX_TIMEOUT_SECONDS", 0.2)
+
+    import time
+    started = time.perf_counter()
+    rows = radar.fetch_pykrx_ranking("20260911", "KOSPI", "외국인", "순매수", 30)
+
+    assert rows == []
+    assert time.perf_counter() - started < 3.0
