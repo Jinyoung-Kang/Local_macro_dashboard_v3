@@ -405,7 +405,6 @@ def test_QA001_scraped_markets_partial_failure_keeps_previous_items(store, monke
 
 
 # ---- QA-011: 외부가 응답하지 않으면 태스크가 상한 없이 돌던 문제 -----------------------------------
-@pytest.mark.xfail(strict=True, reason="QA-011: 수정 전 — 태스크에 시간 상한이 없습니다")
 def test_QA011_task_exceeding_deadline_is_recorded_as_failed_and_runner_moves_on(store, monkeypatch):
     """
     QA-011 (S3). QA 스택에서 외부 소스를 '응답 없음'(연결은 받고 답하지 않음)으로 두자 scraper_markets·

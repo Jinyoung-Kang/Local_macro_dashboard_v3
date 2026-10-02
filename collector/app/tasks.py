@@ -24,7 +24,7 @@ import re
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
@@ -1145,6 +1145,19 @@ def _run_status(ok_count: int, failures: list[str]) -> str:
     return "fail"
 
 
+# 태스크 하나의 시간 상한(초, 속도군별). 요청마다 timeout이 있어도 재시도 × 소스 수만큼 곱해져, 외부가
+# '연결은 받고 응답하지 않는' 상태에서는 2초짜리 fast 태스크가 3~4분씩 돌았습니다(QA-011). 상한을 넘기면
+# 실패로 기록하고 다음 태스크로 넘어갑니다. 작업 스레드는 요청 timeout들이 끝날 때까지 남아 뒤늦게
+# 끝나는데, 그 결과는 로그로만 남깁니다(저장본은 그 작업이 알아서 씁니다 — 진짜 데이터입니다).
+# weekly(13F)는 한 태스크가 10분 넘게 걸리는 것이 정상이라 길게 둡니다.
+TASK_DEADLINE_SECONDS: dict[str, float] = {"fast": 120.0, "slow": 600.0, "weekly": 1800.0}
+_task_threads = ThreadPoolExecutor(max_workers=8, thread_name_prefix="task")
+
+
+def deadline_for(task: Task) -> float:
+    return TASK_DEADLINE_SECONDS.get(task.speed, TASK_DEADLINE_SECONDS["slow"])
+
+
 def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
     started_wall = datetime.now(timezone.utc)
     started = time.perf_counter()
@@ -1153,8 +1166,15 @@ def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
     ok = True
     detail = ""
 
+    deadline = deadline_for(task)
+    future = _task_threads.submit(task.run)
     try:
-        detail = task.run() or ""
+        detail = future.result(timeout=deadline) or ""
+    except FuturesTimeoutError:
+        status, ok = "error", False
+        detail = (f"시간 초과: {deadline:.0f}초 안에 끝나지 않았습니다 — 외부 응답 없음 의심. "
+                  "작업은 뒤에서 계속 끝나기를 기다립니다(결과는 로그에만)")
+        future.add_done_callback(lambda done, name=task.name, t0=started: _log_late_finish(name, t0, done))
     except EmptyResult as exc:
         status, ok, detail = "empty", False, f"{EMPTY_PREFIX}{exc}"
     except Exception as exc:  # noqa: BLE001
@@ -1178,6 +1198,15 @@ def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
         detail=detail,
     )
     return ok, detail
+
+
+def _log_late_finish(name: str, started: float, done) -> None:
+    elapsed = time.perf_counter() - started
+    exc = done.exception()
+    if exc is None:
+        logger.warning("  ⏱️ %-22s %6.1fs  뒤늦게 끝남(이미 시간 초과로 기록): %s", name, elapsed, done.result())
+    else:
+        logger.warning("  ⏱️ %-22s %6.1fs  뒤늦게 실패(이미 시간 초과로 기록): %s: %s", name, elapsed, type(exc).__name__, exc)
 
 
 def run_group(group: str | None = None, task_name: str | None = None) -> dict:
