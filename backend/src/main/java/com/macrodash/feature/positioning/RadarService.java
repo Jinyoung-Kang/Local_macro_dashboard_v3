@@ -117,27 +117,27 @@ public class RadarService {
                 || !MARKETS.get(0).equals(market)
                 || topN != 30;
 
+        // 저장본이 있으면 **기다리지 않습니다.** 오래됐으면 StoreReader가 수집기에
+        // 비동기로 요청하고 저장본을 돌려줍니다("화면은 수집을 기다리지 않습니다").
+        // 예전에는 15분 지난 저장본에서 수집기를 동기로 불러(읽기 타임아웃 90초), 수집기가
+        // 응답을 못 하면 랭킹 90초·교집합 180초·AI 리포트 270초가 멈췄습니다.
         Optional<Snapshot> snapshot = custom
                 ? Optional.empty()
-                : store.readStored(snapshotName);
+                : store.read(snapshotName, Datasets.MAX_AGE_REALTIME, "radar_rankings");
 
-        boolean fresh = snapshot.isPresent()
-                && snapshot.get().isFresh(Datasets.MAX_AGE_REALTIME);
-
-        if (fresh || store.readMode() == AppProperties.ReadMode.STORE_ONLY) {
-            if (snapshot.isPresent() && snapshot.get().payload() != null) {
-                return fillFromSnapshot(out, snapshot.get());
-            }
-            if (store.readMode() == AppProperties.ReadMode.STORE_ONLY) {
-                out.put("available", false);
-                out.put("rows", List.of());
-                out.put("message",
-                        "store_only 모드입니다. 저장본이 없어 표시할 수급이 없습니다 "
-                                + "(수집은 수집기가 담당합니다).");
-                return out;
-            }
+        if (snapshot.isPresent() && snapshot.get().payload() != null) {
+            return fillFromSnapshot(out, snapshot.get());
+        }
+        if (store.readMode() == AppProperties.ReadMode.STORE_ONLY) {
+            out.put("available", false);
+            out.put("rows", List.of());
+            out.put("message",
+                    "store_only 모드입니다. 저장본이 없어 표시할 수급이 없습니다 "
+                            + "(수집은 수집기가 담당합니다).");
+            return out;
         }
 
+        // 저장본이 없는 조합(과거 날짜·다른 시장·다른 topN·스케줄러가 안 받는 투자주체)만 지금 받습니다.
         Optional<JsonNode> live = collector.liveRadar(
                 market, investor, tradeType, topN, intervalType, targetDate);
 
