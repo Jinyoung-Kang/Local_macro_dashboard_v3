@@ -98,6 +98,14 @@ def collect_13f(cik: str, max_quarters: int = 8) -> dict:
 
 
 def _parse_filing_links(html: str, max_quarters: int) -> list[tuple[str, str]]:
+    """
+    공시 목록에서 (제출일, 문서 목록 URL)을 최신순으로 max_quarters개 고릅니다.
+
+    원본 13F-HR만 분기로 셉니다. EDGAR의 type=13F-HR 목록에는 정정(13F-HR/A)도
+    섞여 오는데, 그걸 세면 같은 분기가 두 번 들어가고(q8이 실제로는 7개 분기),
+    가장 최근 공시가 '신규 보유분만' 담은 부분 정정이면 q1이 부분 포트폴리오가
+    되어 비중이 그 부분 합계로 정규화됩니다.
+    """
     soup = BeautifulSoup(html, "html.parser")
     tables = soup.find_all("table", class_="tableFile2")
     if not tables:
@@ -108,7 +116,7 @@ def _parse_filing_links(html: str, max_quarters: int) -> list[tuple[str, str]]:
         cols = row.find_all("td")
         if len(cols) < 4:
             continue
-        if "13F-HR" not in cols[0].text.strip():
+        if cols[0].text.strip().upper() != "13F-HR":
             continue
         anchor = cols[1].find("a", href=True)
         if not anchor:
