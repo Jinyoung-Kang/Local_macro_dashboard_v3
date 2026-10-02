@@ -30,15 +30,6 @@ server:
   error:
     include-message: never
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: never
-
 dashboard:
   # 화면 접속 비밀번호 (구버전 [auth] password와 같은 역할)
   # 비었거나 옛 공개 기본값(admin1234@)이면 받지 않고 실행마다 임시 비밀번호를 만듭니다(로그에 표시).
