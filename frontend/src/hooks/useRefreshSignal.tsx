@@ -131,9 +131,11 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
  */
 async function waitForCollection(baselineRunId: number | null): Promise<boolean> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
+  let interval = POLL_INTERVAL_MS;
 
   while (Date.now() < deadline) {
-    await sleep(POLL_INTERVAL_MS);
+    await sleep(interval);
+    interval = Math.min(POLL_MAX_INTERVAL_MS, Math.round(interval * 1.5));
     try {
       const status = await apiGet<StatusShape>(endpoints.status.overview);
       const run = status.lastRun;
