@@ -43,23 +43,21 @@ const DEFAULT_SECONDS = 60;
  * 브라우저를 닫았다 열어도 유지됩니다. localStorage를 못 쓰는 환경(시크릿 모드
  * 등)에서도 화면이 멀쩡히 뜨도록 읽기·쓰기를 모두 감쌉니다.
  */
-export function useAutoRefreshSeconds(): [number, (seconds: number) => void] {
-  const [seconds, setSeconds] = useState(DEFAULT_SECONDS);
+function readStoredSeconds(): number {
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const parsed = stored === null ? NaN : Number(stored);
+    return REFRESH_OPTIONS.some((option) => option.value === parsed) ? parsed : DEFAULT_SECONDS;
+  } catch {
+    return DEFAULT_SECONDS;   // 저장된 값을 못 읽어도 기본값으로 동작합니다.
+  }
+}
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored === null) {
-        return;
-      }
-      const parsed = Number(stored);
-      if (REFRESH_OPTIONS.some((option) => option.value === parsed)) {
-        setSeconds(parsed);
-      }
-    } catch {
-      // 저장된 값을 못 읽어도 기본값으로 동작합니다.
-    }
-  }, []);
+export function useAutoRefreshSeconds(): [number, (seconds: number) => void] {
+  // 첫 렌더부터 저장된 값을 씁니다. effect에서 뒤늦게 바꾸면 매크로 화면이 기본값(60초)으로
+  // 먼저 `live=true` 수집을 한 번 쏘고 나서야 사용자가 고른 간격으로 다시 요청했습니다.
+  // (dashboard) 화면은 서버에서 그리지 않으므로 localStorage를 초기값에 써도 됩니다.
+  const [seconds, setSeconds] = useState(readStoredSeconds);
 
   const update = (next: number) => {
     setSeconds(next);
