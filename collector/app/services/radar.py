@@ -417,9 +417,14 @@ def parse_daum_ranking(
         if not code or not name:
             continue
 
-        price = _to_float(row.get("tradePrice"))
-        change_pct = round(_to_float(row.get("changeRate")) * 100.0, 2)
-        net_eok = round(_to_float(row.get("straightPurchasePrice")) / 100_000_000.0, 1)
+        # 빠진 값은 모르는 값입니다. 0.0으로 적으면 '가격 0원·등락률 0%'가 이력에 영구히 남습니다.
+        price = _optional_float(row.get("tradePrice"))
+        change_rate = _optional_float(row.get("changeRate"))
+        change_pct = None if change_rate is None else round(change_rate * 100.0, 2)
+        net_won = _optional_float(row.get("straightPurchasePrice"))
+        if net_won is None:
+            continue    # 순매수 금액을 모르면 순위를 매길 수 없습니다
+        net_eok = round(net_won / 100_000_000.0, 1)
 
         if trade_type == "순매도" and net_eok > 0:
             net_eok = -abs(net_eok)
@@ -536,8 +541,10 @@ def parse_naver_ranking(
             continue
 
         price = _cell_to_float(cols[2])
-        change_pct = _cell_to_float(cols[4]) if len(cols) > 4 else 0.0
+        change_pct = _cell_to_float(cols[4]) if len(cols) > 4 else None
         raw_amount = _cell_to_float(cols[7]) if len(cols) >= 8 else _cell_to_float(cols[3])
+        if raw_amount is None:
+            continue    # 순매수 금액을 모르면 순위를 매길 수 없습니다
         net_eok = round(raw_amount / 100.0, 1) if abs(raw_amount) > 1000 else round(raw_amount, 1)
         if trade_type == "순매도":
             net_eok = -abs(net_eok)
@@ -979,19 +986,13 @@ def _rank(records: list[dict], trade_type: str, top_n: int) -> list[dict]:
     return top
 
 
-def _cell_to_float(cell) -> float:
+def _cell_to_float(cell) -> float | None:
+    """표 칸의 숫자. 비었거나 '-'처럼 숫자가 아니면 None — 0으로 바꾸지 않습니다."""
     try:
         text = cell.text.replace(",", "").replace("+", "").replace("%", "").strip()
-        return float(text)
-    except (AttributeError, TypeError, ValueError):
-        return 0.0
-
-
-def _to_float(value) -> float:
-    try:
-        return float(str(value).replace(",", "").strip())
-    except (TypeError, ValueError):
-        return 0.0
+    except AttributeError:
+        return None
+    return _optional_float(text)
 
 
 def _iso_date(value) -> str | None:
@@ -1006,9 +1007,13 @@ def _iso_date(value) -> str | None:
 
 
 def _optional_float(value) -> float | None:
-    """숫자가 아니거나 NaN이면 None — 모르는 값을 0으로 바꾸지 않습니다."""
-    if value is None:
+    """숫자가 아니거나 NaN이면 None — 모르는 값을 0으로 바꾸지 않습니다. '1,234' 같은 문자열도 받습니다."""
+    if value is None or isinstance(value, bool):
         return None
+    if isinstance(value, str):
+        value = value.replace(",", "").strip()
+        if not value:
+            return None
     try:
         number = float(value)
     except (TypeError, ValueError):

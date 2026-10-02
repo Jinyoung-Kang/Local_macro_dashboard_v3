@@ -84,3 +84,27 @@ def test_naver_표가_없거나_행이_없으면_사유를_돌려준다():
     records, reason = radar.parse_naver_ranking("<table class='type_1'><tr><th>h</th></tr></table>",
                                                  trade_type="순매수", top_n=30, target_date="20260911")
     assert records == [] and "종목 행이 없습니다" in reason
+
+
+def test_daum_가격_등락률이_빠지면_모르는_값이고_금액이_빠지면_행을_뺀다():
+    """빠진 값을 0.0으로 적으면 '가격 0원·등락률 0%'가 이력에 영구히 남습니다."""
+    payload = _daum_payload([
+        {"symbolCode": "A005930", "name": "삼성전자", "straightPurchasePrice": 1e9},
+        {"symbolCode": "A000660", "name": "SK하이닉스", "tradePrice": 180000, "changeRate": -0.011},
+    ])
+    records = radar.parse_daum_ranking(payload, investor="외국인", trade_type="순매수",
+                                       top_n=30, target_date="20260911")
+    assert [r["code"] for r in records] == ["005930"]          # 순매수 금액을 모르면 순위를 매길 수 없다
+    assert records[0]["price"] is None and records[0]["changePct"] is None
+    assert records[0]["netAmountEok"] == 10.0
+
+
+def test_naver_빈_칸은_모르는_값이고_금액_칸이_비면_행을_뺀다():
+    html = _naver_html([("005930", "삼성전자", "-", "", "123,450"),
+                        ("000660", "SK하이닉스", "180,000", "-1.10%", "")])
+    records, reason = radar.parse_naver_ranking(html, trade_type="순매수", top_n=30, target_date="20260911")
+
+    assert reason is None
+    assert [r["code"] for r in records] == ["005930"]
+    assert records[0]["price"] is None and records[0]["changePct"] is None
+    assert records[0]["netAmountEok"] == 1234.5
