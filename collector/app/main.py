@@ -67,11 +67,16 @@ ALLOW_NO_TOKEN = os.environ.get("COLLECTOR_ALLOW_NO_TOKEN", "").lower() in ("1",
 # Host 헤더 허용 목록. 수집기는 127.0.0.1에만 열려 있지만, DNS 리바인딩(공격자 도메인이 나중에
 # 127.0.0.1을 가리킴)으로 브라우저가 '같은 출처' 요청을 보내게 할 수 있습니다. 그 요청의 Host는
 # 공격자 도메인이므로 여기서 걸립니다. 백엔드는 compose 서비스 이름(collector)으로 부릅니다.
-ALLOWED_HOSTS = [
-    h.strip() for h in os.environ.get(
-        "COLLECTOR_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],collector,testserver"
-    ).split(",") if h.strip()
-]
+DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1,[::1],collector,testserver"
+
+
+def parse_allowed_hosts(raw: str | None) -> list[str]:
+    """쉼표 목록 → Host 허용 목록. 비어 있으면(compose가 빈 문자열을 넘김) 기본 목록."""
+    hosts = [h.strip() for h in (raw or "").split(",") if h.strip()]
+    return hosts or [h.strip() for h in DEFAULT_ALLOWED_HOSTS.split(",")]
+
+
+ALLOWED_HOSTS = parse_allowed_hosts(os.environ.get("COLLECTOR_ALLOWED_HOSTS"))
 
 
 def check_token_configured() -> None:

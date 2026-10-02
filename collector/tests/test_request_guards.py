@@ -28,6 +28,18 @@ def test_모르는_Host_헤더는_400이다(client):
     assert client.get("/health", headers={"Host": "collector:8000"}).status_code == 200
 
 
+def test_허용_Host_목록이_비어_있으면_기본_목록을_쓴다():
+    """
+    compose는 `COLLECTOR_ALLOWED_HOSTS: "${COLLECTOR_ALLOWED_HOSTS:-}"`로 **빈 문자열**을 넘깁니다.
+    빈 문자열을 "목록이 비었다"로 읽으면 허용 Host가 하나도 없어 헬스체크까지 전부 400이 됩니다.
+    """
+    default = main.parse_allowed_hosts(None)
+    assert "localhost" in default and "collector" in default
+    assert main.parse_allowed_hosts("") == default
+    assert main.parse_allowed_hosts("  ,  ") == default
+    assert main.parse_allowed_hosts(" dash.local , collector ") == ["dash.local", "collector"]
+
+
 @pytest.mark.parametrize("symbol", ["AAPL/etc", "VIX%20OR%201", "a" * 25, "AAPL;rm", "$(id)"])
 def test_야후_형식이_아닌_심볼은_400이다(client, monkeypatch, symbol):
     monkeypatch.setattr(main.market_service, "collect_ticker", lambda *a, **k: pytest.fail("호출하면 안 됩니다"))

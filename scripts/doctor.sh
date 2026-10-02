@@ -71,6 +71,9 @@ STATUS_JSON=$(curl -fsS --max-time 10 "http://localhost:$COLLECTOR_PORT/status" 
 if [ -z "$STATUS_JSON" ]; then
   fail "수집기에 연결하지 못했습니다 (http://localhost:$COLLECTOR_PORT/status)"
   note "make logs S=collector 로 기동 오류를 확인하세요"
+  if docker compose logs --tail=100 collector 2>/dev/null | grep -q 'COLLECTOR_API_TOKEN이 비어 있습니다'; then
+    note ".env의 COLLECTOR_API_TOKEN이 비어 있어 수집기가 뜨지 않습니다 — 'make setup'이 채워 줍니다 (임시로 띄우려면 COLLECTOR_ALLOW_NO_TOKEN=1)"
+  fi
   problem "수집기 기동 실패 — make logs S=collector"
 else
   ok "수집기 응답함"

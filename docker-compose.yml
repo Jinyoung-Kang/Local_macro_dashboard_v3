@@ -76,6 +76,10 @@ services:
       COLLECTOR_WEEKLY_INTERVAL: "${COLLECTOR_WEEKLY_INTERVAL:-43200}"
       COLLECTOR_RUN_LOG_RETENTION_DAYS: "${COLLECTOR_RUN_LOG_RETENTION_DAYS:-90}"
       COLLECTOR_API_TOKEN: "${COLLECTOR_API_TOKEN:-}"
+      # 토큰이 비면 수집기는 뜨지 않습니다. 아래를 1로 두면 경고만 남기고 뜹니다(.env.example 참고).
+      COLLECTOR_ALLOW_NO_TOKEN: "${COLLECTOR_ALLOW_NO_TOKEN:-}"
+      # Host 허용 목록(쉼표). 비우면 localhost·127.0.0.1·collector 기본 목록.
+      COLLECTOR_ALLOWED_HOSTS: "${COLLECTOR_ALLOWED_HOSTS:-}"
       COLLECTOR_INIT_SCHEMA: "true"
       MACRO_MIGRATIONS_DIR: /app/db/migrations
       # 외부 API 키 — 없으면 해당 기능만 비활성화됩니다.
