@@ -113,17 +113,19 @@ def market_totals(rows: list[dict]) -> dict[str, dict]:
     시장별 합계: 시가총액·거래대금·종목 수.
 
     시장구분(mrktCtg)이 없는 행은 "기타"로 모읍니다. 합계에 None을 0으로 섞지
-    않도록, 값이 있는 행만 더하고 몇 행이 빠졌는지 함께 남깁니다.
+    않도록, 값이 있는 행만 더하고 몇 행이 빠졌는지 함께 남깁니다. 한 행도 값이
+    없으면 합계는 0.0이 아니라 None입니다 — 0.0은 timeseries에 "시가총액 0원"으로
+    쌓여 화면 차트가 0으로 떨어집니다.
     """
     out: dict[str, dict] = {}
     for row in rows:
         market = row.get("market") or "기타"
-        agg = out.setdefault(market, {"count": 0, "marketCap": 0.0, "tradingValue": 0.0, "missingCap": 0})
+        agg = out.setdefault(market, {"count": 0, "marketCap": None, "tradingValue": None, "missingCap": 0})
         agg["count"] += 1
         if row.get("marketCap") is None:
             agg["missingCap"] += 1
         else:
-            agg["marketCap"] += row["marketCap"]
+            agg["marketCap"] = (agg["marketCap"] or 0.0) + row["marketCap"]
         if row.get("tradingValue") is not None:
-            agg["tradingValue"] += row["tradingValue"]
+            agg["tradingValue"] = (agg["tradingValue"] or 0.0) + row["tradingValue"]
     return out

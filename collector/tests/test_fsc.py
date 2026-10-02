@@ -57,6 +57,23 @@ def test_시장_합계는_빈_값을_0으로_섞지_않는다():
     assert totals["기타"]["marketCap"] == 7.0
 
 
+def test_시장_합계는_전부_비면_0이_아니라_None():
+    """
+    모든 행에 시가총액이 없으면(필드 이름 변경) 합계가 0.0으로 나와 timeseries에
+    '시가총액 0원'이 쌓이고 화면 차트가 0으로 떨어졌습니다. 하나도 모르면 모르는 것입니다.
+    거래대금도 같은 규칙입니다.
+    """
+    rows = [
+        {"market": "KOSPI", "marketCap": None, "tradingValue": None},
+        {"market": "KOSPI", "marketCap": None, "tradingValue": 5.0},
+    ]
+    totals = fsc.market_totals(rows)
+    assert totals["KOSPI"]["marketCap"] is None
+    assert totals["KOSPI"]["missingCap"] == 2
+    assert totals["KOSPI"]["tradingValue"] == 5.0
+    assert fsc.market_totals([{"market": "KOSDAQ", "marketCap": 1.0, "tradingValue": None}])["KOSDAQ"]["tradingValue"] is None
+
+
 def test_활용가이드의_V2_오퍼레이션으로_부른다(monkeypatch):
     monkeypatch.setattr(fsc.settings, "data_go_kr_key", lambda: "k" * 20)
     monkeypatch.delenv("FSC_STOCK_PRICE_URL", raising=False)
