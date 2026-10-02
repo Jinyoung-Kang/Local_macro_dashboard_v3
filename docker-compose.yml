@@ -63,7 +63,9 @@ services:
   collector:
     restart: unless-stopped
     logging: *logging
-    mem_limit: 768m
+    # pandas·pykrx·yfinance·lxml을 올린 상주 메모리가 637MiB(기동 25분 뒤 실측)입니다. 768m에서는
+    # 13F XML(6MB) 파싱 때 OOM-kill(종료 코드 137) 여지가 있어 1g로 둡니다.
+    mem_limit: 1g
     build: ./collector
     depends_on:
       postgres:
