@@ -82,7 +82,7 @@ public class RadarService {
      * 저장본(거래대금 상위 100종목의 투자자 매매)이 있으면 여섯 모두, 없으면 Daum이 주는 둘만.
      */
     public Map<String, Object> options() {
-        boolean tossReady = repository.readSnapshot(Datasets.SNAP_TOSS_RADAR_UNIVERSE)
+        boolean tossReady = store.readStored(Datasets.SNAP_TOSS_RADAR_UNIVERSE)
                 .filter(snapshot -> snapshot.payload() != null)
                 .filter(snapshot -> snapshot.isFresh(TOSS_UNIVERSE_MAX_AGE_SECONDS))
                 .isPresent();

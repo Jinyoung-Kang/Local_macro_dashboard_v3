@@ -44,6 +44,8 @@ class ArchitectureRulesTest {
 
     /** 파일 → (패키지, 참조한 이름들) */
     private static final Map<Path, Source> SOURCES = new TreeMap<>();
+    /** 파일 → 주석을 뺀 본문 */
+    private static final Map<Path, String> CODE = new TreeMap<>();
 
     record Source(String pkg, String simpleName, Set<String> refs) {
         boolean isController() {
@@ -71,6 +73,7 @@ class ArchitectureRulesTest {
                 }
                 String name = file.getFileName().toString().replace(".java", "");
                 SOURCES.put(file, new Source(pkg.group(1), name, refs));
+                CODE.put(file, code);
             }
         }
         assertThat(SOURCES).as("소스를 찾지 못했습니다(작업 디렉터리가 backend여야 합니다)").isNotEmpty();
@@ -151,6 +154,24 @@ class ArchitectureRulesTest {
                         && ref.endsWith("Controller")) {
                     found.add(source.simpleName() + " → " + ref);
                 }
+            }
+        });
+        assertThat(found).isEmpty();
+    }
+
+    @Test
+    @DisplayName("스냅샷은 read.StoreReader로만 읽는다 — 신선도·수집 요청 정책을 우회하지 않는다")
+    void snapshotsAreReadOnlyThroughStoreReader() {
+        // observations·timeseries는 신선도 정책이 없어 StoreRepository를 바로 써도 됩니다.
+        // 스냅샷을 repository.readSnapshot으로 읽으면 "오래됐으면 수집 요청"이 빠집니다(RadarService.options가 그랬음).
+        Pattern direct = Pattern.compile("\\.readSnapshots?\\(");
+        List<String> found = new ArrayList<>();
+        SOURCES.forEach((file, source) -> {
+            if (source.pkg().equals("com.macrodash.read") || source.pkg().equals("com.macrodash.store")) {
+                return;
+            }
+            if (direct.matcher(CODE.get(file)).find()) {
+                found.add(source.simpleName());
             }
         });
         assertThat(found).isEmpty();

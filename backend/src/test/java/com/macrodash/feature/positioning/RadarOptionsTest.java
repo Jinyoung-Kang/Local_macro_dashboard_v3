@@ -21,9 +21,10 @@ import static org.mockito.Mockito.when;
 class RadarOptionsTest {
 
     private static Map<String, Object> optionsWith(Optional<Snapshot> universe) {
-        StoreRepository repository = mock(StoreRepository.class);
-        when(repository.readSnapshot(Datasets.SNAP_TOSS_RADAR_UNIVERSE)).thenReturn(universe);
-        return new RadarService(mock(StoreReader.class), repository, mock(CollectorClient.class)).options();
+        // 스냅샷은 read.StoreReader로만 읽습니다(ADR 0001 규칙 5).
+        StoreReader store = mock(StoreReader.class);
+        when(store.readStored(Datasets.SNAP_TOSS_RADAR_UNIVERSE)).thenReturn(universe);
+        return new RadarService(store, mock(StoreRepository.class), mock(CollectorClient.class)).options();
     }
 
     private static Snapshot universe(Instant collectedAt) throws Exception {

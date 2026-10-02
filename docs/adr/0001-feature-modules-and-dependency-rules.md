@@ -30,8 +30,8 @@ config · web ─▶ feature/<기능> ─▶ read ─▶ store
 |---|---|---|
 | `feature/<기능>` | 컨트롤러(HTTP 경계) + 서비스(응답 조립) | 아래 전부 + 다른 기능의 **서비스** |
 | `analytics` | 순수 계산 | `java.*`만 |
-| `read` | 읽기 정책(저장본이 오래됐으면 수집 요청) | store · collector · config |
-| `store` | DB 접근 · 데이터셋 이름 · 신선도 | DB만(수집기·설정·기능 모름) |
+| `read` | 읽기 정책(저장본이 오래됐으면 수집 요청). **스냅샷은 여기서만 읽습니다** | store · collector · config |
+| `store` | DB 접근 · 데이터셋 이름 · 신선도. 기능은 observations·timeseries 조회에만 직접 씁니다 | DB만(수집기·설정·기능 모름) |
 | `collector` | 수집기 HTTP 호출 | config |
 | `support` | JSON 읽기 · 파라미터 · 비밀값 가림 · 공통 예외 | analytics(입력 타입) |
 | `config` · `web` | 설정 · 인증 필터 · 공통 오류 응답 | 기능까지 |
@@ -46,6 +46,9 @@ config · web ─▶ feature/<기능> ─▶ read ─▶ store
 3. 기능끼리는 서비스만 가져다 씁니다(컨트롤러는 안 됨). 기능 사이 의존에 순환이 없어야 합니다.
    지금 의존: `ai → snapshot → macro·positioning·institution`, `positioning → insight → institution`.
 4. 새 인터페이스·추상화 계층은 만들지 않습니다. 구현이 하나뿐인 인터페이스는 읽는 비용만 늘립니다.
+5. 스냅샷은 `read.StoreReader`로만 읽습니다(`read`·`store` 밖에서 `readSnapshot(` 금지). `StoreRepository`를
+   직접 쓰면 "오래됐으면 수집을 요청한다"는 정책이 빠집니다 — 레이더 선택지가 토스 저장본을 그렇게 읽어
+   저장본이 낡아도 아무도 새로 받지 않았습니다. observations·timeseries는 신선도 정책이 없어 직접 읽어도 됩니다.
 
 ## 이유
 
