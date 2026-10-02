@@ -1,10 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useApi } from "@/hooks/useApi";
 import { sessionStatus, tradeTimeFrom, type SessionState } from "@/lib/marketSessions";
-import type { KrHolidaysResponse } from "@/lib/types";
-import { endpoints } from "@/lib/endpoints";
 
 /**
  * 지표 카드의 "개장/마감" 배지.
@@ -23,26 +19,10 @@ const STYLES: Record<SessionState, string> = {
   idle: "border-border bg-surface-hover text-muted",
 };
 
-/** 1분마다 바뀌는 현재 시각. 서버 렌더와 어긋나지 않게 마운트 후에만 값을 가집니다. */
-export function useMinuteClock(): Date | null {
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
+import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { useKrOfficialHolidays } from "@/hooks/useKrOfficialHolidays";
 
-/** 올해 한국 공휴일(천문연 공식 목록). 없으면 null → 내장 표로 판정합니다. */
-export function useKrOfficialHolidays(now: Date | null): string[] | null {
-  const { data } = useApi<KrHolidaysResponse>(endpoints.publicData.krHolidays);
-  const year = now ? now.getFullYear() : null;
-  return useMemo(
-    () => (year === null ? null : data?.years?.[String(year)]?.holidays.map((day) => day.date) ?? null),
-    [data, year],
-  );
-}
+export { useMinuteClock, useKrOfficialHolidays };
 
 export function SessionBadge({
   market,

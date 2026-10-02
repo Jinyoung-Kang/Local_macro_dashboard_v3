@@ -7,7 +7,7 @@
  * 주말, KRX·미국 휴장일, 그리고 "개장 시간인데 체결이 멈춘" 휴장 추정.
  * 시각은 모두 UTC로 적고 옆에 현지 시각을 달았습니다.
  */
-import { sessionStatus, tradeTimeFrom } from "../marketSessions.ts";
+import { kstYear, sessionStatus, tradeTimeFrom } from "../marketSessions.ts";
 
 let failed = 0;
 
@@ -83,4 +83,8 @@ if (failed > 0) {
   console.error(`\n${failed}건 실패`);
   process.exit(1);
 }
-console.log("\n모두 통과");
+console.log("\n모두 통과");console.log("한국 시간 연도");
+check("UTC 12/31 16:00 = KST 1/1 01:00 → 새해", kstYear(new Date(Date.UTC(2025, 11, 31, 16, 0))), 2026);
+check("UTC 12/31 14:00 = KST 12/31 23:00 → 그해", kstYear(new Date(Date.UTC(2025, 11, 31, 14, 0))), 2025);
+
+

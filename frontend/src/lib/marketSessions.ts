@@ -334,3 +334,8 @@ export function tradeTimeFrom(lastTs: string | null | undefined): Date | null {
   const [, y, mo, d, hh, mi] = match;
   return new Date(`${y}-${mo}-${d}T${hh}:${mi}:00+09:00`);
 }
+
+/** 한국 시간 기준 연도. 브라우저가 어느 시간대에 있든 같은 답입니다. */
+export function kstYear(date: Date): number {
+  return Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", year: "numeric" }).format(date));
+}
