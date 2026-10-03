@@ -54,16 +54,16 @@ function CategoryTick({
   payload,
   maxWidth,
 }: {
-  x?: number;
-  y?: number;
+  x?: number | string;
+  y?: number | string;
   payload?: { value?: string | number };
   maxWidth: number;
 }) {
   const label = String(payload?.value ?? "");
   return (
     <text
-      x={x}
-      y={y}
+      x={Number(x) || 0}
+      y={Number(y) || 0}
       dy={4}
       textAnchor="end"
       fill={AXIS.stroke}
@@ -99,7 +99,7 @@ function BarValueLabel({
   y?: number | string;
   width?: number | string;
   height?: number | string;
-  value?: number | string;
+  value?: unknown;
   unit: string;
   digits: number;
 }) {
@@ -229,9 +229,10 @@ export function LineSeries({
         <Tooltip
           {...tooltipStyle()}
           cursor={{ stroke: "#8B949E", strokeWidth: 1 }}
-          formatter={(value: number) => [
+          // recharts 3: value는 ValueType | undefined — 숫자로 맞춰 씁니다.
+          formatter={(value) => [
             // 툴팁은 눈금보다 한 자리 더 보여 줍니다(정확한 값을 확인하는 곳).
-            `${formatNumber(value, precision + 1)}${unit}`,
+            `${formatNumber(Number(value), precision + 1)}${unit}`,
             "값",
           ]}
         />
@@ -305,7 +306,8 @@ export function MultiLineSeries({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke={GRID} vertical={false} />
+        {/* recharts 3: 축 id가 기본값(0)이 아니면 격자에도 같은 id를 줘야 그려집니다. */}
+        <CartesianGrid stroke={GRID} vertical={false} yAxisId="left" />
         <XAxis dataKey="date" tick={AXIS} minTickGap={40} tickLine={false} />
         <YAxis
           yAxisId="left"
@@ -333,11 +335,11 @@ export function MultiLineSeries({
         <Tooltip
           {...tooltipStyle()}
           cursor={{ stroke: "#8B949E", strokeWidth: 1 }}
-          formatter={(value: number, name: string) => [
+          formatter={(value, name) => [
             value === null || value === undefined
               ? EMPTY
-              : `${formatNumber(value, 2)}${unitOf(name)}`,
-            name,
+              : `${formatNumber(Number(value), 2)}${unitOf(String(name))}`,
+            String(name),
           ]}
         />
         <Legend wrapperStyle={{ fontSize: 11, color: "#8B949E" }} />
@@ -417,7 +419,7 @@ export function HorizontalBars({
         <Tooltip
           {...tooltipStyle()}
           cursor={BAR_CURSOR}
-          formatter={(value: number) => [`${formatNumber(value, digits)}${unit}`, valueName]}
+          formatter={(value) => [`${formatNumber(Number(value), digits)}${unit}`, valueName]}
         />
         <ReferenceLine x={0} stroke="#8B949E" />
         {/* 한국 관행: 양수(순매수·상승) 빨강, 음수 파랑 */}
@@ -472,7 +474,7 @@ export function SignedBars({
         <Tooltip
           {...tooltipStyle()}
           cursor={BAR_CURSOR}
-          formatter={(value: number) => [`${formatNumber(value, 0)}${unit}`, valueName]}
+          formatter={(value) => [`${formatNumber(Number(value), 0)}${unit}`, valueName]}
         />
         <ReferenceLine y={0} stroke="#8B949E" />
         <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
@@ -546,9 +548,9 @@ export function ScatterPlot({
         <Tooltip
           {...tooltipStyle()}
           cursor={{ strokeDasharray: "3 3", stroke: "#8B949E" }}
-          formatter={(value: number, name: string) => [
-            `${formatNumber(value, 3)}${name === xLabel ? xUnit : yUnit}`,
-            name,
+          formatter={(value, name) => [
+            `${formatNumber(Number(value), 3)}${String(name) === xLabel ? xUnit : yUnit}`,
+            String(name),
           ]}
           labelFormatter={() => ""}
         />
