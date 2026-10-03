@@ -107,6 +107,17 @@ public class StoreRepository {
         return (rs, rowNum) -> new Loaded(base.mapRow(rs, rowNum), rs.getLong("bytes"));
     }
 
+    /**
+     * 저장본 전체에서 가장 최근 수집 시각. 어떤 저장본이든 새로 쓰이면 바뀌므로 "계산 결과가 아직 유효한가"의
+     * 버전으로 씁니다({@code read.ComputedCache}). 표가 수십 행이라 조회는 1ms 안팎입니다. 저장본이 없으면 null.
+     */
+    public Instant latestCollectedAt() {
+        List<Timestamp> rows = jdbc.query(
+                "SELECT MAX(collected_at) AS latest FROM snapshots",
+                (rs, rowNum) -> rs.getTimestamp("latest"));
+        return rows.isEmpty() || rows.get(0) == null ? null : toInstant(rows.get(0));
+    }
+
     /** DB에 닿는가(헬스체크용). 여기서는 예외를 삼키는 것이 맞습니다 — 답이 곧 상태입니다. */
     public boolean ping() {
         try {

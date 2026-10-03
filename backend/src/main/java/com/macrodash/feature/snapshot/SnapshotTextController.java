@@ -1,5 +1,6 @@
 package com.macrodash.feature.snapshot;
 
+import com.macrodash.read.ComputedCache;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,8 +14,11 @@ public class SnapshotTextController {
 
     private final SnapshotTextService snapshotText;
 
-    public SnapshotTextController(SnapshotTextService snapshotText) {
+    private final ComputedCache cache;
+
+    public SnapshotTextController(SnapshotTextService snapshotText, ComputedCache cache) {
         this.snapshotText = snapshotText;
+        this.cache = cache;
     }
 
     /**
@@ -26,6 +30,7 @@ public class SnapshotTextController {
      */
     @GetMapping("/snapshot/text")
     public Map<String, Object> snapshotText() {
-        return snapshotText.payload();
+        // 전 화면을 훑어 만드는 텍스트 — 같은 저장본이면 다시 만들지 않습니다(ComputedCache).
+        return cache.get("snapshot.text", snapshotText::payload);
     }
 }

@@ -1,5 +1,6 @@
 package com.macrodash.feature.institution;
 
+import com.macrodash.read.ComputedCache;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,9 +25,12 @@ public class InstitutionController {
     private final Sec13FService sec13f;
     private final GuruService guru;
 
-    public InstitutionController(Sec13FService sec13f, GuruService guru) {
+    private final ComputedCache cache;
+
+    public InstitutionController(Sec13FService sec13f, GuruService guru, ComputedCache cache) {
         this.sec13f = sec13f;
         this.guru = guru;
+        this.cache = cache;
     }
 
     // ------------------------------------------------------- 📑 13F
@@ -48,7 +52,9 @@ public class InstitutionController {
             @RequestParam(required = false) String reportDate,
             @RequestParam(defaultValue = "2") int minHolders,
             @RequestParam(defaultValue = "30") int topN) {
-        return sec13f.consensus(selectedCiks(ciks), reportDate, minHolders, topN);
+        List<String> selected = selectedCiks(ciks);
+        return cache.get("sec13f.consensus:" + selected + ":" + reportDate + ":" + minHolders + ":" + topN,
+                () -> sec13f.consensus(selected, reportDate, minHolders, topN));
     }
 
     /** 🆕 이번 분기에 여러 기관이 함께 새로 담은 종목. */
@@ -57,20 +63,22 @@ public class InstitutionController {
             @RequestParam(required = false) String ciks,
             @RequestParam(required = false) String reportDate,
             @RequestParam(defaultValue = "3") int minHolders) {
-        return sec13f.newBuys(selectedCiks(ciks), reportDate, minHolders);
+        List<String> selected = selectedCiks(ciks);
+        return cache.get("sec13f.newBuys:" + selected + ":" + reportDate + ":" + minHolders,
+                () -> sec13f.newBuys(selected, reportDate, minHolders));
     }
 
     // ------------------------------------------------- 🧬 기관 스타일·위험
     /** 기관별 성격 요약 (집중도·유효 종목 수·회전율). */
     @GetMapping("/guru/profiles")
     public Map<String, Object> guruProfiles() {
-        return guru.profiles();
+        return cache.get("guru.profiles", guru::profiles);
     }
 
     /** 기관 간 유사도 행렬 (겹침 비중 + 코사인). */
     @GetMapping("/guru/similarity")
     public Map<String, Object> guruSimilarity() {
-        return guru.similarity();
+        return cache.get("guru.similarity", guru::similarity);
     }
 
     /** 이 종목을 누가 들고 있나 (13F 공시 이름 일부로 검색). */
@@ -90,7 +98,7 @@ public class InstitutionController {
             @RequestParam String cik,
             @RequestParam(defaultValue = "SPY") String benchmark,
             @RequestParam(defaultValue = "1") int years) {
-        return guru.risk(cik, benchmark, years);
+        return cache.get("guru.risk:" + cik + ":" + benchmark + ":" + years, () -> guru.risk(cik, benchmark, years));
     }
 
     /** 쉼표로 구분한 CIK 목록. 비어 있으면 추적하는 기관 전체입니다. */

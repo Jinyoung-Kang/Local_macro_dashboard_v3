@@ -1,5 +1,6 @@
 package com.macrodash.feature.insight;
 
+import com.macrodash.read.ComputedCache;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,9 +23,12 @@ public class AnalyticsController {
     private final AnalyticsService analytics;
     private final ScorecardService scorecard;
 
-    public AnalyticsController(AnalyticsService analytics, ScorecardService scorecard) {
+    private final ComputedCache cache;
+
+    public AnalyticsController(AnalyticsService analytics, ScorecardService scorecard, ComputedCache cache) {
         this.analytics = analytics;
         this.scorecard = scorecard;
+        this.cache = cache;
     }
 
     // ----------------------------------------------- 🔗 상관관계 · 🧭 국면
@@ -52,7 +56,7 @@ public class AnalyticsController {
     /** 성장·신용 축 × 유동성 축으로 판정한 시장 국면. */
     @GetMapping("/analytics/regime")
     public Map<String, Object> regime(@RequestParam(defaultValue = "5") int years) {
-        return analytics.regime(years);
+        return cache.get("analytics.regime:" + years, () -> analytics.regime(years));
     }
 
     // ----------------------------------------------------- 🩺 스코어카드
@@ -73,6 +77,7 @@ public class AnalyticsController {
             @RequestParam String symbol,
             @RequestParam(defaultValue = "SPY") String benchmark,
             @RequestParam(defaultValue = "1") int years) {
-        return scorecard.scorecard(symbol, benchmark, years);
+        return cache.get("stock.scorecard:" + symbol + ":" + benchmark + ":" + years,
+                () -> scorecard.scorecard(symbol, benchmark, years));
     }
 }

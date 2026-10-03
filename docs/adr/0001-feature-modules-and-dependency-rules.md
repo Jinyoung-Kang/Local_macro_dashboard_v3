@@ -41,7 +41,7 @@ config · web ─▶ feature/<기능> ─▶ read ─▶ store
 
 규칙
 1. `analytics`는 `java.*`만 씁니다. 저장본 JSON은 `support`에서 일반 타입(record)으로 바꿔 넘깁니다.
-2. 컨트롤러는 자기 기능의 서비스와 `support`·`config`만 씁니다. 입력 검증(길이·형식)까지가 컨트롤러 몫이고,
+2. 컨트롤러는 자기 기능의 서비스와 `support`·`config`만 씁니다(예외: 응답 캐시 `read.ComputedCache` — "같은 저장본이면 같은 응답"은 HTTP 계층의 관심사라 컨트롤러에 두고, 서비스는 캐시를 모른 채 계산만 합니다). 입력 검증(길이·형식)까지가 컨트롤러 몫이고,
    규칙과 조립은 서비스에 둡니다.
 3. 기능끼리는 서비스만 가져다 씁니다(컨트롤러는 안 됨). 기능 사이 의존에 순환이 없어야 합니다.
    지금 의존: `ai → snapshot → macro·positioning·institution`. (예전의 `positioning → insight → institution`은

@@ -122,8 +122,15 @@ class ArchitectureRulesTest {
         }
     }
 
+    /**
+     * 컨트롤러가 예외적으로 쓸 수 있는 기반 클래스. 응답 캐시(ComputedCache)는 "같은 저장본이면 같은 응답"이라는
+     * HTTP 계층의 관심사라 컨트롤러에 둡니다 — 서비스는 캐시를 모르고 계산만 하므로 테스트가 단순합니다.
+     * 데이터 접근(StoreReader·StoreRepository)은 여전히 금지입니다.
+     */
+    private static final List<String> CONTROLLER_INFRASTRUCTURE = List.of("com.macrodash.read.ComputedCache");
+
     @Test
-    @DisplayName("컨트롤러는 자기 기능의 서비스와 support·config만 쓴다(저장소·수집기·다른 기능 직접 호출 금지)")
+    @DisplayName("컨트롤러는 자기 기능의 서비스와 support·config(+응답 캐시)만 쓴다(저장소·수집기·다른 기능 직접 호출 금지)")
     void controllersGoThroughTheirOwnServices() {
         List<String> found = new ArrayList<>();
         SOURCES.forEach((file, source) -> {
@@ -133,7 +140,8 @@ class ArchitectureRulesTest {
             for (String ref : source.refs()) {
                 if (ref.startsWith("com.macrodash.")
                         && !ref.startsWith(source.pkg() + ".")
-                        && !startsWithAny(ref, "com.macrodash.support.", "com.macrodash.config.")) {
+                        && !startsWithAny(ref, "com.macrodash.support.", "com.macrodash.config.")
+                        && !CONTROLLER_INFRASTRUCTURE.contains(ref)) {
                     found.add(source.simpleName() + " → " + ref);
                 }
             }
