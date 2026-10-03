@@ -7,7 +7,7 @@
 | Node (화면 이미지) | 22-alpine | npm audit: 0건 (prod 58·dev 473) | LTS 유지보수 2027-04까지 |
 | Next.js / React / recharts | 15.5.26 / 18.3.1 / 2.15.0 | 0건 | Next 16·React 19가 현행. recharts 2.x는 **유지 종료**(npm 설치 시 deprecated 경고) → 3.x 이전 권장 |
 | Java (백엔드) | Temurin 21 JRE | — | LTS, 2029-09까지 |
-| Spring Boot / Framework | 4.1.1 / 7.0.9 | GitHub Advisory: 런타임 의존성 60개 전부 0건 | Spring Boot 4.1 OSS 지원은 **2026-12 전후 종료 예정**(GA 2025-11 + 13개월) → 4.2 이전 계획 필요 |
+| Spring Boot / Framework | 4.1.1 / 7.0.9 | GitHub Advisory: 런타임 의존성 60개 전부 0건 | **정정(2026-10-03)**: 4.1.0 GA는 2026-06-10(Maven Central 실측), 4.1.1은 2026-08-20. OSS 지원(약 13개월)은 **2027-07 전후**까지. 4.2는 2026-10-03 현재 M2(마일스톤)뿐이라 운영에 올릴 수 없음 — 4.2 GA(2026-11 예정) 뒤 이전 |
 | Tomcat embed / Jackson / HikariCP / PostgreSQL JDBC | 11.0.24 / 2.21.5·3.1.5 / 7.0.2 / 42.7.13 | 0건 | 현행 |
 | PostgreSQL | 16-alpine | — | 2028-11까지 |
 
