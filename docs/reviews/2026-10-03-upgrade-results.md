@@ -34,10 +34,18 @@ gzip은 이미 켜져 있었습니다(전송 29/19/29KB). 줄인 것은 **직렬
 
 ## 성능 (운영 스택, 같은 맥, k6 16경로)
 
+측정: 배포 전(`main@b98e5b9`)과 후(`main@f041203`) 모두 운영 스택에서 캐시를 데운 뒤 `scripts/qa/k6/api-load.js`,
+오류율은 둘 다 0%.
+
 | 조건 | 전: 처리량 / p50 / p95 | 후: 처리량 / p50 / p95 |
 |---|---|---|
-| 동시 10명 · 60초 | 81.5 req/s / 7.9ms / 51ms | (배포 뒤 측정) |
-| 동시 50명 · 60초 | 197.7 req/s / 83.6ms / 528ms | (배포 뒤 측정) |
+| 동시 10명 · 60초 | 81.5 req/s / 7.9ms / 51ms | **92.8 req/s / 3.4ms / 19ms** |
+| 동시 50명 · 60초 | 197.7 req/s / 83.6ms / 528ms | **432.2 req/s / 3.3ms / 38ms** |
+
+경로별 p95(동시 50명): `/api/snapshot/text` 992 → **18ms**, `/api/guru/similarity` 689 → 15ms, `/api/stock/scorecard`
+631 → 18ms, `/api/sec13f/consensus` 455 → 16ms, `/api/guru/profiles` 356 → 16ms(이상 캐시), `/api/macro/overview`
+349 → 96ms, `/api/liquidity` 151 → 33ms(이상 솎기). 캐시가 없는 경로도 서버 전체 부하가 줄어 2~4배 빨라졌습니다.
+처리량이 2.2배로 늘고도 가장 느린 경로가 `/api/status` p95 129ms(수집기 왕복 포함)입니다.
 
 ## CLAUDE.md
 QA 스택 명령, 전달 방식(주제 브랜치 → ff 병합 → CI 확인), 결함 커밋 규칙(test → fix), 수집 실패 시 이전 값 유지·태스크
