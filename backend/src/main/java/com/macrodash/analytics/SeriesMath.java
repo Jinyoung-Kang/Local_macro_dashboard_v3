@@ -1,7 +1,10 @@
 package com.macrodash.analytics;
 
 import java.time.LocalDate;
+import java.time.temporal.WeekFields;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.function.Function;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -218,6 +221,39 @@ public final class SeriesMath {
      * 한 점짜리 차트를 그리느니 넓은 구간을 보여 주는 편이 낫다는 선택입니다.
      * 호출부가 "정확히 n일치"를 기대하면 안 됩니다.
      */
+    /**
+     * 긴 일별 계열을 화면용으로 솎습니다: {@code keepDailyFrom}부터는 전부, 그보다 오래된 구간은 <b>주마다 마지막
+     * 관측 하나</b>만 남깁니다(ISO 주 기준).
+     *
+     * <p>10년치 일별 스프레드는 2,560점(10Y−2Y와 30Y−2Y 합쳐 250KB)인데, 화면은 1,200px 폭에 그리고 1분마다
+     * 다시 받습니다. 솎은 뒤에도 남는 점은 <b>실제 관측값</b>입니다 — 평균·보간으로 없는 숫자를 만들지 않습니다.
+     * 최신값·직전값·변화량은 솎기 전 전체 계열로 계산해야 합니다(호출부 책임).
+     *
+     * @param items        날짜 오름차순으로 정렬된 항목
+     * @param dateOf       항목의 날짜. null이면 그 항목은 그대로 남깁니다
+     * @param keepDailyFrom 이 날짜(포함)부터는 솎지 않습니다
+     */
+    public static <T> List<T> thinOlderThan(List<T> items, Function<T, LocalDate> dateOf, LocalDate keepDailyFrom) {
+        if (items == null || items.size() < 2 || keepDailyFrom == null) {
+            return items;
+        }
+        WeekFields iso = WeekFields.ISO;
+        LinkedHashMap<String, T> lastOfWeek = new LinkedHashMap<>();
+        List<T> recent = new ArrayList<>();
+        for (T item : items) {
+            LocalDate date = dateOf.apply(item);
+            if (date == null || !date.isBefore(keepDailyFrom)) {
+                recent.add(item);
+                continue;
+            }
+            String week = date.get(iso.weekBasedYear()) + "-" + date.get(iso.weekOfWeekBasedYear());
+            lastOfWeek.put(week, item);    // 같은 주의 뒤 항목이 앞 항목을 대체 → 그 주의 마지막 관측
+        }
+        List<T> out = new ArrayList<>(lastOfWeek.values());
+        out.addAll(recent);
+        return out;
+    }
+
     public static <T> List<T> tailByDays(List<LocalDate> dates, List<T> values, Integer days) {
         if (days == null || dates == null || values == null
                 || dates.size() != values.size() || dates.isEmpty()) {

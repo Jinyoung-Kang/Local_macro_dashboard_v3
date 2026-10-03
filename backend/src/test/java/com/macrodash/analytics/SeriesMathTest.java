@@ -126,4 +126,42 @@ class SeriesMathTest {
                 java.util.Map.entry(LocalDate.of(2026, 1, 2), 4.1 - 3.6),
                 java.util.Map.entry(LocalDate.of(2026, 1, 6), 4.0 - 3.5));
     }
+
+    @Test
+    @DisplayName("오래된 구간은 주마다 마지막 관측만 남기고, 최근 1년은 그대로 — 남는 점은 실제 관측값")
+    void thinOlderThanKeepsLastOfWeekAndRecentDaily() {
+        LocalDate end = LocalDate.of(2026, 10, 2);
+        List<LocalDate> daily = new java.util.ArrayList<>();
+        for (LocalDate d = end.minusYears(3); !d.isAfter(end); d = d.plusDays(1)) {
+            if (d.getDayOfWeek().getValue() <= 5) {      // 영업일만 (주 5점)
+                daily.add(d);
+            }
+        }
+        LocalDate keepFrom = end.minusYears(1);
+
+        List<LocalDate> thinned = SeriesMath.thinOlderThan(daily, d -> d, keepFrom);
+
+        long recent = daily.stream().filter(d -> !d.isBefore(keepFrom)).count();
+        long olderWeeks = daily.stream().filter(d -> d.isBefore(keepFrom))
+                .map(d -> d.get(java.time.temporal.WeekFields.ISO.weekBasedYear()) + "-"
+                        + d.get(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear())).distinct().count();
+        assertThat(thinned).hasSize((int) (recent + olderWeeks));
+        assertThat(thinned).isSorted();
+        assertThat(thinned).containsAll(daily.stream().filter(d -> !d.isBefore(keepFrom)).toList());
+        // 오래된 구간의 각 점은 그 주의 금요일(마지막 영업일)이다 — 경계에 걸린 마지막 주만 그 주의 남은 마지막 날
+        List<LocalDate> older = thinned.stream().filter(d -> d.isBefore(keepFrom)).toList();
+        assertThat(older.subList(0, older.size() - 1))
+                .allMatch(d -> d.getDayOfWeek() == java.time.DayOfWeek.FRIDAY);
+        assertThat(thinned.size()).isLessThan(daily.size() / 2);
+    }
+
+    @Test
+    @DisplayName("날짜를 모르는 항목은 솎지 않고 남기고, 항목이 1개 이하면 그대로")
+    void thinOlderThanEdgeCases() {
+        List<String> single = List.of("x");
+        assertThat(SeriesMath.thinOlderThan(single, s -> null, LocalDate.of(2026, 1, 1))).isSameAs(single);
+        List<LocalDate> withNull = java.util.Arrays.asList(LocalDate.of(2020, 1, 6), null, LocalDate.of(2020, 1, 7));
+        assertThat(SeriesMath.thinOlderThan(withNull, d -> d, LocalDate.of(2026, 1, 1)))
+                .containsExactly(LocalDate.of(2020, 1, 7), null);
+    }
 }

@@ -2,6 +2,7 @@ package com.macrodash.feature.macro;
 
 import com.macrodash.Kst;
 import com.macrodash.analytics.FxIndex;
+import com.macrodash.analytics.SeriesMath;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
@@ -126,7 +127,9 @@ public class FxService {
             one.put("baseDate", rebased.baseDate() == null ? null : rebased.baseDate().toString());
             one.put("baseValue", rebased.baseValue());
             one.put("changePct", FxIndex.changePct(values));
-            one.put("points", pointsOf(indexed ? rebased.values() : values));
+            // 최신값·변화율은 전체 계열로 계산했고, 차트용 점만 1년보다 오래된 구간을 주 단위로 솎습니다.
+            one.put("points", SeriesMath.thinOlderThan(pointsOf(indexed ? rebased.values() : values),
+                    point -> Json.parseDate(String.valueOf(point.get("date"))), Kst.today().minusYears(1)));
             series.add(one);
         }
         out.put("series", series);

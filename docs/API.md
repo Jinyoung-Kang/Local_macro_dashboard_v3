@@ -82,11 +82,11 @@
 
 | 경로 | 설명 |
 |---|---|
-| `GET /api/macro/overview?live=` | 카드 + 스프레드 + 신선도. `live=true`면 저장본을 다시 받을 기준이 15분 → **60초**로 내려갑니다(화면의 자동 갱신이 1분 이하일 때). 60초보다 낮추지 않는 이유는 [PRINCIPLES.md](PRINCIPLES.md) |
+| `GET /api/macro/overview?live=` | 카드 + 스프레드 + 신선도. 스프레드 `points`는 1년보다 오래된 구간을 주 단위(그 주의 마지막 관측)로 솎음(latest·previous는 전체 계열). `live=true`면 저장본을 다시 받을 기준이 15분 → **60초**로 내려갑니다(화면의 자동 갱신이 1분 이하일 때). 60초보다 낮추지 않는 이유는 [PRINCIPLES.md](PRINCIPLES.md) |
 | `GET /api/macro/risk` | VIX·MOVE·HY OAS·CP 스프레드·STLFSI4 |
 | `GET /api/macro/advanced` | 심화 지표 6종 (해석·백분위 포함) |
 | `GET /api/macro/usdkrw` | 원/달러 환율 (달러 금액의 원화 병기용, 매크로 카드와 같은 값) |
-| `GET /api/macro/fx?ids=usdkrw,dxy&period=1y&mode=index` | 환율·달러인덱스 비교 (여러 계열 겹쳐 보기). `mode=index`는 기준일 100, `raw`는 원래 단위 |
+| `GET /api/macro/fx?ids=usdkrw,dxy&period=1y&mode=index` | 환율·달러인덱스 비교 (여러 계열 겹쳐 보기). `mode=index`는 기준일 100, `raw`는 원래 단위. `points`는 1년보다 오래된 구간을 주 단위로 솎음(latest·changePct는 전체 계열) |
 | `GET /api/macro/fx/options` | 고를 수 있는 기간·기본 선택 |
 | `GET /api/macro/scraped` | 비공식 참고 시세 |
 | `GET /api/macro/spread?longId=DGS10&shortId=DGS2` | 공식 일별 스프레드 시계열 |
@@ -97,7 +97,7 @@
 
 | 경로 | 설명 |
 |---|---|
-| `GET /api/liquidity?years=3` | 연준 순유동성 |
+| `GET /api/liquidity?years=3` | 연준 순유동성. `rows`는 **1년보다 오래된 구간을 주 단위(그 주의 마지막 행)로 솎음** — 최신값·4주/12주 변화는 전체 행으로 계산 |
 | `GET /api/sector/rotation?period=1M` | 섹터·자산군 수익률·순위 |
 | `GET /api/sector/momentum` | 1주/1개월/3개월 모멘텀 순위 |
 | `GET /api/sec13f/institutions` | 기관 목록 |

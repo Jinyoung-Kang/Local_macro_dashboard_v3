@@ -82,7 +82,10 @@ public class LiquidityService {
         out.put("isEstimated", Json.asBoolean(payload, "isEstimated") || snap.isEstimated());
         snap.putFreshness(out);
         out.put("stale", !snap.isFresh(Datasets.MAX_AGE_DAILY));
-        out.put("rows", rows);
+        // 차트용 행은 1년보다 오래된 구간을 주 단위(그 주의 마지막 행)로 솎습니다. 최신값·4주/12주 변화는
+        // 위에서 전체 행으로 계산했습니다.
+        out.put("rows", SeriesMath.thinOlderThan(rows,
+                row -> Json.parseDate(Json.asText(row, "date")), Kst.today().minusYears(1)));
 
         Map<String, Object> latestBlock = new LinkedHashMap<>();
         latestBlock.put("netLiquidityT", latest);

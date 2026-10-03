@@ -178,10 +178,13 @@ public class MacroService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("longId", longId);
         out.put("shortId", shortId);
-        out.put("points", points);
+        // 최신·직전은 전체 계열에서 읽고, 차트용 점은 1년보다 오래된 구간을 주 단위(그 주의 마지막 관측)로 솎습니다.
+        // 10년치 일별 2,560점 × 2계열이 매 분 250KB로 내려가던 것을 1/3로 줄입니다(docs/API.md).
         out.put("latest", points.isEmpty() ? null : points.get(points.size() - 1).get("value"));
         out.put("previous", points.size() < 2
                 ? null : points.get(points.size() - 2).get("value"));
+        out.put("points", SeriesMath.thinOlderThan(points,
+                point -> Json.parseDate(String.valueOf(point.get("date"))), Kst.today().minusYears(1)));
         return out;
     }
 
