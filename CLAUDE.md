@@ -42,6 +42,8 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
 ## 전달 방식
 - 작업은 `claude/<주제>-YYYY-MM` 브랜치에서 하고, 끝나면 **본체 폴더의 `main`에 fast-forward 병합해 GitHub `main`에
   push**한 뒤 CI(6개 job)까지 확인하고 커밋 번호와 함께 보고한다. 사용자는 git 명령을 직접 치지 않는다. 큰 변경은 설명하고 동의를 받은 뒤 반영한다.
+- 커밋 메시지는 `type(scope): 요약`, **요약은 한국어**(예: `fix(backend): …`, `docs: …`), 끝에 `Co-Authored-By` 줄.
+  CI 가 GitHub 쪽 사정으로 취소되면("job was not acquired by Runner") 취소된 job 만 다시 돌린다 — 코드 실패와 구분해 보고한다.
 - 돌고 있는 코드를 바꾸는 변경이면 보고에 "`make up` 하세요"를 넣는다(이미 `make up`까지
   했으면 그 사실을 적는다).
 - GitHub 인증은 HTTPS + 키체인 토큰. 403이면 docs/DEVELOPMENT.md §5의 해결 순서.
@@ -58,3 +60,8 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
 - `docker kill`로 멈춘 컨테이너는 `restart: unless-stopped`가 다시 띄우지 않는다(수동 정지로 간주). 크래시 시험에
   쓰면 안 된다.
 - 외부 패키지를 올릴 때는 Maven Central·npm에서 **실제 GA 버전을 확인**한다(마일스톤은 운영에 올리지 않음).
+- 이 맥의 `mvn`은 Homebrew JDK 27로 돈다(`java -version`은 21이어도). CI는 Temurin 21이라 JDK 27에서만 나는 컴파일 오류는 CI에서
+  안 보인다(`80db4ae` — 익명 `LinkedHashMap` 안의 `Entry`가 `Map.Entry`로 풀린 이름 충돌). CI와 같은 판으로 재려면
+  `JAVA_HOME=$(/usr/libexec/java_home -v 21) make test-backend`. 코드는 두 판 모두에서 컴파일되게 쓴다.
+- 화면(3000)·API(8080)는 `${WEB_BIND_HOST:-0.0.0.0}`으로 열린다 — 휴대폰 접속용으로 **의도한 예외**(로그인 필요, `.env`에
+  `WEB_BIND_HOST=127.0.0.1`이면 닫힘). postgres·collector와 새 서비스는 127.0.0.1에만 연다.
