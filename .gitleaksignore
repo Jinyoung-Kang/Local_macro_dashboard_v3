@@ -1,0 +1,17 @@
+# gitleaks 허용 목록 — 진짜 비밀이 아닌 것이 확인된 발견만, 규칙이 아니라 지문(커밋:파일:규칙:줄)으로 하나씩.
+# 확인 방법: 각 값이 .env·.env.qa의 실제 값과 일치하지 않는지 대조했고(일치 0건), 아래 사유를 코드에서 확인했다.
+
+# 3a976e6 · 756efda: 야간선물 수집 목록의 데이터셋 키 문자열(14자) — 항목 이름이 "key"라서 generic-api-key로 잡혔다.
+3a976e63e507a9c489bb76fe7ebc9f60f1186772:collector/app/services/scraper.py:generic-api-key:76
+3a976e63e507a9c489bb76fe7ebc9f60f1186772:collector/app/indicators.py:generic-api-key:99
+3a976e63e507a9c489bb76fe7ebc9f60f1186772:collector/tests/test_tasks.py:generic-api-key:215
+756efda11085bad1e40877ac9fb888296d9c7f5e:collector/app/services/scraper.py:generic-api-key:79
+
+# 387a305: 인증 점검 스크립트가 일부러 보내는 서명 없는(alg=none) JWT — 401이 나와야 하는 공격 표본이다.
+387a305efea5e16f2dc9c333fbda774f7c8a9baa:scripts/qa/auth-probe.sh:jwt:41
+
+# d1eabed: SecretRedactor 테스트의 가짜 crtfc_key — 가림 처리를 확인하려고 넣은 자리표시 값이다.
+d1eabeda0f4065e509a4bf55bf4cd58af60515ba:backend/src/test/java/com/macrodash/support/SecretRedactorTest.java:generic-api-key:15
+
+# da0148e: DART 테스트의 가짜 키(40자, 1234·abcd 반복 자리표시) — 실제 DART 키는 .env에만 있다.
+da0148e5c3339c22a50b28fd869f6641ff17559f:collector/tests/test_dart.py:generic-api-key:29

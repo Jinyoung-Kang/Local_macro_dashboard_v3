@@ -188,3 +188,17 @@ jobs:
 
       - name: 이미지 빌드 (docker compose build)
         run: docker compose build
+
+  secrets:
+    name: 비밀값 검사 (gitleaks)
+    runs-on: ubuntu-latest
+    # 저장소가 Public이라 키가 한 번이라도 커밋되면 지워도 이력에 남습니다. 그래서 전체 이력을 봅니다.
+    # gitleaks-action은 첫 push에서 '첫 커밋^' 범위를 만들다 git 오류로 실패하므로 공식 이미지를 직접 씁니다
+    # (roadrail·wakeline과 같은 방식·같은 판). 진짜 비밀이 아닌 발견은 .gitleaksignore에 지문으로 하나씩 둡니다.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 전체 이력 검사
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 git /repo --redact --no-banner
