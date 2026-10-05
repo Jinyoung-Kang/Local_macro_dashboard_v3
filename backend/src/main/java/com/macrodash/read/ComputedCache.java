@@ -41,15 +41,15 @@ public class ComputedCache {
     public static final long MAX_AGE_SECONDS = 60;
     public static final int MAX_ENTRIES = 256;
 
-    private record Entry(Instant version, Instant storedAt, Object value) {
+    private record Cached(Instant version, Instant storedAt, Object value) {
     }
 
     private final StoreRepository repository;
     private final Clock clock;
-    private final Map<String, Entry> entries = Collections.synchronizedMap(
+    private final Map<String, Cached> entries = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<String, Entry> eldest) {
+                protected boolean removeEldestEntry(Map.Entry<String, Cached> eldest) {
                     return size() > MAX_ENTRIES;
                 }
             });
@@ -75,13 +75,13 @@ public class ComputedCache {
             return compute.get();
         }
         Instant now = clock.instant();
-        Entry hit = entries.get(key);
+        Cached hit = entries.get(key);
         if (hit != null && version.equals(hit.version())
                 && Duration.between(hit.storedAt(), now).getSeconds() < MAX_AGE_SECONDS) {
             return (T) hit.value();
         }
         T value = compute.get();
-        entries.put(key, new Entry(version, now, value));
+        entries.put(key, new Cached(version, now, value));
         return value;
     }
 
