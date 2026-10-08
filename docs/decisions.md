@@ -9,3 +9,10 @@
 - 원인: tailwindcss 3.4.19(v3 LTS 최신)와 postcss-nested 6.2.0이 `^6`을 요구하는데 6.x 수정판이 없음. 부모로 푸는 길은 Tailwind 4 메이저 이전뿐(Dependabot PR #3 — 빌드 실패로 닫음).
 - 선택: `overrides`로 7.1.6을 강제하지 않고 알림을 `tolerable_risk`로 dismiss. 나머지 알림 4건은 버전을 올려 해결(`6a1f7e6`).
 - 이유: 빌드 때 우리 소스 CSS만 파싱하는 개발 의존성이고 운영 이미지(`npm ci --omit=dev`)에는 없음. 7.1.6을 강제해도 Tailwind 출력 CSS는 같았지만, 부모가 선언한 메이저 범위 밖 조합을 떠안을 이득이 없음. Tailwind 4로 옮길 때 이 의존성째 사라짐.
+
+## 2026-10-08 · braces 취약점(GHSA-vfj7-8cjw-p6xm)은 고칠 판이 없어 그대로 둠
+
+- 문제: frontend의 braces 3.0.3(dev)에 깊게 중첩된 중괄호 패턴으로 스택을 넘기는 DoS(high). 취약 범위가 `<= 3.0.3`이고 최신판이 3.0.3이라 수정판이 없음.
+- 원인: tailwindcss 3(chokidar·micromatch)과 eslint-config-next(`@next/eslint-plugin-next` → fast-glob 3.3.1 → micromatch)가 끌어옴. eslint-config-next는 15.5.27·16.4.0 모두 fast-glob 3.3.1 고정이라 Tailwind 4로 가도 남음.
+- 선택: 손대지 않음. Dependabot 알림 #1은 GitHub가 이미 `auto_dismissed`. CI의 `npm audit --omit=dev --audit-level=high`는 운영 의존성만 봐서 통과.
+- 이유: 운영 이미지(`npm ci --omit=dev`)에 없고, braces가 펼치는 패턴은 우리 설정의 glob(`./src/**/*.{ts,tsx}` 등)뿐이라 외부 입력이 닿지 않음. braces 수정판이 나오면 lockfile만 갱신(micromatch `^3.0.3`·chokidar `~3.0.2` 범위 안이면).
