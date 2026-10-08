@@ -228,6 +228,11 @@ public class SnapshotTextService {
                 }
                 if (entry.get("percentile") instanceof Double percentile) {
                     text.append(" | 표본 백분위 %.1f%%".formatted(percentile));
+                    // 표본 길이가 지표마다 다릅니다(IG는 FRED 제한으로 3년, 나머지는 약 10년).
+                    if (entry.get("percentileFrom") != null && entry.get("percentileCount") instanceof Integer count
+                            && entry.get("percentileYears") instanceof Double years) {
+                        text.append(" (%s 이후 %,d개, 약 %.1f년)".formatted(entry.get("percentileFrom"), count, years));
+                    }
                 }
                 if (entry.get("asOf") != null) {
                     text.append(" | 기준일 ").append(entry.get("asOf"));

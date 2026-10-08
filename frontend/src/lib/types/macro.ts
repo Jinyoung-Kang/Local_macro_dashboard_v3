@@ -83,6 +83,10 @@ export interface RiskEntry {
   pct?: number | null;
   asOf?: string | null;
   percentile?: number | null;
+  /** 백분위 표본의 첫 날짜·개수·기간(년). 지표마다 다릅니다(IG·HY는 FRED 제한으로 3년). */
+  percentileFrom?: string | null;
+  percentileCount?: number | null;
+  percentileYears?: number | null;
   isProxy?: boolean;
   sourceLabel?: string | null;
   points?: { date: string; value: number }[];
@@ -110,6 +114,10 @@ export interface AdvancedEntry {
   delta?: number | null;
   asOf?: string | null;
   percentile?: number | null;
+  /** 백분위 표본의 첫 날짜·개수·기간(년). 지표마다 다릅니다(IG·HY는 FRED 제한으로 3년). */
+  percentileFrom?: string | null;
+  percentileCount?: number | null;
+  percentileYears?: number | null;
   status?: string;
   color?: string;
   note?: string;

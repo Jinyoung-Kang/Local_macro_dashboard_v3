@@ -8,7 +8,6 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -90,7 +89,6 @@ class SnapshotTextMacroTest {
     }
 
     @Test
-    @Disabled("재현 — 수정 전: 백분위만 적고 표본 기간이 없어 AI가 3년 백분위를 10년 기준처럼 읽음")
     @DisplayName("심화 지표의 표본 백분위에 표본 기간을 붙인다 — IG는 3년, 다른 지표는 약 10년")
     void advancedPercentileStatesItsWindow() {
         MacroService macro = mock(MacroService.class);

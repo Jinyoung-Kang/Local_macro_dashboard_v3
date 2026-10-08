@@ -5,7 +5,6 @@ import com.macrodash.config.AppProperties;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -49,7 +48,6 @@ class AdvancedPercentileWindowTest {
     }
 
     @Test
-    @Disabled("재현 — 수정 전: 백분위만 내려가고 표본 기간이 없음")
     @DisplayName("백분위와 함께 표본 시작일·개수·기간(년)을 내려보낸다")
     void percentileComesWithItsSampleWindow() throws Exception {
         Map<String, Object> advanced = serviceWithIgSeries().advancedIndicators();
@@ -64,7 +62,6 @@ class AdvancedPercentileWindowTest {
     }
 
     @Test
-    @Disabled("재현 — 수정 전: 출처에 FRED의 3년 제한이 적혀 있지 않음")
     @DisplayName("IG 스프레드 출처에 'FRED가 최근 3년만 제공'을 적는다")
     void igSourceDisclosesThreeYearLimit() throws Exception {
         Map<String, Object> advanced = serviceWithIgSeries().advancedIndicators();

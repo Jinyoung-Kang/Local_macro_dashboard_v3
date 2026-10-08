@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -423,8 +424,27 @@ public class MacroService {
         entry.put("previous", previous);
         entry.put("delta", SeriesMath.difference(latest, previous));
         entry.put("asOf", series.isEmpty() ? null : series.lastKey().toString());
-        entry.put("percentile", SeriesMath.percentile(values));
+        putPercentile(entry, new ArrayList<>(series.keySet()), values);
         return entry;
+    }
+
+    /**
+     * 백분위와 그 표본 — 시작일·개수·기간(년).
+     *
+     * <p>시리즈마다 표본 길이가 다릅니다. ICE BofA 시리즈(BAMLC0A0CM·BAMLH0A0HYM2)는 FRED가 최근
+     * 3년만 제공하고, 나머지는 약 10년입니다. 백분위만 내려보내면 받는 쪽(화면·AI 입력)이 모두 같은
+     * 기준으로 읽어, IG 스프레드의 "3년 안의 중간"이 "역사적 중간"처럼 보였습니다.
+     */
+    private static void putPercentile(Map<String, Object> entry, List<LocalDate> dates, List<Double> values) {
+        entry.put("percentile", SeriesMath.percentile(values));
+        if (dates.isEmpty()) {
+            return;
+        }
+        LocalDate from = dates.get(0);
+        LocalDate to = dates.get(dates.size() - 1);
+        entry.put("percentileFrom", from.toString());
+        entry.put("percentileCount", values.size());
+        entry.put("percentileYears", Math.round(ChronoUnit.DAYS.between(from, to) / 365.25 * 10) / 10.0);
     }
 
     /**
@@ -500,7 +520,7 @@ public class MacroService {
             entry.put("prev", previous);
             entry.put("delta", SeriesMath.difference(value, previous));
             entry.put("asOf", dates.isEmpty() ? null : dates.get(dates.size() - 1).toString());
-            entry.put("percentile", SeriesMath.percentile(values));
+            putPercentile(entry, dates, values);
 
             AdvancedIndicators.Interpretation interpretation =
                     AdvancedIndicators.interpret(seriesId, value);

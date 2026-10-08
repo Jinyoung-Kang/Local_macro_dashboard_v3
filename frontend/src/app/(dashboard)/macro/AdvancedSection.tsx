@@ -15,10 +15,11 @@ import { SOURCES } from "@/lib/sources";
 import {
   EMPTY,
   formatNumber,
+  formatSampleWindow,
   formatSigned,
   statusColor,
 } from "@/lib/format";
-import type { AdvancedIndicators } from "@/lib/types";
+import type { AdvancedEntry, AdvancedIndicators } from "@/lib/types";
 import { endpoints } from "@/lib/endpoints";
 
 export function AdvancedSection({
@@ -85,6 +86,9 @@ export function AdvancedSection({
                   {entry.status && <span>상태: {entry.status}</span>}
                   {entry.percentile !== null && entry.percentile !== undefined && (
                     <span>표본 백분위 {formatNumber(entry.percentile, 1)}%</span>
+                  )}
+                  {entry.percentile !== null && entry.percentile !== undefined && (
+                    <SampleWindow entry={entry} />
                   )}
                   {entry.asOf && <span>기준일 {entry.asOf}</span>}
                 </span>
@@ -173,6 +177,15 @@ const ZERO_LINE_NOTES: Record<
       "금융상황지수가 0을 넘었습니다. 0이 장기 평균이므로, 지금은 평균보다 긴축적인 상태입니다.",
   },
 };
+
+/**
+ * 백분위의 표본 — 지표마다 길이가 다릅니다(IG 스프레드는 FRED가 최근 3년만 제공, 나머지는 약 10년).
+ * 표본을 함께 적지 않으면 "3년 안의 중간"이 "역사적 중간"처럼 읽혀, "과열" 판정과 어긋나 보였습니다.
+ */
+function SampleWindow({ entry }: { entry: AdvancedEntry }) {
+  const text = formatSampleWindow(entry.percentileFrom, entry.percentileCount, entry.percentileYears);
+  return text ? <span>표본 {text}</span> : null;
+}
 
 /** 최신값이 경고 방향으로 0선을 넘었는지. 값이 없으면 판정하지 않습니다. */
 function crossedZero(

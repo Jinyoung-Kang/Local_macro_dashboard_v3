@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  deltaColor, formatAge, formatBillionUsd, formatKrw, formatNumber, formatPercent, formatShares,
+  deltaColor, formatAge, formatBillionUsd, formatKrw, formatNumber, formatPercent, formatSampleWindow, formatShares,
   formatSigned, formatSignedKrw, formatTrillionDelta, formatTrillionUsd, formatUsd, formatUsdWithKrw,
 } from "@/lib/format";
 
@@ -81,5 +81,18 @@ describe("경과 시간", () => {
     expect(formatAge(7200)).toBe("2시간 전");
     expect(formatAge(172_800)).toBe("2일 전");
     expect(formatAge(-5)).toBe("0초 전");
+  });
+});
+
+describe("백분위 표본", () => {
+  it("시작일·개수·기간을 함께 적는다 — IG(3년)와 10년 지표를 구분해 읽게", () => {
+    expect(formatSampleWindow("2023-10-09", 784, 3.0)).toBe("2023-10-09 이후 784개 · 약 3.0년");
+    expect(formatSampleWindow("2016-10-07T00:00:00", 2560, 9.96)).toBe("2016-10-07 이후 2,560개 · 약 10.0년");
+  });
+
+  it("하나라도 모르면 null — 표본을 지어내지 않는다", () => {
+    expect(formatSampleWindow(null, 784, 3.0)).toBeNull();
+    expect(formatSampleWindow("2023-10-09", undefined, 3.0)).toBeNull();
+    expect(formatSampleWindow("2023-10-09", 784, Number.NaN)).toBeNull();
   });
 });

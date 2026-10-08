@@ -63,7 +63,7 @@ public final class AdvancedIndicators {
         map.put("BAMLC0A0CM", new Meta("BAMLC0A0CM", "투자등급(IG) 회사채 스프레드", "%", 2, "신용",
                 "신용 경색은 보통 IG에서 먼저 번집니다. 하이일드만 보면 초기 단계를 "
                         + "놓칩니다.",
-                "FRED BAMLC0A0CM (일간)"));
+                "FRED BAMLC0A0CM (일간 · ICE BofA 시리즈라 FRED는 최근 3년만 제공)"));
         map.put("NFCI", new Meta("NFCI", "시카고 연준 금융상황지수", "", 3, "금융상황",
                 "STLFSI4와 구성 지표가 다릅니다. 두 지수가 갈라지는 것 자체가 신호이며, "
                         + "0보다 크면 평균보다 긴축적입니다.",

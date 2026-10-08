@@ -348,6 +348,24 @@ export function formatDate(value: string | null | undefined): string {
 }
 
 /**
+ * 백분위의 표본 — "2023-10-09 이후 784개 · 약 3.0년".
+ *
+ * 표본 길이가 지표마다 다릅니다(IG·HY 스프레드는 FRED가 최근 3년만 제공, 나머지는 약 10년).
+ * 백분위 옆에 표본을 적지 않으면 "3년 안의 중간"이 "역사적 중간"처럼 읽힙니다.
+ * 셋 중 하나라도 없으면 null — 모르는 표본을 지어내지 않습니다.
+ */
+export function formatSampleWindow(
+  from: string | null | undefined,
+  count: number | null | undefined,
+  years: number | null | undefined,
+): string | null {
+  if (!from || missing(count) || missing(years)) {
+    return null;
+  }
+  return `${from.slice(0, 10)} 이후 ${count.toLocaleString("ko-KR")}개 · 약 ${years.toFixed(1)}년`;
+}
+
+/**
  * 백엔드가 내려주는 해석 색상을 Tailwind 클래스명으로.
  *
  * @param color `"green"` | `"blue"` | `"orange"` | `"red"`
