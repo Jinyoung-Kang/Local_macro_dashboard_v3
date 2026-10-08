@@ -76,6 +76,7 @@ class SnapshotTextMacroTest {
         result.put("available", true);
         result.put("isEstimated", false);
         result.put("latest", latest);
+        result.put("momentum", Map.of("change4w", 0.025440, "change12w", -0.161768));
         when(liquidity.netLiquidity(3)).thenReturn(result);
 
         String text = service(mock(MacroService.class), liquidity).fullText();
@@ -83,5 +84,7 @@ class SnapshotTextMacroTest {
         assertThat(text).contains("- 역레포(ON RRP): 23.4억 달러 (= 0.0023조 달러)");
         assertThat(text).contains("- 재무부 일반계정(TGA): 9,487억 달러 (= 0.9487조 달러)");
         assertThat(text).contains("- 계산 (조 달러, 각 값 반올림): 6.7430 − 0.9487 − 0.0023 = 5.7920");
+        assertThat(text).as("유동성 판단의 근거 — 예전에는 빠져 있어 AI가 '데이터 없음'으로 적음")
+                .contains("- 4주 변화: 254.4억 달러 · 12주 변화: -1,618억 달러");
     }
 }

@@ -322,6 +322,12 @@ public class SnapshotTextService {
                         net.doubleValue()));
             }
         }
+        // 4주·12주 변화는 날짜 기준(행 수 아님)으로 백엔드가 계산한 값입니다. 빠져 있어 AI가 "데이터 없음"으로
+        // 적었습니다 — 리포트 프롬프트가 유동성 판단의 근거로 요구하는 값입니다.
+        if (result.get("momentum") instanceof Map<?, ?> momentum) {
+            lines.add("- 4주 변화: " + formatUsdFromTrillions(momentum.get("change4w"))
+                    + " · 12주 변화: " + formatUsdFromTrillions(momentum.get("change12w")));
+        }
         lines.add("");
     }
 
