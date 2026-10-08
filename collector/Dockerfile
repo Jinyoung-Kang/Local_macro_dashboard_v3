@@ -18,6 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt \
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app
 
 COPY app ./app
+# 복사한 코드는 맥의 파일 권한을 그대로 따라옵니다. 맥에서 어떤 파일이 소유자만 읽기(600)가 되면 이미지 안에서
+# root 소유 600이 되고, 아래 USER app은 그 파일을 읽지 못해 수집기가 기동하자마자 PermissionError로 재시작을
+# 반복했습니다(2026-10-08, 빈 __init__.py 두 개). git은 600과 644를 구분하지 않아 CI 빌드에서는 드러나지 않습니다.
+# 누구나 읽기(디렉터리는 들어가기)만 허용하고, 쓰기 권한은 주지 않습니다.
+RUN chmod -R a+rX /app/app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
