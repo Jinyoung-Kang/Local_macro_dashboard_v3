@@ -1,5 +1,17 @@
 package com.macrodash.feature.ai;
 
+import com.anthropic.client.AnthropicClient;
+import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.errors.AnthropicIoException;
+import com.anthropic.errors.AnthropicServiceException;
+import com.anthropic.errors.NotFoundException;
+import com.anthropic.errors.PermissionDeniedException;
+import com.anthropic.errors.RateLimitException;
+import com.anthropic.errors.UnauthorizedException;
+import com.anthropic.models.messages.Message;
+import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.OutputConfig;
+import com.anthropic.models.messages.StopReason;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +39,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 🤖 AI 엔진 라우팅 (NVIDIA / Cerebras / Cloudflare).
+ * 🤖 AI 엔진 라우팅 (Anthropic Claude / NVIDIA / Cerebras / Cloudflare).
  *
  * <p>구버전 services/ai_service.py의 구조를 유지합니다.
  * <ul>
@@ -57,6 +69,8 @@ public class AiService {
     public static final List<Engine> ENGINES = List.of(
             new Engine("auto", "⚡ 자동 탐색 — 권장 (Failover)", "auto", null,
                     "사용 가능한 엔진을 우선순위대로 자동 호출합니다."),
+            new Engine("anthropic_haiku", "🟣 Anthropic — Claude Haiku 5.5", "anthropic",
+                    "claude-haiku-5-5", "빠른 장문 분석·한국어 리포트 (유료 — 리포트 1건 약 1센트 미만)"),
             new Engine("nvidia_nemotron", "🟢 NVIDIA — Nemotron-3 Super 120B", "nvidia",
                     "nvidia/nemotron-3-super-120b-a12b", "장문 투자 분석 및 구조화된 리포트"),
             new Engine("nvidia_gpt_oss_120b", "🟢 NVIDIA — OpenAI GPT-OSS 120B", "nvidia",
@@ -88,10 +102,14 @@ public class AiService {
      * <p>깊은 추론이 필요하면 화면에서 엔진을 직접 고르면 됩니다. 그때는 이 순서를
      * 타지 않고 고른 엔진만 부릅니다.
      *
+     * <p>Claude Haiku 5.5가 맨 앞입니다. 유료지만 리포트 한 건이 1센트 미만이고, 지시를 가장 잘 따라
+     * 한국어 리포트를 한 번에 씁니다(번역 단계가 필요 없음). 키가 없으면 "키 없음"으로 건너뜁니다.
+     *
      * <p>이 순서가 곧 응답 속도라, 같은 패키지의 테스트가 확인할 수 있도록
      * package-private입니다.
      */
     static final List<String> FAILOVER_ORDER = List.of(
+            "anthropic_haiku",
             "cerebras_llama", "cloudflare_llama", "nvidia_llama_33_70b",
             "nvidia_gpt_oss_20b", "nvidia_gpt_oss_120b", "nvidia_nemotron",
             "cloudflare_deepseek");
@@ -103,6 +121,7 @@ public class AiService {
      */
     private static final Map<String, String> SPEED_HINTS = Map.of(
             "auto", "빠름 — 빠른 엔진부터 시도합니다",
+            "anthropic_haiku", "빠름 (수 초~수십 초)",
             "cerebras_llama", "매우 빠름 (수 초)",
             "cloudflare_llama", "빠름 (수 초)",
             "nvidia_llama_33_70b", "보통 (십수 초)",
@@ -132,6 +151,13 @@ public class AiService {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
+     * Claude 응답 한도(토큰). Haiku 5.5는 사고(thinking)가 기본으로 켜져 있고 사고도 이 한도에 들어갑니다 —
+     * 다른 엔진처럼 4096으로 두면 사고만 하다 답을 못 쓰고 끝날 수 있습니다. 출력 단가가 100만 토큰당
+     * $0.50이라 한도까지 써도 0.8센트입니다.
+     */
+    static final long ANTHROPIC_MAX_TOKENS = 16_000L;
+
+    /**
      * 남은 예산이 이보다 적으면 다음 엔진을 부르지 않습니다(초).
      *
      * <p>5초를 남겨 두고 호출해 봐야 타임아웃만 한 번 더 겪습니다.
@@ -140,6 +166,19 @@ public class AiService {
 
     /** 대기 한도별 RestClient. 한도가 다르면 팩토리도 달라야 해서 나눠 둡니다. */
     private final Map<Integer, RestClient> clients = new ConcurrentHashMap<>();
+
+    /** 대기 한도별 Claude 클라이언트(공식 SDK). 키·주소는 기동 때 정해지므로 한도만 키로 씁니다. */
+    private final Map<Integer, AnthropicClient> anthropicClients = new ConcurrentHashMap<>();
+
+    /**
+     * Claude API 키. 단위 테스트에서는 주입이 없어 빈 문자열로 시작합니다(null이면 키 확인이 터집니다).
+     * 값은 로그·화면·오류 문구 어디에도 내보내지 않습니다.
+     */
+    @Value("${dashboard.ai.anthropic-api-key:}")
+    private String anthropicKey = "";
+
+    /** 테스트가 가짜 서버로 보낼 때만 씁니다. null이면 SDK 기본 주소(api.anthropic.com). */
+    String anthropicBaseUrl;
 
     @Value("${dashboard.ai.nvidia-api-key:}")
     private String nvidiaKey;
@@ -253,6 +292,7 @@ public class AiService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("engines", list);
         out.put("keys", Map.of(
+                "anthropic", !anthropicKey.isBlank(),
                 "nvidia", !nvidiaKey.isBlank(),
                 "cerebras", !cerebrasKey.isBlank(),
                 "cloudflare", !cloudflareAccountId.isBlank() && !cloudflareToken.isBlank()));
@@ -265,7 +305,7 @@ public class AiService {
     }
 
     public boolean anyKeyPresent() {
-        return !nvidiaKey.isBlank() || !cerebrasKey.isBlank()
+        return !anthropicKey.isBlank() || !nvidiaKey.isBlank() || !cerebrasKey.isBlank()
                 || (!cloudflareAccountId.isBlank() && !cloudflareToken.isBlank());
     }
 
@@ -273,7 +313,7 @@ public class AiService {
     public Map<String, Object> generate(String engineId, String prompt, String systemPrompt) {
         if (!anyKeyPresent()) {
             return failure("설정 없음",
-                    "AI 키가 하나도 설정되지 않았습니다. NVIDIA / Cerebras / Cloudflare 중 "
+                    "AI 키가 하나도 설정되지 않았습니다. Anthropic / NVIDIA / Cerebras / Cloudflare 중 "
                             + "하나 이상을 설정하세요.");
         }
 
@@ -368,6 +408,8 @@ public class AiService {
     private Map<String, Object> call(Engine engine, String prompt, String systemPrompt,
                                      int attemptSeconds) {
         return switch (engine.provider()) {
+            case "anthropic" -> callAnthropic(engine.label(), engine.model(),
+                    prompt, systemPrompt, attemptSeconds);
             case "nvidia" -> callOpenAiFormat(engine.label(), NVIDIA_URL, nvidiaKey,
                     engine.model(), prompt, systemPrompt, attemptSeconds);
             case "cerebras" -> callOpenAiFormat(engine.label(), CEREBRAS_URL, cerebrasKey,
@@ -546,6 +588,114 @@ public class AiService {
         return content;
     }
 
+    /**
+     * Claude 호출(공식 Java SDK).
+     *
+     * <p>Haiku 5.5에 맞춘 요청입니다 — {@code temperature}를 보내지 않고(기본값이 아니면 400),
+     * 사고는 기본(adaptive)으로 두며 effort를 명시합니다(이 모델의 기본은 medium이지만 바뀌어도
+     * 리포트 품질이 흔들리지 않게 적어 둡니다). 응답 앞에 사고 블록이 올 수 있어 <b>텍스트 블록만</b>
+     * 이어 붙입니다 — 첫 블록을 답으로 읽으면 빈 문자열이 됩니다.
+     *
+     * <p>SDK의 자동 재시도는 끕니다. 대기 한도는 이 서비스가 시도마다 정하고, 실패하면 자동 탐색이
+     * 다음 엔진으로 넘어가는 것이 재시도 정책입니다. SDK가 몰래 다시 보내면 "엔진당 N초"가 깨집니다.
+     */
+    Map<String, Object> callAnthropic(String label, String model, String prompt, String systemPrompt,
+                                      int attemptSeconds) {
+        if (anthropicKey == null || anthropicKey.isBlank()) {
+            return failure(label, label + " API Key 누락 — .env에 ANTHROPIC_API_KEY를 넣고 make up 하세요.");
+        }
+
+        MessageCreateParams.Builder params = MessageCreateParams.builder()
+                .model(model)
+                .maxTokens(ANTHROPIC_MAX_TOKENS)
+                .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.MEDIUM).build())
+                .addUserMessage(prompt);
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            params.system(systemPrompt);
+        }
+
+        long started = System.currentTimeMillis();
+        try {
+            Message message = anthropicClient(attemptSeconds).messages().create(params.build());
+            long elapsed = System.currentTimeMillis() - started;
+
+            StopReason stop = message.stopReason().orElse(null);
+            if (StopReason.REFUSAL.equals(stop)) {
+                // 안전 분류기가 거절한 경우(HTTP 200). Haiku 5.5에는 서버 쪽 대체 모델이 없어,
+                // 이유를 적고 자동 탐색이 다음 엔진으로 넘어가게 합니다.
+                String reason = message.stopDetails()
+                        .map(details -> details.category().map(String::valueOf).orElse("분류 없음")
+                                + details.explanation().map(text -> " — " + text).orElse(""))
+                        .orElse("사유 없음");
+                return failure(label, "Claude가 이 요청을 거절했습니다(refusal): " + reason, elapsed);
+            }
+
+            String text = textOf(message);
+            if (text.isBlank()) {
+                String why = StopReason.MAX_TOKENS.equals(stop)
+                        ? "출력 한도(%d 토큰)에 걸려 답을 쓰기 전에 끝났습니다".formatted(ANTHROPIC_MAX_TOKENS)
+                        : "응답 텍스트 추출 실패 (stop_reason=" + stop + ")";
+                return failure(label, why, elapsed);
+            }
+
+            Map<String, Object> out = success(label, model, text.trim(), elapsed);
+            Map<String, Object> usage = new LinkedHashMap<>();
+            usage.put("inputTokens", message.usage().inputTokens());
+            usage.put("outputTokens", message.usage().outputTokens());
+            out.put("usage", usage);
+            return out;
+        } catch (UnauthorizedException e) {
+            return anthropicFailure(label, started, "인증이 거절됐습니다(401). .env의 ANTHROPIC_API_KEY를 확인하세요.", e);
+        } catch (PermissionDeniedException e) {
+            return anthropicFailure(label, started, "권한이 없습니다(403). 키의 워크스페이스·모델 접근 권한을 확인하세요.", e);
+        } catch (NotFoundException e) {
+            return anthropicFailure(label, started, "모델을 찾지 못했습니다(404): " + model, e);
+        } catch (RateLimitException e) {
+            return anthropicFailure(label, started, "호출 한도에 걸렸습니다(429). 잠시 후 다시 시도하거나 다른 엔진을 고르세요.", e);
+        } catch (AnthropicServiceException e) {
+            String type = e.errorType().map(String::valueOf).orElse("알 수 없음");
+            String hint = e.statusCode() == 402
+                    ? " — 크레딧이 부족합니다. platform.claude.com의 Billing을 확인하세요."
+                    : e.statusCode() == 529 ? " — Anthropic 서버가 과부하입니다. 잠시 후 다시 시도하세요." : "";
+            return anthropicFailure(label, started, "HTTP %d (%s)%s".formatted(e.statusCode(), type, hint), e);
+        } catch (AnthropicIoException e) {
+            return anthropicFailure(label, started, describe(e, attemptSeconds), e);
+        } catch (RuntimeException e) {
+            return anthropicFailure(label, started, describe(e, attemptSeconds), e);
+        }
+    }
+
+    private Map<String, Object> anthropicFailure(String label, long started, String message, Exception e) {
+        long elapsed = System.currentTimeMillis() - started;
+        // 예외 문구에는 키가 들어가지 않지만, 요청 주소는 지웁니다(describe와 같은 규칙).
+        log.warn("Claude 호출 실패 ({}): {}", label, String.valueOf(e.getMessage()).replaceAll("https?://\\S+", "<url>"));
+        return failure(label, message, elapsed);
+    }
+
+    /** 응답의 텍스트 블록만 순서대로 이어 붙입니다(사고 블록은 건너뜀). */
+    private static String textOf(Message message) {
+        StringBuilder text = new StringBuilder();
+        message.content().forEach(block -> block.text().ifPresent(t -> text.append(t.text())));
+        return text.toString();
+    }
+
+    /**
+     * 대기 한도별 Claude 클라이언트. 키는 생성자에 명시해 넘깁니다 — 넘기지 않으면 SDK가 환경 변수·
+     * 로컬 프로필에서 자격 증명을 찾아, 설정하지 않은 키로 조용히 호출할 수 있습니다.
+     */
+    private AnthropicClient anthropicClient(int seconds) {
+        return anthropicClients.computeIfAbsent(seconds, limit -> {
+            AnthropicOkHttpClient.Builder builder = AnthropicOkHttpClient.builder()
+                    .apiKey(anthropicKey)
+                    .timeout(Duration.ofSeconds(limit))
+                    .maxRetries(0);
+            if (anthropicBaseUrl != null) {
+                builder.baseUrl(anthropicBaseUrl);
+            }
+            return builder.build();
+        });
+    }
+
     private Map<String, Object> callCloudflare(String label, String model,
                                                String prompt, String systemPrompt,
                                                int attemptSeconds) {
@@ -602,6 +752,8 @@ public class AiService {
         }
 
         Map<String, Object> translated = switch (provider) {
+            case "anthropic" -> callAnthropic("Claude 번역기", "claude-haiku-5-5",
+                    text, TRANSLATION_PROMPT, attemptSeconds);
             case "nvidia" -> callOpenAiFormat("NVIDIA 번역기", NVIDIA_URL, nvidiaKey,
                     TRANSLATORS.get("nvidia"), text, TRANSLATION_PROMPT, attemptSeconds);
             default -> callCloudflare("Cloudflare 번역기", TRANSLATORS.get("cloudflare"),
@@ -640,6 +792,7 @@ public class AiService {
 
     private boolean hasKey(String provider) {
         return switch (provider) {
+            case "anthropic" -> !anthropicKey.isBlank();
             case "nvidia" -> !nvidiaKey.isBlank();
             case "cerebras" -> !cerebrasKey.isBlank();
             case "cloudflare" -> !cloudflareAccountId.isBlank() && !cloudflareToken.isBlank();

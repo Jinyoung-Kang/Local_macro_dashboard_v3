@@ -60,6 +60,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Claude API (AI 리포트 엔진 Claude Haiku 5.5). 공식 SDK — 오류 종류·재시도·거절 응답을 타입으로 받습니다. -->
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>2.70.0</version>
+        </dependency>
+
         <!-- Spring Boot 4는 테스트 지원도 기능별 모듈로 나뉩니다: MockMvc·웹 테스트, TestRestTemplate -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

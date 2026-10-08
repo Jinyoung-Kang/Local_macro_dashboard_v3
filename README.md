@@ -117,7 +117,7 @@ make down            # 정지
 | 🧭 시장 국면 판정 | `/regime` | 성장·신용 축 × 유동성 축으로 4국면 + 근거 지표 |
 | 🔗 지표 상관관계 | `/correlation` | 지표 20종 중 둘을 골라 롤링 상관계수·산점도 |
 | 🗄️ 데이터 저장소 상태 | `/status` | 태스크별 수집 결과·실패 사유·수동 재실행, **오류·경고 로그 모음(한 번에 복사, 비밀값 가림)**, **국내 공공 API 연결 진단** |
-| 🤖 AI 종합 데이터 분석 | `/ai/report` | 수집 원본을 AI에 넘겨 리포트 생성 (7개 엔진 폴백) |
+| 🤖 AI 종합 데이터 분석 | `/ai/report` | 수집 원본을 AI에 넘겨 리포트 생성 (8개 엔진 폴백 — Claude Haiku 5.5부터, 키가 없는 엔진은 건너뜀) |
 | 🔌 외부 API 연결 테스트 | `/connections` | AI 엔진별 호출·지연시간, 토스증권 연결 진단·조회 (버튼을 눌렀을 때만 외부 호출) |
 
 > `/guru`·`/ai/test`·`/toss`로 들어와도 해당 메뉴(`/style`·`/connections`)로 자동 이동합니다(`next.config.mjs`의 redirects).
@@ -379,6 +379,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 |---|---|---|
 | Frontend | TypeScript · React 18 · Next.js 15 · Tailwind · Recharts | 15개 메뉴가 서로 다른 표·차트를 쓰므로 컴포넌트 재사용이 크게 이득 |
 | Backend | Java 21 · Spring Boot 4.1 | 모든 계산을 한 계층에 모아 타입과 테스트로 고정 |
+| AI | Claude API (Haiku 5.5, 공식 Java SDK) · NVIDIA · Cerebras · Cloudflare | 수집 원본으로 리포트 생성. 엔진이 실패하면 다음 엔진으로 자동 전환 |
 | Store | PostgreSQL 16 | 수집기와 API가 다른 프로세스라 파일 공유 불가. JSONB로 저장해 SQL로 질의 |
 | Collector | Python 3.11 · FastAPI · pandas · yfinance · pykrx | 금융 데이터 수집·파싱 라이브러리 생태계 |
 | DevOps | Docker Compose · GitHub Actions | 네 프로세스를 한 명령으로, 세 언어 테스트를 매 푸시마다 |

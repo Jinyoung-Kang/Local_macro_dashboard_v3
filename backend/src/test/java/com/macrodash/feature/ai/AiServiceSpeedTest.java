@@ -29,10 +29,13 @@ class AiServiceSpeedTest {
             "nvidia_nemotron", "nvidia_gpt_oss_120b", "cloudflare_deepseek");
 
     @Test
-    @DisplayName("자동 탐색은 빠른 엔진부터 부른다")
+    @DisplayName("자동 탐색은 Claude Haiku 5.5, 그다음 빠른 무료 엔진부터 부른다")
     void failoverTriesFastEnginesFirst() {
-        assertThat(AiService.FAILOVER_ORDER.get(0))
-                .as("첫 시도는 가장 빠른 엔진이어야 합니다")
+        // Claude가 맨 앞인 것은 사용자의 결정입니다(유료지만 리포트 1건 1센트 미만, 번역 단계 없음).
+        // 키가 없으면 '키 없음'으로 건너뛰므로, 그때의 첫 시도는 여전히 가장 빠른 무료 엔진입니다.
+        assertThat(AiService.FAILOVER_ORDER.get(0)).isEqualTo("anthropic_haiku");
+        assertThat(AiService.FAILOVER_ORDER.get(1))
+                .as("Claude 다음 첫 시도는 가장 빠른 무료 엔진이어야 합니다")
                 .isEqualTo("cerebras_llama");
 
         int firstReasoning = AiService.FAILOVER_ORDER.stream()

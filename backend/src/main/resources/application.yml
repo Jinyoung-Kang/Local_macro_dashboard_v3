@@ -54,6 +54,8 @@ dashboard:
   frontend-port: ${FRONTEND_PORT:3000}
 
   ai:
+    # Claude API (Haiku 5.5) — platform.claude.com에서 발급. 자동 탐색의 첫 엔진입니다.
+    anthropic-api-key: ${ANTHROPIC_API_KEY:}
     nvidia-api-key: ${NVIDIA_API_KEY:}
     cerebras-api-key: ${CEREBRAS_API_KEY:}
     cloudflare-account-id: ${CLOUDFLARE_ACCOUNT_ID:}

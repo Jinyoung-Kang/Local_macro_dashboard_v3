@@ -56,7 +56,7 @@ export default function AiReportPage() {
 
       {engines.data && !engines.data.enabled && (
         <Banner tone="warn">
-          AI 키가 하나도 설정되지 않았습니다. NVIDIA / Cerebras / Cloudflare 중 하나 이상을
+          AI 키가 하나도 설정되지 않았습니다. Anthropic(Claude) / NVIDIA / Cerebras / Cloudflare 중 하나 이상을
           설정하면 이 메뉴가 활성화됩니다.
         </Banner>
       )}
@@ -119,7 +119,7 @@ export default function AiReportPage() {
           </Button>
           {engines.data && !engines.data.enabled && (
             <span className="text-xs text-muted">
-              사용할 수 있는 AI 엔진이 없습니다 — .env에 NVIDIA·Cloudflare·Cerebras 키 중 하나를 넣고 make up 하세요.
+              사용할 수 있는 AI 엔진이 없습니다 — .env에 ANTHROPIC·NVIDIA·Cloudflare·Cerebras 키 중 하나를 넣고 make up 하세요.
             </span>
           )}
           <Button onClick={() => setShowData((value) => !value)}>
