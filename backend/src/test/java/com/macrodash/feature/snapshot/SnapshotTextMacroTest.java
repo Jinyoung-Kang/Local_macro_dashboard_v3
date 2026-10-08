@@ -37,7 +37,6 @@ class SnapshotTextMacroTest {
     }
 
     @Test
-    @Disabled("수정 전 — 머리말이 미국채 금리를 FRED 확정치로 적습니다")
     @DisplayName("미국채 금리 카드는 TradingView 참고 시세다 — 머리말이 'FRED 확정치'라고 적으면 안 된다")
     void treasuryYieldsAreNotLabeledAsFredOfficial() throws Exception {
         MacroService macro = mock(MacroService.class);

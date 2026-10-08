@@ -139,9 +139,12 @@ public class SnapshotTextService {
 
     private void appendMacro(List<String> lines) {
         Map<String, Object> overview = macro.overview();
+        // 금리 카드도 TradingView 참고 시세입니다. 예전 머리말은 "미국채 금리는 FRED 일별 확정치"라고 적어
+        // AI가 참고 시세를 공식 확정치로 읽었습니다(화면 카드는 "TradingView 참고"로 바르게 표시).
+        // FRED 확정치는 아래 "공식 일별 10Y-2Y" 줄과 "심화 매크로 지표" 구간에만 있습니다.
         sectionHeader(lines, "거시경제 매크로 지표",
-                "[실시간 참고] 환율·지수·원자재는 공개 시세 스크래핑 · "
-                        + "[공식 확정치] 미국채 금리는 FRED 일별 확정치",
+                "[실시간 참고] 환율·지수·원자재·미국채 금리는 Yahoo·TradingView 공개 시세 스크래핑"
+                        + "(미국채 금리는 TradingView 참고 시세) · [공식 확정치] FRED 값은 '공식 일별' 줄과 심화 지표 구간",
                 overview.get("collectedAtKst"));
 
         if (!Boolean.TRUE.equals(overview.get("available"))) {
@@ -184,13 +187,13 @@ public class SnapshotTextService {
                 String shortYears = bondYears(rt.get("shortKey"), "2");
                 lines.add("- 미국채 " + longYears + "년물: " + format(rt.get("longValue"), "%"));
                 lines.add("- 미국채 " + shortYears + "년물: " + format(rt.get("shortValue"), "%"));
-                lines.add("- " + longYears + "Y-" + shortYears + "Y 스프레드: "
+                lines.add("- " + longYears + "Y-" + shortYears + "Y 스프레드 (TradingView 참고 시세로 계산): "
                         + format(rt.get("spread"), "%p"));
                 lines.add("- 스프레드 직전 대비: " + format(rt.get("delta"), "%p"));
             }
             Object official = map.get("official10y2y");
             if (official instanceof Map<?, ?> off) {
-                lines.add("- 공식 일별 10Y-2Y (FRED): " + format(off.get("latest"), "%p"));
+                lines.add("- 공식 일별 10Y-2Y (FRED 확정치, 하루 지연): " + format(off.get("latest"), "%p"));
             }
         }
         lines.add("");
