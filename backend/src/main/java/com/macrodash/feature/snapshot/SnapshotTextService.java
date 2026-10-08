@@ -308,8 +308,19 @@ public class SnapshotTextService {
             lines.add("- 순유동성: " + formatUsdFromTrillions(map.get("netLiquidityT")));
             lines.add("- 직전 대비: " + formatUsdFromTrillions(map.get("deltaT")));
             lines.add("- 연준 총자산(WALCL): " + formatUsdFromTrillions(map.get("walclT")));
-            lines.add("- 재무부 일반계정(TGA): " + formatUsdFromBillions(map.get("tgaB")));
-            lines.add("- 역레포(ON RRP): " + formatUsdFromBillions(map.get("rrpB")));
+            // TGA·RRP는 억 단위로 읽히지만, 순유동성과 맞춰 보려면 조로 옮겨야 합니다. AI가 이 환산을 틀려
+            // ("역레포 23.4억 달러" → 0.0234조) 맞는 순유동성을 "계산 불일치"로 보고했습니다. 같은 단위의 값과
+            // 계산식을 함께 적어, 다시 계산해도 같은 답이 나오게 합니다.
+            lines.add("- 재무부 일반계정(TGA): " + formatUsdFromBillions(map.get("tgaB"))
+                    + inTrillions(map.get("tgaB")));
+            lines.add("- 역레포(ON RRP): " + formatUsdFromBillions(map.get("rrpB"))
+                    + inTrillions(map.get("rrpB")));
+            if (map.get("walclT") instanceof Number walcl && map.get("tgaB") instanceof Number tga
+                    && map.get("rrpB") instanceof Number rrp && map.get("netLiquidityT") instanceof Number net) {
+                lines.add("- 계산 (조 달러, 각 값 반올림): %.4f − %.4f − %.4f = %.4f".formatted(
+                        walcl.doubleValue(), tga.doubleValue() / 1000.0, rrp.doubleValue() / 1000.0,
+                        net.doubleValue()));
+            }
         }
         lines.add("");
     }
@@ -611,6 +622,12 @@ public class SnapshotTextService {
     private String formatUsdFromBillions(Object value) {
         return value instanceof Number number
                 ? koreanScale(number.doubleValue() * 1e9, "달러") : "데이터 없음";
+    }
+
+    /** 십억 달러 값을 " (= 0.0023조 달러)"처럼 조 단위로 덧붙입니다. 모르면 빈 문자열. */
+    private static String inTrillions(Object billions) {
+        return billions instanceof Number number
+                ? " (= %.4f조 달러)".formatted(number.doubleValue() / 1000.0) : "";
     }
 
     /** 조(1e12)·억(1e8) 표기. 화면의 formatUsd/formatKrw와 같은 규칙입니다. */

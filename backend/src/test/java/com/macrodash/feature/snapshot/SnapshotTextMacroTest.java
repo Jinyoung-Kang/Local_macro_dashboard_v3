@@ -8,7 +8,6 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -63,7 +62,6 @@ class SnapshotTextMacroTest {
     }
 
     @Test
-    @Disabled("수정 전 — 구성 항목이 조·억으로 섞여 있습니다")
     @DisplayName("순유동성 구성 항목을 같은 단위(조 달러)로 함께 적어, 다시 계산해도 맞게 한다")
     void liquidityComponentsShareOneUnit() {
         LiquidityService liquidity = mock(LiquidityService.class);
