@@ -8,6 +8,7 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -86,5 +87,29 @@ class SnapshotTextMacroTest {
         assertThat(text).contains("- 계산 (조 달러, 각 값 반올림): 6.7430 − 0.9487 − 0.0023 = 5.7920");
         assertThat(text).as("유동성 판단의 근거 — 예전에는 빠져 있어 AI가 '데이터 없음'으로 적음")
                 .contains("- 4주 변화: 254.4억 달러 · 12주 변화: -1,618억 달러");
+    }
+
+    @Test
+    @Disabled("재현 — 수정 전: 백분위만 적고 표본 기간이 없어 AI가 3년 백분위를 10년 기준처럼 읽음")
+    @DisplayName("심화 지표의 표본 백분위에 표본 기간을 붙인다 — IG는 3년, 다른 지표는 약 10년")
+    void advancedPercentileStatesItsWindow() {
+        MacroService macro = mock(MacroService.class);
+        Map<String, Object> ig = new LinkedHashMap<>();
+        ig.put("id", "BAMLC0A0CM");
+        ig.put("label", "투자등급(IG) 회사채 스프레드");
+        ig.put("unit", "%");
+        ig.put("available", true);
+        ig.put("value", 0.8);
+        ig.put("status", "과열");
+        ig.put("percentile", 46.7);
+        ig.put("percentileFrom", "2023-10-09");
+        ig.put("percentileCount", 784);
+        ig.put("percentileYears", 3.0);
+        ig.put("asOf", "2026-10-07");
+        when(macro.advancedIndicators()).thenReturn(Map.of("latest", Map.of("BAMLC0A0CM", ig)));
+
+        String text = service(macro, mock(LiquidityService.class)).fullText();
+
+        assertThat(text).contains("| 표본 백분위 46.7% (2023-10-09 이후 784개, 약 3.0년)");
     }
 }
