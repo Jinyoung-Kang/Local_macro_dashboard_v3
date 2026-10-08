@@ -200,3 +200,24 @@ export function sectionKind(name: string | null): "summary" | "reliability" | "n
   if (/신뢰도|데이터 (상태|점검|한계)|reliability/i.test(name)) return "reliability";
   return "normal";
 }
+
+/**
+ * 표 칸이 숫자 값인지 — 부호·통화 기호·쉼표·소수와 단위(%, %p, 조 달러, 억 원, 계약, 곳 …), 끝의 괄호 설명,
+ * 앞의 방향 기호(🟢🔴⚪)를 허용합니다. 화면이 숫자 열을 오른쪽 정렬하는 데 씁니다.
+ */
+const NUMERIC_CELL =
+  /^[🟢🔴⚪\s]*[+\-−±]?[$₩]?\d[\d,]*(\.\d+)?(\s*(%p|%|조|억|만|달러|원|계약|곳|배|bp|pt|건|개))*(\s*[(（][^)）]*[)）])?\s*$/u;
+
+export function isNumericCell(cell: string): boolean {
+  return NUMERIC_CELL.test(cell.replace(/\*\*/g, "").trim());
+}
+
+/** 표에서 숫자 열(첫 열 제외, 비어 있지 않은 칸이 모두 숫자)인지 열마다 판정합니다. */
+export function numericColumns(header: string[], rows: string[][]): boolean[] {
+  return header.map(
+    (_, column) =>
+      column > 0 &&
+      rows.some((row) => row[column]?.trim()) &&
+      rows.every((row) => !row[column]?.trim() || isNumericCell(row[column])),
+  );
+}

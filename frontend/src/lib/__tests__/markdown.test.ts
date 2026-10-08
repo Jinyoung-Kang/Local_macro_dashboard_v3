@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseInline, parseMarkdown, sectionKind, sectionName, splitRow, splitSections } from "../markdown";
+import {
+  isNumericCell, numericColumns, parseInline, parseMarkdown, sectionKind, sectionName, splitRow, splitSections,
+} from "../markdown";
 
 const REPORT = `## 1. 핵심 요약
 - **[금리]** 실질금리가 높습니다 (2.91%)
@@ -101,5 +103,22 @@ describe("절 이름과 종류", () => {
     expect(sectionKind("데이터 신뢰도")).toBe("reliability");
     expect(sectionKind("시나리오")).toBe("normal");
     expect(splitRow("| a | b |")).toEqual(["a", "b"]);
+  });
+});
+
+describe("숫자 열 판정", () => {
+  it("두 단어 단위·부호·괄호 설명·방향 기호가 붙은 값도 숫자로 본다", () => {
+    for (const cell of ["5.792조 달러", "-19.2억 달러", "+0.042%p", "1,339.98", "🔴 -2.83%", "-8,384계약", "**3.03**", "2.91% (10-06)"]) {
+      expect(isNumericCell(cell), cell).toBe(true);
+    }
+    for (const cell of ["전 섹터 상위", "데이터 없음", "102.34 / 1,339.98", "🟢 정상", "10-07"]) {
+      expect(isNumericCell(cell), cell).toBe(false);
+    }
+  });
+
+  it("첫 열은 제외하고, 빈 칸은 무시하고, 한 칸이라도 글이면 그 열은 왼쪽", () => {
+    expect(numericColumns(["지표", "값", "의미"], [["A", "5.792조 달러", "설명"], ["B", "", "설명"], ["C", "-0.09", "설명"]]))
+      .toEqual([false, true, false]);
+    expect(numericColumns(["지표", "값"], [["A", "1.0"], ["B", "데이터 없음"]])).toEqual([false, false]);
   });
 });

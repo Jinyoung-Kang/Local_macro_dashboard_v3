@@ -1,7 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { type Block, parseInline, parseMarkdown, sectionKind, type Section, splitSections } from "@/lib/markdown";
+import {
+  type Block,
+  numericColumns,
+  parseInline,
+  parseMarkdown,
+  sectionKind,
+  type Section,
+  splitSections,
+} from "@/lib/markdown";
 
 /**
  * AI 리포트 본문 — Markdown을 절 단위 카드로 그립니다.
@@ -96,17 +104,9 @@ function BlockView({ block, emphasize }: { block: Block; emphasize: boolean }) {
   }
 }
 
-/** 숫자처럼 보이는 칸 — 부호·쉼표·소수·단위(%, %p, 조, 억, 달러, 원, 계약, 곳, 배)만 있는 경우. */
-const NUMERIC = /^[🟢🔴⚪\s]*[+\-−±]?[$₩]?[\d,]+(\.\d+)?\s*(%p?|조|억|만|달러|원|계약|곳|배|bp|pt)?(\s*[(（][^)）]*[)）])?\s*$/u;
-
 function ReportTable({ header, rows }: { header: string[]; rows: string[][] }) {
   // 비어 있지 않은 칸이 모두 숫자인 열만 오른쪽 정렬합니다(첫 열은 항목 이름이라 제외).
-  const numeric = header.map(
-    (_, column) =>
-      column > 0 &&
-      rows.some((row) => row[column]?.trim()) &&
-      rows.every((row) => !row[column]?.trim() || NUMERIC.test(row[column].replace(/\*\*/g, ""))),
-  );
+  const numeric = numericColumns(header, rows);
   return (
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="리포트 표 (좌우 스크롤)">
       <table className="w-full min-w-[520px] border-collapse text-[13px]">
