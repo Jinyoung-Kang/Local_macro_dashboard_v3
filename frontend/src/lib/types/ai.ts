@@ -47,4 +47,6 @@ export interface AiResponse {
   translationInfo?: string;
   originalResponse?: string;
   reportType?: string;
+  /** 사용 토큰 수 — 지금은 Claude 엔진만 내려보냅니다. */
+  usage?: { inputTokens: number; outputTokens: number };
 }

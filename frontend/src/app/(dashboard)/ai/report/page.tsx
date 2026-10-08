@@ -11,6 +11,7 @@ import { formatKst } from "@/lib/format";
 import type { AiEngines, AiResponse, SnapshotText } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
+import { ReportView } from "./ReportView";
 
 /**
  * 🤖 AI 종합 데이터 분석 &amp; 결론 리포트.
@@ -28,6 +29,7 @@ export default function AiReportPage() {
   const [reportType, setReportType] = useState("");
   const [extra, setExtra] = useState("");
   const [showData, setShowData] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
   const report = useAsyncAction(
     (body: { engineId: string; reportType: string | undefined; extraInstruction: string }) =>
       apiPost<AiResponse>(endpoints.ai.report, body),
@@ -160,14 +162,26 @@ export default function AiReportPage() {
           source={`${result.provider ?? "AI"}가 대시보드 저장본을 읽고 쓴 해석 — 수치의 원래 출처는 입력 원본에 표기 · 투자 판단 근거 아님`}
           subtitle={
             result.status
-              ? `${result.provider} · ${formatLatency(result.latencyMs)}${
-                  result.translationInfo ? ` · ${result.translationInfo}` : ""
-                }`
+              ? [
+                  result.provider,
+                  formatLatency(result.latencyMs),
+                  result.usage
+                    ? `토큰 입력 ${result.usage.inputTokens.toLocaleString("ko-KR")} · 출력 ${result.usage.outputTokens.toLocaleString("ko-KR")}`
+                    : null,
+                  result.translationInfo ?? null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
               : undefined
           }
           actions={
             <span className="flex flex-wrap items-center gap-2">
               {result.model && <SourceBadge>{result.model}</SourceBadge>}
+              {result.status && (
+                <Button onClick={() => setShowRaw((value) => !value)}>
+                  {showRaw ? "정리된 보기" : "원문(Markdown) 보기"}
+                </Button>
+              )}
               {result.status && (
                 <CopyButton
                   text={result.response}
@@ -200,9 +214,16 @@ export default function AiReportPage() {
                   폴오버 경로: {result.failoverPath.join(" → ")}
                 </p>
               )}
-              <article className="whitespace-pre-wrap text-sm leading-relaxed text-body">
-                {result.response}
-              </article>
+              {showRaw ? (
+                <pre
+                  tabIndex={0}
+                  className="max-h-[640px] overflow-auto whitespace-pre-wrap rounded border border-border bg-canvas p-3 text-[12px] leading-relaxed text-body"
+                >
+                  {result.response}
+                </pre>
+              ) : (
+                <ReportView markdown={result.response ?? ""} />
+              )}
             </>
           )}
         </Card>
