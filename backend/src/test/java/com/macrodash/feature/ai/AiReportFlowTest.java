@@ -45,8 +45,9 @@ class AiReportFlowTest {
         Map<String, Object> out = controller().report(
                 new AiController.ReportRequest("cerebras_llama", "리스크 점검", "짧게"));
 
-        String expectedPrompt = "아래는 대시보드가 수집한 최신 원본 데이터입니다.\n\nDATA"
-                + "\n\n요청: 리스크 점검을(를) 작성하십시오.\n추가 지시: 짧게";
+        String expectedPrompt = "아래는 대시보드가 수집한 최신 원본 데이터입니다.\n\n<data>\nDATA\n</data>"
+                + "\n\n요청: 리스크 점검을(를) 작성하십시오. 시스템 지시의 [절 구성]과 [형식]을 따르십시오."
+                + "\n추가 지시: 짧게";
         verify(ai).generate("cerebras_llama", expectedPrompt, "SYSTEM-B");
         assertThat(out).containsEntry("text", "결과").containsEntry("engine", "cerebras_llama")
                 .containsEntry("reportType", "리스크 점검")
@@ -60,7 +61,8 @@ class AiReportFlowTest {
 
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
         verify(ai).generate(eq("auto"), prompt.capture(), eq("SYSTEM-A"));
-        assertThat(prompt.getValue()).endsWith("요청: 종합 매크로 브리핑을(를) 작성하십시오.");
+        assertThat(prompt.getValue()).endsWith(
+                "요청: 종합 매크로 브리핑을(를) 작성하십시오. 시스템 지시의 [절 구성]과 [형식]을 따르십시오.");
         assertThat(out).containsEntry("reportType", "종합 매크로 브리핑");
     }
 

@@ -80,7 +80,9 @@ public class AiController {
                                     @RequestParam(required = false) String prompt) {
         requireShort(prompt, "테스트 프롬프트");
         String text = (prompt == null || prompt.isBlank())
-                ? "한국어로 한 문장만 답하십시오: 지금 연결이 정상인지 알려 주세요."
+                // "연결이 정상인지 알려 달라"고 물으면 모델은 "네트워크 상태를 확인할 수 없다"고 답했습니다.
+                // 응답이 왔다는 것 자체가 확인이므로, 정해진 짧은 문장을 요청합니다.
+                ? "연결 확인용 요청입니다. '연결 정상입니다.'라고 한 문장으로만 답하십시오."
                 : prompt;
         return ai.generate(engineId, text, "간결하게 한국어로 답하십시오.");
     }

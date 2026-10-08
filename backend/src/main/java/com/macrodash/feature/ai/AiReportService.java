@@ -52,10 +52,12 @@ public class AiReportService {
         String systemPrompt = prompts.get(reportType);
         String data = snapshotText.fullText();
 
+        // 데이터를 태그로 감싸 지시와 섞이지 않게 하고, 요청은 긴 데이터 뒤(끝)에 둡니다.
         StringBuilder prompt = new StringBuilder();
-        prompt.append("아래는 대시보드가 수집한 최신 원본 데이터입니다.\n\n");
+        prompt.append("아래는 대시보드가 수집한 최신 원본 데이터입니다.\n\n<data>\n");
         prompt.append(data);
-        prompt.append("\n\n요청: ").append(reportType).append("을(를) 작성하십시오.");
+        prompt.append("\n</data>\n\n요청: ").append(reportType)
+                .append("을(를) 작성하십시오. 시스템 지시의 [절 구성]과 [형식]을 따르십시오.");
         if (extraInstruction != null && !extraInstruction.isBlank()) {
             prompt.append("\n추가 지시: ").append(extraInstruction);
         }
