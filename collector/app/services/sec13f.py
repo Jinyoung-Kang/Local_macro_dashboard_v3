@@ -14,6 +14,7 @@ SEC EDGAR 13F-HR 공시 수집.
 from __future__ import annotations
 
 import logging
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
@@ -143,6 +144,8 @@ def _collect_one_filing(session, filing_date: str, doc_url: str) -> dict | None:
     xml_url = _find_information_table_url(res.text)
     if not xml_url:
         return None
+    # 보고 분기는 공시 색인의 'Period of Report'가 정답입니다. 없을 때만 제출일로 추정합니다.
+    report_date = _parse_period_of_report(res.text) or _estimate_report_date(filing_date)
 
     try:
         sec_rate_limit()
@@ -171,7 +174,7 @@ def _collect_one_filing(session, filing_date: str, doc_url: str) -> dict | None:
 
     return {
         "filingDate": filing_date,
-        "reportDate": _estimate_report_date(filing_date),
+        "reportDate": report_date,
         "totalValue": total,
         "holdings": holdings,
     }
@@ -273,23 +276,39 @@ def _parse_information_table(content: bytes, filing_date: str) -> list[dict]:
     return list(merged.values())
 
 
+_PERIOD_OF_REPORT = re.compile(
+    r'infoHead">\s*Period of Report\s*</div>\s*<div class="info">\s*(\d{4}-\d{2}-\d{2})',
+    re.IGNORECASE,
+)
+
+
+def _parse_period_of_report(index_html: str) -> str | None:
+    """EDGAR 공시 색인 페이지의 'Period of Report'(보고 분기말). 없으면 None."""
+    match = _PERIOD_OF_REPORT.search(index_html or "")
+    return match.group(1) if match else None
+
+
 def _estimate_report_date(filing_date: str) -> str:
-    """제출일에서 가장 가까운 직전 분기말을 추정합니다."""
+    """
+    제출일 **전에 끝난** 가장 최근 분기말 — 색인에 보고 기간이 없을 때만 씁니다.
+
+    예전에는 제출 월로 골라 3·6·9·12월에 낸 공시가 아직 끝나지 않은 분기로 붙었습니다
+    (12월 2일 제출 → 같은 해 12-31, QA-014). 13F는 분기가 끝난 뒤에 내므로, 제출일 이전의
+    분기말이 언제나 가능한 답입니다(마감 45일 안에 낸 공시라면 정답).
+    """
     try:
         filed = datetime.strptime(filing_date, "%Y-%m-%d")
     except ValueError:
         return filing_date
 
     year, month = filed.year, filed.month
-    if month <= 2:
+    if month <= 3:
         return f"{year - 1}-12-31"
-    if month <= 5:
+    if month <= 6:
         return f"{year}-03-31"
-    if month <= 8:
+    if month <= 9:
         return f"{year}-06-30"
-    if month <= 11:
-        return f"{year}-09-30"
-    return f"{year}-12-31"
+    return f"{year}-09-30"
 
 
 def _to_float(text: str) -> float:

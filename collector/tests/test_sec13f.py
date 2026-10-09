@@ -7,8 +7,6 @@ SEC EDGAR 13F 목록·문서 파싱.
 """
 from __future__ import annotations
 
-import pytest
-
 from app.services import sec13f
 
 
@@ -94,12 +92,10 @@ _INDEX_HTML = (
 )
 
 
-@pytest.mark.xfail(strict=True, reason="QA-014 재현 — 수정 전: 공시 색인의 Period of Report를 읽지 않음")
 def test_QA014_보고_분기는_공시_색인의_Period_of_Report를_쓴다():
     assert sec13f._parse_period_of_report(_INDEX_HTML) == "2026-09-30"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-014 재현 — 수정 전: 12월 제출을 12-31로 추정")
 def test_QA014_추정은_제출일_전에_끝난_가장_최근_분기말이다():
     assert sec13f._estimate_report_date("2026-12-02") == "2026-09-30"
     assert sec13f._estimate_report_date("2026-03-20") == "2025-12-31"
