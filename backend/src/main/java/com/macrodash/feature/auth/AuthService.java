@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -75,12 +76,28 @@ public class AuthService {
     }
 
     // ------------------------------------------------------------------ 운영자 계정 만들기
+    /** 계정이 하나라도 있음을 확인했는가 — 확인한 뒤에는 정기 재시도를 하지 않습니다. */
+    private volatile boolean ownerChecked;
+
     @EventListener(ApplicationReadyEvent.class)
     public void bootstrapOnStartup() {
+        retryOwner();
+    }
+
+    /**
+     * 기동 때 계정 테이블이 아직 없었으면(백엔드가 스키마 적용보다 먼저 뜬 경우) 1분마다 다시 확인합니다.
+     * 첫 로그인 때도 확인하므로 로그인은 되지만, 운영자 계정이 언제 생기는지 로그로 바로 보이게 합니다.
+     */
+    @Scheduled(initialDelayString = "${dashboard.scheduler.owner-retry-ms:60000}",
+            fixedDelayString = "${dashboard.scheduler.owner-retry-ms:60000}")
+    public void retryOwner() {
+        if (ownerChecked) {
+            return;
+        }
         try {
-            ensureOwner();
+            ownerChecked = ensureOwner();
         } catch (RuntimeException e) {
-            log.warn("운영자 계정 확인 실패 — 첫 로그인 때 다시 시도합니다: {}", e.toString());
+            log.warn("운영자 계정 확인 실패 — 1분 뒤 다시 시도합니다: {}", e.toString());
         }
     }
 
