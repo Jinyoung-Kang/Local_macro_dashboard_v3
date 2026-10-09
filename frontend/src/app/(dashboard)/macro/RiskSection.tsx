@@ -46,14 +46,14 @@ const RISK_TABLE = [
 export function RiskSection({ risk, loading }: { risk: RiskIndicators | null; loading: boolean }) {
   if (loading && !risk) {
     return (
-      <Card title="⚡ 신용 리스크, 은행권 및 시장 변동성">
+      <Card title="신용 리스크, 은행권 및 시장 변동성">
         <Loading />
       </Card>
     );
   }
   if (!risk) {
     return (
-      <Card title="⚡ 신용 리스크, 은행권 및 시장 변동성">
+      <Card title="신용 리스크, 은행권 및 시장 변동성">
         <EmptyState message="리스크 지표를 불러오지 못했습니다." />
       </Card>
     );
@@ -69,7 +69,7 @@ export function RiskSection({ risk, loading }: { risk: RiskIndicators | null; lo
 
   return (
     <Card
-      title="⚡ 신용 리스크, 은행권 및 시장 변동성"
+      title="신용 리스크, 은행권 및 시장 변동성"
       subtitle="주식·채권 변동성, 기업 부도 위험, 단기 자금경색, 종합 금융스트레스"
       source="FRED (공식) — 하이일드·CP·STLFSI4 · Yahoo Finance — ^VIX · MOVE는 ^TNX 변동성 기반 추정"
     >
@@ -108,7 +108,7 @@ export function RiskSection({ risk, loading }: { risk: RiskIndicators | null; lo
 
       <div className="mt-5">
         <h3 className="mb-2 text-sm font-semibold text-bright">
-          📖 신용·은행권·변동성 핵심 해석 기준표
+          신용·은행권·변동성 핵심 해석 기준표
         </h3>
         <Table
           rows={RISK_TABLE}

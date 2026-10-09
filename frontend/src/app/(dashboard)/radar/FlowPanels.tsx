@@ -40,7 +40,7 @@ export function MarketFlowsPanel({ market }: { market: string }) {
 
   return (
     <Card
-      title={`🏦 ${symbol === "KOSPI" ? "코스피" : "코스닥"} 전체 투자자별 매매대금`}
+      title={`${symbol === "KOSPI" ? "코스피" : "코스닥"} 전체 투자자별 매매대금`}
       source={data?.source ?? "토스증권 Open API (공식)"}
       subtitle={
         summary?.latestDate
@@ -109,7 +109,7 @@ export function StockFlowsPanel({ rows }: { rows: { code: string; name: string }
 
   return (
     <Card
-      title="🔁 수급 지속성 — 며칠째 사고 있나 (종목별 20거래일)"
+      title="수급 지속성 — 며칠째 사고 있나 (종목별 20거래일)"
       source={data?.source ?? "토스증권 Open API (공식)"}
       actions={<SourceBadge>단위: 주</SourceBadge>}
     >

@@ -34,7 +34,7 @@ export default function SignupPage() {
   };
 
   return (
-    <AuthCard title="📝 가입">
+    <AuthCard title="가입">
       {done ? (
         <AuthMessage tone="ok">{done}</AuthMessage>
       ) : (

@@ -29,7 +29,7 @@ export function TossSection() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-bright">🔌 토스증권</h2>
+      <h2 className="text-base font-semibold text-bright">토스증권</h2>
 
       <Card
         title="연결 상태" source={SOURCES.toss}

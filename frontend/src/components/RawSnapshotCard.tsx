@@ -37,7 +37,7 @@ export function RawSnapshotCard() {
 
   return (
     <Card
-      title="📋 전체 대시보드 원본 데이터 보기 / 복사"
+      title="전체 대시보드 원본 데이터 보기 / 복사"
       subtitle="AI 분석 없이 수집한 전체 대시보드 최신 원본 데이터 — 거시·리스크·유동성·섹터·자산군·COT·KRX·SEC 13F 데이터를 수집 시각 및 데이터 출처 성격과 함께 표시합니다."
       actions={
         snapshot.data ? (

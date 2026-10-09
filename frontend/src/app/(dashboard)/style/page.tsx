@@ -72,7 +72,7 @@ function ProfilesCard() {
 
   return (
     <Card
-      title="🧬 기관별 성격" source={SOURCES.sec13f}
+      title="기관별 성격" source={SOURCES.sec13f}
       subtitle={data?.note}
       actions={<Button onClick={reload}>새로고침</Button>}
     >
@@ -178,7 +178,7 @@ function SimilarityCard() {
 
   return (
     <Card
-      title="🤝 기관 간 유사도" source={SOURCES.sec13f}
+      title="기관 간 유사도" source={SOURCES.sec13f}
       subtitle={data?.note}
       actions={
         <Select
@@ -324,7 +324,7 @@ function RiskCard() {
 
   return (
     <Card
-      title="🛡️ 포트폴리오 위험" source={SOURCES.sec13fWithPrices}
+      title="포트폴리오 위험" source={SOURCES.sec13fWithPrices}
       subtitle="13F 비중으로 수익률을 재구성해 변동성·VaR·베타·추적오차를 잽니다."
       actions={
         <Freshness
@@ -520,7 +520,7 @@ function HoldersCard() {
 
   return (
     <Card
-      title="🔍 이 종목을 누가 들고 있나" source={SOURCES.sec13f}
+      title="이 종목을 누가 들고 있나" source={SOURCES.sec13f}
       subtitle="13F 공시 이름은 대문자 영문입니다 (예: APPLE, NVIDIA, BERKSHIRE)."
     >
       <form

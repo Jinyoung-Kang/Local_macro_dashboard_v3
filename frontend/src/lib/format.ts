@@ -385,3 +385,11 @@ export function statusColor(color: string | null | undefined): string {
       return "text-body";
   }
 }
+
+/**
+ * 제목 앞의 그림 문자(이모지·국기) 아이콘을 뗍니다 — 카드 제목에 아이콘을 쓰지 않습니다.
+ * 수집기 데이터에서 오는 제목(예: 매크로 카테고리 "💵 통화 및 환율")도 같은 모양으로 맞춥니다.
+ */
+export function withoutLeadingIcon(text: string): string {
+  return text.replace(/^[\p{Extended_Pictographic}\p{Regional_Indicator}\u200d\ufe0f\s]+/u, "");
+}

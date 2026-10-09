@@ -204,7 +204,7 @@ export default function RadarPage() {
             <OmittedNote count={chart.omitted} />
           </Card>
 
-          <Card title="📋 상세 목록" source={data.source ?? undefined}>
+          <Card title="상세 목록" source={data.source ?? undefined}>
             <Table
               rows={data.rows}
               rowKey={(row) => `${row.code}-${row.rank}`}
@@ -296,7 +296,7 @@ function DiagnosticsPanel() {
 
   return (
     <Card
-      title="🔌 데이터 소스 연결 진단" source="각 소스를 화면이 쓰는 경로 그대로 실제 호출 (수집기)"
+      title="데이터 소스 연결 진단" source="각 소스를 화면이 쓰는 경로 그대로 실제 호출 (수집기)"
       subtitle="화면이 실제로 쓰는 경로를 그대로 호출합니다."
       actions={<Button onClick={reload}>다시 검사</Button>}
     >
@@ -359,7 +359,7 @@ function FundamentalsPanel({ codes }: { codes: string[] }) {
 
   return (
     <Card
-      title="📑 재무·밸류에이션 체크 (DART 사업보고서 + 금융위 공식 시세)"
+      title="재무·밸류에이션 체크 (DART 사업보고서 + 금융위 공식 시세)"
       source="금융감독원 Open DART 사업보고서 주요계정 (공식) · 금융위원회 주식시세정보 (공식, 시가총액)"
       subtitle="부채비율 = 부채총계÷자본총계 · 증가율은 전년 대비 · ROE = 순이익÷기말 자본 · PER·PBR = 시가총액÷직전 사업연도 순이익·자본"
       actions={
@@ -471,7 +471,7 @@ function ConsensusPanel({
 
   return (
     <Card
-      title={`🤝 외국인·기관 공통 ${tradeType}`} source={data?.sources?.length ? data.sources.join(" · ") : "외국인·기관 순위와 같은 출처 (위 순위 카드 참고)"}
+      title={`외국인·기관 공통 ${tradeType}`} source={data?.sources?.length ? data.sources.join(" · ") : "외국인·기관 순위와 같은 출처 (위 순위 카드 참고)"}
       subtitle={data?.note}
       actions={
         <Freshness
@@ -643,7 +643,7 @@ function HistoryPanel({
 
   return (
     <Card
-      title="🗂️ 누적 수급 이력" source={SOURCES.radarHistory}
+      title="누적 수급 이력" source={SOURCES.radarHistory}
       subtitle={data?.note}
       actions={
         dates.length > 0 ? (

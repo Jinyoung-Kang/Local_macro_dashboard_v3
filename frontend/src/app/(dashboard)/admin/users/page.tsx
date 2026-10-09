@@ -94,7 +94,7 @@ export default function AdminUsersPage() {
         />
       </Card>
 
-      <Card title="➕ 회원 만들기" subtitle="메일 없이 인증된 회원을 만듭니다. 처음 비밀번호는 직접 전달하고, 회원이 👤 내 계정에서 바꾸도록 안내하세요.">
+      <Card title="회원 만들기" subtitle="메일 없이 인증된 회원을 만듭니다. 처음 비밀번호는 직접 전달하고, 회원이 내 계정에서 바꾸도록 안내하세요.">
         <form onSubmit={submit} className="flex max-w-sm flex-col gap-3">
           <label className="text-xs text-muted">
             이메일
@@ -116,7 +116,7 @@ export default function AdminUsersPage() {
         </form>
       </Card>
 
-      <Card title="🧾 감사 기록" subtitle="로그인·비밀번호·역할/등급 변경·계정 삭제(최근 100건). 비밀번호·토큰 값은 남기지 않습니다.">
+      <Card title="감사 기록" subtitle="로그인·비밀번호·역할/등급 변경·계정 삭제(최근 100건). 비밀번호·토큰 값은 남기지 않습니다.">
         {audit.error && <ErrorState message={audit.error} onRetry={audit.reload} />}
         <Table<AuditEntry>
           rows={audit.data?.entries ?? []}

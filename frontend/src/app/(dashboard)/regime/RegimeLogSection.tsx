@@ -19,7 +19,7 @@ export function RegimeLogSection({ tone }: { tone: Record<string, string> }) {
 
   return (
     <Card
-      title="📒 판정 기록"
+      title="판정 기록"
       source={SOURCES.regimeLog}
       subtitle={
         data?.available

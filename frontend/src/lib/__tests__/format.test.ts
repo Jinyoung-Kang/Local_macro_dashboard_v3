@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  deltaColor, formatAge, formatBillionUsd, formatKrw, formatNumber, formatPercent, formatSampleWindow, formatShares,
+  deltaColor, withoutLeadingIcon, formatAge, formatBillionUsd, formatKrw, formatNumber, formatPercent, formatSampleWindow, formatShares,
   formatSigned, formatSignedKrw, formatTrillionDelta, formatTrillionUsd, formatUsd, formatUsdWithKrw,
 } from "@/lib/format";
 
@@ -94,5 +94,14 @@ describe("백분위 표본", () => {
     expect(formatSampleWindow(null, 784, 3.0)).toBeNull();
     expect(formatSampleWindow("2023-10-09", undefined, 3.0)).toBeNull();
     expect(formatSampleWindow("2023-10-09", 784, Number.NaN)).toBeNull();
+  });
+});
+
+describe("제목 앞 아이콘 떼기", () => {
+  it("이모지·국기·이형 선택자를 떼고 글자는 그대로", () => {
+    expect(withoutLeadingIcon("💵 통화 및 환율")).toBe("통화 및 환율");
+    expect(withoutLeadingIcon("🏛️ 미국 국채 수익률")).toBe("미국 국채 수익률");
+    expect(withoutLeadingIcon("🇰🇷 국내 지수")).toBe("국내 지수");
+    expect(withoutLeadingIcon("10Y-2Y 스프레드")).toBe("10Y-2Y 스프레드");
   });
 });

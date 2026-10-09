@@ -67,7 +67,7 @@ export default function AlertsPage() {
       </header>
 
       <Card
-        title="📥 알림함"
+        title="알림함"
         subtitle={`읽지 않은 알림 ${inbox.data?.unread ?? 0}건 · 90일 보관`}
         actions={
           <Button onClick={async () => { await read.run(null); void inbox.reload(); }} disabled={read.busy || !inbox.data?.unread}>
@@ -111,7 +111,7 @@ export default function AlertsPage() {
       </Card>
 
       <Card
-        title="⚙️ 알림 규칙"
+        title="알림 규칙"
         subtitle={`${rules.data?.rules?.length ?? 0}/${rules.data?.limit ?? 0}개 · 규칙을 만든 날 이후의 사건만 들어옵니다`}
       >
         {(toggle.error || remove.error) && <Banner tone="warn">{toggle.error ?? remove.error}</Banner>}
@@ -142,7 +142,7 @@ export default function AlertsPage() {
         />
 
         <form onSubmit={submit} className="mt-5 flex max-w-md flex-col gap-3">
-          <h3 className="text-sm font-semibold text-bright">➕ 규칙 만들기</h3>
+          <h3 className="text-sm font-semibold text-bright">규칙 만들기</h3>
           <Select label="알림 종류" value={kind} onChange={(value) => setKind(value as AlertKind)}
             options={ALERT_KINDS.map((k) => ({ value: k.value, label: k.pro ? `${k.label} · 유료` : k.label }))} />
           {kind === "FOREIGN_STREAK" && (

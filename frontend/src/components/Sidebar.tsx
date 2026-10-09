@@ -151,7 +151,7 @@ export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: 
             href="/account"
             className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] text-body hover:border-accent/30"
           >
-            👤 {user.email}
+            {user.email}
             <span className="ml-1 text-muted">· {roleLabel(user)}</span>
           </Link>
         )}

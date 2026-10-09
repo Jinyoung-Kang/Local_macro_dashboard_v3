@@ -28,7 +28,7 @@ export function SpotFuturesCard() {
 
   return (
     <Card
-      title="🔀 현물·선물 수급 동조 (외국인·기관·개인)"
+      title="현물·선물 수급 동조 (외국인·기관·개인)"
       subtitle={
         data?.available
           ? `현물 기준일 ${data.spotDate} (코스피 전체) · 선물 기준일 ${data.futuresDate} (KOSPI200 선물)`

@@ -40,7 +40,7 @@ export function SingleChartSection() {
 
   return (
     <Card
-      title="📈 지표별 기간별 단독 차트"
+      title="지표별 기간별 단독 차트"
       source={symbol === "^MOVE" ? "Yahoo Finance ^TNX 변동성 기반 추정 (실제 ICE BofA MOVE 아님)" : `Yahoo Finance (${symbol})`}
     >
       <div className="mb-4 flex flex-wrap gap-3">

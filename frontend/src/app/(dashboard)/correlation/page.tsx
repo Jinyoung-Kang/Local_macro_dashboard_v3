@@ -118,7 +118,7 @@ export default function CorrelationPage() {
           ))}
 
           <Card
-            title={`📈 롤링 상관계수 (${window} 관측)`} source={`${data.x?.label}: ${data.x?.source} · ${data.y?.label}: ${data.y?.source}`}
+            title={`롤링 상관계수 (${window} 관측)`} source={`${data.x?.label}: ${data.x?.source} · ${data.y?.label}: ${data.y?.source}`}
             subtitle="한 숫자로 요약한 상관은 시기에 따라 크게 달라집니다. 언제 함께 움직였는지를 봅니다."
             actions={
               <SourceBadge>
@@ -139,7 +139,7 @@ export default function CorrelationPage() {
           </Card>
 
           <Card
-            title="🔵 산점도" source={`${data.x?.label}: ${data.x?.source} · ${data.y?.label}: ${data.y?.source}`}
+            title="산점도" source={`${data.x?.label}: ${data.x?.source} · ${data.y?.label}: ${data.y?.source}`}
             subtitle={
               mode === "change"
                 ? "점 하나가 하루(또는 한 관측)의 변화입니다. 오른쪽 위·왼쪽 아래에 몰리면 같이 움직인 것입니다."

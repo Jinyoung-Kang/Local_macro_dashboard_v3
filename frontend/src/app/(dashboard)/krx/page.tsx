@@ -156,7 +156,7 @@ export default function KrxPage() {
         보였습니다). 축을 나누고, 어느 선이 어느 축인지 부제에 적습니다.
       */}
       <Card
-        title="📈 선물 종가 및 미결제약정 추이" source={krxSource}
+        title="선물 종가 및 미결제약정 추이" source={krxSource}
         subtitle="왼쪽 축: 선물 종가 · 오른쪽 축: 미결제약정(계약) — 자릿수가 달라 축을 나눠 그립니다."
       >
         <MultiLineSeries
@@ -182,7 +182,7 @@ export default function KrxPage() {
       </Card>
 
       <Card
-        title="📊 한국판 COT OI Index" source={SOURCES.krxDerived}
+        title="한국판 COT OI Index" source={SOURCES.krxDerived}
         subtitle="최근 20거래일 미결제약정 범위 내 위치(0~100). 100에 가까울수록 포지션이 역사적 최대 수준입니다."
       >
         <LineSeries
@@ -194,7 +194,7 @@ export default function KrxPage() {
       </Card>
 
       <Card
-        title="🧭 투자주체별 선물 수급"
+        title="투자주체별 선물 수급"
         source={trend.data?.source ?? "Daum 금융 투자주체별 매매동향 (비공식)"}
         subtitle={
           trend.data?.available
@@ -266,7 +266,7 @@ export default function KrxPage() {
       <SpotFuturesCard />
 
       <Card
-        title="⚡ 장중 수급 가속도 (최근 30분)"
+        title="장중 수급 가속도 (최근 30분)"
         subtitle="장중에만 값이 있습니다."
         source="Daum 금융 시간별 선물 수급 (비공식)"
       >
@@ -329,7 +329,7 @@ function MarketTotalsCard() {
 
   return (
     <Card
-      title="🏛️ 증시 규모 — 시가총액 추이·거래대금 (금융위 공식)"
+      title="증시 규모 — 시가총액 추이·거래대금 (금융위 공식)"
       source={data?.source ?? "금융위원회 주식시세정보 (공식)"}
       subtitle={data?.latestBasDt ? `기준일 ${data.latestBasDt} · 거래소 확정치, 다음 영업일 13시 이후 갱신` : undefined}
       actions={<Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} stale={data?.stale} />}

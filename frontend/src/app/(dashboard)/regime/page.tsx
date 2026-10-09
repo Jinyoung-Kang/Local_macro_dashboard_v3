@@ -172,7 +172,7 @@ export default function RegimePage() {
       <RegimeLogSection tone={TIMELINE_COLOR} />
 
       <Card
-        title="📅 국면 이력" source={SOURCES.regime}
+        title="국면 이력" source={SOURCES.regime}
         subtitle="같은 규칙을 과거 날짜에 그대로 적용한 재현입니다(매주 목요일). 회색은 판정 불가 — 하이일드 스프레드 이력이 2023-09부터라 그 이전은 판정할 수 없습니다."
       >
         <div className="flex h-8 w-full overflow-hidden rounded border border-border">

@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     ["제3자 제공", "없음. 메일은 운영자가 설정한 메일 서버(SMTP)로 보냅니다"],
   ];
   return (
-    <AuthCard title="🔏 개인정보 수집·이용 안내">
+    <AuthCard title="개인정보 수집·이용 안내">
       <dl className="mt-3 flex flex-col gap-3 text-xs">
         {rows.map(([term, detail]) => (
           <div key={term}>

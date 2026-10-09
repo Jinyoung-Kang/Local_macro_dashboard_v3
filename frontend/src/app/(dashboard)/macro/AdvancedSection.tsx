@@ -47,7 +47,7 @@ export function AdvancedSection({
 
   if (loading && !data) {
     return (
-      <Card title="🧭 심화 매크로 지표">
+      <Card title="심화 매크로 지표">
         <Loading />
       </Card>
     );
@@ -57,7 +57,7 @@ export function AdvancedSection({
 
   return (
     <Card
-      title="🧭 심화 매크로 지표"
+      title="심화 매크로 지표"
       source={SOURCES.fred}
       subtitle="명목금리·하이일드만으로는 보이지 않는 구조를 메우는 6종 (30Y-3M은 DGS30−DGS3MO로 계산, 나머지는 FRED 공식 시계열)"
       actions={<RangeTabs value={range} onChange={setRange} />}

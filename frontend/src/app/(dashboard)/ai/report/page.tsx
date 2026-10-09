@@ -137,7 +137,7 @@ export default function AiReportPage() {
 
       {showData && (
         <Card
-          title="📋 수집 데이터 원본 (AI 입력)" source={SOURCES.aiInput}
+          title="수집 데이터 원본 (AI 입력)" source={SOURCES.aiInput}
           subtitle={
             snapshot.data
               ? `${formatKst(snapshot.data.generatedAtKst)} · ${snapshot.data.chars.toLocaleString("ko-KR")}자`
@@ -158,7 +158,7 @@ export default function AiReportPage() {
 
       {result && (
         <Card
-          title={`📄 ${result.reportType ?? "AI 리포트"}`}
+          title={`${result.reportType ?? "AI 리포트"}`}
           source={`${result.provider ?? "AI"}가 대시보드 저장본을 읽고 쓴 해석 — 수치의 원래 출처는 입력 원본에 표기 · 투자 판단 근거 아님`}
           subtitle={
             result.status

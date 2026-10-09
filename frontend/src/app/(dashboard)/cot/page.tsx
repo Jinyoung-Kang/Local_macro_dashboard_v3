@@ -262,7 +262,7 @@ function ExtremesPanel({ asset }: { asset: string }) {
 
   return (
     <Card
-      title="📉 극단 포지션 이후 성적 (백테스트)" source={SOURCES.cftcBacktest}
+      title="극단 포지션 이후 성적 (백테스트)" source={SOURCES.cftcBacktest}
       subtitle={
         data?.available
           ? `백분위는 그 시점까지의 최근 ${data.lookbackWeeks}주로만 계산합니다 (미래를 보지 않습니다).`

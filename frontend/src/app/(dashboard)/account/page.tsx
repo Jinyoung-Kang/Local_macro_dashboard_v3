@@ -52,7 +52,7 @@ export default function AccountPage() {
         </p>
       </header>
 
-      <Card title="🔑 비밀번호 변경" subtitle="10자 이상, 흔한 비밀번호·이메일을 담은 비밀번호는 쓸 수 없습니다. 바꾸면 다른 기기의 로그인은 끊깁니다.">
+      <Card title="비밀번호 변경" subtitle="10자 이상, 흔한 비밀번호·이메일을 담은 비밀번호는 쓸 수 없습니다. 바꾸면 다른 기기의 로그인은 끊깁니다.">
         <form onSubmit={submit} className="flex max-w-sm flex-col gap-3">
           {[
             { label: "지금 비밀번호", value: current, set: setCurrent, auto: "current-password" },
@@ -84,7 +84,7 @@ export default function AccountPage() {
       </Card>
 
       {user?.role !== "OWNER" && (
-        <Card title="🗑️ 계정 삭제" subtitle="계정과 개인정보(이메일·로그인 기기·알림 설정)를 바로 지웁니다. 되돌릴 수 없습니다.">
+        <Card title="계정 삭제" subtitle="계정과 개인정보(이메일·로그인 기기·알림 설정)를 바로 지웁니다. 되돌릴 수 없습니다.">
           {remove.result?.ok ? (
             <Banner tone="info">{remove.result.message} <a href="/login" className="underline">로그인 화면으로</a></Banner>
           ) : (
@@ -115,7 +115,7 @@ export default function AccountPage() {
       )}
 
       <Card
-        title="💻 로그인한 기기"
+        title="로그인한 기기"
         subtitle="이 계정으로 로그인돼 있는 세션입니다. 모르는 기기가 있으면 다른 기기를 모두 로그아웃하고 비밀번호를 바꾸세요."
         actions={
           <Button

@@ -128,11 +128,11 @@ export default function ConsensusPage() {
             />
           </div>
 
-          <Card title="📊 공통 보유 상위 종목" source={SOURCES.sec13f} subtitle="막대 길이 = 보유 기관 수">
+          <Card title="공통 보유 상위 종목" source={SOURCES.sec13f} subtitle="막대 길이 = 보유 기관 수">
             <HorizontalBars data={chartData} unit="곳" digits={0} neutral height={Math.max(260, chartData.length * 26)} />
           </Card>
 
-          <Card title="📋 교집합 상세" source={SOURCES.sec13f} subtitle={usdKrw.note}>
+          <Card title="교집합 상세" source={SOURCES.sec13f} subtitle={usdKrw.note}>
             <Table
               rows={data.rows}
               rowKey={(row) => row.name}
@@ -237,7 +237,7 @@ function NewBuysCard({ reportDate }: { reportDate: string }) {
 
   return (
     <Card
-      title="🆕 이번 분기 공통 신규 매수" source={SOURCES.sec13f}
+      title="이번 분기 공통 신규 매수" source={SOURCES.sec13f}
       subtitle={`여러 기관이 같은 분기에 처음 담은 종목 — 교집합보다 한 발 앞선 신호입니다. ${usdKrw.note}`}
       actions={
         <Select

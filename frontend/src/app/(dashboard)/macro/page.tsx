@@ -187,15 +187,15 @@ export default function MacroPage() {
       {data?.spreads && (
         <>
           <SpreadSection
-            title="📊 10Y−2Y 장단기 금리차"
+            title="10Y−2Y 장단기 금리차"
             block={data.spreads.official10y2y}
           />
           <SpreadSection
-            title="📊 30Y−2Y 장단기 금리차"
+            title="30Y−2Y 장단기 금리차"
             block={data.spreads.official30y2y}
           />
           <Card
-            title="📖 장단기 금리차 해석 기준"
+            title="장단기 금리차 해석 기준"
             subtitle="역사적 분포에 근거한 참고치이며 투자 판단의 근거가 아닙니다."
             source={SOURCES.internalRules}
           >

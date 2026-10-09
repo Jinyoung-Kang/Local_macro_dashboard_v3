@@ -44,7 +44,7 @@ export default function ResetPage() {
 
   const done = message?.ok;
   return (
-    <AuthCard title="🔑 비밀번호 재설정">
+    <AuthCard title="비밀번호 재설정">
       {!done && (
         <form onSubmit={submit}>
           {token ? (

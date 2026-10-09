@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { deltaColor, EMPTY, formatAge, formatKst } from "@/lib/format";
+import { deltaColor, EMPTY, formatAge, formatKst, withoutLeadingIcon } from "@/lib/format";
 
 /**
  * 섹션 카드 컨테이너.
@@ -31,7 +31,12 @@ export function Card({
       {(title || actions || source) && (
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            {title && <h2 className="text-base font-semibold text-bright">{title}</h2>}
+            {/* 카드 제목에는 아이콘을 쓰지 않습니다 — 데이터에서 온 제목도 앞 아이콘을 뗍니다. */}
+            {title && (
+              <h2 className="text-base font-semibold text-bright">
+                {typeof title === "string" ? withoutLeadingIcon(title) : title}
+              </h2>
+            )}
             {subtitle && <p className="mt-1 text-xs text-muted">{subtitle}</p>}
             {source && <SourceLine>{source}</SourceLine>}
           </div>

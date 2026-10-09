@@ -33,7 +33,7 @@ export function AiEngineSection() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-bright">🤖 AI 엔진</h2>
+      <h2 className="text-base font-semibold text-bright">AI 엔진</h2>
 
       {engines.loading && !engines.data && <Loading />}
 

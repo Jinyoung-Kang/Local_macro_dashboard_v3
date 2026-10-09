@@ -74,7 +74,7 @@ export function FxCompareSection() {
 
   return (
     <Card
-      title="💱 환율·달러인덱스 비교"
+      title="환율·달러인덱스 비교"
       source={`${SOURCES.yahoo} — 매크로 카드와 같은 티커`}
       subtitle={
         mode === "index"

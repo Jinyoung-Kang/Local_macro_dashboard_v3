@@ -138,7 +138,7 @@ export default function ScorecardPage() {
 
           {(data.metrics?.length ?? 0) > 0 && (
             <Card
-              title="📊 지표별 점수" source={SOURCES.equityPrices}
+              title="지표별 점수" source={SOURCES.equityPrices}
               subtitle="막대 = 백분위(0~100). 원자료를 함께 적어 점수를 검증할 수 있게 합니다."
             >
               <HorizontalBars
@@ -204,7 +204,7 @@ export default function ScorecardPage() {
             </Card>
           )}
 
-          <Card title="🔎 원자료" source={SOURCES.equityPrices} subtitle="점수로 바꾸기 전의 값입니다.">
+          <Card title="원자료" source={SOURCES.equityPrices} subtitle="점수로 바꾸기 전의 값입니다.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Metric label="1개월 수익률" value={`${formatNumber(data.raw?.momentum1m, 2)}%`} />
               <Metric label="6개월 수익률" value={`${formatNumber(data.raw?.momentum6m, 2)}%`} />

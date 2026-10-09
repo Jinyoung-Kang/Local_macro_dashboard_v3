@@ -33,7 +33,7 @@ export function TrackRecordSection({ tone }: { tone: Record<string, string> }) {
 
   return (
     <Card
-      title="📈 판정 성과"
+      title="판정 성과"
       source={SOURCES.regimeTrackRecord}
       subtitle={
         data?.available
