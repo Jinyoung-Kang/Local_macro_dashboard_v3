@@ -61,6 +61,8 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
 - 테스트 DB를 쓰는 테스트는 postgres 컨테이너가 떠 있어야 한다(`make infra` 또는 `make up`).
 - 수집기 `/health`는 DB까지 확인한다(없으면 503). `/health`를 공개 경로 예시로 쓰는 테스트는 `store.ping`을
   스텁한다 — CI에는 운영 DB가 없어 로컬에서만 통과하는 테스트가 된다.
+- 스키마 파일(`db/migrations`)은 수집기가 기동할 때만 적용된다. `make up`은 `make migrate`로 늘 적용하지만, `docker compose up`을
+  직접 쓰면 백엔드만 바뀐 배포에서 새 테이블이 안 생긴다(QA-016) — `make migrate`를 부른다.
 - `docker kill`로 멈춘 컨테이너는 `restart: unless-stopped`가 다시 띄우지 않는다(수동 정지로 간주). 크래시 시험에
   쓰면 안 된다.
 - 외부 패키지를 올릴 때는 Maven Central·npm에서 **실제 GA 버전을 확인**한다(마일스톤은 운영에 올리지 않음).

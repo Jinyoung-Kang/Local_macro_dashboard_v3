@@ -31,7 +31,7 @@ COLLECTOR_API_TOKEN ?= $(shell grep -s '^COLLECTOR_API_TOKEN=' .env | cut -d= -f
 TOKEN_HEADER := $(if $(COLLECTOR_API_TOKEN),-H "X-Service-Token: $(COLLECTOR_API_TOKEN)",)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup update version up down restart logs ps collect collect-all status verify \
+.PHONY: help setup update version up migrate down restart logs ps collect collect-all status verify \
         doctor test db-test test-collector test-backend test-frontend \
         dev-collector dev-backend dev-frontend db infra backup restore reset
 
@@ -71,6 +71,7 @@ up: ## 전체 스택 기동 (최초 빌드는 5~10분)
 	@# 없이 멈춥니다. 누가 포트를 잡았는지 먼저 확인하고 겹치면 시작하지 않습니다.
 	@bash scripts/ports.sh check
 	$(COMPOSE) up -d --build
+	@$(MAKE) --no-print-directory migrate
 	@echo ""
 	@bash scripts/ports.sh wait
 	@echo ""
@@ -84,6 +85,14 @@ up: ## 전체 스택 기동 (최초 빌드는 5~10분)
 	@bash scripts/version.sh --brief
 	@echo "  첫 실행이라면 'make collect'로 데이터를 한 번 받아 오세요."
 	@echo ""
+
+migrate: ## 대기 중인 스키마 파일(db/migrations)을 지금 적용 (make up이 부름)
+	@# 수집기는 기동할 때만 스키마를 적용합니다. 백엔드만 바뀐 배포에서는 수집기가 다시 만들어지지 않아
+	@# 새 테이블이 생기지 않았습니다(QA-016). 이미 적용한 파일은 건너뛰므로 몇 번 불러도 안전합니다.
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		$(COMPOSE) exec -T collector python -c "from app import store; store.init_schema()" >/dev/null 2>&1 && \
+		{ echo "  스키마: 최신 (db/migrations)"; exit 0; }; sleep 3; done; \
+		echo "⚠️  스키마를 적용하지 못했습니다. 'make logs S=collector'를 보세요." ; exit 1
 
 down: ## 정지 (데이터는 보존)
 	$(COMPOSE) down

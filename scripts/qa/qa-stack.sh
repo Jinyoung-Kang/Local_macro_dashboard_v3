@@ -72,6 +72,11 @@ case "$cmd" in
   up)
     make_env
     APP_VERSION="qa@$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" docker compose up -d --build "$@"
+    # 수집기는 기동할 때만 스키마를 적용합니다 — 백엔드만 바뀐 배포에서도 새 테이블이 생기게 지금 적용(QA-016).
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      docker compose exec -T collector python -c "from app import store; store.init_schema()" >/dev/null 2>&1 && break
+      sleep 3
+    done
     docker compose ps
     ;;
   down)

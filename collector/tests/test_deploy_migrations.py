@@ -12,8 +12,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -23,14 +21,12 @@ def _recipe(makefile: str, target: str) -> str:
     return match.group(1)
 
 
-@pytest.mark.xfail(strict=True, reason="QA-016 재현 — 수정 전: make up이 스키마를 따로 적용하지 않음")
 def test_QA016_make_up은_기동_뒤_대기_중인_스키마를_적용한다():
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     assert "migrate" in _recipe(makefile, "up")
     assert "init_schema" in _recipe(makefile, "migrate")
 
 
-@pytest.mark.xfail(strict=True, reason="QA-016 재현 — 수정 전: QA 스택 up도 같음")
 def test_QA016_QA_스택_up도_스키마를_적용한다():
     script = (ROOT / "scripts/qa/qa-stack.sh").read_text(encoding="utf-8")
     up = script[script.index("  up)"):script.index(";;", script.index("  up)"))]
