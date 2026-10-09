@@ -69,5 +69,5 @@ config · web ─▶ feature/<기능> ─▶ read ─▶ store
 
 - `ArchitectureRulesTest`가 규칙 1~3과 표의 "쓸 수 있는 것"(store·collector·support·read)을 빌드마다
   확인합니다(와일드카드 import 포함, 위반하면 "어느 파일 → 무엇" 목록으로 실패).
-- `RouteInventoryTest`가 경로 64개가 그대로인지 고정합니다(컨트롤러를 옮겨도 URL은 바뀌지 않음).
+- `RouteInventoryTest`가 경로 66개가 그대로인지 고정합니다(컨트롤러를 옮겨도 URL은 바뀌지 않음).
 - 공개 범위를 넓힌 것은 1건(`GuruService.closes` — 스코어카드가 씀)뿐입니다.
