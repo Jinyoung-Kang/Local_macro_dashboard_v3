@@ -167,6 +167,41 @@ public class AnalyticsService {
     }
 
     // ========================================================= 🧭 국면
+    /**
+     * 지금 판정과 입력 네 개(값·기준일). 화면의 "지금 국면"과 라이브 기록이 같은 계산을 쓰게 합니다.
+     *
+     * @param verdict 판정
+     * @param inputs  {@code curve10y3m}·{@code nfci}·{@code hyOas}·{@code liquidity4w} → {value, asOf}.
+     *                값을 모르면 value가 null입니다
+     */
+    public record RegimeReading(Regime.Verdict verdict, Map<String, Map<String, Object>> inputs) {
+    }
+
+    public RegimeReading regimeNow() {
+        NavigableMap<LocalDate, Double> curve = series("fred:T10Y3M");
+        NavigableMap<LocalDate, Double> nfci = series("fred:NFCI");
+        NavigableMap<LocalDate, Double> hyOas = series("fred:BAMLH0A0HYM2");
+        NavigableMap<LocalDate, Double> netLiquidity = series("liquidity:net");
+
+        Double liquidity4w = change4w(netLiquidity);
+        Regime.Verdict verdict = Regime.classify(
+                lastValue(curve), lastValue(nfci), lastValue(hyOas), liquidity4w);
+
+        Map<String, Map<String, Object>> inputs = new LinkedHashMap<>();
+        inputs.put("curve10y3m", reading(lastValue(curve), curve));
+        inputs.put("nfci", reading(lastValue(nfci), nfci));
+        inputs.put("hyOas", reading(lastValue(hyOas), hyOas));
+        inputs.put("liquidity4w", reading(liquidity4w, netLiquidity));
+        return new RegimeReading(verdict, inputs);
+    }
+
+    private static Map<String, Object> reading(Double value, NavigableMap<LocalDate, Double> series) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("value", value);
+        out.put("asOf", series.isEmpty() ? null : series.lastKey().toString());
+        return out;
+    }
+
     /** 지금 국면 + 최근 이력. */
     public Map<String, Object> regime(int years) {
         Map<String, Object> out = new LinkedHashMap<>();

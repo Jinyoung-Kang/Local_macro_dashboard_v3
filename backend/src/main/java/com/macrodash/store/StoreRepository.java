@@ -25,13 +25,11 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 저장 계층 읽기 (백엔드는 <b>읽기만</b> 합니다).
+ * 수집기 테이블 읽기 (이 테이블들은 <b>읽기만</b> 합니다).
  *
- * <p>쓰기는 수집기(Python)의 몫입니다. 예외는 두 가지뿐입니다.
- * <ul>
- *   <li>수동 새로고침 기준 시각({@code refresh_requests}) — 화면 버튼이 누르는 값</li>
- *   <li>없음 — 그 외 모든 테이블은 수집기만 씁니다</li>
- * </ul>
+ * <p>{@code snapshots}·{@code timeseries}·{@code observations}·{@code collector_*}·{@code refresh_requests}는
+ * 수집기(Python)만 씁니다. 수동 새로고침 기준 시각도 수집기의 {@code POST /refresh}가 씁니다. 백엔드가 쓰는
+ * 테이블(판정 기록 등)은 따로 둔 저장소가 맡습니다(ADR 0008, {@link RegimeLogStore}).
  * 이렇게 나누면 "화면을 열었더니 수집이 시작돼 사용자가 수십 초를 기다리는"
  * 구버전의 구조적 문제가 되살아나지 않습니다.
  */

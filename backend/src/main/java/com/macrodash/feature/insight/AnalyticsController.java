@@ -22,12 +22,15 @@ public class AnalyticsController {
 
     private final AnalyticsService analytics;
     private final ScorecardService scorecard;
+    private final RegimeLogService regimeLog;
 
     private final ComputedCache cache;
 
-    public AnalyticsController(AnalyticsService analytics, ScorecardService scorecard, ComputedCache cache) {
+    public AnalyticsController(AnalyticsService analytics, ScorecardService scorecard,
+                               RegimeLogService regimeLog, ComputedCache cache) {
         this.analytics = analytics;
         this.scorecard = scorecard;
+        this.regimeLog = regimeLog;
         this.cache = cache;
     }
 
@@ -57,6 +60,15 @@ public class AnalyticsController {
     @GetMapping("/analytics/regime")
     public Map<String, Object> regime(@RequestParam(defaultValue = "5") int years) {
         return cache.get("analytics.regime:" + years, () -> analytics.regime(years));
+    }
+
+    /**
+     * 국면 판정 라이브 기록(최근 순). 저장본이 아니라 판정 기록 테이블에서 나오므로 응답 캐시를 쓰지 않습니다 —
+     * 캐시의 버전(저장본 수집 시각)이 기록이 늘어난 것을 모릅니다.
+     */
+    @GetMapping("/analytics/regime/log")
+    public Map<String, Object> regimeLog(@RequestParam(defaultValue = "90") int limit) {
+        return regimeLog.recent(limit);
     }
 
     // ----------------------------------------------------- 🩺 스코어카드

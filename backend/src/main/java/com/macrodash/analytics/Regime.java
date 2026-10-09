@@ -26,6 +26,12 @@ public final class Regime {
     private Regime() {
     }
 
+    /**
+     * 판정 규칙의 판. 임계치·축 구성을 바꾸면 올립니다 — 라이브 기록(regime_log)이 어느 규칙으로
+     * 낸 판정인지 남겨, 규칙이 바뀐 날을 성과 집계에서 구분할 수 있게 합니다.
+     */
+    public static final String RULE_VERSION = "v1";
+
     /** 하이일드 스프레드 경보 임계치(%p). README의 해석 기준표와 같은 값입니다. */
     public static final double HY_ALERT = 7.0;
     /** 하이일드 스프레드 주의 임계치(%p). */

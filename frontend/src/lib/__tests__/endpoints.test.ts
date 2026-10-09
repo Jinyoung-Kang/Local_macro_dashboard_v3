@@ -58,6 +58,7 @@ const CASES: Case[] = [
       `&window=${"60"}&years=${"5"}&mode=${"change"}`,
     after: endpoints.insight.correlation({ x: "liquidity:net", y: "etf:QQQ", window: "60", years: "5", mode: "change" }) },
   { name: "regime", before: `/api/analytics/regime?years=${"5"}`, after: endpoints.insight.regime("5") },
+  { name: "regimeLog", before: `/api/analytics/regime/log?limit=${"90"}`, after: endpoints.insight.regimeLog(90) },
   { name: "cot.asset", before: `/api/cot/asset?name=${encodeURIComponent("S&P 500 E-Mini")}`,
     after: endpoints.positioning.cotAsset("S&P 500 E-Mini") },
   { name: "cot.extremes",
@@ -139,6 +140,6 @@ describe("docs/API.md 백엔드 표와 대조", () => {
     const paths = [...strings, ...CASES.map(({ after }) => after)].map(documentedForm);
     expect(paths.filter((path) => !documented.has(path))).toEqual([]);
     // 경로를 만드는 함수는 모두 위 CASES에 한 줄 이상 있습니다. 새 함수를 만들었다면 CASES에 추가하고 이 숫자를 고치세요.
-    expect(functions).toBe(32);
+    expect(functions).toBe(33);
   });
 });

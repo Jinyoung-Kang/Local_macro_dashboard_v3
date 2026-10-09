@@ -408,4 +408,25 @@ class StoreReaderNonBlockingTest {
         reader.read("test.dataset", 3600, "some_task");
         org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(2)).refreshRequestedAt("global");
     }
+
+    @Test
+    @DisplayName("quietly 안에서는 오래된 저장본을 읽어도 수집을 요청하지 않는다 — 정기 작업이 수집기를 깨우지 않게(ADR 0008)")
+    void quietReadsNeverTriggerCollection() {
+        StoreRepository repository = mock(StoreRepository.class);
+        Snapshot stale = staleSnapshot();
+        when(repository.readSnapshot(anyString())).thenReturn(Optional.of(stale));
+        when(repository.readSnapshot("missing.dataset")).thenReturn(Optional.empty());
+        RecordingCollector collector = new RecordingCollector();
+        StoreReader reader = reader(repository, collector);
+
+        Optional<Snapshot> result = reader.quietly(() -> reader.read("test.dataset", 60, "some_task"));
+        Optional<Snapshot> missing = reader.quietly(() -> reader.read("missing.dataset", 60, "other_task"));
+
+        assertThat(result).containsSame(stale);
+        assertThat(missing).isEmpty();
+        assertThat(collector.waits).as("오래됐든 없든 수집 요청 0건").isEmpty();
+
+        reader.read("test.dataset", 60, "some_task");
+        assertThat(collector.waits).as("quietly 밖에서는 평소대로 요청").containsExactly(false);
+    }
 }

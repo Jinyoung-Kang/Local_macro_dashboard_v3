@@ -100,6 +100,26 @@ public class StoreReader {
         return properties.resolvedReadMode();
     }
 
+    /** 이 스레드가 {@link #quietly}로 읽는 중인가. */
+    private static final ThreadLocal<Boolean> QUIET = ThreadLocal.withInitial(() -> false);
+
+    /**
+     * 수집을 요청하지 않고 저장본만 읽는 구간(읽기 모드 {@code store_only}와 같은 동작).
+     *
+     * <p>정기 작업(판정 기록·알림 평가)용입니다. auto 모드에서는 저장본이 오래됐으면 <b>읽기만 해도</b>
+     * 수집을 요청하므로, 정기 작업이 보통 경로로 읽으면 몇 분마다 수집기를 깨웁니다(ADR 0008).
+     * 오래된 저장본을 어떻게 다룰지는 부르는 쪽이 정합니다.
+     */
+    public <T> T quietly(java.util.function.Supplier<T> work) {
+        boolean outer = QUIET.get();
+        QUIET.set(true);
+        try {
+            return work.get();
+        } finally {
+            QUIET.set(outer);
+        }
+    }
+
     /**
      * 저장본을 읽습니다. 필요하면 수집기에 수집을 요청합니다.
      *
@@ -111,7 +131,7 @@ public class StoreReader {
         AppProperties.ReadMode mode = readMode();
         Optional<Snapshot> stored = repository.readSnapshot(name);
 
-        if (mode == AppProperties.ReadMode.STORE_ONLY) {
+        if (mode == AppProperties.ReadMode.STORE_ONLY || QUIET.get()) {
             return stored;
         }
 

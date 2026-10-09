@@ -104,3 +104,28 @@ export interface RegimeResponse {
   episodes?: { code: string; label: string; start: string; end: string; weeks: number }[];
   note?: string;
 }
+
+/** 국면 판정 라이브 기록의 입력 하나 — 값을 모르면 value가 null. */
+export interface RegimeLogInput {
+  value: number | null;
+  asOf: string | null;
+}
+
+export interface RegimeLogEntry {
+  date: string;
+  code: RegimeVerdict["code"];
+  label: string;
+  inputs: Partial<Record<"curve10y3m" | "nfci" | "hyOas" | "liquidity4w", RegimeLogInput>>;
+  missing: string[];
+  ruleVersion: string;
+}
+
+export interface RegimeLogResponse {
+  available: boolean;
+  message?: string;
+  startedOn?: string | null;
+  count?: number;
+  recordHourKst?: number;
+  entries?: RegimeLogEntry[];
+  note?: string;
+}

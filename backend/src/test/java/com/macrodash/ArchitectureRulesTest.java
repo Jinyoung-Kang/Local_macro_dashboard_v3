@@ -186,6 +186,38 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    @DisplayName("DB 접근(스프링 JDBC)은 store에서만 한다 — 백엔드가 쓰는 테이블도 마찬가지(ADR 0001·0008)")
+    void jdbcOnlyInStore() {
+        List<String> found = new ArrayList<>();
+        SOURCES.values().forEach(source -> {
+            if (source.pkg().equals("com.macrodash.store")) {
+                return;
+            }
+            source.refs().stream().filter(ref -> ref.startsWith("org.springframework.jdbc."))
+                    .forEach(ref -> found.add(source.simpleName() + " → " + ref));
+        });
+        assertThat(found).isEmpty();
+    }
+
+    /** 수집기가 쓰는 테이블(ADR 0008). 백엔드는 읽기만 합니다. */
+    private static final Pattern WRITES_COLLECTOR_TABLE = Pattern.compile(
+            "(?i)(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|TRUNCATE)\\s+(snapshots|timeseries|observations|"
+                    + "collector_runs|collector_task_runs|refresh_requests|schema_migrations)\\b");
+
+    @Test
+    @DisplayName("백엔드는 수집기 테이블에 쓰지 않는다 — 테이블마다 쓰는 프로세스는 하나(ADR 0008)")
+    void backendDoesNotWriteCollectorTables() {
+        List<String> found = new ArrayList<>();
+        SOURCES.forEach((file, source) -> {
+            Matcher matcher = WRITES_COLLECTOR_TABLE.matcher(CODE.get(file));
+            while (matcher.find()) {
+                found.add(source.simpleName() + ": " + matcher.group());
+            }
+        });
+        assertThat(found).isEmpty();
+    }
+
+    @Test
     @DisplayName("기능 사이 의존에 순환이 없다")
     void noCyclesBetweenFeatures() {
         Map<String, Set<String>> graph = new HashMap<>();

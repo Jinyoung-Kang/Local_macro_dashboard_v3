@@ -31,7 +31,7 @@ config · web ─▶ feature/<기능> ─▶ read ─▶ store
 | `feature/<기능>` | 컨트롤러(HTTP 경계) + 서비스(응답 조립) | 아래 전부 + 다른 기능의 **서비스** |
 | `analytics` | 순수 계산 | `java.*`만 |
 | `read` | 읽기 정책(저장본이 오래됐으면 수집 요청). **스냅샷은 여기서만 읽습니다** | store · collector · config |
-| `store` | DB 접근 · 데이터셋 이름 · 신선도. 기능은 observations·timeseries 조회에만 직접 씁니다 | DB만(수집기·설정·기능 모름) |
+| `store` | DB 접근 전부(수집기 테이블 읽기 + 백엔드가 쓰는 테이블, [0008](0008-backend-owned-tables-and-scheduled-jobs.md)) · 데이터셋 이름 · 신선도. 기능은 observations·timeseries 조회와 백엔드 소유 테이블에 직접 씁니다. 스프링 JDBC는 `store`에서만 | DB만(수집기·설정·기능 모름) |
 | `collector` | 수집기 HTTP 호출 | config |
 | `support` | JSON 읽기 · 파라미터 · 비밀값 가림 · 공통 예외 | analytics(입력 타입) |
 | `config` · `web` | 설정 · 인증 필터 · 공통 오류 응답 | 기능까지 |

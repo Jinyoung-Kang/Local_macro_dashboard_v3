@@ -30,6 +30,8 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
 - **없는 숫자를 만들지 않는다.** 표본 부족·수집 실패는 `null`→화면 `—`. 0으로 채우지 않는다.
   추정치는 `isEstimated`/`isProxy`를 함께 내려보낸다.
 - 날짜는 `Kst.today()`(Java)·KST 기준. `LocalDate.now()`를 쓰지 않는다(서버 TZ는 UTC).
+- **테이블마다 쓰는 프로세스는 하나**(ADR 0008). 수집기 테이블은 백엔드가 읽기만, 백엔드 테이블(`regime_log` 등)은 백엔드만 쓴다.
+  스키마 파일은 `db/migrations/` 한 곳(수집기가 기동 시 적용). 백엔드 DB 접근은 `store`에서만. 정기 작업은 `StoreReader.quietly`로 읽는다(수집 유발 금지).
 - 데이터셋 이름은 `collector/app/catalog.py`와 `backend/.../store/Datasets.java` 둘 다 고친다
   (`DatasetsParityTest`가 대조).
 - 백엔드 패키지 의존 규칙(ADR 0001)과 화면 계층(ADR 0004)을 지킨다 — `ArchitectureRulesTest`가 막는다.

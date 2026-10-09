@@ -22,6 +22,7 @@ export const SOURCES = {
   krxDerived: "KRX 미결제약정으로 대시보드가 계산",
   equityPrices: "Yahoo Finance (yfinance) — 일별 종가",
   regime: "FRED (공식) — 10Y−3M 금리차 · NFCI · 하이일드 스프레드 · 연준 순유동성(WALCL−TGA−RRP)",
+  regimeLog: "대시보드 판정 기록 (PostgreSQL regime_log) — 그날 화면에 보인 판정, 입력은 FRED(공식)",
   radarHistory: "수집기가 쌓아 온 누적 이력 (PostgreSQL) — 각 날짜의 원래 출처는 순위 수집 당시 소스",
   internalRules: "대시보드 해석 기준표 (역사적 분포 참고치 — 공식 기준 아님)",
   collectorRuns: "수집기 실행 기록 (PostgreSQL collector_task_runs)",

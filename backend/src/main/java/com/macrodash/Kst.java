@@ -38,6 +38,11 @@ public final class Kst {
         return LocalDate.now(ZONE);
     }
 
+    /** 주어진 시계 기준 한국 시각 — 시각을 움직여야 하는 정기 작업 테스트용. */
+    public static java.time.ZonedDateTime now(java.time.Clock clock) {
+        return java.time.ZonedDateTime.now(clock.withZone(ZONE));
+    }
+
     /** "최근 N년" 조회의 상한. 저장본은 길어야 수십 년이라, 이보다 길면 "전체"와 같습니다. */
     public static final int MAX_LOOKBACK_YEARS = 100;
 

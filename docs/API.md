@@ -152,6 +152,7 @@
 | `GET /api/analytics/series` | 상관 분석에 쓸 수 있는 계열 목록 (20종) |
 | `GET /api/analytics/correlation?x=&y=&window=60&years=3&mode=change` | 롤링 상관계수 + 산점도. `mode=level`에는 허위 상관 경고가 붙습니다 |
 | `GET /api/analytics/regime?years=5` | 4국면 판정 + 근거 신호 + 주간 이력·구간 |
+| `GET /api/analytics/regime/log?limit=90` | 국면 판정 라이브 기록(하루 한 건, 최근 순) — 판정·입력값·입력별 기준일·판정 불가 사유. 추가만 하는 기록(`regime_log`) |
 
 ### 🏦 투자자별 매매 (토스증권 공식)
 

@@ -46,7 +46,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         "dashboard.jwt-secret=integration-test-secret-key-32-bytes!",
         "dashboard.read-mode=store_only",
         "dashboard.collector-url=http://localhost:1",    // 수집기가 없어도 화면은 떠야 합니다
-        "dashboard.ai.timeout-seconds=333"               // 설정 주입이 실제로 먹는지 확인용
+        "dashboard.ai.timeout-seconds=333",              // 설정 주입이 실제로 먹는지 확인용
+        "dashboard.scheduler.enabled=false"              // 정기 작업이 테스트 DB에 쓰면 결과가 실행 시각에 따라 달라짐
 })
 class ApiIntegrationTest {
 

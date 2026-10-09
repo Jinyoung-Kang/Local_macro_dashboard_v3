@@ -48,6 +48,7 @@
 | `collector_task_runs` | 태스크별 결과 (상태·소요·실패 이유) |
 | `refresh_requests` | 수동 새로고침 기준 시각 |
 | `schema_migrations` | 적용한 스키마 버전 (3-2 참고) |
+| `regime_log` | 국면 판정 라이브 기록 — 하루 한 건, 추가만. **백엔드가 씁니다**(ADR 0008) |
 
 **데이터셋 이름은 두 언어에 같은 문자열로 존재합니다** — `collector/app/catalog.py`와
 `backend/.../store/Datasets.java`. `DatasetsParityTest`가 실제로 `catalog.py`를
@@ -75,9 +76,11 @@ pandas DataFrame을 JSON 문자열로 저장하면 **dtype을 따로 실어야**
 ### 3-2. 스키마 변경은 번호 붙은 파일로
 
 `db/migrations/V{번호}__{설명}.sql`을 **수집기가 기동할 때** 번호 순서로 한 번씩 적용하고
-`schema_migrations`에 기록합니다(`collector/app/migrations.py`). 쓰기는 수집기의 몫이라
-백엔드에는 마이그레이션 도구를 두지 않았습니다. 초기 스키마를 기동할 때마다 다시 실행하는
-방식으로는 이미 있는 DB를 바꾸는 변경(예: 인덱스 삭제)을 넣을 수 없기 때문입니다.
+`schema_migrations`에 기록합니다(`collector/app/migrations.py`). 백엔드가 쓰는 테이블(`regime_log` 등)도
+같은 폴더·같은 번호 체계를 씁니다 — 백엔드에는 마이그레이션 도구를 두지 않고, 자기 테이블이 아직 없으면
+그 기능만 "준비 중"으로 둡니다([ADR 0008](adr/0008-backend-owned-tables-and-scheduled-jobs.md)).
+초기 스키마를 기동할 때마다 다시 실행하는 방식으로는 이미 있는 DB를 바꾸는 변경(예: 인덱스 삭제)을
+넣을 수 없기 때문입니다.
 
 - 스키마를 바꿀 때는 **새 번호 파일을 추가**합니다. 이미 적용한 파일을 고치면 경고가 남습니다.
 - 모든 파일은 여러 번 실행해도 안전하게 씁니다(`IF EXISTS` / `IF NOT EXISTS`). 새 DB는

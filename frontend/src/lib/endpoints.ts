@@ -78,6 +78,7 @@ export const endpoints = {
     correlation: (p: { x: string; y: string; window: string | number; years: string | number; mode: string }) =>
       withQuery("/api/analytics/correlation", { x: p.x, y: p.y, window: p.window, years: p.years, mode: p.mode }),
     regime: (years: string | number) => withQuery("/api/analytics/regime", { years }),
+    regimeLog: (limit: string | number) => withQuery("/api/analytics/regime/log", { limit }),
   },
 
   // 🏛️ COT · 🇰🇷 파생 · 📡 레이더 · 🏦 투자자별 매매
