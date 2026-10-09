@@ -149,7 +149,7 @@ def test_fred_task_failure_detail_carries_reason(store, monkeypatch):
 
 def test_run_group_summarizes_results(store, monkeypatch):
     monkeypatch.setattr(
-        tasks, "ALL_TASKS",
+        tasks.runner, "ALL_TASKS",
         (
             tasks.Task("ok_task", "fast", lambda: "정상", ""),
             tasks.Task("bad_task", "fast", lambda: (_ for _ in ()).throw(RuntimeError("x")), ""),
@@ -449,7 +449,7 @@ def test_관심_종목은_레이더_상한과_따로_수집_범위에_더한다(
     assert store.watched_stock_codes(60) == ["000660", "005930"]
 
     radar = [f"{i:06d}" for i in range(100000, 100045)]
-    monkeypatch.setattr(tasks, "RADAR_COMBINATIONS", [])
+    monkeypatch.setattr(tasks.toss, "RADAR_COMBINATIONS", [])
     monkeypatch.setattr(tasks.store, "recent_observation_codes", lambda dataset, since, limit: radar[:limit])
     universe = tasks._toss_universe()
 

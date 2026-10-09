@@ -146,7 +146,7 @@ def test_기다리다_한도를_넘기면_실패가_아니라_합류다(monkeypa
     import threading
     from app import tasks
 
-    monkeypatch.setattr(tasks, "_COALESCE_WAIT_SECONDS", 0.05)
+    monkeypatch.setattr(tasks.runner, "_COALESCE_WAIT_SECONDS", 0.05)
     release = threading.Event()
     task = tasks.Task("slow_one", "fast", lambda: release.wait(5) or "끝", "느린 태스크")
 

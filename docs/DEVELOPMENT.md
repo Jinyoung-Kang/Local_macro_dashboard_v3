@@ -98,13 +98,13 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 티커·FRED 시리즈·COT 자산·기관 목록이 전부 여기 있습니다. 화면에만 추가하면
 "왜 항상 비어 있지?"가 됩니다.
 
-### ② 받아서 저장 — `collector/app/tasks.py` + `catalog.py`
+### ② 받아서 저장 — `collector/app/tasks/`(주제에 맞는 모듈) + `registry.py` + `catalog.py`
 
 ```python
 # catalog.py — 저장본 이름 (백엔드와 같은 문자열이어야 합니다)
 SNAP_MY_THING = "domain.my_thing"
 
-# tasks.py
+# tasks/series.py 등 주제에 맞는 모듈
 def task_my_thing() -> str:
     payload = my_service.collect(...)
     if not payload:
@@ -112,6 +112,7 @@ def task_my_thing() -> str:
     store.put_snapshot(catalog.SNAP_MY_THING, payload)
     return "N건 수집"
 
+# tasks/registry.py
 ALL_TASKS = (..., Task("my_thing", "slow", task_my_thing, "설명"),)
 ```
 
@@ -197,8 +198,10 @@ snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
 - 화면: 메뉴 페이지의 섹션은 같은 폴더의 파일로 둡니다 — 예: `macro/SpreadSection.tsx`,
   `radar/FlowPanels.tsx`. `page.tsx`에는 데이터 조회와 배치만 남깁니다.
 - 수집기: 태스크가 부르는 가공 단계는 별도 모듈로 둡니다 — 예: `macro_cards.py`
-  (매크로 카드 보정). `tasks.py`에는 "받아서 저장"만 남깁니다.
-- 아직 큰 파일(600줄 이상): `tasks.py`, `lib/types.ts`, `services/radar.py`, `store.py`,
+  (매크로 카드 보정). `tasks/`에는 "받아서 저장"만 남깁니다. 태스크는 주제별 모듈(`markets`·`series`·`filings`·
+  `korea_public`·`toss`·`maintenance`)에, 목록은 `registry.py`, 실행·합치기·시간 상한은 `runner.py`에 둡니다.
+  테스트가 모듈 전역(`store`·상수)을 바꿔 끼울 때는 그 이름을 실제로 쓰는 모듈(`tasks.toss` 등)을 대상으로 합니다.
+- 아직 큰 파일(600줄 이상): `lib/types.ts`, `services/radar.py`, `store.py`,
   `components/charts.tsx`, `radar/page.tsx`. 다음에 손댈 때 같은 방식으로 나눕니다.
 
 자세한 규칙은 [PRINCIPLES.md](PRINCIPLES.md)에 있습니다.

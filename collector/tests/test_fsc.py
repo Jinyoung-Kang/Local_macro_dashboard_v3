@@ -179,7 +179,7 @@ def test_이미_최신이면_호출_0회(monkeypatch):
 
     today = datetime.now(tasks.KST).date()
     fake = _FakeStore(latest=(today - timedelta(days=1)).isoformat())
-    monkeypatch.setattr(tasks, "store", fake)
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
     monkeypatch.setattr(tasks.fsc_service, "fetch_day", lambda *a: pytest.fail("호출하면 안 됩니다"))
     assert "최신 상태" in tasks.task_fsc_prices()
 
@@ -188,7 +188,7 @@ def test_발표_전이면_하루_더_거슬러_올라가_저장한다(monkeypatc
     from app import catalog, tasks
 
     fake = _FakeStore(latest=None)
-    monkeypatch.setattr(tasks, "store", fake)
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
     calls = []
 
     def fetch(bas_dt, budget):
@@ -218,7 +218,7 @@ def test_빠진_영업일을_오래된_날부터_전부_메운다(monkeypatch):
     today = datetime.now(tasks.KST).date()
     candidates = tasks._fsc_candidate_dates(today)        # 어제부터 과거로
     fake = _FakeStore(latest=candidates[2].isoformat())   # 3영업일 전까지 저장됨
-    monkeypatch.setattr(tasks, "store", fake)
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
     calls = []
 
     def fetch(bas_dt, budget):

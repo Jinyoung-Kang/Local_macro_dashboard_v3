@@ -189,7 +189,8 @@ make down            # 정지
 .
 ├── collector/          Python · FastAPI — 외부 데이터 수집
 │   ├── app/
-│   │   ├── tasks.py         수집 태스크 정의·스케줄·동시 실행 합치기
+│   │   ├── tasks/           수집 태스크(주제별 모듈)·목록(registry)·실행기(runner: 합치기·시간 상한)
+│   │   ├── numbers.py       외부 응답 숫자 해석(모르는 값은 None)
 │   │   ├── catalog.py       데이터셋 이름·신선도 기준 (백엔드와 공유하는 문자열)
 │   │   ├── indicators.py    수집 대상 정의 (티커·FRED 시리즈·COT 자산·기관)
 │   │   ├── equities.py      13F 종목명 → 티커·섹터 매핑표
@@ -242,7 +243,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 데이터가 필요한 기능은 **네 곳을 순서대로** 건드립니다.
 
 1. `collector/app/indicators.py` — 무엇을 받을지 정의
-2. `collector/app/tasks.py` — 받아서 저장하는 태스크 추가 (+ `catalog.py`에 이름)
+2. `collector/app/tasks/` — 받아서 저장하는 태스크를 주제 모듈에 추가하고 `registry.py`에 한 줄 (+ `catalog.py`에 이름)
 3. `backend/.../analytics/` — 순수 계산 작성 (테스트를 여기에)
 4. `backend/.../feature/<기능>/` 서비스 + 컨트롤러 — 응답 조립 + 엔드포인트
 5. `frontend/src/app/(dashboard)/…` — 화면

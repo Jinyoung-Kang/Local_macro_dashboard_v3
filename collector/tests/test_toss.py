@@ -203,7 +203,7 @@ def _radar_snapshot(store, codes):
 
 def test_stock_flows_task_saves_by_date(store, monkeypatch):
     _radar_snapshot(store, ["005930", "000660", "bad!"])
-    monkeypatch.setattr(tasks, "TOSS_STOCK_SPACING", 0)
+    monkeypatch.setattr(tasks.toss, "TOSS_STOCK_SPACING", 0)
     fixture = _fixture("stock_investor_trading_005930.json")["result"]["records"]
     monkeypatch.setattr(
         tasks.toss_service, "fetch_stock_investor_trading",
@@ -230,7 +230,7 @@ def test_stock_flows_task_saves_by_date(store, monkeypatch):
 
 def test_stock_flows_task_stops_on_forbidden(store, monkeypatch):
     _radar_snapshot(store, ["005930", "000660", "035420"])
-    monkeypatch.setattr(tasks, "TOSS_STOCK_SPACING", 0)
+    monkeypatch.setattr(tasks.toss, "TOSS_STOCK_SPACING", 0)
     calls: list[str] = []
 
     def forbidden(code, count):

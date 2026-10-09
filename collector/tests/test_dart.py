@@ -144,7 +144,7 @@ def test_최신_연도에_없는_회사만_전년도로_다시_받는다(monkeyp
         }}},
         codes=["005930", "000660", "069500"],  # 069500(ETF)은 DART 대상이 아님
     )
-    monkeypatch.setattr(tasks, "store", fake)
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
     calls = []
 
     def fetch(corp_codes, year):
@@ -177,7 +177,7 @@ def test_이번에_못_받은_종목은_이전_저장본을_유지한다(monkeyp
         },
         codes=["005930"],
     )
-    monkeypatch.setattr(tasks, "store", fake)
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
     monkeypatch.setattr(tasks.dart_service, "fetch_accounts", lambda codes, year: [_row("005930", "CFS", "자본총계", "10")])
 
     tasks.task_dart_fundamentals()
@@ -189,7 +189,7 @@ def test_키가_없으면_EmptyResult(monkeypatch):
     from app import tasks
 
     fake = _FakeStore(codes=["005930"])
-    monkeypatch.setattr(tasks, "store", fake)
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
 
     def missing():
         raise publicapi.MissingKey("x")

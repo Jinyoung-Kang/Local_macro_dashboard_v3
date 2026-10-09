@@ -14,7 +14,7 @@ import java.time.temporal.TemporalAccessor;
  * 계산됐습니다.
  *
  * <p>이 대시보드는 한국에서 한국 장을 함께 보는 화면이고, 수집기도 KST로 시각을
- * 찍습니다({@code collector/app/tasks.py}). 기준을 한 곳에 두어 백엔드도 같은
+ * 찍습니다({@code collector/app/tasks/}). 기준을 한 곳에 두어 백엔드도 같은
  * 달력을 쓰게 합니다.
  *
  * <p><b>주의</b> — 시간대를 JVM 기본값으로 바꾸지 않습니다. 기본값을 바꾸면

@@ -165,7 +165,7 @@ def test_0건_응답이_받아_둔_해를_지우지_않는다(monkeypatch):
     this_year = datetime.now(tasks.KST).year
     old = [{"date": f"{this_year}-01-01", "name": "1월1일"}]
     fake = _FakeStore({"years": {str(this_year): {"holidays": old, "announced": True}}})
-    monkeypatch.setattr(tasks, "store", fake)
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
     monkeypatch.setattr(
         tasks.kasi_service, "fetch_year",
         lambda year: [] if year == this_year else [{"date": f"{year}-01-01", "name": "1월1일"}],
@@ -178,7 +178,7 @@ def test_0건_응답이_받아_둔_해를_지우지_않는다(monkeypatch):
 
 
 def test_키가_없으면_EmptyResult(monkeypatch):
-    monkeypatch.setattr(tasks, "store", _FakeStore())
+    monkeypatch.setattr(tasks.korea_public, "store", _FakeStore())
 
     def missing(year):
         raise publicapi.MissingKey("x")
