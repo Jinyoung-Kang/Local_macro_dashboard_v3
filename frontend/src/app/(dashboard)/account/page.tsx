@@ -46,7 +46,7 @@ export default function AccountPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">👤 내 계정</h1>
+        <h1 className="text-xl font-bold text-bright">내 계정</h1>
         <p className="mt-1 text-xs text-muted">
           {user?.email} · {roleLabel(user)}
         </p>

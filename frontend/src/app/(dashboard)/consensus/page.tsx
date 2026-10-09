@@ -59,7 +59,7 @@ export default function ConsensusPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">🎯 기관 13F Money 교집합</h1>
+        <h1 className="text-xl font-bold text-bright">기관 13F Money 교집합</h1>
         <p className="mt-1 text-xs text-muted">
           여러 기관이 공통 보유한 종목 · 동시 매수/매도 집중도
         </p>

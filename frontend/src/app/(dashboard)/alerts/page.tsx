@@ -60,7 +60,7 @@ export default function AlertsPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">🔔 알림</h1>
+        <h1 className="text-xl font-bold text-bright">알림</h1>
         <p className="mt-1 text-xs text-muted">
           알림은 이 화면에만 쌓입니다(메일·메신저로 보내지 않음). 대시보드를 열면 사이드바와 탭 제목에 읽지 않은 수가 보입니다.
         </p>

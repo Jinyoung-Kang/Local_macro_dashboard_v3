@@ -17,7 +17,7 @@ export default function ConnectionsPage() {
   return (
     <div className="flex flex-col gap-8">
       <header>
-        <h1 className="text-xl font-bold text-bright">🔌 외부 API 연결 테스트</h1>
+        <h1 className="text-xl font-bold text-bright">외부 API 연결 테스트</h1>
         <p className="mt-1 text-xs text-muted">
           AI 엔진과 토스증권 연결을 확인합니다. 모든 테스트는 버튼을 눌렀을 때만 외부를 호출합니다.
         </p>

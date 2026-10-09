@@ -63,7 +63,7 @@ export default function StatusPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">🗄️ 데이터 저장소 상태</h1>
+        <h1 className="text-xl font-bold text-bright">데이터 저장소 상태</h1>
         <p className="mt-1 text-xs text-muted">
           수집 현황·신선도·실패 원인·누적 이력 · 읽기 모드 {data?.readMode}
         </p>

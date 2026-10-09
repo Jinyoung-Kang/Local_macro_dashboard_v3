@@ -50,7 +50,7 @@ export default function AiReportPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">🤖 AI 종합 데이터 분석 &amp; 결론 리포트</h1>
+        <h1 className="text-xl font-bold text-bright">AI 종합 데이터 분석 &amp; 결론 리포트</h1>
         <p className="mt-1 text-xs text-muted">
           수집된 데이터만 근거로 삼습니다. 데이터에 없는 수치는 생성하지 않도록 지시합니다.
         </p>

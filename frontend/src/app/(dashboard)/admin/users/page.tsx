@@ -52,7 +52,7 @@ export default function AdminUsersPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">👥 사용자 관리</h1>
+        <h1 className="text-xl font-bold text-bright">사용자 관리</h1>
         <p className="mt-1 text-xs text-muted">역할(운영자·회원)과 등급(무료·유료)을 정합니다. 자기 운영자 역할은 내릴 수 없습니다.</p>
       </header>
 

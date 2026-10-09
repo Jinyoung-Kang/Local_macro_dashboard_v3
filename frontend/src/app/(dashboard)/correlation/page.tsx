@@ -50,7 +50,7 @@ export default function CorrelationPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">🔗 지표 상관관계</h1>
+        <h1 className="text-xl font-bold text-bright">지표 상관관계</h1>
         <p className="mt-1 text-xs text-muted">
           이미 수집한 지표끼리 엮어 봅니다 · 롤링 상관계수 + 산점도 · 상관은 인과가 아닙니다
         </p>

@@ -95,7 +95,7 @@ export default function MacroPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-bright">📊 거시경제 매크로 지표</h1>
+          <h1 className="text-xl font-bold text-bright">거시경제 매크로 지표</h1>
           <p className="mt-1 text-xs text-muted">
             환율·국채·원자재·지수, 장단기 금리차, 신용 리스크, 심화 지표 6종
           </p>

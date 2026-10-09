@@ -77,7 +77,7 @@ export default function RadarPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-bright">📡 외국인/기관 수급 레이더</h1>
+          <h1 className="text-xl font-bold text-bright">외국인/기관 수급 레이더</h1>
           <p className="mt-1 text-xs text-muted">
             폴백 체인: {(options.data?.fallbackChain ?? ["KIS(장중)", "Daum", "Naver", "LS", "토스(공식)", "PyKrx", "누적 이력"]).join(" → ")}
           </p>

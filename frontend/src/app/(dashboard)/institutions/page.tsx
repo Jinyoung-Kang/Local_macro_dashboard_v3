@@ -70,7 +70,7 @@ export default function InstitutionsPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-bright">📑 기관 13F 포트폴리오 분석</h1>
+          <h1 className="text-xl font-bold text-bright">기관 13F 포트폴리오 분석</h1>
           <p className="mt-1 text-xs text-muted">
             SEC EDGAR 공식 공시 · 분기 공시, 공시 마감 45일 지연
           </p>

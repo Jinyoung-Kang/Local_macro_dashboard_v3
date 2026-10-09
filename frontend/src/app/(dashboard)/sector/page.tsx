@@ -56,7 +56,7 @@ export default function SectorPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-bright">🔄 섹터 &amp; 자산군 로테이션 맵</h1>
+          <h1 className="text-xl font-bold text-bright">섹터 &amp; 자산군 로테이션 맵</h1>
           <p className="mt-1 text-xs text-muted">
             S&amp;P 11개 섹터 + 글로벌 자산군 모멘텀 · 벤치마크 {data?.benchmark ?? "SPY"}
           </p>

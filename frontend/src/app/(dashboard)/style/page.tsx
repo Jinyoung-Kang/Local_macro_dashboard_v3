@@ -39,7 +39,7 @@ export default function GuruPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-bold text-bright">🧬 기관 13F 스타일·위험</h1>
+        <h1 className="text-xl font-bold text-bright">기관 13F 스타일·위험</h1>
         <p className="mt-1 text-xs text-muted">
           집중도 · 회전율 · 기관 간 유사도 · 포트폴리오 위험 (13F 공시 기준)
         </p>

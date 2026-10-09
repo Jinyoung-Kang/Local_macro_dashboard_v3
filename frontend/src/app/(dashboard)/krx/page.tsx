@@ -65,7 +65,7 @@ export default function KrxPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-bright">🇰🇷 국내 파생 &amp; 투기세력 (KRX)</h1>
+          <h1 className="text-xl font-bold text-bright">국내 파생 &amp; 투기세력 (KRX)</h1>
           <p className="mt-1 text-xs text-muted">
             KOSPI200 선물 종가·미결제약정·베이시스 · 한국판 COT Index (계약수 기준)
           </p>

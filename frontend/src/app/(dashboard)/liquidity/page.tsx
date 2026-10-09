@@ -68,7 +68,7 @@ export default function LiquidityPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-bright">🏢 연준 순유동성 트래커</h1>
+          <h1 className="text-xl font-bold text-bright">연준 순유동성 트래커</h1>
           <p className="mt-1 text-xs text-muted">
             WALCL − TGA − ON RRP · 출처: FRED 공식 시계열 (주간 갱신)
           </p>
