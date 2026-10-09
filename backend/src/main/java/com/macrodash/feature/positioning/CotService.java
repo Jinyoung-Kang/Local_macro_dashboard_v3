@@ -2,6 +2,7 @@ package com.macrodash.feature.positioning;
 
 import com.macrodash.Kst;
 import com.macrodash.analytics.CotExtremes;
+import com.macrodash.analytics.ForwardReturns;
 import com.macrodash.analytics.SeriesMath;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
@@ -249,13 +250,13 @@ public class CotService {
                     .filter(event -> side.equals(event.side()))
                     .map(event -> event.forwardReturns().get(weeks + "w"))
                     .toList();
-            out.put("h" + weeks, summaryMap(CotExtremes.summarize(returns)));
+            out.put("h" + weeks, summaryMap(ForwardReturns.summarize(returns)));
             out.put("baseline" + weeks, summaryMap(CotExtremes.baseline(allDates, prices, weeks)));
         }
         return out;
     }
 
-    private Map<String, Object> summaryMap(CotExtremes.Summary summary) {
+    private Map<String, Object> summaryMap(ForwardReturns.Summary summary) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("count", summary.count());
         out.put("mean", summary.mean());

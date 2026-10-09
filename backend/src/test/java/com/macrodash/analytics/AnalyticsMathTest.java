@@ -205,10 +205,10 @@ class AnalyticsMathTest {
             prices.put(LocalDate.of(2026, 1, 5), 100.0);
             prices.put(LocalDate.of(2026, 1, 12), 110.0);
 
-            assertThat(CotExtremes.forwardReturn(prices, LocalDate.of(2026, 1, 5), 1))
+            assertThat(ForwardReturns.forwardReturn(prices, LocalDate.of(2026, 1, 5), 1))
                     .isEqualTo(10.0, within(1e-9));
             // 13주 뒤 가격이 없습니다.
-            assertThat(CotExtremes.forwardReturn(prices, LocalDate.of(2026, 1, 5), 13)).isNull();
+            assertThat(ForwardReturns.forwardReturn(prices, LocalDate.of(2026, 1, 5), 13)).isNull();
         }
 
         @Test
@@ -219,14 +219,14 @@ class AnalyticsMathTest {
             prices.put(LocalDate.of(2026, 2, 2), 120.0);
 
             // 1월 3일(토)에는 가격이 없습니다 → 1월 5일을 씁니다.
-            assertThat(CotExtremes.forwardReturn(prices, LocalDate.of(2026, 1, 3), 4))
+            assertThat(ForwardReturns.forwardReturn(prices, LocalDate.of(2026, 1, 3), 4))
                     .isEqualTo(20.0, within(1e-9));
         }
 
         @Test
         @DisplayName("요약은 표본이 없으면 0이 아니라 null을 돌려준다")
         void emptySummaryIsNull() {
-            CotExtremes.Summary summary = CotExtremes.summarize(List.of());
+            ForwardReturns.Summary summary = ForwardReturns.summarize(List.of());
 
             assertThat(summary.count()).isZero();
             assertThat(summary.mean()).isNull();
@@ -239,7 +239,7 @@ class AnalyticsMathTest {
             List<Double> returns = new ArrayList<>(List.of(10.0, -5.0, 3.0, 2.0));
             returns.add(null);
 
-            CotExtremes.Summary summary = CotExtremes.summarize(returns);
+            ForwardReturns.Summary summary = ForwardReturns.summarize(returns);
 
             assertThat(summary.count()).isEqualTo(4);
             assertThat(summary.mean()).isEqualTo(2.5, within(1e-9));

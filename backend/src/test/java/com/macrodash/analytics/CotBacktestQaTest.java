@@ -72,7 +72,7 @@ class CotBacktestQaTest {
             prices.put(first.plusDays(i), 100.0 + i);
         }
 
-        assertThat(CotExtremes.forwardReturn(prices, LocalDate.of(2024, 8, 13), 13))
+        assertThat(ForwardReturns.forwardReturn(prices, LocalDate.of(2024, 8, 13), 13))
                 .as("8월 신호를 10-09 종가에서 출발시키면 안 됨")
                 .isNull();
     }
