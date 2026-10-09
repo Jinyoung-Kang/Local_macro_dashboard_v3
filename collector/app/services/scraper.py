@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+from ..numbers import to_float
 from .. import kst
 
 import logging
@@ -285,9 +286,9 @@ def fetch_symbol_snapshot(
     response.raise_for_status()
     payload = response.json()
 
-    price = _to_float(payload.get("close"))
-    change_pct = _to_float(payload.get("change"))
-    change = _to_float(payload.get("change_abs"))
+    price = to_float(payload.get("close"))
+    change_pct = to_float(payload.get("change"))
+    change = to_float(payload.get("change_abs"))
 
     if price is None:
         logger.warning("Symbol Scanner 현재가 파싱 실패: symbol=%s", symbol)
@@ -351,7 +352,7 @@ def fetch_treasury_yields() -> dict:
         values = row.get("d") or []
         if not isinstance(values, list) or len(values) < 5:
             continue
-        current = _to_float(values[4])
+        current = to_float(values[4])
         if current is None:
             continue
         out[key] = {
@@ -367,19 +368,3 @@ def fetch_treasury_yields() -> dict:
             sorted(missing),
         )
     return out
-
-
-def _to_float(value) -> float | None:
-    if value is None:
-        return None
-    try:
-        text = (
-            str(value)
-            .replace(",", "")
-            .replace(" ", "")
-            .replace("\xa0", "")
-            .strip()
-        )
-        return float(text)
-    except (TypeError, ValueError):
-        return None

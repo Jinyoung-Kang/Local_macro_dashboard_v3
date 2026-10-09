@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+from ..numbers import to_float
 from .. import http, settings
 from .. import kst
 
@@ -378,8 +379,5 @@ def test_connection() -> dict:
 
 
 def _to_float(value) -> float | None:
-    try:
-        number = float(str(value).strip().replace(",", ""))
-    except (TypeError, ValueError):
-        return None
-    return number if number != 0 else None
+    """KIS는 모르는 값을 0으로 줍니다 — 0도 None으로 봅니다(원래 동작 유지). 해석 규칙은 app/numbers."""
+    return to_float(value) or None

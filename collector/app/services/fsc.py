@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 import re
 
+from ..numbers import to_float
 from .. import publicapi, settings
 
 URL = "https://apis.data.go.kr/1160100/GetStockSecuritiesInfoService_V2/getStockPriceInfo_V2"
@@ -75,16 +76,6 @@ def _fetch_pages(url: str, bas_dt: str, key: str, budget: publicapi.CallBudget) 
     return [row for row in rows if row["code"]]
 
 
-def _number(text: str | None) -> float | None:
-    if text is None:
-        return None
-    cleaned = text.replace(",", "").strip()
-    try:
-        return float(cleaned) if cleaned not in ("", "-") else None
-    except ValueError:
-        return None
-
-
 def normalize(item: dict) -> dict:
     """
     응답 한 행을 저장 형태로 옮깁니다. 숫자가 아니면 None (0으로 채우지 않음).
@@ -97,13 +88,13 @@ def normalize(item: dict) -> dict:
         "code": match.group(1) if match else None,
         "name": (item.get("itmsNm") or "").strip() or None,
         "market": (item.get("mrktCtg") or "").strip() or None,
-        "close": _number(item.get("clpr")),
-        "change": _number(item.get("vs")),
-        "changePct": _number(item.get("fltRt")),
-        "volume": _number(item.get("trqu")),
-        "tradingValue": _number(item.get("trPrc")),
-        "listedShares": _number(item.get("lstgStCnt")),
-        "marketCap": _number(item.get("mrktTotAmt")),
+        "close": to_float(item.get("clpr")),
+        "change": to_float(item.get("vs")),
+        "changePct": to_float(item.get("fltRt")),
+        "volume": to_float(item.get("trqu")),
+        "tradingValue": to_float(item.get("trPrc")),
+        "listedShares": to_float(item.get("lstgStCnt")),
+        "marketCap": to_float(item.get("mrktTotAmt")),
         "basDt": (item.get("basDt") or "").strip() or None,
     }
 

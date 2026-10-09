@@ -29,6 +29,7 @@ import time
 
 import requests
 
+from ..numbers import to_float, to_int
 from .. import http, settings
 
 logger = logging.getLogger(__name__)
@@ -276,30 +277,11 @@ INSTITUTION_BREAKDOWN = (
 )
 
 
-def _int(value) -> int | None:
-    """문자열 정수 → int. 없거나 숫자가 아니면 None(0으로 바꾸지 않음)."""
-    if value is None:
-        return None
-    try:
-        return int(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-
-
-def _float(value) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-
-
 def _amounts(node) -> dict | None:
     """{buyAmount, sellAmount} → {buy, sell, net}. 노드가 없으면 None."""
     if not isinstance(node, dict):
         return None
-    buy, sell = _int(node.get("buyAmount")), _int(node.get("sellAmount"))
+    buy, sell = to_int(node.get("buyAmount")), to_int(node.get("sellAmount"))
     return {"buy": buy, "sell": sell, "net": buy - sell if buy is not None and sell is not None else None}
 
 
@@ -307,8 +289,8 @@ def _volumes(node) -> dict | None:
     """{buyVolume, sellVolume, netBuyVolume} → {buy, sell, net}. 노드가 없으면 None."""
     if not isinstance(node, dict):
         return None
-    buy, sell = _int(node.get("buyVolume")), _int(node.get("sellVolume"))
-    net = _int(node.get("netBuyVolume"))
+    buy, sell = to_int(node.get("buyVolume")), to_int(node.get("sellVolume"))
+    net = to_int(node.get("netBuyVolume"))
     if net is None and buy is not None and sell is not None:
         net = buy - sell
     return {"buy": buy, "sell": sell, "net": net}
@@ -342,7 +324,7 @@ def normalize_stock_record(rec: dict) -> dict:
             {key: _volumes(breakdown.get(key)) for key in INSTITUTION_BREAKDOWN}
             if isinstance(breakdown, dict) else None
         ),
-        "foreignerHoldingRate": _float(holding.get("holdingRate")) if isinstance(holding, dict) else None,
+        "foreignerHoldingRate": to_float(holding.get("holdingRate")) if isinstance(holding, dict) else None,
     }
 
 
@@ -387,10 +369,10 @@ def fetch_trading_amount_leaders(count: int = 100) -> list[dict]:
         if not isinstance(row, dict) or not row.get("symbol"):
             continue
         price = row.get("price") or {}
-        rate = _float(price.get("changeRate"))
+        rate = to_float(price.get("changeRate"))
         out.append({
             "code": str(row["symbol"]),
-            "lastPrice": _float(price.get("lastPrice")),
+            "lastPrice": to_float(price.get("lastPrice")),
             "changePct": round(rate * 100, 2) if rate is not None else None,
         })
     return out
@@ -440,7 +422,7 @@ def fetch_index_daily_close(symbol: str = "KOSPI") -> dict:
     candles = [c for c in (result.get("candles") or []) if isinstance(c, dict)]
     if not candles:
         return {"ok": False, "value": None, "detail": "응답에 일봉이 없습니다"}
-    value = _float(candles[0].get("closePrice"))
+    value = to_float(candles[0].get("closePrice"))
     as_of = str(candles[0].get("timestamp") or "")[:10] or None
     if value is None:
         return {"ok": False, "value": None, "detail": "응답에 종가(closePrice)가 없습니다"}
@@ -455,7 +437,7 @@ def fetch_usdkrw_mid() -> dict:
     그래서 은행 간 중간값인 ``midRate``를 씁니다.
     """
     result = api_get("/api/v1/exchange-rate", {"baseCurrency": "USD", "quoteCurrency": "KRW"}) or {}
-    value = _float(result.get("midRate"))
+    value = to_float(result.get("midRate"))
     if value is None:
         return {"ok": False, "value": None, "detail": "응답에 매매기준율(midRate)이 없습니다"}
     valid_from = str(result.get("validFrom") or "")

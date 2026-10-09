@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+from ..numbers import to_float
 from .. import http, settings
 from .. import kst
 
@@ -335,7 +336,5 @@ def test_connection() -> dict:
 
 
 def _to_float(value) -> float:
-    try:
-        return float(str(value).replace(",", "").strip())
-    except (TypeError, ValueError):
-        return 0.0
+    """LS 순위 금액 — 비었거나 숫자가 아니면 0(순위 정렬용, 원래 동작 유지). 해석 규칙은 app/numbers."""
+    return to_float(value) or 0.0

@@ -20,6 +20,7 @@ from datetime import datetime
 
 from bs4 import BeautifulSoup
 
+from ..numbers import to_float
 from ..http import (
     SecUserAgentInvalid,
     brief_error,
@@ -312,10 +313,8 @@ def _estimate_report_date(filing_date: str) -> str:
 
 
 def _to_float(text: str) -> float:
-    try:
-        return float(str(text).replace(",", "").strip()) if text else 0.0
-    except (TypeError, ValueError):
-        return 0.0
+    """13F 평가액·주식 수 — 비었으면 0(합계에서 빠지게, 원래 동작 유지). 해석 규칙은 app/numbers."""
+    return to_float(text) or 0.0
 
 
 def _fail(cik: str, message: str) -> dict:

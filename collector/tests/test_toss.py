@@ -98,9 +98,9 @@ def test_confirmed_stock_record_negative_net_and_holding():
 
 
 def test_non_numeric_amount_is_none():
-    assert toss._int("-") is None
-    assert toss._int(None) is None
-    assert toss._int("-291850") == -291850
+    assert toss.to_int("-") is None
+    assert toss.to_int(None) is None
+    assert toss.to_int("-291850") == -291850
 
 
 # ------------------------------------------------------------------ 호출 규칙

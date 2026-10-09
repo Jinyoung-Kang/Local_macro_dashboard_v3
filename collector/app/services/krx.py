@@ -32,6 +32,7 @@ from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
+from ..numbers import to_float
 from .. import yfcache
 
 from .. import settings
@@ -134,7 +135,7 @@ def fetch_kospi200_index_close(date_str: str) -> float | None:
     for row in rows:
         name = str(_pick(row, "IDX_NM") or "")
         if "코스피200" in name.replace(" ", ""):
-            close = _to_float(_pick(row, "CLSPRC_IDX", "TDD_CLSPRC"))
+            close = to_float(_pick(row, "CLSPRC_IDX", "TDD_CLSPRC"))
             return close if close and close > 0 else None
     return None
 
@@ -249,12 +250,12 @@ def _parse_futures_day(date_str: str, rows: list[dict]) -> dict | None:
 
     # 최근월물 = 거래량이 가장 많은 종목
     candidates.sort(
-        key=lambda r: _to_float(_pick(r, "ACC_TRDVOL", "TRDVOL")) or 0.0,
+        key=lambda r: to_float(_pick(r, "ACC_TRDVOL", "TRDVOL")) or 0.0,
         reverse=True,
     )
     row = candidates[0]
 
-    close = _to_float(_pick(row, "TDD_CLSPRC", "CLSPRC"))
+    close = to_float(_pick(row, "TDD_CLSPRC", "CLSPRC"))
     if not close or close <= 0:
         return None
 
@@ -263,7 +264,7 @@ def _parse_futures_day(date_str: str, rows: list[dict]) -> dict | None:
     for field in ("FLUC_RT", "FLUC_RATE", "CMPPREVDD_RT"):
         raw = row.get(field)
         if raw is not None and str(raw).strip() not in ("", "nan"):
-            reported = _to_float(raw)
+            reported = to_float(raw)
             break
 
     # 거래량·미결제약정도 모르면 None입니다. 0.0으로 메우면 (1) 40일 이력 위에
@@ -271,8 +272,8 @@ def _parse_futures_day(date_str: str, rows: list[dict]) -> dict | None:
     return {
         "close": close,
         "reportedPct": reported,
-        "volume": _to_float(_pick(row, "ACC_TRDVOL", "TRDVOL")),
-        "openInterest": _to_float(_pick(row, "ACC_OPNINT_QTY", "OPNINT_QTY")),
+        "volume": to_float(_pick(row, "ACC_TRDVOL", "TRDVOL")),
+        "openInterest": to_float(_pick(row, "ACC_OPNINT_QTY", "OPNINT_QTY")),
         "contractName": str(_pick(row, "ISU_NM", "PROD_NM") or "KOSPI 200 선물"),
     }
 
@@ -509,7 +510,7 @@ def collect_daum_futures_trend(lookback_days: int = 25) -> dict:
 
 def _contracts(value) -> int | None:
     """계약 수. 숫자가 아니면 None."""
-    number = _to_float(value)
+    number = to_float(value)
     return None if number is None else int(number)
 
 
@@ -588,8 +589,8 @@ def collect_daum_intraday_acceleration(lookback_minutes: int = 30) -> dict:
     reference_time, reference_row = earlier[-1] if earlier else same_day[0]
 
     def delta(field: str) -> tuple[int, int]:
-        current = int(_to_float(latest_row.get(field)) or 0)
-        before = int(_to_float(reference_row.get(field)) or 0)
+        current = int(to_float(latest_row.get(field)) or 0)
+        before = int(to_float(reference_row.get(field)) or 0)
         return current, current - before
 
     foreign_current, foreign_change = delta("foreignSettlement")
@@ -639,13 +640,3 @@ def _pick(row: dict, *names: str):
         if name.upper() in upper:
             return upper[name.upper()]
     return None
-
-
-def _to_float(value) -> float | None:
-    if value is None:
-        return None
-    try:
-        number = float(str(value).replace(",", "").strip())
-    except (TypeError, ValueError):
-        return None
-    return None if number != number else number

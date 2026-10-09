@@ -23,12 +23,12 @@ yfinance 기반 시세 수집 (티커 시계열 + 매크로 카드).
 from __future__ import annotations
 
 import logging
-import math
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
 
+from ..numbers import to_float
 from .. import indicators, yfcache
 from .. import kst
 
@@ -214,11 +214,11 @@ def _frame_to_points(frame: pd.DataFrame) -> list[dict]:
         timestamp = pd.Timestamp(index)
         points.append({
             "date": timestamp.isoformat(),
-            "open": _safe_float(row.get("Open")),
-            "high": _safe_float(row.get("High")),
-            "low": _safe_float(row.get("Low")),
-            "close": _safe_float(row.get("Close")),
-            "volume": _safe_float(row.get("Volume")),
+            "open": to_float(row.get("Open")),
+            "high": to_float(row.get("High")),
+            "low": to_float(row.get("Low")),
+            "close": to_float(row.get("Close")),
+            "volume": to_float(row.get("Volume")),
         })
     return points
 
@@ -457,16 +457,6 @@ def previous_close_from_daily(symbol: str, current_iso: str | None = None) -> fl
     if len(closes) >= 2:
         return float(closes[-2]["close"])
     return None
-
-
-def _safe_float(value) -> float | None:
-    if value is None:
-        return None
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    return None if math.isnan(out) else out
 
 
 def now_kst_text() -> str:

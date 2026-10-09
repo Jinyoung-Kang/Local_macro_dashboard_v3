@@ -34,6 +34,7 @@ from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
 
+from ..numbers import to_float
 from .. import catalog, krcalendar, kst, store
 from ..http import get_session
 from . import kis, ls, toss
@@ -418,10 +419,10 @@ def parse_daum_ranking(
             continue
 
         # 빠진 값은 모르는 값입니다. 0.0으로 적으면 '가격 0원·등락률 0%'가 이력에 영구히 남습니다.
-        price = _optional_float(row.get("tradePrice"))
-        change_rate = _optional_float(row.get("changeRate"))
+        price = to_float(row.get("tradePrice"))
+        change_rate = to_float(row.get("changeRate"))
         change_pct = None if change_rate is None else round(change_rate * 100.0, 2)
-        net_won = _optional_float(row.get("straightPurchasePrice"))
+        net_won = to_float(row.get("straightPurchasePrice"))
         if net_won is None:
             continue    # 순매수 금액을 모르면 순위를 매길 수 없습니다
         net_eok = round(net_won / 100_000_000.0, 1)
@@ -749,8 +750,8 @@ def fetch_pykrx_ranking(
             price_row = prices.loc[code]
             if getattr(price_row, "ndim", 1) == 2:      # 같은 종목이 두 번 있으면 첫 행
                 price_row = price_row.iloc[0]
-            price = _optional_float(price_row.get("종가"))
-            change_pct = _optional_float(price_row.get("등락률"))
+            price = to_float(price_row.get("종가"))
+            change_pct = to_float(price_row.get("등락률"))
 
         records.append({
             "code": code,
@@ -992,7 +993,7 @@ def _cell_to_float(cell) -> float | None:
         text = cell.text.replace(",", "").replace("+", "").replace("%", "").strip()
     except AttributeError:
         return None
-    return _optional_float(text)
+    return to_float(text)
 
 
 def _iso_date(value) -> str | None:
@@ -1004,18 +1005,3 @@ def _iso_date(value) -> str | None:
         return date(int(text[:4]), int(text[4:6]), int(text[6:8])).isoformat()
     except ValueError:
         return None
-
-
-def _optional_float(value) -> float | None:
-    """숫자가 아니거나 NaN이면 None — 모르는 값을 0으로 바꾸지 않습니다. '1,234' 같은 문자열도 받습니다."""
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, str):
-        value = value.replace(",", "").strip()
-        if not value:
-            return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return None if number != number else number
