@@ -7,6 +7,8 @@ SEC EDGAR 13F 목록·문서 파싱.
 """
 from __future__ import annotations
 
+import pytest
+
 from app.services import sec13f
 
 
@@ -74,3 +76,31 @@ def test_같은_종목의_여러_클래스는_따로_남는다():
     by_cusip = {h["cusip"]: h for h in holdings}
     assert set(by_cusip) == {"02079K305", "02079K107"}
     assert by_cusip["02079K305"]["value"] == 1500.0 and by_cusip["02079K305"]["shares"] == 15.0
+
+
+# ---------------------------------------------------------------- QA-014
+# 보고 분기를 제출 '월'로 추정해, 3·6·9·12월에 낸 공시가 아직 끝나지 않은 분기로 붙었습니다
+# (예: 12월 2일 제출 → 같은 해 12-31). 늦게 낸 공시가 다음 분기 이름을 달면 백엔드의
+# 분기별 중복 제거(dedupeByReportDate)가 진짜 다음 분기 공시와 겹쳐 한 분기를 버릴 수 있습니다.
+# EDGAR 공시 색인 페이지에는 'Period of Report'가 있으므로 그 값을 씁니다.
+
+_INDEX_HTML = (
+    "<div class=\"formGrouping\">"
+    "<div class=\"infoHead\">Filing Date</div>\n<div class=\"info\">2026-12-02</div>"
+    "<div class=\"infoHead\">Accepted</div>\n<div class=\"info\">2026-12-02 16:05:04</div>"
+    "</div><div class=\"formGrouping\">"
+    "<div class=\"infoHead\">Period of Report</div>\n<div class=\"info\">2026-09-30</div>"
+    "</div>"
+)
+
+
+@pytest.mark.xfail(strict=True, reason="QA-014 재현 — 수정 전: 공시 색인의 Period of Report를 읽지 않음")
+def test_QA014_보고_분기는_공시_색인의_Period_of_Report를_쓴다():
+    assert sec13f._parse_period_of_report(_INDEX_HTML) == "2026-09-30"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-014 재현 — 수정 전: 12월 제출을 12-31로 추정")
+def test_QA014_추정은_제출일_전에_끝난_가장_최근_분기말이다():
+    assert sec13f._estimate_report_date("2026-12-02") == "2026-09-30"
+    assert sec13f._estimate_report_date("2026-03-20") == "2025-12-31"
+    assert sec13f._estimate_report_date("2026-08-14") == "2026-06-30"
