@@ -1,4 +1,16 @@
 spring:
+  # 계정 메일(가입 인증·비밀번호 재설정). MAIL_HOST가 비면 메일이 필요한 두 기능만 꺼집니다(ADR 0010).
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:true}
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
   application:
     name: macro-dashboard-backend
 
@@ -35,6 +47,10 @@ dashboard:
   # 둘 중 하나라도 비었거나 비밀번호가 옛 공개 기본값(admin1234@)이면 만들지 않고 로그로 안내합니다.
   password: ${APP_PASSWORD:}
   owner-email: ${OWNER_EMAIL:}
+  # 계정 메일의 보낸 사람 주소(비면 MAIL_USERNAME)
+  mail-from: ${MAIL_FROM:}
+  # 메일 속 링크의 화면 주소(비면 FRONTEND_ORIGIN의 첫 값)
+  public-url: ${PUBLIC_URL:}
   session-minutes: ${SESSION_MINUTES:720}
   # HTTPS로만 접속할 때 true (세션 쿠키에 Secure). http://에서 켜면 로그인이 안 됩니다.
   cookie-secure: ${COOKIE_SECURE:false}

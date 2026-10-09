@@ -39,9 +39,11 @@ public final class AccessPolicy {
     static final Map<String, Access> ROUTES = new LinkedHashMap<>();
 
     static {
-        public_("GET /api/health", "POST /api/auth/login", "GET /api/auth/session");
+        public_("GET /api/health", "POST /api/auth/login", "GET /api/auth/session",
+                "POST /api/auth/signup", "POST /api/auth/verify", "POST /api/auth/reset/request",
+                "POST /api/auth/reset/confirm");
         member("POST /api/auth/logout", "POST /api/auth/logout-all", "GET /api/auth/sessions",
-                "POST /api/auth/password");
+                "POST /api/auth/password", "POST /api/auth/delete");
 
         // 📊 매크로 · 순유동성 · 로테이션
         member("GET /api/macro/overview", "GET /api/macro/risk", "GET /api/macro/advanced",

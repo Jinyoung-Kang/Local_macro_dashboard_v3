@@ -18,7 +18,7 @@ class AccessPolicyTest {
     }
 
     @Test
-    @DisplayName("수집을 일으키거나 내부 상태를 보여 주는 경로는 운영자만, 로그인·헬스체크만 공개")
+    @DisplayName("수집을 일으키거나 내부 상태를 보여 주는 경로는 운영자만, 로그인·가입·재설정·헬스체크만 공개")
     void sensitiveRoutesAreOwnerOnly() {
         assertThat(AccessPolicy.required("POST", "/api/status/refresh")).isEqualTo(AccessPolicy.Access.OWNER);
         assertThat(AccessPolicy.required("POST", "/api/status/run/fred_series")).isEqualTo(AccessPolicy.Access.OWNER);
@@ -29,7 +29,9 @@ class AccessPolicyTest {
                 .isEqualTo(AccessPolicy.Access.MEMBER);
         assertThat(AccessPolicy.routes().entrySet().stream()
                 .filter(entry -> entry.getValue() == AccessPolicy.Access.PUBLIC).map(java.util.Map.Entry::getKey))
-                .containsExactlyInAnyOrder("GET /api/health", "POST /api/auth/login", "GET /api/auth/session");
+                .containsExactlyInAnyOrder("GET /api/health", "POST /api/auth/login", "GET /api/auth/session",
+                        "POST /api/auth/signup", "POST /api/auth/verify", "POST /api/auth/reset/request",
+                        "POST /api/auth/reset/confirm");
     }
 
     @Test

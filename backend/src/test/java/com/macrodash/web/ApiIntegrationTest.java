@@ -175,6 +175,16 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("메일 발송이 설정되지 않으면 가입·재설정은 503, 로그인 화면은 그 사실을 세션 응답으로 안다")
+    void signupNeedsMail() {
+        ResponseEntity<String> signup = rest.postForEntity(url("/api/auth/signup"),
+                Map.of("email", "new@test.local", "password", "a long enough passphrase", "agreed", true), String.class);
+        assertThat(signup.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        JsonNode session = rest.getForEntity(url("/api/auth/session"), JsonNode.class).getBody();
+        assertThat(session.path("mailAvailable").asBoolean(true)).isFalse();
+    }
+
+    @Test
     @DisplayName("다른 출처에서 온 상태 변경 요청은 403 (Origin 확인)")
     void foreignOriginPostIsRejected() {
         HttpHeaders headers = new HttpHeaders();

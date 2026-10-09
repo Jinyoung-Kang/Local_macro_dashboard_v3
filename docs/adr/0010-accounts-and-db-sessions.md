@@ -32,7 +32,13 @@
    - 계정이 생긴 뒤에는 두 값을 읽지 않습니다.
 6. **계정 존재를 드러내지 않습니다.** 없는 이메일도 가짜 해시와 비교해 같은 시간·같은 401을 냅니다.
 7. **로그인 지연(`LoginThrottle`)의 키는 (접속 주소, 이메일)입니다.**
-8. **다른 출처에서 온 상태 변경 요청은 막습니다.** POST·PUT·DELETE의 `Origin`이 CORS 허용 목록에 없으면 403입니다(SameSite에 더한 한 겹). Origin이 없는 요청(스크립트)은 통과시킵니다.
+8. **가입·메일 인증·비밀번호 재설정은 SMTP 메일로 합니다**(`spring-boot-starter-mail`).
+   - `MAIL_HOST`가 비면 그 기능만 꺼집니다(503, 로그인 화면은 링크를 숨김).
+   - 가입·재설정 요청은 계정 존재와 무관하게 같은 응답입니다. 이미 있는 주소면 그 주인에게만 안내 메일을 보냅니다.
+   - 링크 토큰은 SHA-256만 저장하고 한 번만 쓸 수 있습니다(인증 24시간·재설정 30분). 재설정하면 모든 세션을 끊습니다.
+   - (주소·이메일)마다 시간당 5회로 제한합니다.
+   - 계정 삭제는 비밀번호를 다시 확인하고 개인정보를 바로 지웁니다. 감사 기록은 사용자 번호만 비웁니다. 운영자 계정은 지울 수 없습니다.
+9. **다른 출처에서 온 상태 변경 요청은 막습니다.** POST·PUT·DELETE의 `Origin`이 CORS 허용 목록에 없으면 403입니다(SameSite에 더한 한 겹). Origin이 없는 요청(스크립트)은 통과시킵니다.
 
 ## 이유
 
@@ -49,7 +55,7 @@
 
 ## 결과
 
-- 새 테이블(V4): `users`·`user_sessions`·`audit_log`.
-- 새 경로: `POST /api/auth/logout-all`, `GET /api/auth/sessions`, `POST /api/auth/password`.
+- 새 테이블: V4 `users`·`user_sessions`·`audit_log`, V5 `email_tokens`.
+- 새 경로: `POST /api/auth/logout-all`, `GET /api/auth/sessions`, `POST /api/auth/password`, `POST /api/auth/signup`·`verify`·`reset/request`·`reset/confirm`·`delete`.
 - 화면: 로그인에 이메일 칸, 👤 내 계정(비밀번호 변경·로그인한 기기). 일반 회원에게는 운영 메뉴(저장소 상태·연결 테스트)와 수동 새로고침 버튼을 숨깁니다. 막는 것은 백엔드입니다.
 - **운영 이전:** 기존 `.env`에 `OWNER_EMAIL` 한 줄을 더하면 지금 비밀번호로 그대로 로그인합니다.

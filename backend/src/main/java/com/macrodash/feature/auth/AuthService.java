@@ -146,9 +146,22 @@ public class AuthService {
         return new Issued(token, new CurrentUser(user.id(), user.email(), user.role(), user.tier(), sessionId));
     }
 
-    /** 확인과 세션 열기를 한 번에. 틀리면 비어 있음(같은 시간). */
-    public Optional<Issued> login(String email, String password, String userAgent) {
-        return verify(email, password).map(user -> openSession(user, userAgent));
+    /**
+     * 로그인 결과. 비밀번호가 맞아도 메일 인증 전이면 세션을 열지 않습니다({@code unverified}).
+     * 비밀번호가 틀리면 둘 다 비어 있습니다 — 인증 여부는 비밀번호를 아는 사람에게만 알려 줍니다.
+     */
+    public record LoginResult(Issued issued, boolean unverified) {
+    }
+
+    public LoginResult login(String email, String password, String userAgent) {
+        Optional<UserStore.User> user = verify(email, password);
+        if (user.isEmpty()) {
+            return new LoginResult(null, false);
+        }
+        if (user.get().emailVerifiedAt() == null) {
+            return new LoginResult(null, true);
+        }
+        return new LoginResult(openSession(user.get(), userAgent), false);
     }
 
     /** 로그인 실패를 감사 기록에 남깁니다(이메일만, 비밀번호는 남기지 않음). */

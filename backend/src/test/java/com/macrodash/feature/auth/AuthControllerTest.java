@@ -23,7 +23,10 @@ class AuthControllerTest {
     AuthControllerTest() {
         db.user("owner", "right-password-1", "OWNER", "PRO");
         // 느린 차선의 대기를 실제로 기다리지 않습니다(동작은 LoginThrottleTest가 고정).
-        controller = new AuthController(db.service(properties),
+        AccountMail mail = org.mockito.Mockito.mock(AccountMail.class);
+        AccountService accounts = new AccountService(db.users, db.sessions,
+                new com.macrodash.store.EmailTokenStore(db.jdbc), db.audit, db.hasher, mail);
+        controller = new AuthController(db.service(properties), accounts,
                 new LoginThrottle(java.time.Clock.systemUTC(), millis -> { }), properties);
     }
 

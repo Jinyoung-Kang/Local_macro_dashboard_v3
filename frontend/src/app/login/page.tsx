@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useEffect, useState } from "react";
 import { auth } from "@/lib/api";
 
 /**
@@ -17,6 +18,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 가입·재설정은 백엔드에 메일 발송이 설정됐을 때만 보여 줍니다.
+  const [mailAvailable, setMailAvailable] = useState(false);
+
+  useEffect(() => {
+    auth.session().then((s) => setMailAvailable(Boolean(s.mailAvailable))).catch(() => setMailAvailable(false));
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -78,6 +85,13 @@ export default function LoginPage() {
         >
           {busy ? "확인 중…" : "로그인"}
         </button>
+
+        {mailAvailable && (
+          <div className="mt-4 flex justify-between text-xs text-muted">
+            <Link href="/signup" className="hover:text-accent">가입하기</Link>
+            <Link href="/reset" className="hover:text-accent">비밀번호를 잊었나요?</Link>
+          </div>
+        )}
       </form>
     </main>
   );

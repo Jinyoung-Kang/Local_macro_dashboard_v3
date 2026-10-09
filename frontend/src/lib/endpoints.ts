@@ -37,6 +37,11 @@ export const endpoints = {
     logoutAll: "/api/auth/logout-all",
     sessions: "/api/auth/sessions",
     password: "/api/auth/password",
+    signup: "/api/auth/signup",
+    verify: "/api/auth/verify",
+    resetRequest: "/api/auth/reset/request",
+    resetConfirm: "/api/auth/reset/confirm",
+    deleteAccount: "/api/auth/delete",
   },
 
   // 📊 매크로 · 순유동성 · 로테이션

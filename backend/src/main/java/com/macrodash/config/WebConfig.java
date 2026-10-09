@@ -94,8 +94,10 @@ public class WebConfig implements WebMvcConfigurer {
      */
     public static class SessionFilter extends OncePerRequestFilter {
 
+        /** 로그인 없이 받는 경로 — {@link AccessPolicy}의 공개 경로와 같아야 합니다(SessionFilterTest가 대조). */
         static final Set<String> PUBLIC_PATHS = Set.of(
-                "/api/auth/login", "/api/auth/session", "/api/health");
+                "/api/auth/login", "/api/auth/session", "/api/health", "/api/auth/signup", "/api/auth/verify",
+                "/api/auth/reset/request", "/api/auth/reset/confirm");
 
         /**
          * 로그인 본문 상한(바이트). 로그인은 인증 없이 받는 유일한 JSON 입력이라, 크기 제한이
@@ -151,7 +153,7 @@ public class WebConfig implements WebMvcConfigurer {
                     response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(
-                            "{\"error\":\"too_large\",\"message\":\"로그인 요청이 너무 큽니다.\"}");
+                            "{\"error\":\"too_large\",\"message\":\"요청이 너무 큽니다.\"}");
                     return;
                 }
                 chain.doFilter(new CappedBodyRequest(request, body), response);
@@ -206,8 +208,10 @@ public class WebConfig implements WebMvcConfigurer {
             return PUBLIC_PATHS.contains(pathOf(request));
         }
 
+        /** 본문 상한을 거는 요청 — 로그인 없이 받는 POST(로그인·가입·인증·재설정) 전부. */
         static boolean isLoginPost(HttpServletRequest request) {
-            return "POST".equalsIgnoreCase(request.getMethod()) && "/api/auth/login".equals(pathOf(request));
+            return "POST".equalsIgnoreCase(request.getMethod()) && PUBLIC_PATHS.contains(pathOf(request))
+                    && !"/api/auth/session".equals(pathOf(request)) && !"/api/health".equals(pathOf(request));
         }
 
         /** 상한 안에서 미리 읽어 둔 본문을 컨트롤러에 그대로 넘기는 요청. */

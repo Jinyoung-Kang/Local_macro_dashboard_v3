@@ -27,6 +27,8 @@ export default function AccountPage() {
   const others = useAsyncAction(auth.logoutOthers, "다른 기기 로그아웃에 실패했습니다.");
 
   const mismatch = confirm.length > 0 && next !== confirm;
+  const [deletePassword, setDeletePassword] = useState("");
+  const remove = useAsyncAction(auth.deleteAccount, "계정을 지우지 못했습니다.");
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -80,6 +82,37 @@ export default function AccountPage() {
           </Button>
         </form>
       </Card>
+
+      {user?.role !== "OWNER" && (
+        <Card title="🗑️ 계정 삭제" subtitle="계정과 개인정보(이메일·로그인 기기·알림 설정)를 바로 지웁니다. 되돌릴 수 없습니다.">
+          {remove.result?.ok ? (
+            <Banner tone="info">{remove.result.message} <a href="/login" className="underline">로그인 화면으로</a></Banner>
+          ) : (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (window.confirm("계정을 지울까요? 되돌릴 수 없습니다.")) void remove.run(deletePassword);
+              }}
+              className="flex max-w-sm flex-col gap-3"
+            >
+              <label className="text-xs text-muted">
+                비밀번호 확인
+                <input
+                  type="password"
+                  value={deletePassword}
+                  autoComplete="current-password"
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+                />
+              </label>
+              {remove.error && <Banner tone="warn">{remove.error}</Banner>}
+              <Button type="submit" disabled={remove.busy || !deletePassword}>
+                {remove.busy ? "지우는 중…" : "계정 지우기"}
+              </Button>
+            </form>
+          )}
+        </Card>
+      )}
 
       <Card
         title="💻 로그인한 기기"

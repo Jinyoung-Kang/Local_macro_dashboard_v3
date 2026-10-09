@@ -12,11 +12,16 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | POST | `/api/auth/login` | `{"email": "...", "password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict, DB 세션 — ADR 0010)와 `{ok, user:{email, role, tier}}`. 없는 이메일과 틀린 비밀번호는 같은 401. (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 느리게(전역 1초에 1건) 처리하며 틀리면 **429 + `Retry-After`**(안내값 30초부터 2배씩, 최대 15분) — 맞는 비밀번호는 그래도 통과. 다른 느린 시도가 진행 중이면 즉시 429(1초). 본문은 4KB까지(초과 413). 다른 출처(Origin)에서 온 POST는 403 |
-| GET | `/api/auth/session` | `{"authenticated": bool, "readMode": …, "user": {email, role(OWNER·MEMBER), tier(FREE·PRO)}}`. `readMode`·`user`는 로그인한 경우에만 옵니다. 화면은 이 값으로 메뉴를 고르고, 막는 것은 백엔드의 경로별 접근 정책입니다 |
+| GET | `/api/auth/session` | `{"authenticated": bool, "mailAvailable": bool, "readMode": …, "user": {email, role(OWNER·MEMBER), tier(FREE·PRO)}}`. `mailAvailable`은 가입·재설정을 쓸 수 있는지(메일 발송 설정). `readMode`·`user`는 로그인한 경우에만 옵니다. 화면은 이 값으로 메뉴를 고르고, 막는 것은 백엔드의 경로별 접근 정책입니다 |
 | POST | `/api/auth/logout` | 쿠키 만료 + 그 세션을 DB에서 끊음(재시작 후에도 유지) |
 | POST | `/api/auth/logout-all` | 다른 기기의 내 세션을 모두 끊음(지금 기기는 남김) → `{ok, revoked}` |
 | GET | `/api/auth/sessions` | 내 로그인 세션 목록 `{sessions:[{id, current, createdAt, lastSeenAt, expiresAt, userAgent}]}` |
 | POST | `/api/auth/password` | `{"current", "next"}` — 지금 비밀번호 확인, 규칙(10자 이상·흔한 값·이메일 포함·반복 금지) 위반이면 400, 성공하면 다른 기기 세션을 끊음 |
+| POST | `/api/auth/signup` | 공개. `{"email","password","agreed":true}` — 무료 회원, 메일 인증 전. 이미 있는 주소도 **같은 200**(그 주소 주인에게만 안내 메일). 동의·비밀번호 규칙·형식 위반 400, 메일 미설정 503, (주소·이메일)마다 시간당 5회 초과 429 |
+| POST | `/api/auth/verify` | 공개. `{"token"}` — 메일 인증 링크(24시간, 한 번만). 인증 전 계정은 로그인 시 403 `unverified` |
+| POST | `/api/auth/reset/request` | 공개. `{"email"}` — 가입 여부와 무관하게 같은 200. 인증된 계정에만 재설정 메일(30분, 한 번만) |
+| POST | `/api/auth/reset/confirm` | 공개. `{"token","password"}` — 새 비밀번호, 성공하면 그 계정의 모든 세션을 끊음 |
+| POST | `/api/auth/delete` | `{"password"}` — 비밀번호 재확인 뒤 계정·세션·토큰 삭제(감사 기록은 사용자 번호만 비움), 운영자 계정은 400 |
 
 `GET /api/health`는 DB 연결을 확인해 `{"status":"ok","database":"ok"}`(200) 또는
 `{"status":"degraded","database":"unreachable"}`(503)로 답합니다 — 컨테이너 헬스체크·`make doctor`가 봅니다.

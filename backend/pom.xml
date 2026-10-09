@@ -54,6 +54,12 @@
             <version>1.86</version>
         </dependency>
 
+        <!-- 계정 메일(가입 인증·비밀번호 재설정) SMTP 발송. 버전은 Spring Boot BOM. MAIL_HOST가 비면 그 두 기능만 꺼집니다. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Claude API (AI 리포트 엔진 Claude Haiku 5.5). 공식 SDK — 오류 종류·재시도·거절 응답을 타입으로 받습니다. -->
         <dependency>
             <groupId>com.anthropic</groupId>

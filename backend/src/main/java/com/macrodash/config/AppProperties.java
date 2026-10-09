@@ -29,6 +29,12 @@ public class AppProperties {
     /** 처음 만드는 운영자 계정의 이메일(로그인 아이디, OWNER_EMAIL). 기본값 없음. */
     private String ownerEmail = "";
 
+    /** 계정 메일의 보낸 사람(MAIL_FROM). 비면 SMTP 계정(MAIL_USERNAME). */
+    private String mailFrom = "";
+
+    /** 메일 속 링크가 가리킬 화면 주소(PUBLIC_URL). 비면 FRONTEND_ORIGIN의 첫 값. */
+    private String publicUrl = "";
+
     /**
      * 세션 쿠키에 Secure 속성을 붙일지. HTTPS로만 접속하는 경우에 켜세요.
      * 로컬 http://에서 켜면 브라우저가 쿠키를 저장하지 않아 로그인이 되지 않습니다.
@@ -80,6 +86,29 @@ public class AppProperties {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getMailFrom() {
+        return mailFrom;
+    }
+
+    public void setMailFrom(String mailFrom) {
+        this.mailFrom = mailFrom;
+    }
+
+    public String getPublicUrl() {
+        return publicUrl;
+    }
+
+    public void setPublicUrl(String publicUrl) {
+        this.publicUrl = publicUrl;
+    }
+
+    /** 메일 링크의 기준 주소 — PUBLIC_URL, 없으면 FRONTEND_ORIGIN의 첫 값(끝 / 없음). */
+    public String linkBase() {
+        String base = publicUrl != null && !publicUrl.isBlank() ? publicUrl.trim()
+                : frontendOrigin.split(",")[0].trim();
+        return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
     }
 
     public String getOwnerEmail() {

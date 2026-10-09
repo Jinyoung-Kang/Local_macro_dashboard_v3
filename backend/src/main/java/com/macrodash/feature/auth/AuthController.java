@@ -37,11 +37,14 @@ import java.util.concurrent.atomic.AtomicReference;
 public class AuthController {
 
     private final AuthService authService;
+    private final AccountService accounts;
     private final LoginThrottle throttle;
     private final AppProperties properties;
 
-    public AuthController(AuthService authService, LoginThrottle throttle, AppProperties properties) {
+    public AuthController(AuthService authService, AccountService accounts, LoginThrottle throttle,
+                          AppProperties properties) {
         this.authService = authService;
+        this.accounts = accounts;
         this.throttle = throttle;
         this.properties = properties;
     }
@@ -50,6 +53,18 @@ public class AuthController {
     }
 
     public record PasswordRequest(String current, String next) {
+    }
+
+    public record SignupRequest(String email, String password, Boolean agreed) {
+    }
+
+    public record TokenRequest(String token, String password) {
+    }
+
+    public record EmailRequest(String email) {
+    }
+
+    public record DeleteRequest(String password) {
     }
 
     /**
@@ -66,11 +81,11 @@ public class AuthController {
         String email = request == null ? null : request.email();
         String password = request == null ? null : request.password();
         String key = http.getRemoteAddr() + "|" + (email == null ? "" : email.trim().toLowerCase(Locale.ROOT));
-        AtomicReference<AuthService.Issued> issued = new AtomicReference<>();
+        AtomicReference<AuthService.LoginResult> result = new AtomicReference<>();
         String userAgent = http.getHeader(HttpHeaders.USER_AGENT);
         LoginThrottle.Outcome outcome = throttle.attempt(key, () -> {
-            issued.set(authService.login(email, password, userAgent).orElse(null));
-            return issued.get() != null;
+            result.set(authService.login(email, password, userAgent));
+            return result.get().issued() != null || result.get().unverified();
         });
 
         if (outcome.busy()) {
@@ -87,10 +102,15 @@ public class AuthController {
                     .body(Map.of("ok", false, "message", "이메일 또는 비밀번호가 올바르지 않습니다."));
         }
 
-        ResponseCookie cookie = sessionCookie(issued.get().token(), authService.sessionSeconds());
+        if (result.get().unverified()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("ok", false, "error", "unverified",
+                    "message", "메일 인증을 마친 뒤 로그인하세요. 받은 메일함(스팸함 포함)의 링크를 여세요."));
+        }
+        AuthService.Issued issued = result.get().issued();
+        ResponseCookie cookie = sessionCookie(issued.token(), authService.sessionSeconds());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(Map.of("ok", true, "user", userMap(issued.get().user())));
+                .body(Map.of("ok", true, "user", userMap(issued.user())));
     }
 
     /**
@@ -102,6 +122,8 @@ public class AuthController {
         Optional<CurrentUser> user = authService.authenticate(readToken(request));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("authenticated", user.isPresent());
+        // 로그인 화면이 가입·재설정 링크를 보여 줄지 정합니다(메일 발송이 설정됐을 때만).
+        out.put("mailAvailable", accounts.mailConfigured());
         user.ifPresent(current -> {
             out.put("readMode", properties.resolvedReadMode().name().toLowerCase(Locale.ROOT));
             out.put("user", userMap(current));
@@ -141,6 +163,52 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("ok", false, "message", problem));
         }
         return ResponseEntity.ok(Map.of("ok", true, "message", "비밀번호를 바꿨습니다. 다른 기기의 로그인은 끊었습니다."));
+    }
+
+    /** 가입 — 이메일이 이미 있어도 같은 응답(그 주소의 주인에게만 안내 메일). */
+    @PostMapping("/signup")
+    public ResponseEntity<Map<String, Object>> signup(@RequestBody(required = false) SignupRequest body,
+                                                      HttpServletRequest http) {
+        return respond(body == null ? AccountService.Result.bad("요청 본문이 없습니다.")
+                : accounts.signup(body.email(), body.password(), Boolean.TRUE.equals(body.agreed()),
+                        http.getRemoteAddr()));
+    }
+
+    /** 메일 인증 링크(화면 /verify가 토큰을 넘김). */
+    @PostMapping("/verify")
+    public ResponseEntity<Map<String, Object>> verify(@RequestBody(required = false) TokenRequest body) {
+        return respond(accounts.verify(body == null ? null : body.token()));
+    }
+
+    /** 비밀번호 재설정 메일 요청 — 가입 여부와 무관하게 같은 응답. */
+    @PostMapping("/reset/request")
+    public ResponseEntity<Map<String, Object>> requestReset(@RequestBody(required = false) EmailRequest body,
+                                                            HttpServletRequest http) {
+        return respond(accounts.requestReset(body == null ? null : body.email(), http.getRemoteAddr()));
+    }
+
+    /** 재설정 링크 + 새 비밀번호 — 성공하면 모든 기기 로그아웃. */
+    @PostMapping("/reset/confirm")
+    public ResponseEntity<Map<String, Object>> confirmReset(@RequestBody(required = false) TokenRequest body) {
+        return respond(body == null ? AccountService.Result.bad("요청 본문이 없습니다.")
+                : accounts.confirmReset(body.token(), body.password()));
+    }
+
+    /** 계정 삭제 — 비밀번호 재확인, 개인정보 즉시 삭제, 쿠키도 지움. */
+    @PostMapping("/delete")
+    public ResponseEntity<Map<String, Object>> deleteAccount(@RequestBody(required = false) DeleteRequest body,
+                                                             HttpServletRequest http) {
+        AccountService.Result result = accounts.deleteAccount(CurrentUser.of(http), body == null ? null : body.password());
+        ResponseEntity<Map<String, Object>> response = respond(result);
+        if (result.status() != 200) {
+            return response;
+        }
+        return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, sessionCookie("", 0).toString()).body(response.getBody());
+    }
+
+    private static ResponseEntity<Map<String, Object>> respond(AccountService.Result result) {
+        return ResponseEntity.status(result.status())
+                .body(Map.of("ok", result.status() == 200, "message", result.message()));
     }
 
     private static Map<String, Object> userMap(CurrentUser user) {

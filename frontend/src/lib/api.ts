@@ -180,4 +180,12 @@ export const auth = {
   changePassword: (current: string, next: string) =>
     apiPost<{ ok: boolean; message: string }>(endpoints.auth.password, { current, next }),
   session: () => apiGet<SessionResponse>(endpoints.auth.session),
+  signup: (email: string, password: string, agreed: boolean) =>
+    apiPost<{ ok: boolean; message: string }>(endpoints.auth.signup, { email, password, agreed }),
+  verify: (token: string) => apiPost<{ ok: boolean; message: string }>(endpoints.auth.verify, { token }),
+  requestReset: (email: string) => apiPost<{ ok: boolean; message: string }>(endpoints.auth.resetRequest, { email }),
+  confirmReset: (token: string, password: string) =>
+    apiPost<{ ok: boolean; message: string }>(endpoints.auth.resetConfirm, { token, password }),
+  deleteAccount: (password: string) =>
+    apiPost<{ ok: boolean; message: string }>(endpoints.auth.deleteAccount, { password }),
 };

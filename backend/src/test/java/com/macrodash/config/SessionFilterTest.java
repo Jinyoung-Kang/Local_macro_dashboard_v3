@@ -82,4 +82,16 @@ class SessionFilterTest {
         assertThat(filter.foreignOrigin(script)).isFalse();
         assertThat(filter.foreignOrigin(read)).isFalse();
     }
+
+    @Test
+    @DisplayName("필터의 공개 경로가 접근 정책 표의 공개 경로와 같다 — 두 곳이 어긋나면 인증 없이 열리는 경로가 생긴다")
+    void publicPathsMatchAccessPolicy() {
+        java.util.Set<String> fromPolicy = new java.util.TreeSet<>();
+        com.macrodash.feature.auth.AccessPolicy.routes().forEach((route, access) -> {
+            if (access == com.macrodash.feature.auth.AccessPolicy.Access.PUBLIC) {
+                fromPolicy.add(route.split(" ", 2)[1]);
+            }
+        });
+        assertThat(new java.util.TreeSet<>(WebConfig.SessionFilter.PUBLIC_PATHS)).isEqualTo(fromPolicy);
+    }
 }

@@ -7,6 +7,8 @@ export interface SessionUser {
 
 export interface SessionResponse {
   authenticated: boolean;
+  /** 가입·비밀번호 재설정을 쓸 수 있는지(백엔드에 메일 발송이 설정됐는지). */
+  mailAvailable?: boolean;
   readMode?: string;
   user?: SessionUser;
 }
