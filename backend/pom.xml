@@ -41,23 +41,17 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- 세션 토큰 서명 (비밀번호 로그인 유지) -->
+        <!-- 비밀번호 해시(Argon2id). Spring Security 전체가 아니라 해시 기능만 씁니다 — 버전은 Spring Boot BOM(7.1.1).
+             세션은 DB에 두므로(ADR 0010) 서명 토큰(JWT) 라이브러리는 쓰지 않습니다. -->
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
         </dependency>
+        <!-- Argon2 구현. spring-security-crypto의 Argon2PasswordEncoder가 요구합니다(BOM 관리 밖이라 버전을 적음). -->
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.86</version>
         </dependency>
 
         <!-- Claude API (AI 리포트 엔진 Claude Haiku 5.5). 공식 SDK — 오류 종류·재시도·거절 응답을 타입으로 받습니다. -->

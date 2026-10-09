@@ -139,10 +139,11 @@ make setup
 이 스크립트가 하는 일:
 
 1. `.env.example`을 복사해 `.env`를 만듭니다 (이미 있으면 건드리지 않습니다)
-2. `JWT_SECRET`을 무작위 값으로 생성합니다 — 기본 placeholder를 그대로 두면
-   누구나 세션 토큰을 위조할 수 있습니다
-   - `APP_PASSWORD`(화면 접속 비밀번호)가 비었거나 공개된 기본값(`admin1234@`)이면 무작위
+2. 처음 운영자 계정 값을 확인합니다(ADR 0010)
+   - `OWNER_EMAIL`(로그인 아이디로 쓸 이메일)이 비어 있으면 알려 줍니다 — 기본값이 없어 직접 넣어야 합니다
+   - `APP_PASSWORD`(처음 비밀번호)가 비었거나 공개된 기본값(`admin1234@`)이면 무작위
      값을 만들어 넣고 **터미널에 한 번 보여 줍니다.** 직접 정한 값은 건드리지 않습니다
+   - 계정이 생긴 뒤에는 두 값을 읽지 않습니다. 비밀번호는 화면의 👤 내 계정에서 바꿉니다
 3. `COLLECTOR_API_TOKEN`(백엔드→수집기 호출 토큰)이 비어 있으면 무작위 값으로
    채웁니다. 외부 API 키가 아니라 두 컨테이너끼리만 쓰는 값이라 따로 발급받을
    필요가 없습니다. 이미 값이 있으면 그대로 둡니다
@@ -181,6 +182,7 @@ open -e .env            # 또는 code .env / vi .env
 > (기존 `.env`는 덮어쓰지 않습니다).
 
 ```ini
+OWNER_EMAIL=로그인용_이메일
 APP_PASSWORD=원하는_비밀번호
 ```
 
@@ -234,7 +236,7 @@ make up
 
 | 주소 | 용도 |
 |---|---|
-| <http://localhost:3000> | 화면 (로그인 → `.env`의 `APP_PASSWORD`) |
+| <http://localhost:3000> | 화면 (로그인 → `.env`의 `OWNER_EMAIL` + `APP_PASSWORD`, 이후 바꾼 비밀번호) |
 | <http://localhost:8080/api/health> | 백엔드 상태 |
 | <http://localhost:8000/docs> | 수집기 API 문서 (FastAPI 자동 생성) |
 
@@ -323,7 +325,7 @@ java -version           # 21 이상인지 먼저 확인하세요
 
 DATABASE_URL="jdbc:postgresql://localhost:5432/macrodash" \
 DATABASE_USER="macro" DATABASE_PASSWORD="macro" \
-APP_PASSWORD="원하는_비밀번호" \
+OWNER_EMAIL="로그인용_이메일" APP_PASSWORD="원하는_비밀번호" \
 COLLECTOR_URL="http://localhost:8000" \
   make dev-backend
 ```

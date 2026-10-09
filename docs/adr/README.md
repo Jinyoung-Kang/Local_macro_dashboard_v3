@@ -15,3 +15,4 @@
 | [0007](0007-claude-api-engine.md) | AI 엔진에 Claude Haiku 5.5를 공식 SDK로, 재시도는 SDK가 아니라 자동 탐색이 맡음 |
 | [0008](0008-backend-owned-tables-and-scheduled-jobs.md) | 백엔드가 쓰는 테이블과 정기 작업 — 테이블마다 쓰는 쪽은 하나, 스키마 파일 한 곳, 정기 작업은 수집을 일으키지 않음 |
 | [0009](0009-regime-track-record-point-in-time.md) | 국면 판정 성과: 시점 기준 재현(발표 지연), 다음 거래일 진입, 표본 부족은 숫자를 내지 않음 |
+| [0010](0010-accounts-and-db-sessions.md) | 계정과 DB 세션(토큰 해시 저장), 경로별 접근 정책 표(미분류 금지), 운영자 계정은 OWNER_EMAIL·APP_PASSWORD로 |

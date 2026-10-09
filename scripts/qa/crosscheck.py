@@ -57,7 +57,7 @@ def main() -> None:
     base = f"http://127.0.0.1:{env_value('BACKEND_PORT') or '18080'}"
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
-    body = json.dumps({"password": env_value("APP_PASSWORD")}).encode()
+    body = json.dumps({"email": env_value("OWNER_EMAIL"), "password": env_value("APP_PASSWORD")}).encode()
     opener.open(urllib.request.Request(f"{base}/api/auth/login", data=body, method="POST",
                 headers={"Content-Type": "application/json", "Origin": f"http://localhost:{env_value('FRONTEND_PORT') or '13000'}"}), timeout=30)
     results: list[str] = []

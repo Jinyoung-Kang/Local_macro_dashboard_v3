@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestPropertySource(properties = {
         "spring.datasource.url=${TEST_DATABASE_URL:jdbc:postgresql://localhost:5432/macrodash_test}",
         "dashboard.password=test-password",
-        "dashboard.jwt-secret=integration-test-secret-key-32-bytes!",
+        "dashboard.owner-email=" + ApiIntegrationTest.OWNER,
         "dashboard.read-mode=store_only",
         "dashboard.collector-url=http://localhost:1",    // 수집기가 없어도 화면은 떠야 합니다
         "dashboard.ai.timeout-seconds=333",              // 설정 주입이 실제로 먹는지 확인용
@@ -66,6 +66,15 @@ class ApiIntegrationTest {
     @Autowired
     com.macrodash.store.StoreRepository repository;
 
+    @Autowired
+    com.macrodash.store.UserStore users;
+
+    @Autowired
+    com.macrodash.feature.auth.PasswordHasher hasher;
+
+    static final String OWNER = "owner@test.local";
+    static final String MEMBER = "member@test.local";
+
     private String sessionCookie;
 
     @BeforeEach
@@ -73,7 +82,16 @@ class ApiIntegrationTest {
         guardAgainstRealDatabase();
         jdbc.execute("DELETE FROM snapshots");
         jdbc.update("DELETE FROM observations WHERE dataset = ?", Datasets.OBS_TOSS_STOCK_FLOW);
-        sessionCookie = login("test-password");
+        // 테스트 DB에는 다른 테스트가 만든 계정이 남아 있을 수 있어, 첫 계정 만들기(빈 테이블일 때만)에 기대지 않습니다.
+        ensureUser(OWNER, "OWNER");
+        ensureUser(MEMBER, "MEMBER");
+        sessionCookie = login(OWNER, "test-password");
+    }
+
+    private void ensureUser(String email, String role) {
+        if (users.findByEmail(email).isEmpty()) {
+            users.insert(email, hasher.hash("test-password"), role, "FREE", true);
+        }
     }
 
     /**
@@ -108,7 +126,7 @@ class ApiIntegrationTest {
     @DisplayName("로그아웃한 세션 쿠키는 만료 전이라도 다시 쓸 수 없다 (SEC-07)")
     void loggedOutSessionCannotBeReused() {
         // 예전에는 로그아웃이 브라우저 쿠키만 지워서, 쿠키 값을 가진 쪽은 12시간 동안 계속 쓸 수 있었습니다.
-        String stolen = login("test-password");
+        String stolen = login(OWNER, "test-password");
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.COOKIE, stolen);
         assertThat(rest.exchange(url("/api/macro/overview"), HttpMethod.GET,
@@ -126,10 +144,51 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("일반 회원은 데이터는 보지만 운영 경로(수집 실행·상태)는 403 — 막는 것은 백엔드다(ADR 0010)")
+    void memberCannotCallOwnerRoutes() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, login(MEMBER, "test-password"));
+        assertThat(rest.exchange(url("/api/analytics/regime/log"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<JsonNode> refresh = rest.exchange(url("/api/status/refresh"), HttpMethod.POST,
+                new HttpEntity<>(null, headers), JsonNode.class);
+        assertThat(refresh.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refresh.getBody().path("required").asText()).isEqualTo("OWNER");
+        assertThat(rest.exchange(url("/api/status"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+        JsonNode session = rest.exchange(url("/api/auth/session"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), JsonNode.class).getBody();
+        assertThat(session.path("user").path("role").asText()).isEqualTo("MEMBER");
+    }
+
+    @Test
+    @DisplayName("없는 이메일과 틀린 비밀번호는 같은 응답이다 — 계정 존재를 드러내지 않는다")
+    void unknownEmailLooksLikeWrongPassword() {
+        ResponseEntity<String> unknown = rest.postForEntity(url("/api/auth/login"),
+                Map.of("email", "nobody@test.local", "password", "test-password"), String.class);
+        ResponseEntity<String> wrong = rest.postForEntity(url("/api/auth/login"),
+                Map.of("email", MEMBER, "password", "not-the-password"), String.class);
+        assertThat(unknown.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(unknown.getBody()).isEqualTo(wrong.getBody());
+    }
+
+    @Test
+    @DisplayName("다른 출처에서 온 상태 변경 요청은 403 (Origin 확인)")
+    void foreignOriginPostIsRejected() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, sessionCookie);
+        headers.add(HttpHeaders.ORIGIN, "https://evil.example");
+        assertThat(rest.exchange(url("/api/auth/logout"), HttpMethod.POST, new HttpEntity<>(null, headers),
+                String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
     @DisplayName("잘못된 비밀번호는 거부된다")
     void rejectsWrongPassword() {
         ResponseEntity<String> response = rest.postForEntity(
-                url("/api/auth/login"), Map.of("password", "wrong"), String.class);
+                url("/api/auth/login"), Map.of("email", OWNER, "password", "wrong"), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
@@ -265,13 +324,13 @@ class ApiIntegrationTest {
     }
 
     // ------------------------------------------------------------------ helpers
-    private String login(String password) {
+    private String login(String email, String password) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         ResponseEntity<String> response = rest.postForEntity(
                 url("/api/auth/login"),
-                new HttpEntity<>(Map.of("password", password), headers),
+                new HttpEntity<>(Map.of("email", email, "password", password), headers),
                 String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);

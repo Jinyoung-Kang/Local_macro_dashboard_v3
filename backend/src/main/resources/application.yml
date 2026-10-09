@@ -31,11 +31,10 @@ server:
     include-message: never
 
 dashboard:
-  # 화면 접속 비밀번호 (구버전 [auth] password와 같은 역할)
-  # 비었거나 옛 공개 기본값(admin1234@)이면 받지 않고 실행마다 임시 비밀번호를 만듭니다(로그에 표시).
+  # 처음 기동할 때 계정이 없으면 이 둘로 운영자 계정을 만듭니다(ADR 0010). 계정이 생긴 뒤에는 읽지 않습니다.
+  # 둘 중 하나라도 비었거나 비밀번호가 옛 공개 기본값(admin1234@)이면 만들지 않고 로그로 안내합니다.
   password: ${APP_PASSWORD:}
-  # 세션 토큰 서명 키 — 운영에서는 반드시 무작위 값으로 바꾸세요
-  jwt-secret: ${JWT_SECRET:change-me-please-change-me-please-32b}
+  owner-email: ${OWNER_EMAIL:}
   session-minutes: ${SESSION_MINUTES:720}
   # HTTPS로만 접속할 때 true (세션 쿠키에 Secure). http://에서 켜면 로그인이 안 됩니다.
   cookie-secure: ${COOKIE_SECURE:false}

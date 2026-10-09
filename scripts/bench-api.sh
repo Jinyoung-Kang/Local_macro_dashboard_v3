@@ -4,7 +4,7 @@
 #
 # 사용: bash scripts/bench-api.sh [반복 횟수=5] [> 결과파일]
 #
-# .env의 APP_PASSWORD로 로그인해 쿠키를 받은 뒤, 아래 목록의 엔드포인트를 반복 호출하고
+# .env의 OWNER_EMAIL·APP_PASSWORD(운영자 계정)로 로그인해 쿠키를 받은 뒤, 아래 목록의 엔드포인트를 반복 호출하고
 # 중앙값(ms)과 응답 크기를 표로 찍는다. 첫 호출은 JIT·커넥션 준비 때문에 느리므로 버린다.
 # 비밀번호는 출력하지 않는다. 쿠키 파일은 임시 폴더에 만들고 끝나면 지운다.
 #
@@ -21,12 +21,13 @@ BASE="http://localhost:${BACKEND_PORT}"
 N=${1:-5}
 
 PASSWORD=$(get_env APP_PASSWORD)
-if [ -z "$PASSWORD" ]; then echo "APP_PASSWORD가 .env에 없습니다" >&2; exit 1; fi
+EMAIL=$(get_env OWNER_EMAIL)
+if [ -z "$PASSWORD" ] || [ -z "$EMAIL" ]; then echo "OWNER_EMAIL·APP_PASSWORD가 .env에 없습니다(운영자 계정)" >&2; exit 1; fi
 
 JAR=$(mktemp -t bench-cookie); trap 'rm -f "$JAR"' EXIT
 code=$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -H 'Content-Type: application/json' \
   -H "Origin: http://localhost:3000" \
-  --data-binary "$(printf '{"password":%s}' "$(printf '%s' "$PASSWORD" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" \
+  --data-binary "$(EMAIL="$EMAIL" PASSWORD="$PASSWORD" python3 -c 'import json,os; print(json.dumps({"email": os.environ["EMAIL"], "password": os.environ["PASSWORD"]}))')" \
   "$BASE/api/auth/login")
 unset PASSWORD
 if [ "$code" != "200" ]; then echo "로그인 실패: HTTP $code" >&2; exit 1; fi

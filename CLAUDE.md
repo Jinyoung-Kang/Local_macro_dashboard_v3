@@ -29,6 +29,8 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
   넣지 않는다. 예시 이메일 같은 자리표시 값도 코드 기본값으로 두지 않는다.
 - **없는 숫자를 만들지 않는다.** 표본 부족·수집 실패는 `null`→화면 `—`. 0으로 채우지 않는다.
   추정치는 `isEstimated`/`isProxy`를 함께 내려보낸다.
+- **새 API 경로는 `AccessPolicy` 표에 넣는다**(공개·회원·유료·운영자, ADR 0010) — 빠지면 `AccessPolicyTest`가 막는다. 사용자 정보는 `support.CurrentUser`.
+  로그인은 이메일+비밀번호(DB 세션). 운영자 계정은 처음 기동 때 `.env`의 `OWNER_EMAIL`·`APP_PASSWORD`로 만든다.
 - 날짜는 `Kst.today()`(Java)·KST 기준. `LocalDate.now()`를 쓰지 않는다(서버 TZ는 UTC).
 - **테이블마다 쓰는 프로세스는 하나**(ADR 0008). 수집기 테이블은 백엔드가 읽기만, 백엔드 테이블(`regime_log` 등)은 백엔드만 쓴다.
   스키마 파일은 `db/migrations/` 한 곳(수집기가 기동 시 적용). 백엔드 DB 접근은 `store`에서만. 정기 작업은 `StoreReader.quietly`로 읽는다(수집 유발 금지).

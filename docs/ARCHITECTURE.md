@@ -174,26 +174,31 @@ config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 
 ## 6. 인증·보안
 
-사용자 계정 체계가 없는 1인용 대시보드라 "비밀번호 한 개" 모델을
-씁니다. 다만 프런트·백엔드가 분리됐으므로 서명된 토큰(JWT)을 쿠키로 내려
-줍니다.
+계정(이메일 + Argon2id 비밀번호 해시)과 **DB 세션**을 씁니다([ADR 0010](adr/0010-accounts-and-db-sessions.md)).
+쿠키에는 무작위 토큰, DB에는 그 SHA-256만 둡니다. 경로마다 누가 부를 수 있는지는 표 하나(`AccessPolicy`)가
+정하고, 컨트롤러가 여는 모든 경로가 그 표에 있어야 빌드가 통과합니다. 처음 기동할 때 계정이 없으면
+`OWNER_EMAIL`·`APP_PASSWORD`로 운영자 계정을 만듭니다.
 
 | 위협 | 대응 | 위치 |
 |---|---|---|
 | XSS로 토큰 탈취 | 쿠키 `HttpOnly` (스크립트가 읽지 못함) | `AuthController` |
 | CSRF | 쿠키 `SameSite=Strict`. 화면(:3000)과 API(:8080)는 포트만 달라 같은 사이트 | `AuthController` |
-| 비밀번호 대입 | 연속 5회 실패 뒤에는 그 주소의 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 잠금이 아니라 지연이라 맞는 비밀번호가 **잠기지는 않지만**, 공격자가 느린 차선을 계속 차지하는 순간에는 주인도 429를 받을 수 있고 1초 뒤 다시 시도하면 통과(Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 영구히 막았음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제 | `LoginThrottle` |
-| 타이밍 공격 | 비밀번호 `MessageDigest.isEqual`, 수집기 토큰 `hmac.compare_digest` | `AuthService`, `collector/app/main.py` |
-| 공개된 기본 서명 키로 토큰 위조 | JWT_SECRET이 기본값·32바이트 미만이면 실행마다 무작위 키 | `AuthService.signingSecret` |
+| 비밀번호 대입 | (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 잠금이 아니라 지연이라 맞는 비밀번호가 **잠기지는 않지만**, 공격자가 느린 차선을 계속 차지하는 순간에는 주인도 429를 받을 수 있고 1초 뒤 다시 시도하면 통과(Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 영구히 막았음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제 | `LoginThrottle` |
+| 비밀번호 유출 | Argon2id 해시만 저장. 세션 토큰은 SHA-256만 저장(DB가 새어도 쿠키를 만들 수 없음) | `PasswordHasher`, `SessionStore` |
+| 계정 존재 여부 탐색 | 없는 이메일도 가짜 해시와 비교해 같은 시간·같은 401 | `AuthService.verify` |
+| 타이밍 공격 | 수집기 토큰 `hmac.compare_digest` | `collector/app/main.py` |
+| 로그아웃·비밀번호 변경 뒤 토큰 재사용 | DB 세션이라 다음 요청부터 거부, 재시작 후에도 유지(예전 JWT는 메모리 차단 목록이라 재시작 때 사라짐) | `SessionStore` |
+| 권한 밖 기능 호출 | 경로별 접근 정책(공개·회원·유료·운영자). 미분류 경로는 빌드 실패 | `AccessPolicy`, `AccessPolicyTest` |
+| 다른 출처의 상태 변경 요청 | POST·PUT·DELETE의 `Origin`이 CORS 허용 목록에 없으면 403 | `SessionFilter.foreignOrigin` |
 | 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단) | `WebConfig.SessionFilter` |
 | 응답 가로채기·끼워 넣기 | `nosniff`, `no-store`, `X-Frame-Options: DENY`, `frame-ancestors 'none'` | `SessionFilter`, `next.config.mjs` |
 | 유료 AI API 비용 폭주 | 사용자 입력 2,000자 상한(400) | `AiController` |
 | 로그로 API 키 유출 | 로깅 계층에서 키 파라미터 가림(`serviceKey`·`crtfc_key`·`key` 등 포함) | `collector/app/logredact.py` |
 
-**주의** — 실패 횟수는 접속 주소(remoteAddr) 기준입니다. X-Forwarded-For는 위조할 수
+**주의** — 실패 횟수는 (접속 주소, 이메일) 기준입니다. X-Forwarded-For는 위조할 수
 있어 믿지 않습니다. 도커 포트 포워딩에서는 모든 접속이 같은 주소로 보일 수 있어
-사실상 전체 공통 지연이 됩니다(1인용이라 더 안전한 쪽). 공격이 계속되는 동안 주인이
-429를 받을 수 있는 것은 남은 위험이며, 재시도로 풀립니다.
+사실상 이메일별 지연이 됩니다. 공격이 계속되는 동안 그 계정 주인이 429를 받을 수 있는 것은
+남은 위험이며, 재시도로 풀립니다.
 
 ## 7. 장애 시 동작
 

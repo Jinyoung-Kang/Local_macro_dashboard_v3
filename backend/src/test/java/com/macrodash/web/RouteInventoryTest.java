@@ -39,6 +39,7 @@ class RouteInventoryTest {
             "GET /api/health",
             // 인증
             "POST /api/auth/login", "GET /api/auth/session", "POST /api/auth/logout",
+            "POST /api/auth/logout-all", "GET /api/auth/sessions", "POST /api/auth/password",
             // 📊 매크로 · 순유동성 · 로테이션
             "GET /api/macro/overview", "GET /api/macro/risk", "GET /api/macro/advanced",
             "GET /api/macro/usdkrw", "GET /api/macro/fx", "GET /api/macro/fx/options",

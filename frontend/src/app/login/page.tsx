@@ -5,13 +5,15 @@ import { FormEvent, useState } from "react";
 import { auth } from "@/lib/api";
 
 /**
- * 간이 인증 화면.
+ * 로그인 — 이메일·비밀번호(계정, ADR 0010).
  *
  * 비밀번호는 백엔드가 검증하고, 세션은 httpOnly 쿠키로 유지됩니다.
  * (토큰을 브라우저 저장소에 두지 않습니다 — XSS로 새어 나갈 수 있습니다.)
+ * 처음 쓰는 경우 운영자 계정은 .env의 OWNER_EMAIL·APP_PASSWORD로 만들어집니다.
  */
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +23,7 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await auth.login(password);
+      await auth.login(email, password);
       router.replace("/macro");
     } catch (err) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.");
@@ -40,13 +42,25 @@ export default function LoginPage() {
         <p className="mt-1 text-xs text-muted">인가된 사용자만 접근할 수 있는 시스템입니다.</p>
 
         <label className="mt-6 block text-xs text-muted">
-          접속 비밀번호
+          이메일
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="username"
+            autoFocus
+            className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+          />
+        </label>
+
+        <label className="mt-3 block text-xs text-muted">
+          비밀번호
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="Enter Password..."
-            autoFocus
+            autoComplete="current-password"
             className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
           />
         </label>
@@ -59,7 +73,7 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={busy || password.length === 0}
+          disabled={busy || password.length === 0 || email.trim().length === 0}
           className="mt-5 w-full rounded-md border border-accent/60 bg-accent/15 px-3 py-2 text-sm font-semibold text-accent transition hover:bg-accent/25 disabled:opacity-50"
         >
           {busy ? "확인 중…" : "로그인"}

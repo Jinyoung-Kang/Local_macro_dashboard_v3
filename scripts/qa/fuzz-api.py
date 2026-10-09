@@ -55,7 +55,7 @@ def env_value(key: str) -> str:
 
 
 def login(opener, base: str) -> None:
-    body = json.dumps({"password": env_value("APP_PASSWORD")}).encode()
+    body = json.dumps({"email": env_value("OWNER_EMAIL"), "password": env_value("APP_PASSWORD")}).encode()
     req = urllib.request.Request(f"{base}/api/auth/login", data=body, method="POST",
                                  headers={"Content-Type": "application/json", "Origin": f"http://localhost:{env_value('FRONTEND_PORT') or '13000'}"})
     with opener.open(req, timeout=TIMEOUT) as r:

@@ -13,7 +13,7 @@ export const options = { scenarios: { burst: { executor: 'per-vu-iterations', vu
 
 export function setup() {
   if (SCENARIO === 'login') return {};
-  const res = http.post(`${BASE}/api/auth/login`, JSON.stringify({ password: __ENV.PASSWORD || '' }),
+  const res = http.post(`${BASE}/api/auth/login`, JSON.stringify({ email: __ENV.EMAIL || '', password: __ENV.PASSWORD || '' }),
     { headers: { 'Content-Type': 'application/json', Origin: ORIGIN } });
   if (res.status !== 200) throw new Error(`login failed: ${res.status}`);
   return { cookie: res.cookies.macro_session[0].value };
@@ -26,7 +26,7 @@ export default function (data) {
   } else if (SCENARIO === 'run') {
     res = http.post(`${BASE}/api/status/run/kr_holidays`, null, { cookies: { macro_session: data.cookie }, timeout: '120s' });
   } else {
-    res = http.post(`${BASE}/api/auth/login`, JSON.stringify({ password: 'wrong-' + __VU }),
+    res = http.post(`${BASE}/api/auth/login`, JSON.stringify({ email: __ENV.EMAIL || '', password: 'wrong-' + __VU }),
       { headers: { 'Content-Type': 'application/json', Origin: ORIGIN } });
   }
   check(res, { 'no 5xx': (r) => r.status < 500, 'status': (r) => { console.log(`VU${__VU} ${r.status} ${r.timings.duration.toFixed(0)}ms ${r.body ? String(r.body).slice(0, 100) : ''}`); return true; } });

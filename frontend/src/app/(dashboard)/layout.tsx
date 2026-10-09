@@ -8,6 +8,7 @@ import { useApi } from "@/hooks/useApi";
 import { apiBase } from "@/lib/api";
 import { RefreshProvider, useRefreshSignal } from "@/hooks/useRefreshSignal";
 import { endpoints } from "@/lib/endpoints";
+import type { SessionResponse } from "@/lib/types";
 
 /**
  * 대시보드 공통 레이아웃 — 사이드바 + 거래소 시계.
@@ -62,7 +63,7 @@ function DashboardShell({
   useDocumentTitle(pathname);
   // 수동 새로고침에는 반응하지 않습니다(followRefresh: false). 반응하면 새로고침마다
   // 아래의 "세션을 확인하는 중…"이 떠 화면 전체가 다시 그려지고 화면 상태가 초기화됐습니다.
-  const session = useApi<{ authenticated: boolean; readMode?: string }>(endpoints.auth.session, 0, {
+  const session = useApi<SessionResponse>(endpoints.auth.session, 0, {
     timeoutMs: SESSION_TIMEOUT_MS,
     followRefresh: false,
   });
@@ -113,7 +114,7 @@ function DashboardShell({
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* 읽기 모드는 세션 응답에 함께 옵니다. 예전에는 이 한 줄 때문에 페이지를 열 때마다
           무거운 /api/status(수집기 상태 + DB 집계)를 불렀습니다. */}
-      <Sidebar readMode={data?.readMode} />
+      <Sidebar readMode={data?.readMode} user={data?.user} />
       <main tabIndex={-1} id="main" className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:h-screen lg:overflow-y-auto">
         <div className="mb-5">
           <MarketClock />

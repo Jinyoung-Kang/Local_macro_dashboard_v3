@@ -140,6 +140,12 @@ case "$HEALTH_CODE" in
     problem "백엔드 기동 실패 — make logs S=backend" ;;
 esac
 
+# 로그인 계정 — 처음 기동할 때 계정이 없으면 OWNER_EMAIL·APP_PASSWORD로 운영자 계정을 만듭니다(ADR 0010).
+if [ -z "$(get_env OWNER_EMAIL)" ]; then
+  warn "OWNER_EMAIL이 .env에 없습니다 — 계정이 아직 없다면 로그인할 수 없습니다(이미 계정이 있으면 무시해도 됩니다)"
+  note ".env에 OWNER_EMAIL=로그인용 이메일 을 넣고 make up"
+fi
+
 # ==============================================================================
 title "5. 화면 (Next.js)"
 # ==============================================================================

@@ -1,159 +1,141 @@
 package com.macrodash.feature.auth;
 
 import com.macrodash.config.AppProperties;
-import org.junit.jupiter.api.BeforeEach;
+import com.macrodash.store.AuditLogStore;
+import com.macrodash.store.SessionStore;
+import com.macrodash.store.UserStore;
+import com.macrodash.support.CurrentUser;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * 계정 로그인과 DB 세션(ADR 0010).
+ */
 class AuthServiceTest {
 
-    private AuthService authService;
+    private final AuthTestDatabase db = new AuthTestDatabase("authsvc");
+    private final AppProperties properties = new AppProperties();
 
-    @BeforeEach
-    void setUp() {
-        AppProperties properties = new AppProperties();
-        properties.setPassword("s3cret-password");
-        properties.setJwtSecret("test-secret-key-that-is-long-enough-32b");
-        properties.setSessionMinutes(60);
-        authService = new AuthService(properties);
+    @AfterEach
+    void cleanUp() {
+        db.cleanUp();
     }
 
     @Test
-    @DisplayName("올바른 비밀번호만 통과한다")
-    void passwordCheck() {
-        assertThat(authService.passwordMatches("s3cret-password")).isTrue();
-        assertThat(authService.passwordMatches("wrong")).isFalse();
-        assertThat(authService.passwordMatches(null)).isFalse();
-        assertThat(authService.passwordMatches("")).isFalse();
+    @DisplayName("맞는 이메일·비밀번호면 세션이 열리고, 쿠키 토큰으로 사용자를 찾는다. DB에는 토큰 원문이 없다")
+    void loginOpensSession() {
+        db.user("owner", "correct horse battery", "OWNER", "PRO");
+        AuthService auth = db.service(properties);
+
+        UserStore.User user = auth.verify("  AUTHSVC-owner@TEST.local ", "correct horse battery").orElseThrow();
+        AuthService.Issued issued = auth.openSession(user, "JUnit");
+
+        CurrentUser current = auth.authenticate(issued.token()).orElseThrow();
+        assertThat(current.email()).isEqualTo(db.email("owner"));
+        assertThat(current.isOwner()).isTrue();
+        Integer plain = db.jdbc.queryForObject(
+                "SELECT COUNT(*) FROM user_sessions WHERE token_hash = convert_to(?, 'UTF8')", Integer.class,
+                issued.token());
+        assertThat(plain).as("토큰 원문은 저장하지 않음").isZero();
+        Integer hashed = db.jdbc.queryForObject(
+                "SELECT COUNT(*) FROM user_sessions WHERE token_hash = sha256(convert_to(?, 'UTF8'))", Integer.class,
+                issued.token());
+        assertThat(hashed).as("SHA-256만 저장").isEqualTo(1);
     }
 
     @Test
-    @DisplayName("발급한 토큰은 유효하다")
-    void issuedTokenIsValid() {
-        String token = authService.issueToken();
+    @DisplayName("틀린 비밀번호·없는 이메일·형식이 아닌 이메일은 모두 실패")
+    void wrongCredentialsFail() {
+        db.user("member", "correct horse battery", "MEMBER", "FREE");
+        AuthService auth = db.service(properties);
 
-        assertThat(token).isNotBlank();
-        assertThat(authService.isValid(token)).isTrue();
+        assertThat(auth.verify(db.email("member"), "wrong password!!")).isEmpty();
+        assertThat(auth.verify(db.email("nobody"), "correct horse battery")).isEmpty();
+        assertThat(auth.verify("not-an-email", "correct horse battery")).isEmpty();
+        assertThat(auth.verify(null, null)).isEmpty();
+        assertThat(auth.authenticate("forged-token")).isEmpty();
+        assertThat(auth.authenticate(null)).isEmpty();
     }
 
     @Test
-    @DisplayName("위조·빈 토큰은 거부된다")
-    void invalidTokensRejected() {
-        assertThat(authService.isValid(null)).isFalse();
-        assertThat(authService.isValid("")).isFalse();
-        assertThat(authService.isValid("not-a-token")).isFalse();
-        assertThat(authService.isValid(authService.issueToken() + "x")).isFalse();
+    @DisplayName("로그아웃한 세션은 백엔드를 다시 만들어도(재시작) 쓸 수 없다 — 예전 메모리 목록의 한계")
+    void logoutSurvivesRestart() {
+        long id = db.user("restart", "correct horse battery", "MEMBER", "FREE");
+        AuthService before = db.service(properties);
+        AuthService.Issued kept = before.openSession(db.users.findById(id).orElseThrow(), null);
+        AuthService.Issued gone = before.openSession(db.users.findById(id).orElseThrow(), null);
+
+        before.logout(gone.token());
+        AuthService after = db.service(properties);   // 새 인스턴스 = 재시작
+
+        assertThat(after.authenticate(gone.token())).isEmpty();
+        assertThat(after.authenticate(kept.token())).isPresent();
     }
 
     @Test
-    @DisplayName("다른 서명 키로 만든 토큰은 거부된다")
-    void tokenFromOtherKeyRejected() {
-        AppProperties other = new AppProperties();
-        other.setPassword("s3cret-password");
-        other.setJwtSecret("completely-different-secret-key-32bytes");
-        String foreignToken = new AuthService(other).issueToken();
+    @DisplayName("비밀번호를 바꾸면 다른 기기 세션은 끊기고 지금 세션은 남는다. 규칙에 어긋나면 거절")
+    void changePasswordRevokesOtherSessions() {
+        long id = db.user("change", "correct horse battery", "MEMBER", "FREE");
+        AuthService auth = db.service(properties);
+        UserStore.User user = db.users.findById(id).orElseThrow();
+        AuthService.Issued phone = auth.openSession(user, "phone");
+        AuthService.Issued laptop = auth.openSession(user, "laptop");
+        CurrentUser me = auth.authenticate(laptop.token()).orElseThrow();
 
-        assertThat(authService.isValid(foreignToken)).isFalse();
+        assertThat(auth.changePassword(me, "wrong current!!", "new long passphrase")).contains("지금 비밀번호");
+        assertThat(auth.changePassword(me, "correct horse battery", "short")).contains("10자");
+        assertThat(auth.changePassword(me, "correct horse battery", "new long passphrase")).isNull();
+
+        assertThat(auth.authenticate(phone.token())).as("다른 기기").isEmpty();
+        assertThat(auth.authenticate(laptop.token())).as("지금 기기").isPresent();
+        assertThat(auth.verify(db.email("change"), "new long passphrase")).isPresent();
+        assertThat(auth.sessionsOf(me)).hasSize(1).first().satisfies(row -> assertThat(row.get("current")).isEqualTo(true));
     }
 
     @Test
-    @DisplayName("짧은 서명 키도 기동은 되지만 토큰은 정상 동작한다")
-    void shortSecretStillWorks() {
-        AppProperties properties = new AppProperties();
-        properties.setPassword("x");
-        properties.setJwtSecret("short");
-        AuthService service = new AuthService(properties);
+    @DisplayName("계정이 없으면 OWNER_EMAIL·APP_PASSWORD로 운영자(PRO) 계정을 만든다 — 기존 사용 흐름 유지")
+    void bootstrapsOwnerFromEnvironment() {
+        UserStore users = mock(UserStore.class);
+        when(users.ready()).thenReturn(true);
+        when(users.count()).thenReturn(0L);
+        properties.setOwnerEmail(" Owner@Example.COM ");
+        properties.setPassword("app-password-from-env");
+        AuthService auth = new AuthService(properties, users, mock(SessionStore.class), mock(AuditLogStore.class),
+                new PasswordHasher());
 
-        assertThat(service.isValid(service.issueToken())).isTrue();
+        assertThat(auth.ensureOwner()).isTrue();
+        verify(users).insert(eq("owner@example.com"), anyString(), eq("OWNER"), eq("PRO"), eq(true));
     }
 
     @Test
-    @DisplayName("공개된 기본 키·짧은 키로는 토큰을 위조할 수 없다 (실행마다 무작위 키)")
-    void placeholderSecretIsNotForgeable() {
-        for (String weak : new String[]{"change-me-please-change-me-please-32b", "short", ""}) {
-            AppProperties a = new AppProperties();
-            a.setJwtSecret(weak);
-            AppProperties b = new AppProperties();
-            b.setJwtSecret(weak);
+    @DisplayName("OWNER_EMAIL이 없거나 비밀번호가 공개된 옛 기본값이면 계정을 만들지 않는다(자리표시 기본값 없음)")
+    void doesNotBootstrapWithoutSettings() {
+        for (String[] setting : new String[][]{{"", "app-password"}, {"owner@example.com", ""},
+                {"owner@example.com", "admin1234@"}}) {
+            UserStore users = mock(UserStore.class);
+            when(users.ready()).thenReturn(true);
+            when(users.count()).thenReturn(0L);
+            AppProperties props = new AppProperties();
+            props.setOwnerEmail(setting[0]);
+            props.setPassword(setting[1]);
+            AuthService auth = new AuthService(props, users, mock(SessionStore.class), mock(AuditLogStore.class),
+                    new PasswordHasher());
 
-            // 같은 약한 값을 아는 공격자(b)가 만든 토큰을 서버(a)가 받아 주면 안 됩니다.
-            String forged = new AuthService(b).issueToken();
-            assertThat(new AuthService(a).isValid(forged)).as(weak).isFalse();
+            assertThat(auth.ensureOwner()).isFalse();
+            verify(users, never()).insert(anyString(), anyString(), anyString(), anyString(), anyBoolean());
+            assertThat(auth.verify("owner@example.com", "app-password")).isEqualTo(Optional.empty());
         }
-    }
-
-    @Test
-    @DisplayName("비밀번호를 바꾸면 이전 비밀번호로 받은 세션은 무효가 된다 (SEC-07)")
-    void passwordChangeInvalidatesOldSessions() {
-        // 비밀번호는 .env에서 바꾸고 재시작합니다. 서명 키(JWT_SECRET)는 그대로라
-        // 예전에는 바꾸기 전에 받은 토큰이 만료(12시간)까지 계속 통했습니다.
-        String before = authService.issueToken();
-
-        AppProperties changed = new AppProperties();
-        changed.setPassword("new-password-after-change");
-        changed.setJwtSecret("test-secret-key-that-is-long-enough-32b");
-        changed.setSessionMinutes(60);
-        AuthService afterChange = new AuthService(changed);
-
-        assertThat(afterChange.isValid(before)).isFalse();
-        assertThat(afterChange.isValid(afterChange.issueToken())).isTrue();
-    }
-
-    @Test
-    @DisplayName("로그아웃한 토큰만 거부되고 다른 세션은 그대로다 (SEC-07)")
-    void revokedTokenIsRejected() {
-        String loggedOut = authService.issueToken();
-        String other = authService.issueToken();
-
-        authService.revoke(loggedOut);
-        authService.revoke(null);            // 쿠키 없이 로그아웃해도 문제없어야 합니다
-        authService.revoke("not-a-token");
-
-        assertThat(authService.isValid(loggedOut)).isFalse();
-        assertThat(authService.isValid(other)).isTrue();
-    }
-
-    @Test
-    @DisplayName("토큰에는 비밀번호도, 서명 키 없이 맞춰 볼 수 있는 단순 해시도 들어가지 않는다")
-    void tokenDoesNotCarryThePassword() {
-        String payload = new String(java.util.Base64.getUrlDecoder().decode(authService.issueToken().split("\\.")[1]),
-                java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(payload).doesNotContain("s3cret-password");
-        byte[] other = "another-secret-key-that-is-long-enough".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        // 같은 비밀번호라도 서명 키가 다르면 지문이 다릅니다(키 없이 사전 대입 불가).
-        assertThat(AuthService.passwordStamp(other, "s3cret-password"))
-                .isNotEqualTo(AuthService.passwordStamp(
-                        "test-secret-key-that-is-long-enough-32b".getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                        "s3cret-password"));
-    }
-
-    @Test
-    @DisplayName("공개된 기본 비밀번호·빈 비밀번호로는 로그인할 수 없다 (SEC-04)")
-    void publicDefaultPasswordIsNeverAccepted() {
-        // admin1234@는 저장소·문서에 적혀 있던 값입니다. 화면은 기본으로 같은 와이파이에 열리므로
-        // 이 값이 통하면 누구나 들어올 수 있었습니다(예전에는 경고 로그만 남겼습니다).
-        for (String configured : new String[]{"admin1234@", "", "   ", null}) {
-            AppProperties p = new AppProperties();
-            p.setPassword(configured);
-            p.setJwtSecret("test-secret-key-that-is-long-enough-32b");
-            AuthService service = new AuthService(p);
-
-            assertThat(service.passwordMatches("admin1234@")).as("설정값 %s", configured).isFalse();
-            assertThat(service.passwordMatches("")).as("설정값 %s", configured).isFalse();
-            // 대신 이번 실행 동안만 쓰는 임시 비밀번호로는 들어갈 수 있습니다(로그에 한 번 표시).
-            String temporary = service.effectivePassword();
-            assertThat(temporary).hasSizeGreaterThanOrEqualTo(16);
-            assertThat(service.passwordMatches(temporary)).isTrue();
-        }
-    }
-
-    @Test
-    @DisplayName("충분히 긴 설정 키는 그대로 쓴다 (재시작해도 세션 유지)")
-    void strongSecretIsStable() {
-        byte[] key = AuthService.signingSecret("test-secret-key-that-is-long-enough-32b");
-        assertThat(new String(key, java.nio.charset.StandardCharsets.UTF_8))
-                .isEqualTo("test-secret-key-that-is-long-enough-32b");
     }
 }

@@ -20,11 +20,14 @@ import java.util.Locale;
 @ConfigurationProperties(prefix = "dashboard")
 public class AppProperties {
 
-    /** 화면 접속 비밀번호. 구버전 [auth] password / APP_PASSWORD와 같은 역할입니다. */
+    /**
+     * 처음 만드는 운영자 계정의 비밀번호(APP_PASSWORD). 계정이 생긴 뒤에는 읽지 않습니다 — 비밀번호는 화면에서
+     * 바꿉니다(ADR 0010).
+     */
     private String password = "";
 
-    /** 세션 토큰 서명 키 (HS256). 최소 32바이트. */
-    private String jwtSecret = "change-me-please-change-me-please-32b";
+    /** 처음 만드는 운영자 계정의 이메일(로그인 아이디, OWNER_EMAIL). 기본값 없음. */
+    private String ownerEmail = "";
 
     /**
      * 세션 쿠키에 Secure 속성을 붙일지. HTTPS로만 접속하는 경우에 켜세요.
@@ -79,12 +82,12 @@ public class AppProperties {
         this.password = password;
     }
 
-    public String getJwtSecret() {
-        return jwtSecret;
+    public String getOwnerEmail() {
+        return ownerEmail;
     }
 
-    public void setJwtSecret(String jwtSecret) {
-        this.jwtSecret = jwtSecret;
+    public void setOwnerEmail(String ownerEmail) {
+        this.ownerEmail = ownerEmail;
     }
 
     public boolean isCookieSecure() {

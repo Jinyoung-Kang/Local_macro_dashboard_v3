@@ -27,6 +27,7 @@ make_env() {
   umask 077
   cat > .env.qa <<ENV
 # QA 스택 전용 — 이 세션에서 만든 비밀값. 운영 .env와 무관하며 커밋하지 않습니다(.gitignore).
+OWNER_EMAIL=qa-owner@qa.local
 APP_PASSWORD=$(random_token 24)
 JWT_SECRET=$(random_token 48)
 COLLECTOR_API_TOKEN=$(random_token 40)
@@ -95,7 +96,7 @@ case "$cmd" in
   api)
     port="$(env_value BACKEND_PORT)"; port="${port:-18080}"
     jar="$(mktemp -t qacookie)"; trap 'rm -f "$jar"' EXIT
-    body="$(env_value APP_PASSWORD | python3 -c 'import json,sys; print(json.dumps({"password": sys.stdin.read().strip()}))')"
+    body="$( (env_value OWNER_EMAIL; env_value APP_PASSWORD) | python3 -c 'import json,sys; e,p=sys.stdin.read().split("\n")[:2]; print(json.dumps({"email": e.strip(), "password": p.strip()}))')"
     curl -s -o /dev/null -c "$jar" -H 'Content-Type: application/json' -H "Origin: http://localhost:$(env_value FRONTEND_PORT)" \
       --data-binary "$body" "http://127.0.0.1:$port/api/auth/login"
     unset body

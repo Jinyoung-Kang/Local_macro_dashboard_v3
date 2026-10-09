@@ -8,6 +8,7 @@
 
 import { endpoints } from "./endpoints.ts";
 import { createSharedFetcher } from "./sharedRequest.ts";
+import type { SessionResponse, SessionUser } from "./types.ts";
 
 /** 빌드 시점에 명시한 전체 주소(리버스 프록시 등). 비어 있으면 실행 시점에 정합니다. */
 const BUILD_TIME_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
@@ -172,7 +173,11 @@ export function apiPost<T>(path: string, body?: unknown): Promise<T> {
 
 // ---------------------------------------------------------------- 인증
 export const auth = {
-  login: (password: string) => apiPost<{ ok: boolean }>(endpoints.auth.login, { password }),
+  login: (email: string, password: string) =>
+    apiPost<{ ok: boolean; user?: SessionUser }>(endpoints.auth.login, { email, password }),
   logout: () => apiPost<{ ok: boolean }>(endpoints.auth.logout),
-  session: () => apiGet<{ authenticated: boolean; readMode?: string }>(endpoints.auth.session),
+  logoutOthers: () => apiPost<{ ok: boolean; revoked: number }>(endpoints.auth.logoutAll),
+  changePassword: (current: string, next: string) =>
+    apiPost<{ ok: boolean; message: string }>(endpoints.auth.password, { current, next }),
+  session: () => apiGet<SessionResponse>(endpoints.auth.session),
 };

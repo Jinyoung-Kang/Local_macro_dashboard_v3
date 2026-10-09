@@ -8,7 +8,7 @@ env_value() { grep -s "^$1=" .env.qa | head -1 | cut -d= -f2-; }
 FRONT="http://localhost:$(env_value FRONTEND_PORT)"; BACK="http://127.0.0.1:$(env_value BACKEND_PORT)"
 JAR="$(mktemp -t lhcookie)"; trap 'rm -f "$JAR"' EXIT
 curl -s -o /dev/null -c "$JAR" -H 'Content-Type: application/json' -H "Origin: $FRONT" \
-  --data-binary "$(env_value APP_PASSWORD | python3 -c 'import json,sys; print(json.dumps({"password": sys.stdin.read().strip()}))')" "$BACK/api/auth/login"
+  --data-binary "$( (env_value OWNER_EMAIL; env_value APP_PASSWORD) | python3 -c 'import json,sys; e,p=sys.stdin.read().split("\n")[:2]; print(json.dumps({"email": e.strip(), "password": p.strip()}))')" "$BACK/api/auth/login"
 COOKIE="$(awk '$6=="macro_session"{print $7}' "$JAR")"
 [ -n "$COOKIE" ] || { echo "로그인 실패"; exit 1; }
 printf '%-16s %-8s %5s %5s %5s %8s %8s %6s\n' 페이지 폼팩터 성능 접근성 모범 'LCP(ms)' 'TBT(ms)' CLS

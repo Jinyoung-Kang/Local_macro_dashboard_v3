@@ -4,7 +4,7 @@
 # 최초 1회 준비 스크립트 (macOS · Linux 공통).
 #
 #   1) .env 생성 (.env.example 복사)
-#   2) 세션 서명 키(JWT_SECRET)·수집기 내부 토큰(COLLECTOR_API_TOKEN) 자동 생성
+#   2) 운영자 계정 이메일(OWNER_EMAIL) 확인 · 수집기 내부 토큰(COLLECTOR_API_TOKEN) 자동 생성
 #      — 기본 placeholder나 빈 값을 쓰면 안 됩니다. 둘 다 외부 API 키가 아닙니다
 #   3) 필수 도구 확인 (Docker / 네이티브 실행용 Java·Node·Python)
 #   4) 포트 충돌 확인 (3000 · 8080 · 8000 · 5432 · 6379)
@@ -58,22 +58,15 @@ if [ -n "$bad_lines" ]; then
   note "KEY=VALUE 형식으로, 줄 맨 앞에서 시작해야 합니다 (export·들여쓰기 금지)"
 fi
 
-# --- 세션 서명 키 ---------------------------------------------------------
-# 기본값(placeholder)을 그대로 쓰면 누구나 세션 토큰을 위조할 수 있습니다.
-if grep -q '^JWT_SECRET=change-me' .env 2>/dev/null; then
-  if command -v openssl >/dev/null 2>&1; then
-    SECRET=$(openssl rand -base64 48 | tr -d '\n=+/' | cut -c1-48)
-    # BSD sed(macOS)와 GNU sed(Linux)의 -i 문법이 달라, 임시 파일로 처리합니다.
-    tmp=$(mktemp)
-    awk -v secret="$SECRET" \
-      '/^JWT_SECRET=/ { print "JWT_SECRET=" secret; next } { print }' .env > "$tmp"
-    mv "$tmp" .env
-    ok "JWT_SECRET을 무작위 값으로 생성했습니다"
-  else
-    warn "openssl이 없어 JWT_SECRET을 생성하지 못했습니다. .env에서 직접 바꾸세요"
-  fi
+# --- 운영자 계정 이메일 -----------------------------------------------------
+# 처음 기동할 때 계정이 없으면 OWNER_EMAIL·APP_PASSWORD로 운영자 계정을 만듭니다(ADR 0010).
+# 로그인 아이디라 자리표시 값을 대신 넣지 않습니다 — 비어 있으면 알려만 줍니다.
+if ! grep -q '^OWNER_EMAIL=.\+' .env 2>/dev/null; then
+  grep -q '^OWNER_EMAIL=' .env 2>/dev/null || printf '\nOWNER_EMAIL=\n' >> .env
+  warn "OWNER_EMAIL이 비어 있습니다. .env에 로그인 아이디로 쓸 이메일을 넣으세요 (예: OWNER_EMAIL=본인이메일)"
+  note "넣은 뒤 make up — 그 전에는 로그인할 수 없습니다"
 else
-  ok "JWT_SECRET이 이미 설정돼 있습니다"
+  ok "OWNER_EMAIL이 설정돼 있습니다"
 fi
 
 # --- 수집기 내부 토큰 -----------------------------------------------------

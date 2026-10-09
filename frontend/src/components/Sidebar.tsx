@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
+import { isOwner, roleLabel, visibleMenus } from "@/lib/access";
+import type { SessionUser } from "@/lib/types";
 
 /**
  * 실행 중인 코드의 버전(브랜치@커밋).
@@ -37,7 +39,7 @@ export const MENUS = [
   { href: "/connections", label: "🔌 외부 API 연결 테스트" },
 ];
 
-export function Sidebar({ readMode }: { readMode?: string }) {
+export function Sidebar({ readMode, user }: { readMode?: string; user?: SessionUser }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -88,7 +90,7 @@ export function Sidebar({ readMode }: { readMode?: string }) {
       </div>
 
       <nav className={`flex-col gap-1 ${menuOpen ? "flex" : "hidden"} lg:flex`}>
-        {MENUS.map((menu) => {
+        {visibleMenus(MENUS, user).map((menu) => {
           const active = pathname === menu.href || pathname.startsWith(`${menu.href}/`);
           return (
             <Link
@@ -123,15 +125,27 @@ export function Sidebar({ readMode }: { readMode?: string }) {
           )}
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => void requestRefresh()}
-          disabled={collecting}
-        >
-          {collecting ? "수집 중… 끝나면 자동 갱신" : "데이터 수동 새로고침 🚀"}
-        </Button>
+        {/* 수동 새로고침은 수집을 일으키므로 운영자만(백엔드도 403). */}
+        {isOwner(user) && (
+          <Button
+            variant="primary"
+            onClick={() => void requestRefresh()}
+            disabled={collecting}
+          >
+            {collecting ? "수집 중… 끝나면 자동 갱신" : "데이터 수동 새로고침 🚀"}
+          </Button>
+        )}
         {message && <p className="text-[11px] leading-relaxed text-muted">{message}</p>}
 
+        {user && (
+          <Link
+            href="/account"
+            className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] text-body hover:border-accent/30"
+          >
+            👤 {user.email}
+            <span className="ml-1 text-muted">· {roleLabel(user)}</span>
+          </Link>
+        )}
         <Button onClick={logout}>로그아웃</Button>
         {/*
           지금 화면이 "어느 코드"인지 항상 보이게 둡니다.
@@ -150,7 +164,7 @@ export function Sidebar({ readMode }: { readMode?: string }) {
       </div>
 
       {/* 메뉴를 접은 모바일 화면에서도 새로고침은 한 번에 닿아야 합니다. */}
-      {!menuOpen && (
+      {!menuOpen && isOwner(user) && (
         <Button
           className="lg:hidden"
           variant="primary"

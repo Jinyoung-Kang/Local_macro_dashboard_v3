@@ -1,6 +1,8 @@
 package com.macrodash.config;
 
+import com.macrodash.feature.auth.AccessPolicy;
 import com.macrodash.feature.auth.AuthService;
+import com.macrodash.support.CurrentUser;
 import com.macrodash.feature.auth.AuthController;
 import jakarta.servlet.FilterChain;
 import java.nio.charset.StandardCharsets;
@@ -24,14 +26,14 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * CORS와 인증 필터.
  *
  * <p>인증은 단순합니다 — 로그인·헬스체크를 제외한 모든 {@code /api/**} 요청에
- * 유효한 세션 쿠키가 있어야 합니다. 사용자 계정 체계가 없는 1인용 대시보드라
- * 구버전의 "비밀번호 한 개" 모델을 그대로 유지합니다.
+ * 유효한 세션 쿠키가 있어야 하고, 경로마다 필요한 역할·등급을 {@link AccessPolicy}가 정합니다(ADR 0010).
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -73,7 +75,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Bean
     public FilterRegistrationBean<SessionFilter> sessionFilter(AuthService authService) {
         FilterRegistrationBean<SessionFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new SessionFilter(authService));
+        registration.setFilter(new SessionFilter(authService, allowedOriginPatterns(properties)));
         registration.addUrlPatterns("/api/*");
         registration.setOrder(1);
         return registration;
@@ -98,14 +100,32 @@ public class WebConfig implements WebMvcConfigurer {
         /**
          * 로그인 본문 상한(바이트). 로그인은 인증 없이 받는 유일한 JSON 입력이라, 크기 제한이
          * 없으면 LAN의 아무나 수 MB짜리 {"password": "AAAA…"}를 보내 힙을 압박할 수 있습니다
-         * (Tomcat의 maxPostSize는 JSON에 적용되지 않습니다). 비밀번호 한 줄에는 4KB면 충분합니다.
+         * (Tomcat의 maxPostSize는 JSON에 적용되지 않습니다). 이메일·비밀번호 한 줄에는 4KB면 충분합니다.
          */
         static final long MAX_LOGIN_BODY_BYTES = 4096;
 
         private final AuthService authService;
+        /** 상태를 바꾸는 요청(POST·PUT·DELETE)의 Origin이 이 목록(CORS와 같음)에 맞아야 합니다. */
+        private final org.springframework.web.cors.CorsConfiguration origins = new org.springframework.web.cors.CorsConfiguration();
 
-        public SessionFilter(AuthService authService) {
+        public SessionFilter(AuthService authService, List<String> allowedOriginPatterns) {
             this.authService = authService;
+            this.origins.setAllowedOriginPatterns(allowedOriginPatterns);
+        }
+
+        /**
+         * 다른 출처에서 온 상태 변경 요청을 막습니다. 세션 쿠키는 SameSite=Strict라 다른 사이트의 요청에 실리지 않지만,
+         * 로그인처럼 쿠키 없이 받는 요청과 하위 도메인 배포까지 고려해 한 겹 더 둡니다. Origin이 없는 요청(스크립트·curl)은
+         * 브라우저가 아니므로 통과시킵니다 — 브라우저는 다른 출처로 POST할 때 Origin을 반드시 붙입니다.
+         */
+        boolean foreignOrigin(HttpServletRequest request) {
+            String method = request.getMethod();
+            if (!("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
+                    || "DELETE".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method))) {
+                return false;
+            }
+            String origin = request.getHeader("Origin");
+            return origin != null && origins.checkOrigin(origin) == null;
         }
 
         @Override
@@ -113,6 +133,14 @@ public class WebConfig implements WebMvcConfigurer {
                                         HttpServletResponse response,
                                         FilterChain chain) throws ServletException, IOException {
             addSecurityHeaders(response);
+
+            if (foreignOrigin(request)) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write(
+                        "{\"error\":\"bad_origin\",\"message\":\"다른 출처에서 온 요청은 받지 않습니다.\"}");
+                return;
+            }
 
             if (isLoginPost(request)) {
                 // 본문을 상한까지만 읽습니다. Content-Length가 없는(chunked) 요청도 같은 상한을 받습니다.
@@ -135,15 +163,26 @@ public class WebConfig implements WebMvcConfigurer {
                 return;
             }
 
-            if (authService.isValid(AuthController.readToken(request))) {
-                chain.doFilter(request, response);
+            Optional<CurrentUser> user = authService.authenticate(AuthController.readToken(request));
+            if (user.isEmpty()) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write(
+                        "{\"error\":\"unauthorized\",\"message\":\"로그인이 필요합니다.\"}");
                 return;
             }
-
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write(
-                    "{\"error\":\"unauthorized\",\"message\":\"로그인이 필요합니다.\"}");
+            AccessPolicy.Access required = AccessPolicy.required(request.getMethod(), pathOf(request));
+            if (!AccessPolicy.allows(required, user.get().role(), user.get().tier())) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json;charset=UTF-8");
+                String message = required == AccessPolicy.Access.OWNER
+                        ? "운영자만 쓸 수 있는 기능입니다." : "유료 등급에서 쓸 수 있는 기능입니다.";
+                response.getWriter().write("{\"error\":\"forbidden\",\"required\":\"" + required.name()
+                        + "\",\"message\":\"" + message + "\"}");
+                return;
+            }
+            request.setAttribute(CurrentUser.ATTRIBUTE, user.get());
+            chain.doFilter(request, response);
         }
 
         /**

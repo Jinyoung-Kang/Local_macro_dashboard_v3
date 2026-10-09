@@ -31,7 +31,7 @@ class SessionFilterTest {
     @Test
     @DisplayName("로그인 본문은 4KB까지만 읽고, 넘으면 파싱 전에 413으로 끝낸다")
     void oversizedLoginIsRejectedBeforeParsing() throws Exception {
-        WebConfig.SessionFilter filter = new WebConfig.SessionFilter(null);
+        WebConfig.SessionFilter filter = new WebConfig.SessionFilter(null, java.util.List.of("http://*:3000"));
 
         MockHttpServletRequest huge = new MockHttpServletRequest("POST", "/api/auth/login");
         huge.setServletPath("/api/auth/login");
@@ -63,5 +63,23 @@ class SessionFilterTest {
         assertThat(response.getHeader("X-Content-Type-Options")).isEqualTo("nosniff");
         assertThat(response.getHeader("Cache-Control")).isEqualTo("no-store");
         assertThat(response.getHeader("X-Frame-Options")).isEqualTo("DENY");
+    }
+
+    @Test
+    @DisplayName("다른 출처의 상태 변경 요청은 막고, Origin 없는 요청(스크립트)과 같은 출처·GET은 통과")
+    void foreignOriginIsDetected() {
+        WebConfig.SessionFilter filter = new WebConfig.SessionFilter(null, java.util.List.of("http://*:3000"));
+        MockHttpServletRequest evil = new MockHttpServletRequest("POST", "/api/auth/logout");
+        evil.addHeader("Origin", "https://evil.example");
+        MockHttpServletRequest lan = new MockHttpServletRequest("POST", "/api/auth/logout");
+        lan.addHeader("Origin", "http://192.168.0.10:3000");
+        MockHttpServletRequest script = new MockHttpServletRequest("POST", "/api/auth/logout");
+        MockHttpServletRequest read = new MockHttpServletRequest("GET", "/api/macro/overview");
+        read.addHeader("Origin", "https://evil.example");
+
+        assertThat(filter.foreignOrigin(evil)).isTrue();
+        assertThat(filter.foreignOrigin(lan)).isFalse();
+        assertThat(filter.foreignOrigin(script)).isFalse();
+        assertThat(filter.foreignOrigin(read)).isFalse();
     }
 }
