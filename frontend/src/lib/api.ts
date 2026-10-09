@@ -164,6 +164,10 @@ export function apiGetShared<T>(path: string, timeoutMs = 0): Promise<T> {
   return sharedGet(`${timeoutMs}|${path}`) as Promise<T>;
 }
 
+export function apiDelete<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "DELETE" });
+}
+
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return request<T>(path, {
     method: "POST",

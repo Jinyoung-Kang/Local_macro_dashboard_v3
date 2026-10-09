@@ -13,3 +13,4 @@ export * from "./types/status";
 export * from "./types/ai";
 export * from "./types/publicData";
 export * from "./types/auth";
+export * from "./types/alerts";

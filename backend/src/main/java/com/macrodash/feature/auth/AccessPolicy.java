@@ -74,6 +74,11 @@ public final class AccessPolicy {
         // 💎 유료 — 종목별 투자자 매매 이력, AI 리포트(유료 API, 하루 한도는 UsageService)
         pro("GET /api/kr/stock-flows", "POST /api/ai/report");
 
+        // 🔔 알림 — 규칙·알림함(등급별 규칙 수와 종류는 AlertService가 제한)
+        member("GET /api/alerts/rules", "POST /api/alerts/rules", "POST /api/alerts/rules/{id}",
+                "DELETE /api/alerts/rules/{id}", "GET /api/alerts/inbox", "GET /api/alerts/unread-count",
+                "POST /api/alerts/inbox/read");
+
         // 🗄️ 운영 — 수집을 일으키거나 내부 상태·키 설정 여부를 보여 줌
         owner("GET /api/status", "GET /api/status/issues", "GET /api/status/tasks", "GET /api/status/history",
                 "POST /api/status/refresh", "POST /api/status/run/{taskName}", "GET /api/status/public-apis",

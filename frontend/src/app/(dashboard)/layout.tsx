@@ -9,6 +9,7 @@ import { apiBase } from "@/lib/api";
 import { RefreshProvider, useRefreshSignal } from "@/hooks/useRefreshSignal";
 import { endpoints } from "@/lib/endpoints";
 import type { SessionResponse } from "@/lib/types";
+import { titleWithUnread } from "@/lib/alerts";
 
 /**
  * 대시보드 공통 레이아웃 — 사이드바 + 거래소 시계.
@@ -35,7 +36,7 @@ export default function DashboardLayout({
  * 없습니다. 그대로 두면 탭 12개가 전부 같은 제목이라, 매크로·레이더·13F를 함께
  * 띄워 두고 비교할 때 어느 탭이 무엇인지 구분할 수 없습니다.
  */
-function useDocumentTitle(pathname: string) {
+function useDocumentTitle(pathname: string, unread: number) {
   useEffect(() => {
     const menu = MENUS.find(
       (entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`),
@@ -46,8 +47,9 @@ function useDocumentTitle(pathname: string) {
     const name = menu?.label
       .replace(/^[\p{Extended_Pictographic}\u200d\ufe0f\s]+/u, "")
       .trim();
-    document.title = name ? `${name} · 매크로 대시보드` : "매크로 대시보드";
-  }, [pathname]);
+    // 읽지 않은 알림이 있으면 앞에 수를 붙입니다(화면 알림함만이라 알아차리는 길이 이것뿐입니다).
+    document.title = titleWithUnread(name ? `${name} · 매크로 대시보드` : "매크로 대시보드", unread);
+  }, [pathname, unread]);
 }
 
 /** 세션 확인이 이 시간 안에 끝나지 않으면 "응답 없음"으로 보여 줍니다. */
@@ -60,7 +62,10 @@ function DashboardShell({
 }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
   const pathname = usePathname();
-  useDocumentTitle(pathname);
+  // 읽지 않은 알림 수 — 기존 자동 갱신 주기(5분). 알림 사건이 5분 평가에서 생기므로 더 빠를 이유가 없습니다.
+  const alerts = useApi<{ unread: number }>(endpoints.alerts.unreadCount, 300_000, { followRefresh: false });
+  const unread = alerts.data?.unread ?? 0;
+  useDocumentTitle(pathname, unread);
   // 수동 새로고침에는 반응하지 않습니다(followRefresh: false). 반응하면 새로고침마다
   // 아래의 "세션을 확인하는 중…"이 떠 화면 전체가 다시 그려지고 화면 상태가 초기화됐습니다.
   const session = useApi<SessionResponse>(endpoints.auth.session, 0, {
@@ -114,7 +119,7 @@ function DashboardShell({
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* 읽기 모드는 세션 응답에 함께 옵니다. 예전에는 이 한 줄 때문에 페이지를 열 때마다
           무거운 /api/status(수집기 상태 + DB 집계)를 불렀습니다. */}
-      <Sidebar readMode={data?.readMode} user={data?.user} />
+      <Sidebar readMode={data?.readMode} user={data?.user} unread={unread} />
       <main tabIndex={-1} id="main" className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:h-screen lg:overflow-y-auto">
         <div className="mb-5">
           <MarketClock />

@@ -26,6 +26,13 @@
 | POST | `/api/admin/users` | 운영자. 회원 만들기 `{"email","password","tier"}`(인증된 상태, 처음 비밀번호는 운영자가 전달) |
 | POST | `/api/admin/users/{id}` | 운영자. 역할·등급 지정 `{"role":"OWNER"\|"MEMBER","tier":"FREE"\|"PRO"}` — 그 사용자의 다음 요청부터 반영. 자기 운영자 역할은 못 내림 |
 | GET | `/api/admin/audit?limit=100` | 운영자. 감사 기록(로그인·비밀번호·역할/등급 변경·삭제) |
+| GET | `/api/alerts/rules` | 내 알림 규칙 `{available, limit, rules:[{id, kind, params, enabled, createdAt, description}]}`. 상한: 무료 1개(국면 전환만)·유료 20·운영자 50 |
+| POST | `/api/alerts/rules` | 만들기 `{"kind":"REGIME_CHANGE"\|"FOREIGN_STREAK"\|"INSTITUTION_NEW","params":{…}}` — 연속 순매수 `{target:KOSPI\|KOSDAQ\|STOCK, code(6자리), n:3~20}`, 13F `{cik}`(추적 12곳). 무료가 다른 종류면 403, 관심 종목은 사용자당 20·전체 60종목(수집 범위 초과면 400). 만든 날 이후 사건만 들어옴 |
+| POST | `/api/alerts/rules/{id}` | 켜기·끄기 `{"enabled": bool}` |
+| DELETE | `/api/alerts/rules/{id}` | 지우기 |
+| GET | `/api/alerts/inbox?limit=50` | 알림함(최근 순) `{items:[{id, kind, occurredOn, title, body, late, createdAt, read}], unread}` — 90일 보관, `late`는 발생 3일 뒤 들어간 '지난 사건' |
+| GET | `/api/alerts/unread-count` | 읽지 않은 수(지난 사건 제외) `{unread}` — 사이드바·탭 제목 표시용 |
+| POST | `/api/alerts/inbox/read` | 읽음 `{"ids":[…]}` 또는 `{"all":true}` |
 
 `GET /api/health`는 DB 연결을 확인해 `{"status":"ok","database":"ok"}`(200) 또는
 `{"status":"degraded","database":"unreachable"}`(503)로 답합니다 — 컨테이너 헬스체크·`make doctor`가 봅니다.

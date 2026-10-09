@@ -7,6 +7,7 @@ import { auth } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
 import { isOwner, lockedFor, roleLabel, visibleMenus } from "@/lib/access";
+import { unreadBadge } from "@/lib/alerts";
 import type { SessionUser } from "@/lib/types";
 
 /**
@@ -33,6 +34,7 @@ export const MENUS = [
   { href: "/krx", label: "🇰🇷 국내 파생 & 투기세력 (KRX)" },
   { href: "/radar", label: "📡 외국인/기관 수급 레이더" },
   { href: "/regime", label: "🧭 시장 국면 판정" },
+  { href: "/alerts", label: "🔔 알림" },
   { href: "/correlation", label: "🔗 지표 상관관계" },
   { href: "/status", label: "🗄️ 데이터 저장소 상태" },
   { href: "/ai/report", label: "🤖 AI 종합 데이터 분석" },
@@ -40,7 +42,7 @@ export const MENUS = [
   { href: "/admin/users", label: "👥 사용자 관리" },
 ];
 
-export function Sidebar({ readMode, user }: { readMode?: string; user?: SessionUser }) {
+export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: SessionUser; unread?: number }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -105,6 +107,11 @@ export function Sidebar({ readMode, user }: { readMode?: string; user?: SessionU
             >
               {menu.label}
               {lockedFor(user, menu.href) && <span className="ml-1" title="유료 등급 기능">🔒</span>}
+              {menu.href === "/alerts" && unreadBadge(unread) && (
+                <span className="ml-1 rounded-full bg-accent/20 px-1.5 text-[10px] text-accent" aria-label={`읽지 않은 알림 ${unread}건`}>
+                  {unreadBadge(unread)}
+                </span>
+              )}
             </Link>
           );
         })}

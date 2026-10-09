@@ -44,6 +44,15 @@ export const endpoints = {
     deleteAccount: "/api/auth/delete",
   },
 
+  // 🔔 알림 — 규칙·화면 알림함
+  alerts: {
+    rules: "/api/alerts/rules",
+    rule: (id: number) => `/api/alerts/rules/${segment(String(id))}`,
+    inbox: (limit: number) => withQuery("/api/alerts/inbox", { limit }),
+    unreadCount: "/api/alerts/unread-count",
+    read: "/api/alerts/inbox/read",
+  },
+
   // 👥 사용자 관리(운영자)
   admin: {
     users: "/api/admin/users",

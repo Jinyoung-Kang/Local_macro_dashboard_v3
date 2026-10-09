@@ -1,0 +1,315 @@
+package com.macrodash.feature.alert;
+
+import com.macrodash.Kst;
+import com.macrodash.analytics.AlertRules;
+import com.macrodash.analytics.FlowRecord;
+import com.macrodash.analytics.Holding;
+import com.macrodash.feature.institution.Institutions;
+import com.macrodash.read.StoreReader;
+import com.macrodash.store.AlertStore;
+import com.macrodash.store.Datasets;
+import com.macrodash.store.RegimeLogStore;
+import com.macrodash.store.Snapshot;
+import com.macrodash.store.StoreRepository;
+import com.macrodash.support.FlowJson;
+import com.macrodash.support.HoldingsJson;
+import com.macrodash.support.Json;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * 알림 평가 — 5분마다 세 트리거를 <b>전부</b> 평가해 사건을 만들고, 규칙이 맞는 사용자의 알림함에 넣습니다(설계 §4).
+ *
+ * <ul>
+ *   <li>새 데이터를 "알아내지" 않습니다. 평가가 멱등이라(사건 키·알림함 유일 제약) 같은 데이터를 다시 평가해도
+ *       새 사건이 생기지 않습니다. 수집기 실행 번호를 이어 처리하는 방식은 놓치는 건이 있어 버렸습니다(ADR 0011).</li>
+ *   <li>저장본은 {@link StoreReader#quietly}로 읽어 수집을 일으키지 않습니다(ADR 0008).</li>
+ *   <li>규칙을 만든 날보다 앞선 사건은 그 규칙으로 보내지 않습니다(과거 사건을 몰아 보내지 않음). 사건 발생 3일 뒤에야
+ *       알림함에 들어가는 것(백엔드가 꺼져 있었던 경우)은 '지난 사건'으로 표시하고 읽지 않은 수에 세지 않습니다.</li>
+ *   <li>잠정치는 쓰지 않습니다. 투자자 매매는 오늘(KST) 기록을 빼고, 종목 기록은 저녁 확정 칸이 모두 찬 경우만 씁니다.</li>
+ * </ul>
+ */
+@Service
+public class AlertEvaluator {
+
+    static final int LATE_DAYS = 3;
+    static final int REFAN_DAYS = 7;
+    static final int INBOX_KEEP_DAYS = 90;
+
+    private static final Logger log = LoggerFactory.getLogger(AlertEvaluator.class);
+    private static final ZoneId KST = Kst.ZONE;
+
+    private final AlertStore alerts;
+    private final RegimeLogStore regimeLog;
+    private final StoreReader store;
+    private final StoreRepository repository;
+    private final ObjectMapper mapper;
+    private final Clock clock;
+
+    @Autowired
+    public AlertEvaluator(AlertStore alerts, RegimeLogStore regimeLog, StoreReader store, StoreRepository repository,
+                          ObjectMapper mapper) {
+        this(alerts, regimeLog, store, repository, mapper, Clock.systemUTC());
+    }
+
+    AlertEvaluator(AlertStore alerts, RegimeLogStore regimeLog, StoreReader store, StoreRepository repository,
+                   ObjectMapper mapper, Clock clock) {
+        this.alerts = alerts;
+        this.regimeLog = regimeLog;
+        this.store = store;
+        this.repository = repository;
+        this.mapper = mapper;
+        this.clock = clock;
+    }
+
+    @Scheduled(initialDelayString = "${dashboard.scheduler.alert-initial-delay-ms:90000}",
+            fixedDelayString = "${dashboard.scheduler.alert-interval-ms:300000}")
+    public void scheduledEvaluate() {
+        try {
+            int delivered = evaluate();
+            if (delivered > 0) {
+                log.info("알림함에 {}건을 넣었습니다.", delivered);
+            }
+        } catch (RuntimeException e) {
+            log.warn("알림 평가 실패 — 다음 주기에 다시 시도합니다: {}", e.toString());
+        }
+    }
+
+    /** 한 번 평가합니다. @return 이번에 알림함에 새로 넣은 건수 */
+    public int evaluate() {
+        if (!alerts.ready()) {
+            return 0;
+        }
+        LocalDate today = LocalDate.now(clock.withZone(KST));
+        store.quietly(() -> {
+            regimeEvents();
+            streakEvents(today);
+            institutionEvents();
+            return null;
+        });
+        int delivered = fanOut("REGIME_CHANGE", today) + fanOut("FOREIGN_STREAK", today) + fanOut("INSTITUTION_NEW", today);
+        alerts.purgeDeliveries(INBOX_KEEP_DAYS);
+        return delivered;
+    }
+
+    // ------------------------------------------------------------------ 국면 전환
+    void regimeEvents() {
+        if (!regimeLog.ready() || alerts.enabledRules("REGIME_CHANGE").isEmpty()) {
+            return;
+        }
+        List<RegimeLogStore.Entry> entries = new ArrayList<>(regimeLog.recent(800));
+        Collections.reverse(entries);
+        List<AlertRules.RegimeDay> days = new ArrayList<>();
+        Map<LocalDate, JsonNode> inputsByDay = new LinkedHashMap<>();
+        for (RegimeLogStore.Entry entry : entries) {
+            days.add(new AlertRules.RegimeDay(entry.verdictDate(), entry.code(), entry.label()));
+            inputsByDay.put(entry.verdictDate(), entry.inputs());
+        }
+        List<AlertRules.RegimeChange> changes = AlertRules.confirmedChanges(days, AlertRules.REGIME_CONFIRM_DAYS);
+        for (AlertRules.RegimeChange change : changes) {
+            long recent = changes.stream()
+                    .filter(other -> !other.confirmedOn().isAfter(change.confirmedOn())
+                            && other.confirmedOn().isAfter(change.confirmedOn().minusDays(90)))
+                    .count();
+            AlertText.Text text = AlertText.regime(change,
+                    AlertText.regimeInputs(inputsByDay.get(change.confirmedOn())), (int) recent);
+            ObjectNode payload = mapper.createObjectNode();
+            payload.put("from", change.fromCode()).put("to", change.toCode())
+                    .put("startedOn", change.startedOn().toString());
+            alerts.insertEvent("REGIME_CHANGE", "regime:%s:%s>%s".formatted(change.confirmedOn(), change.fromCode(),
+                    change.toCode()), change.confirmedOn(), text.title(), text.body(), payload);
+        }
+    }
+
+    // ------------------------------------------------------------------ 외국인 연속 순매수
+    void streakEvents(LocalDate today) {
+        Set<String> combos = new LinkedHashSet<>();
+        for (AlertStore.Rule rule : alerts.enabledRules("FOREIGN_STREAK")) {
+            combos.add(target(rule.params()) + "|" + rule.params().path("n").asInt());
+        }
+        if (combos.isEmpty()) {
+            return;
+        }
+        Optional<Snapshot> market = store.read(Datasets.SNAP_TOSS_MARKET_FLOWS, Datasets.MAX_AGE_DAILY, "toss_market_flows");
+        Set<String> codes = new LinkedHashSet<>();
+        combos.forEach(combo -> {
+            if (combo.startsWith("STOCK:")) {
+                codes.add(combo.substring(6, combo.indexOf('|')));
+            }
+        });
+        Map<String, List<JsonNode>> stockSeries = codes.isEmpty() ? Map.of()
+                : repository.readObservationSeries(Datasets.OBS_TOSS_STOCK_FLOW, codes, today.minusDays(60));
+
+        for (String combo : combos) {
+            String target = combo.substring(0, combo.indexOf('|'));
+            int n = Integer.parseInt(combo.substring(combo.indexOf('|') + 1));
+            boolean stock = target.startsWith("STOCK:");
+            List<FlowRecord> records = stock
+                    ? FlowJson.records(stockSeries.getOrDefault(target.substring(6), List.of()))
+                    : market.filter(s -> s.payload() != null)
+                            .map(s -> FlowJson.records(Json.array(s.payload().path("markets").path(target), "records")))
+                            .orElse(List.of());
+            List<AlertRules.DayNet> finalized = finalizedForeignNet(records, today, stock);
+            for (AlertRules.StreakHit hit : AlertRules.streakReached(finalized, n)) {
+                Long sum = sumNet(finalized, hit);
+                String label = stock ? "종목 " + target.substring(6) : ("KOSPI".equals(target) ? "코스피" : "코스닥");
+                AlertText.Text text = AlertText.foreignStreak(label, stock, hit, sum);
+                ObjectNode payload = mapper.createObjectNode().put("target", target).put("n", n);
+                alerts.insertEvent("FOREIGN_STREAK", "streak:%s:%s:%d".formatted(target, hit.date(), n),
+                        hit.date(), text.title(), text.body(), payload);
+            }
+        }
+    }
+
+    /**
+     * 확정 기록만 오름차순으로. 오늘(KST) 기록은 잠정치라 빼고, 종목 기록은 저녁 확정 칸(개인·기타법인·기관 세부·
+     * 외국인 보유율)이 모두 찬 경우만 오늘 기록도 씁니다. 시장 기록은 하루 늦게(다음 날부터) 확정으로 봅니다.
+     */
+    static List<AlertRules.DayNet> finalizedForeignNet(List<FlowRecord> records, LocalDate today, boolean stock) {
+        List<AlertRules.DayNet> out = new ArrayList<>();
+        for (FlowRecord record : records) {
+            LocalDate date = Json.parseDate(record.date());
+            if (date == null) {
+                continue;
+            }
+            boolean finalized = date.isBefore(today) || (stock && complete(record));
+            if (!finalized) {
+                continue;
+            }
+            FlowRecord.Amounts foreigner = record.investors().get("foreigner");
+            out.add(new AlertRules.DayNet(date, foreigner == null ? null : foreigner.net()));
+        }
+        out.sort((a, b) -> a.date().compareTo(b.date()));
+        return out;
+    }
+
+    private static boolean complete(FlowRecord record) {
+        FlowRecord.Amounts individual = record.investors().get("individual");
+        FlowRecord.Amounts other = record.investors().get("otherCorporation");
+        return individual != null && individual.net() != null && other != null && other.net() != null
+                && !record.breakdown().isEmpty() && record.foreignerHoldingRate() != null;
+    }
+
+    private static Long sumNet(List<AlertRules.DayNet> days, AlertRules.StreakHit hit) {
+        long sum = 0;
+        int counted = 0;
+        for (int i = days.size() - 1; i >= 0 && counted < hit.days(); i--) {
+            AlertRules.DayNet day = days.get(i);
+            if (day.date().isAfter(hit.date())) {
+                continue;
+            }
+            if (day.net() == null) {
+                return null;
+            }
+            sum += day.net();
+            counted++;
+        }
+        return counted == hit.days() ? sum : null;
+    }
+
+    private static String target(JsonNode params) {
+        String target = params.path("target").asText();
+        return "STOCK".equals(target) ? "STOCK:" + params.path("code").asText() : target;
+    }
+
+    // ------------------------------------------------------------------ 13F 신규 편입
+    void institutionEvents() {
+        Set<String> ciks = new LinkedHashSet<>();
+        alerts.enabledRules("INSTITUTION_NEW").forEach(rule -> ciks.add(rule.params().path("cik").asText()));
+        for (String cik : ciks) {
+            Optional<Snapshot> snapshot = store.read(Datasets.sec13f(cik, Datasets.MAX_TRACKED_QUARTERS),
+                    Datasets.MAX_AGE_SLOW, "sec_13f");
+            if (snapshot.isEmpty() || snapshot.get().payload() == null) {
+                continue;
+            }
+            List<JsonNode> quarters = distinctQuarters(Json.array(snapshot.get().payload(), "quarters"));
+            if (quarters.isEmpty()) {
+                continue;
+            }
+            JsonNode latest = quarters.get(0);
+            String filingDate = Json.asText(latest, "filingDate");
+            LocalDate filed = Json.parseDate(filingDate);
+            if (filed == null) {
+                continue;
+            }
+            List<Holding> added = quarters.size() < 2 ? List.of()
+                    : AlertRules.newPositions(HoldingsJson.holdings(latest), HoldingsJson.holdings(quarters.get(1)));
+            if (quarters.size() < 2 || added.isEmpty()) {
+                continue;   // 비교할 직전 분기가 없거나 신규 편입이 없으면 알릴 것이 없습니다
+            }
+            String name = Institutions.byCik(cik).get("name");
+            AlertText.Text text = AlertText.institutionNew(name, Json.asText(latest, "reportDate"), filingDate, added);
+            ObjectNode payload = mapper.createObjectNode().put("cik", cik).put("newCount", added.size());
+            alerts.insertEvent("INSTITUTION_NEW", "13f:%s:%s".formatted(cik, filingDate), filed,
+                    text.title(), text.body(), payload);
+        }
+    }
+
+    /** 같은 보고 분기가 두 번(정정) 나오면 먼저 나온(최근 제출) 것만 — 13F 화면과 같은 규칙. */
+    static List<JsonNode> distinctQuarters(List<JsonNode> quarters) {
+        Map<String, JsonNode> byDate = new LinkedHashMap<>();
+        for (JsonNode quarter : quarters) {
+            String reportDate = Json.asText(quarter, "reportDate");
+            if (reportDate != null) {
+                byDate.putIfAbsent(reportDate, quarter);
+            }
+        }
+        return new ArrayList<>(byDate.values());
+    }
+
+    // ------------------------------------------------------------------ 알림함에 넣기
+    /** 최근 사건을 규칙과 맞춰 알림함에 넣습니다(이미 있으면 그대로). 규칙을 만든 날보다 앞선 사건은 넣지 않습니다. */
+    int fanOut(String kind, LocalDate today) {
+        List<AlertStore.Rule> rules = alerts.enabledRules(kind);
+        if (rules.isEmpty()) {
+            return 0;
+        }
+        int delivered = 0;
+        for (AlertStore.Event event : alerts.recentEvents(kind, REFAN_DAYS)) {
+            for (AlertStore.Rule rule : rules) {
+                if (!matches(rule, event)) {
+                    continue;
+                }
+                LocalDate created = rule.createdAt().atZone(KST).toLocalDate();
+                if (event.occurredOn().isBefore(created)) {
+                    continue;
+                }
+                boolean late = event.occurredOn().isBefore(today.minusDays(LATE_DAYS));
+                if (alerts.deliver(event.id(), rule.userId(), rule.id(), late)) {
+                    delivered++;
+                }
+            }
+        }
+        return delivered;
+    }
+
+    /** 사건 키에 담긴 대상이 규칙과 맞는가. */
+    static boolean matches(AlertStore.Rule rule, AlertStore.Event event) {
+        String key = event.eventKey();
+        return switch (rule.kind()) {
+            case "REGIME_CHANGE" -> key.startsWith("regime:");
+            case "FOREIGN_STREAK" -> key.startsWith("streak:" + target(rule.params()) + ":")
+                    && key.endsWith(":" + rule.params().path("n").asInt());
+            case "INSTITUTION_NEW" -> key.startsWith("13f:" + rule.params().path("cik").asText() + ":");
+            default -> false;
+        };
+    }
+}
