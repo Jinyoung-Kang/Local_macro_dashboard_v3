@@ -21,3 +21,20 @@ export interface LoginSession {
   expiresAt: string;
   userAgent: string | null;
 }
+
+/** 사용자 관리 목록의 한 줄. */
+export interface AdminUser {
+  id: number;
+  email: string;
+  role: SessionUser["role"];
+  tier: SessionUser["tier"];
+  verified: boolean;
+  createdAt: string;
+}
+
+export interface AuditEntry {
+  at: string;
+  userId: number | null;
+  action: string;
+  detail: string;
+}

@@ -164,6 +164,30 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("무료 회원은 유료 경로가 403 required=PRO, 운영자가 등급을 바꾸면 다음 요청부터 열린다")
+    void tierChangeAppliesOnNextRequest() {
+        long memberId = users.findByEmail(MEMBER).orElseThrow().id();
+        users.updateRoleAndTier(memberId, "MEMBER", "FREE");
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, login(MEMBER, "test-password"));
+
+        ResponseEntity<JsonNode> locked = rest.exchange(url("/api/kr/stock-flows?codes=005930"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), JsonNode.class);
+        assertThat(locked.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(locked.getBody().path("required").asText()).isEqualTo("PRO");
+
+        HttpHeaders owner = new HttpHeaders();
+        owner.add(HttpHeaders.COOKIE, sessionCookie);
+        owner.setContentType(MediaType.APPLICATION_JSON);
+        assertThat(rest.exchange(url("/api/admin/users/" + memberId), HttpMethod.POST,
+                new HttpEntity<>(Map.of("role", "MEMBER", "tier", "PRO"), owner), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(rest.exchange(url("/api/kr/stock-flows?codes=005930"), HttpMethod.GET,
+                new HttpEntity<>(null, headers), String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+        users.updateRoleAndTier(memberId, "MEMBER", "FREE");
+    }
+
+    @Test
     @DisplayName("없는 이메일과 틀린 비밀번호는 같은 응답이다 — 계정 존재를 드러내지 않는다")
     void unknownEmailLooksLikeWrongPassword() {
         ResponseEntity<String> unknown = rest.postForEntity(url("/api/auth/login"),

@@ -53,15 +53,17 @@ public final class AccessPolicy {
                 "GET /api/sector/rotation", "GET /api/sector/momentum");
         // 📑 13F · 🧬 기관 스타일 · 🩺 스코어카드
         member("GET /api/sec13f/institutions", "GET /api/sec13f/portfolio", "GET /api/sec13f/consensus",
-                "GET /api/sec13f/new-buys", "GET /api/guru/profiles", "GET /api/guru/similarity",
-                "GET /api/guru/holders", "GET /api/guru/risk", "GET /api/stock/universe", "GET /api/stock/scorecard");
+                "GET /api/guru/profiles", "GET /api/guru/similarity",
+                "GET /api/guru/holders", "GET /api/stock/universe", "GET /api/stock/scorecard");
+        // 💎 유료 — 심화 분석(신규 매수 교집합·포트폴리오 위험)
+        pro("GET /api/sec13f/new-buys", "GET /api/guru/risk");
         // 🏛️ COT · 🇰🇷 파생 · 📡 레이더 · 🏦 투자자별 매매 · 공공 API
         member("GET /api/cot/assets", "GET /api/cot/overview", "GET /api/cot/asset", "GET /api/cot/extremes",
                 "GET /api/krx/futures", "GET /api/krx/investor-trend", "GET /api/krx/intraday",
                 "GET /api/krx/oi-trend", "GET /api/krx/spot-futures",
                 "GET /api/radar/options", "GET /api/radar/ranking", "GET /api/radar/consensus",
                 "GET /api/radar/history",
-                "GET /api/kr/investor-flows", "GET /api/kr/stock-flows", "GET /api/calendar/kr-holidays",
+                "GET /api/kr/investor-flows", "GET /api/calendar/kr-holidays",
                 "GET /api/kr/fundamentals", "GET /api/kr/market-totals");
         // 🔗 상관 · 🧭 국면 · 원본 텍스트
         member("GET /api/analytics/series", "GET /api/analytics/correlation", "GET /api/analytics/regime",
@@ -69,13 +71,16 @@ public final class AccessPolicy {
         // 🤖 AI (조회) · 🔌 토스 공개 시세
         member("GET /api/ai/engines", "GET /api/ai/report-types", "GET /api/ai/snapshot-text",
                 "GET /api/ai/toss/exchange-rate", "GET /api/ai/toss/indices");
-        member("POST /api/ai/report");
+        // 💎 유료 — 종목별 투자자 매매 이력, AI 리포트(유료 API, 하루 한도는 UsageService)
+        pro("GET /api/kr/stock-flows", "POST /api/ai/report");
 
         // 🗄️ 운영 — 수집을 일으키거나 내부 상태·키 설정 여부를 보여 줌
         owner("GET /api/status", "GET /api/status/issues", "GET /api/status/tasks", "GET /api/status/history",
                 "POST /api/status/refresh", "POST /api/status/run/{taskName}", "GET /api/status/public-apis",
                 "POST /api/verification", "GET /api/radar/diagnostics", "GET /api/ai/toss/diagnostics",
                 "POST /api/ai/test");
+        // 👥 사용자 관리
+        owner("GET /api/admin/users", "POST /api/admin/users", "POST /api/admin/users/{id}", "GET /api/admin/audit");
     }
 
     private static final List<Rule> RULES = new ArrayList<>();
@@ -94,6 +99,10 @@ public final class AccessPolicy {
 
     private static void member(String... routes) {
         put(Access.MEMBER, routes);
+    }
+
+    private static void pro(String... routes) {
+        put(Access.PRO, routes);
     }
 
     private static void owner(String... routes) {

@@ -49,4 +49,6 @@ export interface AiResponse {
   reportType?: string;
   /** 사용 토큰 수 — 지금은 Claude 엔진만 내려보냅니다. */
   usage?: { inputTokens: number; outputTokens: number };
+  /** 오늘(KST) AI 리포트 사용량. limit이 null이면 한도 없음(운영자). */
+  quota?: { used: number; limit: number | null };
 }

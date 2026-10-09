@@ -42,8 +42,7 @@ class AiReportFlowTest {
     @Test
     @DisplayName("고른 리포트 종류의 시스템 프롬프트로, 원본 텍스트와 요청·추가 지시를 붙여 부른다")
     void assemblesPromptForChosenType() {
-        Map<String, Object> out = controller().report(
-                new AiController.ReportRequest("cerebras_llama", "리스크 점검", "짧게"));
+        Map<String, Object> out = controller().report(new AiController.ReportRequest("cerebras_llama", "리스크 점검", "짧게"), new org.springframework.mock.web.MockHttpServletRequest());
 
         String expectedPrompt = "아래는 대시보드가 수집한 최신 원본 데이터입니다.\n\n<data>\nDATA\n</data>"
                 + "\n\n요청: 리스크 점검을(를) 작성하십시오. 시스템 지시의 [절 구성]과 [형식]을 따르십시오."
@@ -57,7 +56,7 @@ class AiReportFlowTest {
     @Test
     @DisplayName("모르는·빈 리포트 종류는 첫 번째 종류로, 빈 추가 지시는 붙이지 않는다")
     void unknownTypeFallsBackToFirst() {
-        Map<String, Object> out = controller().report(new AiController.ReportRequest("auto", "없는 종류", " "));
+        Map<String, Object> out = controller().report(new AiController.ReportRequest("auto", "없는 종류", " "), new org.springframework.mock.web.MockHttpServletRequest());
 
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
         verify(ai).generate(eq("auto"), prompt.capture(), eq("SYSTEM-A"));
@@ -71,7 +70,7 @@ class AiReportFlowTest {
     void overlongInstructionIsRejected() {
         String longText = "가".repeat(2001);
 
-        assertThatThrownBy(() -> controller().report(new AiController.ReportRequest("auto", null, longText)))
+        assertThatThrownBy(() -> controller().report(new AiController.ReportRequest("auto", null, longText), new org.springframework.mock.web.MockHttpServletRequest()))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("2000자 이하");
         verify(ai, never()).generate(anyString(), anyString(), anyString());
@@ -85,6 +84,7 @@ class AiReportFlowTest {
     }
 
     private AiController controller() {
-        return new AiController(ai, new AiReportService(ai, snapshotText));
+        return new AiController(ai, new AiReportService(ai, snapshotText,
+                org.mockito.Mockito.mock(com.macrodash.feature.auth.UsageService.class)));
     }
 }

@@ -260,6 +260,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | `OWNER_EMAIL` | 처음 운영자 계정의 로그인 이메일. 없으면 계정을 만들지 않아 로그인 불가(`make doctor`가 알림) |
 | `APP_PASSWORD` | 처음 운영자 계정의 비밀번호. `make setup`이 무작위로 만듭니다. 비었거나 `admin1234@`면 계정을 만들지 않음 |
 | `MAIL_HOST`·`MAIL_PORT`·`MAIL_USERNAME`·`MAIL_PASSWORD` | 계정 메일(가입 인증·비밀번호 재설정). 없으면 가입·재설정만 꺼짐(운영자 로그인·나머지는 정상) |
+| `AI_DAILY_LIMIT` | 유료 회원의 하루 AI 리포트 한도(기본 20). 운영자는 한도 없음, 무료 회원은 쓸 수 없음 |
 | `FRED_API_KEY` | FRED 웹 CSV로 폴백 (대부분 정상) |
 | `SEC_USER_AGENT` | **키가 아니라 본인 이메일입니다.** 없으면 13F 수집만 멈춥니다 |
 | `KRX_API_KEY` | KRX 선물이 KODEX 200 기반 **추정치**로 폴백 (`isEstimated` 표시) |

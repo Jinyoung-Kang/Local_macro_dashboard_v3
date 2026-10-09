@@ -62,7 +62,10 @@ public class TrackRecordService {
         this.store = store;
     }
 
-    public Map<String, Object> trackRecord(String ticker) {
+    /** 무료 회원이 볼 수 있는 자산(D5 등급표). 유료·운영자는 전체. */
+    static final String FREE_ASSET = "SPY";
+
+    public Map<String, Object> trackRecord(String ticker, boolean pro) {
         Asset asset = ASSETS.stream().filter(a -> a.ticker().equals(ticker)).findFirst()
                 .orElseThrow(() -> new InvalidRequestException(
                         "알 수 없는 자산입니다: " + Params.echo(ticker) + " (가능: SPY·QQQ·069500.KS·IEF·GLD)"));
@@ -73,6 +76,12 @@ public class TrackRecordService {
         out.put("assets", ASSETS.stream().map(a -> Map.of("ticker", a.ticker(), "label", a.label())).toList());
         out.put("horizons", HORIZONS);
         out.put("limits", LIMITS);
+        if (!pro && !FREE_ASSET.equals(asset.ticker())) {
+            out.put("available", false);
+            out.put("locked", true);
+            out.put("message", "무료 등급은 S&P 500(SPY) 성과만 볼 수 있습니다. 다른 자산은 유료 등급에서 볼 수 있습니다.");
+            return out;
+        }
 
         NavigableMap<LocalDate, Double> curve = known("T10Y3M", PointInTime.Release.NEXT_BUSINESS_DAY);
         NavigableMap<LocalDate, Double> nfci = known("NFCI", PointInTime.Release.NEXT_WEDNESDAY);

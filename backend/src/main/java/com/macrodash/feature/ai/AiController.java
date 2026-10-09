@@ -1,5 +1,7 @@
 package com.macrodash.feature.ai;
 
+import com.macrodash.support.CurrentUser;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -69,9 +71,10 @@ public class AiController {
      * <p>추가 지시는 유료 AI API로 그대로 전달되므로, 길이는 여기(HTTP 경계)에서 먼저 막습니다.
      */
     @PostMapping("/report")
-    public Map<String, Object> report(@RequestBody ReportRequest request) {
+    public Map<String, Object> report(@RequestBody ReportRequest request, jakarta.servlet.http.HttpServletRequest http) {
         requireShort(request.extraInstruction(), "추가 지시");
-        return reports.report(request.engineId(), request.reportType(), request.extraInstruction());
+        return reports.report(request.engineId(), request.reportType(), request.extraInstruction(),
+                CurrentUser.of(http));
     }
 
     /** AI 연결 테스트 (짧은 프롬프트로 엔진 응답만 확인). */

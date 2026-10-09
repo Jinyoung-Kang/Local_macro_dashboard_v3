@@ -1,6 +1,8 @@
 package com.macrodash.feature.ai;
 
+import com.macrodash.feature.auth.UsageService;
 import com.macrodash.feature.snapshot.SnapshotTextService;
+import com.macrodash.support.CurrentUser;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -19,10 +21,12 @@ public class AiReportService {
 
     private final AiService ai;
     private final SnapshotTextService snapshotText;
+    private final UsageService usage;
 
-    public AiReportService(AiService ai, SnapshotTextService snapshotText) {
+    public AiReportService(AiService ai, SnapshotTextService snapshotText, UsageService usage) {
         this.ai = ai;
         this.snapshotText = snapshotText;
+        this.usage = usage;
     }
 
     /** 고를 수 있는 리포트 종류(화면 표시 순서). */
@@ -43,7 +47,18 @@ public class AiReportService {
      * @param extraInstruction 사용자가 덧붙인 지시(비어 있으면 넣지 않음). 길이 검사는 호출하는 쪽에서
      * @return 엔진 응답 + {@code reportType}(실제로 쓴 종류) · {@code promptChars}(프롬프트 길이)
      */
-    public Map<String, Object> report(String engineId, String requestedType, String extraInstruction) {
+    public Map<String, Object> report(String engineId, String requestedType, String extraInstruction,
+                                      CurrentUser user) {
+        // 유료 API 비용 상한 — 사용자별 하루 한도(운영자는 한도 없음). 엔진이 모두 실패하면 되돌립니다.
+        UsageService.Quota quota = user == null ? null : usage.consume(user, UsageService.AI_REPORT);
+        if (quota != null && !quota.allowed()) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("status", false);
+            out.put("error", "오늘 쓸 수 있는 AI 리포트 %d건을 모두 썼습니다. 내일(KST 0시) 다시 쓸 수 있습니다."
+                    .formatted(quota.limit()));
+            out.put("quota", quotaMap(quota));
+            return out;
+        }
         Map<String, String> prompts = snapshotText.reportPrompts();
         String reportType = (requestedType == null || !prompts.containsKey(requestedType))
                 ? prompts.keySet().iterator().next()
@@ -67,6 +82,20 @@ public class AiReportService {
         Map<String, Object> out = new LinkedHashMap<>(result);
         out.put("reportType", reportType);
         out.put("promptChars", prompt.length());
+        if (quota != null) {
+            if (!Boolean.TRUE.equals(result.get("status"))) {
+                usage.refund(user, UsageService.AI_REPORT);
+                quota = new UsageService.Quota(true, Math.max(0, quota.used() - 1), quota.limit());
+            }
+            out.put("quota", quotaMap(quota));
+        }
+        return out;
+    }
+
+    private static Map<String, Object> quotaMap(UsageService.Quota quota) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("used", quota.used());
+        out.put("limit", quota.limit());
         return out;
     }
 }

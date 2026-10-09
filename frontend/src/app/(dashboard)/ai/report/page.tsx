@@ -169,6 +169,9 @@ export default function AiReportPage() {
                     ? `토큰 입력 ${result.usage.inputTokens.toLocaleString("ko-KR")} · 출력 ${result.usage.outputTokens.toLocaleString("ko-KR")}`
                     : null,
                   result.translationInfo ?? null,
+                  result.quota
+                    ? `오늘 ${result.quota.used}/${result.quota.limit ?? "무제한"}건`
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")

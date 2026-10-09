@@ -62,7 +62,7 @@ export function TrackRecordSection({ tone }: { tone: Record<string, string> }) {
     >
       {loading && !data && <Loading label="판정 성과를 계산하는 중…" />}
       {error && <ErrorState message={error} onRetry={reload} />}
-      {data && !data.available && <Banner tone="warn">{data.message}</Banner>}
+      {data && !data.available && <Banner tone={data.locked ? "info" : "warn"}>{data.locked ? "🔒 " : ""}{data.message}</Banner>}
       {data?.available && (
         <>
           <Banner tone="info">

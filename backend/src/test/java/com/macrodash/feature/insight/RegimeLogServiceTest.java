@@ -127,7 +127,7 @@ class RegimeLogServiceTest {
                 regimeLog, MAPPER, kstAt(19));
 
         assertThat(service.recordToday()).isEqualTo(RegimeLogService.Outcome.SCHEMA_NOT_READY);
-        Map<String, Object> recent = service.recent(30);
+        Map<String, Object> recent = service.recent(30, true);
         assertThat(recent.get("available")).isEqualTo(false);
         assertThat(String.valueOf(recent.get("message"))).contains("V3");
     }

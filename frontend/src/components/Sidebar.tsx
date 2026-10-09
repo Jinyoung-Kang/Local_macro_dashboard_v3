@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
-import { isOwner, roleLabel, visibleMenus } from "@/lib/access";
+import { isOwner, lockedFor, roleLabel, visibleMenus } from "@/lib/access";
 import type { SessionUser } from "@/lib/types";
 
 /**
@@ -37,6 +37,7 @@ export const MENUS = [
   { href: "/status", label: "🗄️ 데이터 저장소 상태" },
   { href: "/ai/report", label: "🤖 AI 종합 데이터 분석" },
   { href: "/connections", label: "🔌 외부 API 연결 테스트" },
+  { href: "/admin/users", label: "👥 사용자 관리" },
 ];
 
 export function Sidebar({ readMode, user }: { readMode?: string; user?: SessionUser }) {
@@ -103,6 +104,7 @@ export function Sidebar({ readMode, user }: { readMode?: string; user?: SessionU
               }`}
             >
               {menu.label}
+              {lockedFor(user, menu.href) && <span className="ml-1" title="유료 등급 기능">🔒</span>}
             </Link>
           );
         })}

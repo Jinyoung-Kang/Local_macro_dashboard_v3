@@ -8,7 +8,16 @@
 import type { SessionUser } from "./types";
 
 /** 운영자만 보는 메뉴 — 수집 실행·내부 상태(/api/status*)와 키 설정 진단·유료 AI 시험 호출을 부르는 화면. */
-export const OWNER_ONLY_MENUS = ["/status", "/connections"] as const;
+export const OWNER_ONLY_MENUS = ["/status", "/connections", "/admin/users"] as const;
+
+/** 유료 등급 메뉴 — 무료 회원에게는 🔒을 붙입니다(눌러도 되며, 화면이 유료 안내를 띄움). */
+export const PRO_MENUS = ["/ai/report"] as const;
+
+/** 무료 회원에게 잠긴 메뉴인가. */
+export function lockedFor(user: SessionUser | null | undefined, href: string): boolean {
+  if (!user || user.role === "OWNER" || user.tier === "PRO") return false;
+  return (PRO_MENUS as readonly string[]).includes(href);
+}
 
 export function isOwner(user: SessionUser | null | undefined): boolean {
   return user?.role === "OWNER";

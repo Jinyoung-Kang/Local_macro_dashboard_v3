@@ -126,6 +126,8 @@ export interface RegimeLogResponse {
   startedOn?: string | null;
   count?: number;
   recordHourKst?: number;
+  /** 무료 등급이라 최근 N건만 받은 경우. */
+  limitedTo?: number;
   entries?: RegimeLogEntry[];
   note?: string;
 }
@@ -155,6 +157,8 @@ export interface TrackRecordRegime {
 
 export interface TrackRecordResponse {
   available: boolean;
+  /** 무료 등급이라 이 자산을 볼 수 없는 경우. */
+  locked?: boolean;
   message?: string;
   asset: string;
   assetLabel: string;

@@ -22,6 +22,10 @@
 | POST | `/api/auth/reset/request` | 공개. `{"email"}` — 가입 여부와 무관하게 같은 200. 인증된 계정에만 재설정 메일(30분, 한 번만) |
 | POST | `/api/auth/reset/confirm` | 공개. `{"token","password"}` — 새 비밀번호, 성공하면 그 계정의 모든 세션을 끊음 |
 | POST | `/api/auth/delete` | `{"password"}` — 비밀번호 재확인 뒤 계정·세션·토큰 삭제(감사 기록은 사용자 번호만 비움), 운영자 계정은 400 |
+| GET | `/api/admin/users` | 운영자. 사용자 목록 `{users:[{id, email, role, tier, verified, createdAt}]}` |
+| POST | `/api/admin/users` | 운영자. 회원 만들기 `{"email","password","tier"}`(인증된 상태, 처음 비밀번호는 운영자가 전달) |
+| POST | `/api/admin/users/{id}` | 운영자. 역할·등급 지정 `{"role":"OWNER"\|"MEMBER","tier":"FREE"\|"PRO"}` — 그 사용자의 다음 요청부터 반영. 자기 운영자 역할은 못 내림 |
+| GET | `/api/admin/audit?limit=100` | 운영자. 감사 기록(로그인·비밀번호·역할/등급 변경·삭제) |
 
 `GET /api/health`는 DB 연결을 확인해 `{"status":"ok","database":"ok"}`(200) 또는
 `{"status":"degraded","database":"unreachable"}`(503)로 답합니다 — 컨테이너 헬스체크·`make doctor`가 봅니다.

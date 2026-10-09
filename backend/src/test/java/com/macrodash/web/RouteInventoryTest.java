@@ -42,6 +42,8 @@ class RouteInventoryTest {
             "POST /api/auth/logout-all", "GET /api/auth/sessions", "POST /api/auth/password",
             "POST /api/auth/signup", "POST /api/auth/verify", "POST /api/auth/reset/request",
             "POST /api/auth/reset/confirm", "POST /api/auth/delete",
+            // 👥 사용자 관리(운영자)
+            "GET /api/admin/users", "POST /api/admin/users", "POST /api/admin/users/{id}", "GET /api/admin/audit",
             // 📊 매크로 · 순유동성 · 로테이션
             "GET /api/macro/overview", "GET /api/macro/risk", "GET /api/macro/advanced",
             "GET /api/macro/usdkrw", "GET /api/macro/fx", "GET /api/macro/fx/options",

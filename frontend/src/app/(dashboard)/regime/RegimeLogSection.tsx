@@ -70,6 +70,11 @@ export function RegimeLogSection({ tone }: { tone: Record<string, string> }) {
             ]}
           />
           {data.note && <p className="mt-2 text-[11px] text-muted">{data.note}</p>}
+          {data.limitedTo && (
+            <p className="mt-1 text-[11px] text-muted">
+              🔒 무료 등급은 최근 {data.limitedTo}건만 보입니다. 유료 등급은 기록 전체를 봅니다.
+            </p>
+          )}
         </>
       )}
     </Card>

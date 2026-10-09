@@ -44,6 +44,8 @@ public class RegimeLogService {
     /** NFCI(주간, 다음 주 수요일 발표)의 허용 지연. */
     static final int WEEKLY_MAX_AGE_DAYS = 12;
     static final int MAX_LIMIT = 3650;
+    /** 무료 회원이 보는 최근 기록 수(D5 등급표). 유료·운영자는 전체. */
+    static final int FREE_LIMIT = 30;
 
     private static final Logger log = LoggerFactory.getLogger(RegimeLogService.class);
 
@@ -129,7 +131,7 @@ public class RegimeLogService {
     }
 
     /** 최근 기록. 테이블이 아직 없으면 그 사실을 알립니다. */
-    public Map<String, Object> recent(int limit) {
+    public Map<String, Object> recent(int limit, boolean pro) {
         Map<String, Object> out = new LinkedHashMap<>();
         if (!regimeLog.ready()) {
             out.put("available", false);
@@ -137,7 +139,7 @@ public class RegimeLogService {
                     + "생깁니다 — make up 후 다시 보세요.");
             return out;
         }
-        int bounded = Math.max(1, Math.min(limit, MAX_LIMIT));
+        int bounded = Math.max(1, Math.min(limit, pro ? MAX_LIMIT : FREE_LIMIT));
         List<Map<String, Object>> entries = new ArrayList<>();
         for (RegimeLogStore.Entry entry : regimeLog.recent(bounded)) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -153,6 +155,9 @@ public class RegimeLogService {
         out.put("startedOn", regimeLog.firstDate().map(LocalDate::toString).orElse(null));
         out.put("count", regimeLog.count());
         out.put("recordHourKst", RECORD_HOUR_KST);
+        if (!pro && limit > FREE_LIMIT) {
+            out.put("limitedTo", FREE_LIMIT);   // 화면이 "유료 등급은 전체" 안내를 띄웁니다
+        }
         out.put("entries", entries);
         out.put("note", "하루 한 번(KST %d시 이후) 그날 화면에 보인 판정을 근거와 함께 남깁니다. "
                 .formatted(RECORD_HOUR_KST)

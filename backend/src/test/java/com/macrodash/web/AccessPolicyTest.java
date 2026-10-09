@@ -42,4 +42,15 @@ class AccessPolicyTest {
         assertThat(AccessPolicy.allows(AccessPolicy.Access.PRO, "MEMBER", "PRO")).isTrue();
         assertThat(AccessPolicy.allows(AccessPolicy.Access.PRO, "OWNER", "FREE")).isTrue();
     }
+
+    @Test
+    @DisplayName("유료 경로: AI 리포트·종목별 수급·13F 신규 매수·포트폴리오 위험. 사용자 관리는 운영자만")
+    void paidAndAdminRoutes() {
+        for (String route : java.util.List.of("POST /api/ai/report", "GET /api/kr/stock-flows",
+                "GET /api/sec13f/new-buys", "GET /api/guru/risk")) {
+            String[] parts = route.split(" ");
+            assertThat(AccessPolicy.required(parts[0], parts[1])).as(route).isEqualTo(AccessPolicy.Access.PRO);
+        }
+        assertThat(AccessPolicy.required("POST", "/api/admin/users/7")).isEqualTo(AccessPolicy.Access.OWNER);
+    }
 }

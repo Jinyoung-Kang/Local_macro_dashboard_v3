@@ -58,6 +58,8 @@ const CASES: Case[] = [
       `&window=${"60"}&years=${"5"}&mode=${"change"}`,
     after: endpoints.insight.correlation({ x: "liquidity:net", y: "etf:QQQ", window: "60", years: "5", mode: "change" }) },
   { name: "regime", before: `/api/analytics/regime?years=${"5"}`, after: endpoints.insight.regime("5") },
+  { name: "admin.user", before: `/api/admin/users/${7}`, after: endpoints.admin.user(7) },
+  { name: "admin.audit", before: `/api/admin/audit?limit=${100}`, after: endpoints.admin.audit(100) },
   { name: "regimeLog", before: `/api/analytics/regime/log?limit=${"90"}`, after: endpoints.insight.regimeLog(90) },
   { name: "regimeTrackRecord", before: `/api/analytics/regime/track-record?asset=${encodeURIComponent("069500.KS")}`,
     after: endpoints.insight.regimeTrackRecord("069500.KS") },
@@ -129,7 +131,8 @@ function leaves(value: unknown, out = { strings: [] as string[], functions: 0 })
 /** 쿼리를 뗀 경로. 동적 조각은 문서 표기로 바꿉니다. */
 const documentedForm = (url: string) => new URL(url, "http://backend").pathname
   .replace(/^\/api\/macro\/fred\/[^/]+$/, "/api/macro/fred/{seriesId}")
-  .replace(/^\/api\/status\/run\/[^/]+$/, "/api/status/run/{taskName}");
+  .replace(/^\/api\/status\/run\/[^/]+$/, "/api/status/run/{taskName}")
+  .replace(/^\/api\/admin\/users\/[^/]+$/, "/api/admin/users/{id}");
 
 describe("docs/API.md 백엔드 표와 대조", () => {
   it("화면이 부르는 경로는 모두 문서(= 백엔드 경로 목록 테스트가 대조하는 표)에 있다", () => {
@@ -142,6 +145,6 @@ describe("docs/API.md 백엔드 표와 대조", () => {
     const paths = [...strings, ...CASES.map(({ after }) => after)].map(documentedForm);
     expect(paths.filter((path) => !documented.has(path))).toEqual([]);
     // 경로를 만드는 함수는 모두 위 CASES에 한 줄 이상 있습니다. 새 함수를 만들었다면 CASES에 추가하고 이 숫자를 고치세요.
-    expect(functions).toBe(34);
+    expect(functions).toBe(36);
   });
 });

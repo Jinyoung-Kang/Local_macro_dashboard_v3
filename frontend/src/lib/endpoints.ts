@@ -44,6 +44,13 @@ export const endpoints = {
     deleteAccount: "/api/auth/delete",
   },
 
+  // 👥 사용자 관리(운영자)
+  admin: {
+    users: "/api/admin/users",
+    user: (id: number) => `/api/admin/users/${segment(String(id))}`,
+    audit: (limit: number) => withQuery("/api/admin/audit", { limit }),
+  },
+
   // 📊 매크로 · 순유동성 · 로테이션
   macro: {
     overview: (live: boolean) => withQuery("/api/macro/overview", { live: live ? true : undefined }),

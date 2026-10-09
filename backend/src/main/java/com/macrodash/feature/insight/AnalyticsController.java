@@ -1,6 +1,8 @@
 package com.macrodash.feature.insight;
 
 import com.macrodash.read.ComputedCache;
+import com.macrodash.support.CurrentUser;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -69,8 +71,8 @@ public class AnalyticsController {
      * 캐시의 버전(저장본 수집 시각)이 기록이 늘어난 것을 모릅니다.
      */
     @GetMapping("/analytics/regime/log")
-    public Map<String, Object> regimeLog(@RequestParam(defaultValue = "90") int limit) {
-        return regimeLog.recent(limit);
+    public Map<String, Object> regimeLog(@RequestParam(defaultValue = "90") int limit, HttpServletRequest request) {
+        return regimeLog.recent(limit, isPro(request));
     }
 
     /**
@@ -78,8 +80,18 @@ public class AnalyticsController {
      * 입력(누적 시계열)과 가격은 같은 수집 태스크가 저장본과 함께 쓰므로, 저장본 버전으로 캐시해도 낡지 않습니다.
      */
     @GetMapping("/analytics/regime/track-record")
-    public Map<String, Object> regimeTrackRecord(@RequestParam(defaultValue = "SPY") String asset) {
-        return cache.get("analytics.regime.track:" + asset, () -> trackRecord.trackRecord(asset));
+    public Map<String, Object> regimeTrackRecord(@RequestParam(defaultValue = "SPY") String asset,
+                                                 HttpServletRequest request) {
+        boolean pro = isPro(request);
+        // 등급마다 응답 범위가 달라 캐시 키에 등급을 넣습니다 — 빼면 서로의 캐시된 응답을 받습니다.
+        return cache.get("analytics.regime.track:" + asset + ":" + (pro ? "pro" : "free"),
+                () -> trackRecord.trackRecord(asset, pro));
+    }
+
+    /** 유료 기능을 쓸 수 있는가(운영자 포함). 세션 필터를 거치지 않은 호출(테스트)은 제한 없음으로 봅니다. */
+    private static boolean isPro(HttpServletRequest request) {
+        CurrentUser user = CurrentUser.of(request);
+        return user == null || user.isPro();
     }
 
     // ----------------------------------------------------- 🩺 스코어카드

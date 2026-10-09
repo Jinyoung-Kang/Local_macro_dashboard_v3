@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { roleLabel, visibleMenus } from "../access";
+import { lockedFor, roleLabel, visibleMenus } from "../access";
 
 const MENUS = [{ href: "/macro" }, { href: "/status" }, { href: "/regime" }, { href: "/connections" }];
 
@@ -19,5 +19,14 @@ describe("메뉴 고르기", () => {
     expect(roleLabel({ email: "o@x", role: "OWNER", tier: "FREE" })).toBe("운영자");
     expect(roleLabel({ email: "m@x", role: "MEMBER", tier: "PRO" })).toBe("유료 회원");
     expect(roleLabel({ email: "m@x", role: "MEMBER", tier: "FREE" })).toBe("무료 회원");
+  });
+});
+
+describe("유료 메뉴 잠금 표시", () => {
+  it("무료 회원에게만 잠금", () => {
+    expect(lockedFor({ email: "m@x", role: "MEMBER", tier: "FREE" }, "/ai/report")).toBe(true);
+    expect(lockedFor({ email: "m@x", role: "MEMBER", tier: "PRO" }, "/ai/report")).toBe(false);
+    expect(lockedFor({ email: "o@x", role: "OWNER", tier: "FREE" }, "/ai/report")).toBe(false);
+    expect(lockedFor({ email: "m@x", role: "MEMBER", tier: "FREE" }, "/macro")).toBe(false);
   });
 });

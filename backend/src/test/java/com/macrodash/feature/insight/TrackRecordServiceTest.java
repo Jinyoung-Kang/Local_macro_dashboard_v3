@@ -72,7 +72,7 @@ class TrackRecordServiceTest {
     @DisplayName("국면별 4·13·26주 성과와 비교 기준을 내고, 표본 부족이면 수익률 대신 표본 수만 낸다")
     @SuppressWarnings("unchecked")
     void buildsTrackRecordAndHidesThinSamples() {
-        Map<String, Object> out = service().trackRecord("SPY");
+        Map<String, Object> out = service().trackRecord("SPY", true);
 
         assertThat(out.get("available")).isEqualTo(true);
         assertThat((List<Object>) out.get("limits")).hasSize(5);
@@ -98,14 +98,23 @@ class TrackRecordServiceTest {
     @Test
     @DisplayName("모르는 자산은 400 — 아무 문자열이나 캐시 키가 되지 않게")
     void unknownAssetIsRejected() {
-        assertThatThrownBy(() -> service().trackRecord("TSLA")).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> service().trackRecord("TSLA", true)).isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
     @DisplayName("가격 저장본이 없으면 어떤 태스크를 돌릴지 알려 준다")
     void missingPricesExplainWhatToRun() {
-        Map<String, Object> out = service().trackRecord("GLD");
+        Map<String, Object> out = service().trackRecord("GLD", true);
         assertThat(out.get("available")).isEqualTo(false);
         assertThat(String.valueOf(out.get("message"))).contains("sector_history");
+    }
+
+    @Test
+    @DisplayName("무료 등급은 SPY만 — 다른 자산은 계산하지 않고 잠금 안내")
+    void freeTierSeesSpyOnly() {
+        Map<String, Object> locked = service().trackRecord("QQQ", false);
+        assertThat(locked.get("available")).isEqualTo(false);
+        assertThat(locked.get("locked")).isEqualTo(true);
+        assertThat(service().trackRecord("SPY", false).get("available")).isEqualTo(true);
     }
 }

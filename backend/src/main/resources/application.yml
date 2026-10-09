@@ -83,6 +83,8 @@ dashboard:
     #   auto-budget-seconds   폴오버 전체에 주는 시간 예산 (넘으면 중단)
     auto-attempt-seconds: ${AI_AUTO_ATTEMPT_SECONDS:60}
     auto-budget-seconds: ${AI_AUTO_BUDGET_SECONDS:180}
+    # 유료 회원의 하루(KST) AI 리포트 한도 — 유료 API 비용 상한. 운영자는 한도 없음, 무료 회원은 쓸 수 없음.
+    daily-limit: ${AI_DAILY_LIMIT:20}
 
 logging:
   level:
