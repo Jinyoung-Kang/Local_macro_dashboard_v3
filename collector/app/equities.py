@@ -214,6 +214,12 @@ BENCHMARKS: dict[str, str] = {
     "ACWI": "글로벌 주식 (ACWI)",
 }
 
+# 국면 판정 성과(이후 수익률)에 쓰는 국내 자산. 위험 분석 벤치마크와 목적이 달라 따로 둡니다.
+# KODEX 200은 원화 종가(수정주가)입니다 — 성과는 비율이라 통화 단위와 무관합니다.
+TRACK_RECORD_TICKERS: dict[str, str] = {
+    "069500.KS": "KOSPI 200 (KODEX 200)",
+}
+
 PRICE_HISTORY_PERIOD = "5y"
 
 # 이름 끝에 붙는 법인격·클래스 표기. 매칭할 때만 떼어 냅니다.
@@ -263,9 +269,10 @@ def lookup(name: str) -> tuple[str, str] | None:
 
 
 def all_tickers() -> tuple[str, ...]:
-    """매핑된 종목 + 벤치마크 전체 (중복 제거, 정렬)."""
+    """매핑된 종목 + 벤치마크 + 판정 성과용 국내 자산 (중복 제거, 정렬)."""
     tickers = {ticker for ticker, _ in EQUITY_MAP.values()}
     tickers.update(BENCHMARKS.keys())
+    tickers.update(TRACK_RECORD_TICKERS.keys())
     return tuple(sorted(tickers))
 
 

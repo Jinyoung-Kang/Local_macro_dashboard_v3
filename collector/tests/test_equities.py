@@ -51,6 +51,8 @@ def test_every_mapped_ticker_is_collected():
     assert mapped <= collected
     # 벤치마크도 함께 받아야 베타·추적오차를 낼 수 있습니다.
     assert set(equities.BENCHMARKS) <= collected
+    # 국면 판정 성과의 국내 자산(KOSPI 200 ETF)도 같은 저장본에 받습니다.
+    assert "069500.KS" in collected
 
 
 def test_equity_task_stores_prices_with_the_mapping(store, monkeypatch):

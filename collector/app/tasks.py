@@ -455,6 +455,7 @@ def task_equity_history() -> str:
         # 이름 → {ticker, sector}. 백엔드가 13F 종목명을 여기에 대조합니다.
         "nameMap": equities.mapping_payload(),
         "benchmarks": equities.BENCHMARKS,
+        "trackRecordAssets": equities.TRACK_RECORD_TICKERS,
     })
     return f"{len(frames)}/{len(tickers)} 티커"
 
