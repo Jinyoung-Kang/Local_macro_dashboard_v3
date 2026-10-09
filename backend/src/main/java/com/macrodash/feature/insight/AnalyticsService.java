@@ -11,7 +11,9 @@ import com.macrodash.support.Json;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -363,13 +365,19 @@ public class AnalyticsService {
         return SeriesMath.changeOverWeeks(series, date, 4);
     }
 
-    /** 주 단위 날짜 목록 (금리차 계열을 기준으로 잡습니다). */
+    /**
+     * 주 단위 날짜 목록 — 매주 목요일(WALCL 발표일), 금리차 계열이 있는 구간 안.
+     *
+     * <p>예전에는 시작일(오늘 − N년)부터 7일씩 더해, 날마다 평가 요일이 바뀌고 토·일요일 날짜가
+     * 이력에 찍혔습니다(QA-015). 요일을 고정해야 같은 데이터에서 같은 이력이 나옵니다.
+     */
     private List<LocalDate> weeklyDates(NavigableMap<LocalDate, Double> base, LocalDate cutoff) {
         List<LocalDate> out = new ArrayList<>();
         if (base.isEmpty()) {
             return out;
         }
-        LocalDate date = base.firstKey().isAfter(cutoff) ? base.firstKey() : cutoff;
+        LocalDate start = base.firstKey().isAfter(cutoff) ? base.firstKey() : cutoff;
+        LocalDate date = start.with(TemporalAdjusters.nextOrSame(DayOfWeek.THURSDAY));
         LocalDate last = base.lastKey();
         while (!date.isAfter(last)) {
             out.add(date);

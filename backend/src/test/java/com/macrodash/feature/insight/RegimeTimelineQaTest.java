@@ -4,7 +4,6 @@ import com.macrodash.config.AppProperties;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -46,7 +45,6 @@ class RegimeTimelineQaTest {
     }
 
     @Test
-    @Disabled("QA-015 재현 — 수정 전: 첫 날짜(토)부터 7일 간격이라 전부 토요일")
     @DisplayName("QA-015: 국면 이력은 매주 목요일(WALCL 발표일)로 평가한다")
     @SuppressWarnings("unchecked")
     void timelineUsesFixedWeekday() {
