@@ -2,7 +2,7 @@
 
 > 명세: [2026-10-09-feature-spec.md](2026-10-09-feature-spec.md)
 >
-> - 상태: **초안**. 명세서 §7의 결정에 따라 바뀌는 곳은 "(D#)"로 표시했습니다.
+> - 상태: **확정 — 구현 대기**(2026-10-09). 명세서 §7의 결정을 반영했습니다. 결정에 따라 정해진 곳은 "(D#)"로 표시했습니다.
 > - 기준 코드: `main@9f5f98f`.
 > - 이 문서는 **어떻게** 만들지와 **어떤 순서로** 넣을지를 정합니다. 단계마다 `make test`·CI를 통과하는 커밋으로 끊습니다.
 
@@ -11,9 +11,9 @@
 | # | 지금 | 바뀐 뒤 | 기록 |
 |---|---|---|---|
 | 1 | 백엔드는 DB를 **읽기만** 함. 쓰기·스키마는 수집기 몫 | 백엔드가 **자기 소유 테이블**(계정·세션·판정 기록·알림)에 씀. 수집기 테이블은 계속 수집기만 씀 | ADR 0008 |
-| 2 | 백엔드에 스케줄러 없음. 요청이 올 때만 일함 | 백엔드에 정기 작업 3개(판정 기록, 알림 평가, 발송) | ADR 0008 |
+| 2 | 백엔드에 스케줄러 없음. 요청이 올 때만 일함 | 백엔드에 정기 작업 2개(판정 기록, 알림 평가) | ADR 0008 |
 | 3 | 비밀번호 하나 + JWT 쿠키. 로그아웃 목록은 메모리 | 계정 + **DB 세션**(불투명 토큰의 해시 저장). 경로마다 역할·등급 정책 | ADR 0009 |
-| 4 | 외부로 나가는 것은 데이터 소스·AI뿐 | 메일(SMTP) 발송이 추가됨(D2·D8) | ADR 0010 |
+| 4 | 외부로 나가는 것은 데이터 소스·AI뿐 | 메일(SMTP) 발송이 추가됨. **계정 인증·재설정 전용**입니다. 알림은 화면 알림함만이라 외부로 나가지 않습니다(D2·D8) | ADR 0009 |
 
 ### 0-1. 테이블 소유 규칙 (ADR 0008의 핵심)
 
@@ -47,8 +47,9 @@
 | 작업 | 주기 | 하는 일 |
 |---|---|---|
 | `RegimeRecorder` | 30분 | 오늘(KST) 판정 기록이 없고 입력이 갱신됐으면 한 건 기록 |
-| `AlertEvaluator` | 5분 | 세 트리거를 **매번 전부** 평가 → 사건 생성(이미 있으면 무시) → 수신자별 발송 건 생성 |
-| `AlertSender` | 1분 | 보낼 때가 된 발송 건을 `FOR UPDATE SKIP LOCKED`로 집어 보냄, 실패하면 재시도 예약 |
+| `AlertEvaluator` | 5분 | 세 트리거를 **매번 전부** 평가 → 사건 생성(이미 있으면 무시) → 규칙이 맞는 사용자의 알림함에 넣기 |
+
+알림이 화면 알림함만이라(D2) 발송 작업은 두지 않습니다. 외부 채널을 붙일 때 `AlertSender`를 더합니다(§4-4).
 
 **새 데이터를 아는 방법 — 알아내지 않고 매번 전부 평가**
 
@@ -71,7 +72,7 @@
 
 ```
 feature/auth/      (기존을 넓힘) 계정·세션·접근 정책·등급·사용량 한도·운영자 사용자 관리. URL(/api/auth/*)은 그대로
-feature/alert/     규칙·관심 목록·알림함·평가기·발송기·메일 템플릿
+feature/alert/     규칙·관심 목록·알림함·평가기·알림 문구
 feature/insight/   (기존) 국면 — 판정 기록기·성과 서비스 추가
 store/             (기존) DB 접근. 새 쓰기 저장소 UserStore·SessionStore·AlertStore·RegimeLogStore 추가
 support/           CurrentUser(id·역할·등급) record — 모든 컨트롤러가 읽을 수 있는 자리
@@ -98,7 +99,7 @@ config/WebConfig   SessionFilter가 feature/auth의 세션 조회·접근 정책
 | `alert → insight` | 판정 기록 |
 | `alert → positioning` | 수급 |
 | `alert → institution` | 13F |
-| `alert → auth` | 수신자·이메일 |
+| `alert → auth` | 수신자(사용자·등급) |
 | `ai → auth` | 사용량 한도 |
 
 - 순환은 없습니다. `auth`는 아무 기능도 쓰지 않습니다.
@@ -118,14 +119,14 @@ config/WebConfig   SessionFilter가 feature/auth의 세션 조회·접근 정책
 | `regime_log` | A | `verdict_date date PK`, `code`, `label`, `inputs jsonb`(값·입력별 기준일), `missing text[]`, `computed_at`, `rule_version` | 추가만 함. 백엔드 코드에 UPDATE·DELETE 문이 없음(테스트). `rule_version`은 판정 규칙(임계치)이 바뀐 날을 구분 |
 | `users` | B | `id bigserial`, `email citext UNIQUE`, `password_hash`, `role`, `tier`, `email_verified_at`, `created_at`, `deleted_at` | `role ∈ {OWNER, MEMBER}`, `tier ∈ {FREE, PRO}`(D5) |
 | `user_sessions` | B | `id uuid`, `user_id`, `token_hash bytea UNIQUE`, `created_at`, `last_seen_at`, `expires_at`, `revoked_at`, `user_agent`(앞 120자) | 토큰 원문은 저장하지 않음. IP 저장 안 함(명세 B10) |
-| `email_tokens` | B | `token_hash PK`, `user_id`, `purpose`(verify·reset·unsubscribe), `expires_at`, `used_at` | 한 번 쓰면 `used_at` |
+| `email_tokens` | B | `token_hash PK`, `user_id`, `purpose`(verify·reset), `expires_at`, `used_at` | 한 번 쓰면 `used_at` |
 | `audit_log` | B | `id`, `user_id NULL`, `action`, `at`, `detail jsonb` | 계정 삭제 시 `user_id`를 NULL로(식별자 제거) |
 | `usage_counters` | B | `(user_id, day, kind) PK`, `count` | AI 리포트 하루 한도. `INSERT … ON CONFLICT DO UPDATE … RETURNING count` |
 | `watch_institutions` | C | `(user_id, cik) PK` | `cik`은 추적 12곳 안에서만(서비스가 확인) |
 | `watch_stocks` | C | `(user_id, code) PK` | 6자리 문자열(앞자리 0 보존) |
 | `alert_rules` | C | `id`, `user_id`, `kind`, `params jsonb`, `channel`, `enabled`, `created_at` | `kind ∈ {REGIME_CHANGE, FOREIGN_STREAK, INSTITUTION_NEW}` |
 | `alert_events` | C | `id`, `kind`, `event_key UNIQUE`, `occurred_on date`, `payload jsonb`, `created_at` | **사용자와 무관한 사실.** 예: `regime:2026-10-08:EXPANSION>LATE` |
-| `alert_deliveries` | C | `id`, `event_id`, `user_id`, `rule_id`, `channel`, `status`, `attempts`, `next_attempt_at`, `sent_at`, `read_at`, `error` | `UNIQUE(event_id, user_id, channel)` — 중복 발송 방지. 화면 알림함은 `channel='inbox'` |
+| `alert_deliveries` | C | `id`, `event_id`, `user_id`, `rule_id`, `channel`, `created_at`, `read_at` | `UNIQUE(event_id, user_id, channel)` — 중복 방지. 지금은 `channel='inbox'`뿐. 외부 채널을 붙일 때 `status`·`attempts`·`next_attempt_at`·`error` 열을 더함(§4-4) |
 
 **사건 키**
 
@@ -293,17 +294,17 @@ config/WebConfig   SessionFilter가 feature/auth의 세션 조회·접근 정책
 ### 4-1. 흐름
 
 ```
-수집기 실행(ok) ──▶ AlertEvaluator ──▶ 사건 판정(analytics/AlertRules, 순수) ──▶ alert_events (event_key UNIQUE)
-                                                                                    │
-                     alert_rules(사용자별) ◀── 수신자 찾기 ◀─────────────────────────┘
-                            │
-                            ▼
-                     alert_deliveries (UNIQUE event·user·channel) ──▶ AlertSender ──▶ inbox / 메일
+5분마다 AlertEvaluator ──▶ 사건 판정(analytics/AlertRules, 순수) ──▶ alert_events (event_key UNIQUE)
+                                                                            │
+             alert_rules(사용자별) ◀── 수신자 찾기 ◀──────────────────────────┘
+                    │
+                    ▼
+             alert_deliveries (UNIQUE event·user·channel, channel='inbox') ──▶ 화면 알림함 · 읽지 않은 수
 ```
 
 - **사건**은 "무슨 일이 있었나"(전역)입니다.
-- **발송 건**은 "누구에게 어떤 채널로"입니다.
-- 둘을 나누면 한 번의 사건 판정을 수신자 수만큼 반복하지 않고, 중복 방지를 DB 제약 두 개가 맡습니다.
+- **알림함 항목**(`alert_deliveries`)은 "누구에게"입니다.
+- 둘을 나누면 한 번의 사건 판정을 수신자 수만큼 반복하지 않고, 중복 방지를 DB 제약 두 개가 맡습니다. 외부 채널을 붙일 때도 이 구조에 채널만 더하면 됩니다.
 
 ### 4-2. 트리거별 판정 (순수 함수)
 
@@ -323,26 +324,40 @@ config/WebConfig   SessionFilter가 feature/auth의 세션 조회·접근 정책
 - 기록 날짜가 오늘(KST)보다 이전이면 확정입니다.
 - 오늘 기록은 다음과 같이 봅니다.
   - **종목별:** 장중에 비어 있다가 저녁 확정 때 채워지는 칸(개인·기관 세부·기타법인·외국인 보유)이 모두 값이 있으면 확정.
-  - 단위가 다릅니다. 종목별은 **주식 수(주)**, 시장 전체는 **금액(원)** 입니다. 알림 본문에도 그 단위로 적습니다.
   - **시장 전체:** 다음 날부터 확정으로 봅니다. 보수적으로 하루 늦게 알립니다.
+- 단위가 다릅니다. 종목별은 **주식 수(주)**, 시장 전체는 **금액(원)** 입니다. 알림 본문에도 그 단위로 적습니다.
 - 토스의 정확한 확정 시각은 확인하지 못했습니다(문서·코드에 없음). 구현 단계에서 API 문서로 확인합니다.
 
 ### 4-3. 처음 켤 때 몰아 보내지 않기
 
-- 규칙에는 `created_at`이 있습니다. 사건의 `occurred_on`이 규칙 생성일보다 앞이면 그 규칙으로는 보내지 않습니다.
-- 백엔드를 처음 올리거나 오래 꺼져 있다가 켜지면 밀린 실행이 한꺼번에 평가됩니다. 이때 사건은 기록하되, 사건 발생일이 **3일보다 오래된 것은 발송하지 않고** 알림함에만 "지난 사건"으로 남깁니다.
+- 규칙에는 `created_at`이 있습니다. 사건의 `occurred_on`이 규칙 생성일보다 앞이면 그 규칙으로는 알림함에 넣지 않습니다.
+- 백엔드를 처음 올리거나 오래 꺼져 있다가 켜지면 밀린 데이터가 한꺼번에 평가됩니다. 이때 사건 발생일이 **3일보다 오래된 것은** 알림함에 "지난 사건"으로 표시해 넣고, 읽지 않은 수에는 세지 않습니다.
 
-### 4-4. 발송
+### 4-4. 알림함 (D2: 화면 알림함만)
 
-- **화면 알림함:** 발송 건을 바로 `sent`로 둡니다. 화면이 `read_at`을 갱신합니다.
-- **메일:** `spring-boot-starter-mail`을 씁니다. 새 의존성이며, Spring Boot BOM이 버전을 관리합니다.
-  - 설정은 `MAIL_HOST`·`MAIL_PORT`·`MAIL_USERNAME`·`MAIL_PASSWORD`·`MAIL_FROM`입니다. 값은 `.env`에만 둡니다.
-  - 메일 본문은 텍스트 위주에 HTML 대체본을 둡니다. 템플릿은 서비스 안의 순수 함수입니다.
-- **재시도:** 1분 → 5분 → 30분 → 2시간 → 6시간, 최대 5회. 그다음은 `failed`이고 운영 상태 화면에 수를 보입니다.
-  - 인증 실패(SMTP 535)처럼 다시 해도 안 될 오류는 바로 `failed`로 두고 운영자에게 한 번 알립니다.
-- **조용한 시간:** 발송 건을 만들 때 `next_attempt_at`을 조용한 시간이 끝나는 시각으로 미룹니다.
-- **수신 거부:** 메일 링크에 `email_tokens(purpose=unsubscribe)`를 씁니다. 로그인 없이 그 규칙만 끕니다. 링크는 30일 동안 유효하고 여러 번 써도 결과가 같습니다.
-- **텔레그램(다음 단계):** 같은 발송기 뒤에 채널 하나를 더 붙이는 모양입니다. 봇 토큰은 환경변수입니다. SDK 없이 `RestClient`로 보냅니다.
+**API**
+
+| 경로 | 내용 |
+|---|---|
+| `GET /api/alerts/inbox?before=` | 최근 순 목록 |
+| `GET /api/alerts/unread-count` | 읽지 않은 수 |
+| `POST /api/alerts/inbox/read` | 하나 또는 모두 읽음 |
+
+규칙·관심 목록 CRUD는 `/api/alerts/rules`·`/api/alerts/watch/*`에 둡니다.
+
+**동작**
+
+- 사이드바·탭 제목의 읽지 않은 수는 기존 `useApi` 자동 갱신(5분)으로 읽습니다. 새 실시간 연결(SSE·WebSocket)은 두지 않습니다. 사건이 5분 주기 평가에서 생기므로 더 빠를 이유가 없습니다.
+- 90일이 지난 항목은 `AlertEvaluator`가 하루 한 번 지웁니다. 사건(`alert_events`)은 지우지 않습니다. 사건은 중복 판정 키이자 기록입니다.
+- 알림 문구는 `feature/alert` 안의 순수 함수로 만들고, 행동 지시어(매수·매도·비중 등) 금지를 테스트로 검사합니다.
+
+**외부 채널을 나중에 붙일 때 (지금 만들지 않음)**
+
+- `alert_deliveries`에 `status`·`attempts`·`next_attempt_at`·`error`를 더합니다.
+- `AlertSender`(1분, `FOR UPDATE SKIP LOCKED`)를 둡니다.
+- 재시도는 간격을 늘려 최대 5회로 합니다. 다시 해도 안 될 오류(인증 실패 등)는 바로 실패로 둡니다.
+- 조용한 시간(발송 시각을 미룸)과 수신 거부 링크(`email_tokens`에 `unsubscribe` 용도 추가)를 둡니다.
+- 메일이면 계정 기능의 발송 기반(B2)을 그대로 씁니다. 텔레그램이면 SDK 없이 `RestClient`로 보내고, 봇 토큰은 환경변수에 둡니다.
 
 ### 4-5. 관심 종목과 종목별 수급 수집 범위
 
@@ -366,13 +381,15 @@ config/WebConfig   SessionFilter가 feature/auth의 세션 조회·접근 정책
 | **A1. 판정 기록** | ADR 0008(테이블 소유·정기 작업)과 ADR 0001 개정(`store` = DB 접근 전부, JDBC는 `store`만), 테스트 DB·CI 마이그레이션 적용기 통일, V3(`regime_log`), 최소 스키마 버전 확인, 수집을 일으키지 않는 읽기, `RegimeRecorder`, `/regime/log`, 화면 기록 표 | M | 운영 스택에서 하루 한 건씩 쌓임. 같은 날 재실행해도 한 건. 정기 작업이 수집을 일으키지 않음 |
 | **A2. 판정 성과** | `ForwardReturns` 떼어 내기(옮기는 커밋) → COT 결함 수정(0단계와 연결) → `PointInTime`·`RegimeBacktest` → `/regime/track-record` → 화면 카드 | L | 표본·기준선·한계 문구가 모두 보임. 시점 기준 테스트 통과 |
 | **B1. 계정·세션** | ADR 0009, V4, Argon2id, DB 세션, `support.CurrentUser`, 기존 운영 이전(`OWNER_EMAIL`), `OWNER`/`MEMBER` 접근 정책, `AccessPolicyTest` | L | `OWNER_EMAIL` 한 줄 추가로 기존 비밀번호 로그인됨. 재시작 후에도 로그아웃이 유지됨. 미분류 경로 0개 |
-| **B2. 가입·메일** | ADR 0010(메일 발송), 메일 발송 기반, 가입·인증·재설정 | M | 가짜 SMTP 테스트 통과. QA 스택에서 실제 흐름 확인 |
+| **B2. 가입·메일** | 계정용 메일 발송 기반(`spring-boot-starter-mail`, `MAIL_*` 환경변수 — D8), 가입·인증·재설정 | M | 가짜 SMTP 테스트 통과. QA 스택에서 실제 흐름 확인 |
 | **B3. 등급** | 등급 표, 화면 잠금, AI 하루 한도, 운영자 사용자 화면 | M | 무료 사용자로 유료 경로 403, 화면 안내 |
-| **C1. 사건·알림함** | V5, `AlertRules`(순수), `AlertEvaluator`, 알림함 화면 | M | 세 트리거가 테스트 데이터로 사건을 정확히 한 번 만듦 |
-| **C2. 규칙·메일 발송** | 규칙·관심 기관 화면, `AlertSender`, 조용한 시간, 수신 거부 | M | 중복 0건, 재시도, 수신 거부 동작 |
+| **C1. 사건·알림함** | ADR 0010, V5, `AlertRules`(순수), `AlertEvaluator`, 알림함 화면·읽지 않은 수 | M | 세 트리거가 테스트 데이터로 사건을 정확히 한 번 만듦. 같은 사용자 알림함에 중복 0건 |
+| **C2. 규칙·관심 기관** | 규칙 화면(만들기·끄기·지우기), 관심 기관 선택, 등급별 규칙 수 상한 | S | 규칙을 끄면 그 뒤 사건이 들어오지 않음. 처음 켤 때 과거 사건이 쏟아지지 않음 |
 | **C3. 관심 종목** | 수집기 범위 확장, 관심 종목 규칙 | S | 관심 종목의 연속 순매수 알림이 확정 기록으로만 울림 |
 
-D7(KOSPI 가격 이력)을 받아들이면, A2 안에 수집 태스크 추가 커밋이 하나 들어갑니다.
+A2 안에 KOSPI 200 ETF(069500) 일별 가격 수집 커밋이 하나 들어갑니다(D7).
+- 기존 `equity_history` 태스크의 기준 종목(SPY·QQQ·ACWI)에 더할지, 태스크를 따로 둘지는 구현 때 저장본 크기와 거래소 달력 차이(KRX 휴장일)를 보고 정합니다.
+- 데이터셋 이름이 새로 생기면 `catalog.py`와 `Datasets.java`를 함께 고칩니다.
 
 ## 6. 테스트 계획
 
@@ -390,7 +407,7 @@ D7(KOSPI 가격 이력)을 받아들이면, A2 안에 수집 태스크 추가 �
 - 새 마이그레이션이 V1부터 순서대로 적용되고 버전이 기록됩니다(테스트 DB·CI도 같은 적용기). 백엔드의 최소 버전 확인이 동작합니다.
 - 정기 작업이 오래된 저장본을 읽어도 수집기 호출이 0건입니다(가짜 수집기 클라이언트로 확인).
 - 판정 기록을 두 번 실행해도 한 건입니다. 두 스레드로 동시에 돌려도 한 건입니다.
-- 사건 키 중복이면 사건이 하나만 생깁니다. 발송 건 `UNIQUE`도 같습니다. `SKIP LOCKED` 발송기 두 개가 같은 건을 두 번 보내지 않습니다.
+- 사건 키 중복이면 사건이 하나만 생깁니다. 알림함 항목 `UNIQUE`도 같습니다. 평가기 두 개를 동시에 돌려도 알림함에 한 건입니다.
 - 세션 해지가 재시작(새 컨텍스트) 뒤에도 유지됩니다.
 
 **보안**
@@ -403,7 +420,7 @@ D7(KOSPI 가격 이력)을 받아들이면, A2 안에 수집 태스크 추가 �
 
 **외부 호출 없음**
 
-- 메일은 테스트 안에 띄운 가짜 SMTP 서버(Java)로 받습니다.
+- 계정 메일(인증·재설정)은 테스트 안에 띄운 가짜 SMTP 서버(Java)로 받습니다.
 - QA 스택에서 실제 흐름을 볼 때는 메일 수신 확인용 컨테이너(mailpit)를 **QA 스택에만** 띄웁니다. 새 이미지라 그 단계에서 이유를 먼저 말씀드립니다.
 
 **화면**
@@ -420,7 +437,8 @@ D7(KOSPI 가격 이력)을 받아들이면, A2 안에 수집 태스크 추가 �
 | 판정 성과의 표본이 작음(3년, 전환 몇 번) | 숫자를 꾸미지 않음. 표본 부족이면 숫자 대신 문구. 라이브 기록을 가장 먼저 시작 |
 | 잠정치·오래된 값으로 잘못된 알림 | 확정 판정 규칙, 사건 키, 처음 켤 때 백필 금지, 3일 지난 사건은 알림함만 |
 | 정기 작업이 두 번 돎(재시작·다중 인스턴스) | advisory lock + DB 유일 제약. 작업이 두 번 돌아도 결과는 한 번 |
-| 메일이 스팸함으로 감 | 로컬 단계는 SMTP 계정 자체 발송. 공개 배포 시 발송 서비스와 SPF·DKIM(배포 단계 항목) |
+| 계정 메일(인증·재설정)이 스팸함으로 감 | 로컬 단계는 SMTP 계정 자체 발송. 공개 배포 시 발송 서비스와 SPF·DKIM(배포 단계 항목) |
+| 알림함만이라 대시보드를 열지 않으면 알림을 못 봄(D2) | 읽지 않은 수를 사이드바·탭 제목에 표시하고, 한계를 알림함 안내에 적음. 외부 채널은 §4-4 방식으로 나중에 붙임 |
 | AI 비용 폭주(사용자가 늘어남) | 사용자별 하루 한도. 무료 0건. 운영 상태에 하루 사용량 표시 |
 | 법·약관(명세 §5) | 유료 등급을 열기 전 확인. 코드로는 무료·단일 운영에서 문제가 없게 유지 |
 | 범위가 커서 중간에 멈춤 | 단계마다 그 자체로 쓸모가 있게 끊음. A1만 해도 라이브 기록이 쌓이기 시작함 |
@@ -432,8 +450,8 @@ D7(KOSPI 가격 이력)을 받아들이면, A2 안에 수집 태스크 추가 �
 | 번호 | 내용 |
 |---|---|
 | 0008 | 백엔드 소유 테이블과 정기 작업 — 테이블 소유 규칙, 스키마 파일 한 곳, 최소 버전 확인, advisory lock, 정기 작업은 수집을 일으키지 않음. **ADR 0001도 함께 개정**(`store`의 뜻, JDBC 규칙) |
-| 0009 | 계정과 세션 — DB 세션을 고르고 JWT를 버린 이유, Argon2id, 접근 정책 표와 미분류 금지 |
-| 0010 | 알림 파이프라인 — 사건/발송 분리, 사건 키, 발송 건 큐(SKIP LOCKED), 백필 금지 |
+| 0009 | 계정과 세션 — DB 세션을 고르고 JWT를 버린 이유, Argon2id, 접근 정책 표와 미분류 금지, 계정용 메일 발송(SMTP) |
+| 0010 | 알림 파이프라인 — 사건/알림함 분리, 사건 키, 처음 켤 때 백필 금지, 화면 알림함만으로 시작한 이유와 외부 채널 확장 방식 |
 | 0011 | 판정 성과의 시점 기준 — 발표 지연 규칙, 진입은 다음 거래일, 표본 부족 기준, 현재 개정본 사용의 한계 |
 
 **함께 고칠 문서 (각 단계에서)**
