@@ -1,6 +1,5 @@
 package com.macrodash.analytics;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -65,7 +64,6 @@ class CotBacktestQaTest {
     }
 
     @Test
-    @Disabled("QA-013 재현 — 수정 전: 첫 가격일로 당겨 계산")
     @DisplayName("QA-013: 가격 이력이 시작되기 전의 신호는 수익률을 모른다(null)")
     void signalBeforePriceHistoryIsUnknown() {
         TreeMap<LocalDate, Double> prices = new TreeMap<>();

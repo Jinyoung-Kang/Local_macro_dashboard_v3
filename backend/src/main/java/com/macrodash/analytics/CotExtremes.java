@@ -36,6 +36,9 @@ public final class CotExtremes {
      */
     public static final int RELEASE_ENTRY_DAYS = 4;
 
+    /** 진입·청산일에서 가장 가까운 거래일까지 허용하는 날 수(주말 + 연휴). 넘으면 가격을 모르는 것으로 봅니다. */
+    public static final int MAX_GAP_DAYS = 7;
+
     /** 공시가 나온 뒤 처음 들어갈 수 있는 날(이 날 이후 첫 거래일 종가에서 출발). */
     public static LocalDate entryDate(LocalDate asOf) {
         return asOf.plusDays(RELEASE_ENTRY_DAYS);
@@ -130,9 +133,17 @@ public final class CotExtremes {
         if (prices == null || prices.isEmpty() || from == null) {
             return null;
         }
+        LocalDate target = from.plusWeeks(weeks);
         var start = prices.ceilingEntry(from);
-        var end = prices.ceilingEntry(from.plusWeeks(weeks));
+        var end = prices.ceilingEntry(target);
         if (start == null || end == null || start.getValue() == null || end.getValue() == null) {
+            return null;
+        }
+        // 가장 가까운 거래일이 일주일 넘게 떨어져 있으면 그 날의 가격을 모르는 것입니다.
+        // 가격 이력이 시작되기 전의 신호를 첫 가격일로 당기면, 다른 날 출발한 수익률을
+        // 그 신호의 성과로 세게 됩니다(QA-013).
+        if (start.getKey().isAfter(from.plusDays(MAX_GAP_DAYS))
+                || end.getKey().isAfter(target.plusDays(MAX_GAP_DAYS))) {
             return null;
         }
         if (start.getValue() == 0.0 || !start.getKey().isBefore(end.getKey())) {
