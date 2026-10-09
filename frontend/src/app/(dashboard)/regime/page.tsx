@@ -17,6 +17,7 @@ import type { RegimeResponse, RegimeSignal } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
 import { RegimeLogSection } from "./RegimeLogSection";
+import { TrackRecordSection } from "./TrackRecordSection";
 
 /**
  * 🧭 시장 국면.
@@ -165,6 +166,8 @@ export default function RegimePage() {
           <p className="text-sm text-muted">판정에 쓸 신호를 하나도 받지 못했습니다.</p>
         )}
       </Card>
+
+      <TrackRecordSection tone={TIMELINE_COLOR} />
 
       <RegimeLogSection tone={TIMELINE_COLOR} />
 

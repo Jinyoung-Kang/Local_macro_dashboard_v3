@@ -67,7 +67,7 @@ class RouteInventoryTest {
             "GET /api/status/public-apis", "POST /api/verification", "GET /api/snapshot/text",
             // 🔗 상관 · 🧭 국면
             "GET /api/analytics/series", "GET /api/analytics/correlation", "GET /api/analytics/regime",
-            "GET /api/analytics/regime/log",
+            "GET /api/analytics/regime/log", "GET /api/analytics/regime/track-record",
             // 🤖 AI · 🔌 토스
             "GET /api/ai/engines", "GET /api/ai/report-types", "GET /api/ai/snapshot-text",
             "POST /api/ai/report", "POST /api/ai/test",

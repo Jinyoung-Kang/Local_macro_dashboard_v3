@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { regimeInputCells } from "../regime";
+import { regimeInputCells, trackRecordRow } from "../regime";
 
 describe("국면 판정 기록의 근거 표기", () => {
   it("단위를 다른 화면과 같게 적고, 기준일은 월-일로 줄인다", () => {
@@ -21,5 +21,27 @@ describe("국면 판정 기록의 근거 표기", () => {
     const cells = regimeInputCells({ nfci: { value: null, asOf: null } });
     expect(cells.every((c) => c.value === "—")).toBe(true);
     expect(cells[1].asOf).toBe("—");
+  });
+});
+
+describe("판정 성과 표의 한 줄", () => {
+  const base = { horizonWeeks: 13, count: 140, independent: 11, sufficient: true, mean: 2.9, median: 3.1,
+    winRate: 68, best: 12, worst: -9 };
+
+  it("표본이 충분하면 수익률·상승 비율·초과분, 비교 기준을 함께", () => {
+    const row = trackRecordRow({ ...base, count: 42, independent: 4, mean: 1.2, median: 1.0, winRate: 61.9,
+      excessMean: -1.7 }, base);
+    expect(row).toEqual({
+      horizon: "13주 뒤", samples: "42건 · 독립 4", sufficient: true, mean: "+1.20%", median: "+1.00%",
+      winRate: "62%", excess: "-1.70%p", baseline: "+2.90% · 68% 상승",
+    });
+  });
+
+  it("표본이 부족하면 숫자 대신 '표본 부족' — 표본 수는 그대로 적는다", () => {
+    const row = trackRecordRow({ ...base, count: 4, independent: 2, sufficient: false, mean: null, median: null,
+      winRate: null }, base);
+    expect(row.mean).toBe("표본 부족");
+    expect(row.samples).toBe("4건 · 독립 2");
+    expect(row.median).toBe("—");
   });
 });

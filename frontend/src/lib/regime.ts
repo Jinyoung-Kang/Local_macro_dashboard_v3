@@ -5,8 +5,8 @@
  * NFCI는 단위 없는 지수, 순유동성 변화는 조·억 달러(PRINCIPLES "한국식 단위").
  * 값을 모르는 입력은 "—"로 둡니다 — 0으로 채우지 않습니다.
  */
-import { EMPTY, formatSigned, formatTrillionDelta } from "./format";
-import type { RegimeLogEntry, RegimeLogInput } from "./types";
+import { EMPTY, formatNumber, formatPercent, formatSigned, formatTrillionDelta } from "./format";
+import type { RegimeLogEntry, RegimeLogInput, TrackRecordCell } from "./types";
 
 const ORDER = [
   { key: "curve10y3m", label: "10Y-3M", format: (v: number) => `${formatSigned(v, 2)}%p` },
@@ -32,4 +32,42 @@ export function regimeInputCells(inputs: RegimeLogEntry["inputs"]) {
       asOf: input?.asOf ? shortDate(input.asOf) : EMPTY,
     };
   });
+}
+
+/**
+ * 판정 성과 표의 한 줄(국면 × 기간)을 화면 문자열로.
+ *
+ * 표본이 부족하면 수익률 칸에 숫자 대신 "표본 부족"을 적습니다 — 몇 개 안 되는 수익률의 평균은 우연이라,
+ * 숫자를 보여 주는 순간 신호처럼 읽힙니다. 표본 수와 겹치지 않는 표본 수는 언제나 적습니다.
+ */
+export function trackRecordRow(cell: TrackRecordCell, base: TrackRecordCell | undefined) {
+  const samples = `${cell.count}건 · 독립 ${cell.independent}`;
+  if (!cell.sufficient) {
+    return {
+      horizon: `${cell.horizonWeeks}주 뒤`,
+      samples,
+      sufficient: false,
+      mean: "표본 부족",
+      median: EMPTY,
+      winRate: EMPTY,
+      excess: EMPTY,
+      baseline: baselineText(base),
+    };
+  }
+  return {
+    horizon: `${cell.horizonWeeks}주 뒤`,
+    samples,
+    sufficient: true,
+    mean: formatPercent(cell.mean),
+    median: formatPercent(cell.median),
+    winRate: cell.winRate === null ? EMPTY : `${formatNumber(cell.winRate, 0)}%`,
+    excess: cell.excessMean === null || cell.excessMean === undefined ? EMPTY : `${formatSigned(cell.excessMean, 2)}%p`,
+    baseline: baselineText(base),
+  };
+}
+
+function baselineText(base: TrackRecordCell | undefined): string {
+  if (!base || base.mean === null) return EMPTY;
+  const win = base.winRate === null ? EMPTY : `${formatNumber(base.winRate, 0)}% 상승`;
+  return `${formatPercent(base.mean)} · ${win}`;
 }

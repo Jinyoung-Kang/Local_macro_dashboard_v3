@@ -129,3 +129,48 @@ export interface RegimeLogResponse {
   entries?: RegimeLogEntry[];
   note?: string;
 }
+
+/** 국면 판정 성과의 한 칸(국면 × 기간). 표본이 부족하면 수익률 값은 null이고 sufficient=false. */
+export interface TrackRecordCell {
+  horizonWeeks: number;
+  count: number;
+  independent: number;
+  sufficient: boolean;
+  mean: number | null;
+  median: number | null;
+  winRate: number | null;
+  best: number | null;
+  worst: number | null;
+  excessMean?: number | null;
+  excessMedian?: number | null;
+}
+
+export interface TrackRecordRegime {
+  code: RegimeVerdict["code"];
+  label: string;
+  weeks: number;
+  episodes: number;
+  cells: TrackRecordCell[];
+}
+
+export interface TrackRecordResponse {
+  available: boolean;
+  message?: string;
+  asset: string;
+  assetLabel: string;
+  assets: { ticker: string; label: string }[];
+  horizons: number[];
+  limits: string[];
+  evaluatedFrom?: string | null;
+  evaluatedTo?: string | null;
+  evaluatedWeeks?: number;
+  knownWeeks?: number;
+  priceFrom?: string;
+  priceTo?: string;
+  minSamples?: number;
+  minIndependent?: number;
+  start?: TrackRecordRegime[];
+  all?: TrackRecordRegime[];
+  baseline?: TrackRecordCell[];
+  rule?: string;
+}

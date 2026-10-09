@@ -23,14 +23,16 @@ public class AnalyticsController {
     private final AnalyticsService analytics;
     private final ScorecardService scorecard;
     private final RegimeLogService regimeLog;
+    private final TrackRecordService trackRecord;
 
     private final ComputedCache cache;
 
     public AnalyticsController(AnalyticsService analytics, ScorecardService scorecard,
-                               RegimeLogService regimeLog, ComputedCache cache) {
+                               RegimeLogService regimeLog, TrackRecordService trackRecord, ComputedCache cache) {
         this.analytics = analytics;
         this.scorecard = scorecard;
         this.regimeLog = regimeLog;
+        this.trackRecord = trackRecord;
         this.cache = cache;
     }
 
@@ -69,6 +71,15 @@ public class AnalyticsController {
     @GetMapping("/analytics/regime/log")
     public Map<String, Object> regimeLog(@RequestParam(defaultValue = "90") int limit) {
         return regimeLog.recent(limit);
+    }
+
+    /**
+     * 국면 판정 성과 — 판정을 과거에 적용했을 때 4·13·26주 뒤 수익률(국면 시작 시점·머문 모든 주)과 비교 기준.
+     * 입력(누적 시계열)과 가격은 같은 수집 태스크가 저장본과 함께 쓰므로, 저장본 버전으로 캐시해도 낡지 않습니다.
+     */
+    @GetMapping("/analytics/regime/track-record")
+    public Map<String, Object> regimeTrackRecord(@RequestParam(defaultValue = "SPY") String asset) {
+        return cache.get("analytics.regime.track:" + asset, () -> trackRecord.trackRecord(asset));
     }
 
     // ----------------------------------------------------- 🩺 스코어카드
