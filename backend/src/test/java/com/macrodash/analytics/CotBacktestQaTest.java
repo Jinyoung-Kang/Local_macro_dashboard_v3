@@ -42,7 +42,6 @@ class CotBacktestQaTest {
     }
 
     @Test
-    @Disabled("QA-012 재현 — 수정 전: 화요일(기준일) 종가에서 출발")
     @DisplayName("QA-012: 수익률은 공시(금) 다음 거래일 종가에서 출발한다")
     void entryAfterRelease() {
         List<LocalDate> dates = tuesdays();

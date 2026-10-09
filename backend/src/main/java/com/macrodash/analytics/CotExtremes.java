@@ -29,6 +29,18 @@ public final class CotExtremes {
     private CotExtremes() {
     }
 
+    /**
+     * 기준일(화)에서 진입일까지의 날 수. CFTC는 화요일 기준 포지션을 <b>금요일</b>에 공시합니다.
+     * 화요일 종가에서 재면 공시 전 사흘(수·목·금)의 움직임을 신호의 성과로 세게 됩니다(QA-012).
+     * 기준일 + 4일(토) 이후 첫 거래일, 즉 공시 다음 거래일 종가에서 출발합니다.
+     */
+    public static final int RELEASE_ENTRY_DAYS = 4;
+
+    /** 공시가 나온 뒤 처음 들어갈 수 있는 날(이 날 이후 첫 거래일 종가에서 출발). */
+    public static LocalDate entryDate(LocalDate asOf) {
+        return asOf.plusDays(RELEASE_ENTRY_DAYS);
+    }
+
     /** 극단 신호 1건과 이후 수익률. */
     public record Event(LocalDate date, double net, double percentile, String side,
                         Map<String, Double> forwardReturns) {
@@ -94,7 +106,7 @@ public final class CotExtremes {
 
             Map<String, Double> forward = new LinkedHashMap<>();
             for (int weeks : horizonWeeks) {
-                forward.put(weeks + "w", forwardReturn(prices, dates.get(i), weeks));
+                forward.put(weeks + "w", forwardReturn(prices, entryDate(dates.get(i)), weeks));
             }
             events.add(new Event(dates.get(i), current, percentile, side, forward));
         }
@@ -176,7 +188,7 @@ public final class CotExtremes {
         List<Double> returns = new ArrayList<>();
         if (dates != null) {
             for (LocalDate date : dates) {
-                returns.add(forwardReturn(prices, date, weeks));
+                returns.add(forwardReturn(prices, entryDate(date), weeks));
             }
         }
         return summarize(returns);

@@ -161,7 +161,8 @@ public class CotService {
         out.put("priceProxy", proxy);
         out.put("priceProxyLabel", proxy == null ? null : PROXY_LABEL.get(proxy));
         out.put("proxyNotice", "COT 공시에는 가격이 없어 ETF 종가를 대용으로 씁니다. "
-                + "선물 실물과는 롤오버·추적 오차만큼 다릅니다 — 방향과 분포를 보는 용도입니다.");
+                + "선물 실물과는 롤오버·추적 오차만큼 다릅니다 — 방향과 분포를 보는 용도입니다. "
+                + "수익률은 공시(금요일) 다음 거래일 종가에서 출발합니다 — 기준일(화요일)에는 아직 알 수 없던 신호입니다.");
 
         Optional<Snapshot> snapshot = store.read(
                 Datasets.cotContract(info.get("code"), WEEKS),
