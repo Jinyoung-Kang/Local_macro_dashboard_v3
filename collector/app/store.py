@@ -447,6 +447,26 @@ def read_observations(
     return out
 
 
+def watched_stock_codes(limit: int) -> list[str]:
+    """
+    알림 규칙(관심 종목 외국인 연속 순매수)에 걸린 종목코드 — 종목별 수급 수집 범위에 더합니다(명세 C3).
+
+    alert_rules는 백엔드가 쓰는 테이블입니다(ADR 0008). 수집기는 **읽기만** 하며, 이것이 테이블 소유 규칙의
+    유일한 교차 읽기입니다. 백엔드가 만들 때 전체 60종목으로 막지만, 여기서도 limit으로 한 번 더 자릅니다.
+    """
+    with connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT params->>'code' AS code
+            FROM alert_rules
+            WHERE kind = 'FOREIGN_STREAK' AND enabled AND params->>'target' = 'STOCK'
+            ORDER BY 1 LIMIT %s
+            """,
+            (limit,),
+        ).fetchall()
+    return [r["code"] for r in rows if r["code"]]
+
+
 def recent_observation_codes(dataset: str, since: str, limit: int) -> list[str]:
     """
     최근 누적 레코드에 등장한 종목코드(payload.code), 등장 횟수 많은 순.

@@ -839,7 +839,8 @@ def task_dart_fundamentals() -> str:
 # ==============================================================================
 TOSS_MARKET_DAYS = 30         # 시장 합계: 20거래일 누적 + 여유
 TOSS_STOCK_DAYS = 20          # 종목: 5·20일 누적, 연속 순매수 일수
-TOSS_STOCK_LIMIT = 40         # 한 번에 받을 종목 수 (= 호출 수)
+TOSS_STOCK_LIMIT = 40         # 레이더에서 고르는 종목 수
+TOSS_WATCHED_LIMIT = 60       # 알림 규칙의 관심 종목(백엔드가 만들 때 전체 60종목으로 막음) — 합쳐 최대 100회 호출
 # 이 그룹(STOCK_TRADING_TREND)의 초당 한도는 공개된 표에서 확인하지 못했습니다.
 # 다른 그룹은 초당 1~10회라, 한 번에 몰아 부르지 않고 간격을 둡니다.
 TOSS_STOCK_SPACING = 0.3
@@ -882,7 +883,10 @@ def task_toss_market_flows() -> str:
 
 
 def _toss_universe() -> list[str]:
-    """지금 레이더 화면에 걸린 종목을 먼저, 그다음 최근 10일 레이더에 자주 오른 종목."""
+    """
+    지금 레이더 화면에 걸린 종목을 먼저, 그다음 최근 10일 레이더에 자주 오른 종목(합쳐 40), 마지막으로 알림 규칙의
+    관심 종목(최대 60). 관심 종목은 레이더 상한과 따로 세어, 레이더가 꽉 차도 알림 대상이 빠지지 않게 합니다.
+    """
     codes: list[str] = []
     for market, investor, trade_type, interval in RADAR_COMBINATIONS:
         snap = store.read_snapshot(catalog.snap_radar_scanner(market, investor, trade_type, interval))
@@ -894,7 +898,16 @@ def _toss_universe() -> list[str]:
     for code in store.recent_observation_codes(catalog.OBS_RADAR, since, TOSS_STOCK_LIMIT):
         if _KR_CODE.match(code) and code not in codes:
             codes.append(code)
-    return codes[:TOSS_STOCK_LIMIT]
+    codes = codes[:TOSS_STOCK_LIMIT]
+    try:
+        watched = store.watched_stock_codes(TOSS_WATCHED_LIMIT)
+    except Exception as exc:  # noqa: BLE001 — 알림 테이블이 없어도 레이더 종목 수집은 계속합니다
+        logger.warning("알림 규칙의 관심 종목을 읽지 못했습니다: %s", http.brief_error(exc))
+        watched = []
+    for code in watched:
+        if _KR_CODE.match(code) and code not in codes:
+            codes.append(code)
+    return codes
 
 
 def task_toss_stock_flows() -> str:

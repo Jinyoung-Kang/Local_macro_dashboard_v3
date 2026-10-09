@@ -429,3 +429,29 @@ def test_QA011_task_exceeding_deadline_is_recorded_as_failed_and_runner_moves_on
     summary = {row["task"]: row for row in store.read_task_summary()}
     assert summary["hanging_task"]["status"] == "error"
     assert tasks.deadline_for(tasks.Task("x", "weekly", hanging, "")) >= 600   # 13F는 10분 넘게 걸립니다
+
+
+# ---------------------------------------------------------------- 관심 종목(알림 규칙) 수집 범위 — 명세 C3
+def test_관심_종목은_레이더_상한과_따로_수집_범위에_더한다(store, monkeypatch):
+    """레이더가 40종목으로 꽉 차도 알림 규칙의 관심 종목이 빠지지 않아야 알림이 울립니다."""
+    with store.connection() as conn:
+        user = conn.execute(
+            "INSERT INTO users (email, password_hash, role, tier) VALUES ('w@test.local', 'x', 'MEMBER', 'PRO') "
+            "RETURNING id").fetchone()["id"]
+        for code, enabled in (("005930", True), ("000660", True), ("035420", False)):
+            conn.execute(
+                "INSERT INTO alert_rules (user_id, kind, params, enabled) VALUES (%s, 'FOREIGN_STREAK', %s::jsonb, %s)",
+                (user, '{"target": "STOCK", "code": "%s", "n": 5}' % code, enabled))
+        conn.execute(
+            "INSERT INTO alert_rules (user_id, kind, params) VALUES (%s, 'FOREIGN_STREAK', "
+            "'{\"target\": \"KOSPI\", \"n\": 5}'::jsonb)", (user,))
+
+    assert store.watched_stock_codes(60) == ["000660", "005930"]
+
+    radar = [f"{i:06d}" for i in range(100000, 100045)]
+    monkeypatch.setattr(tasks, "RADAR_COMBINATIONS", [])
+    monkeypatch.setattr(tasks.store, "recent_observation_codes", lambda dataset, since, limit: radar[:limit])
+    universe = tasks._toss_universe()
+
+    assert universe[:40] == radar[:40]
+    assert universe[40:] == ["000660", "005930"]
