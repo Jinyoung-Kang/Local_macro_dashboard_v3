@@ -153,3 +153,29 @@ def test_QA031_받지_못한_공시는_직전_저장본의_같은_공시를_이�
     assert [q["reportDate"] for q in result["quarters"]] == ["2026-06-30", "2026-03-31", "2025-12-31"]
     assert result["quarters"][1]["isStale"] is True
     assert result["error"] is None
+
+
+_INFO_TABLE = b"""<?xml version="1.0" encoding="UTF-8"?>
+<informationTable xmlns="http://www.sec.gov/edgar/document/thirteenf/informationtable">
+  <infoTable><nameOfIssuer>APPLE INC</nameOfIssuer><titleOfClass>COM</titleOfClass><cusip>037833100</cusip>
+    <value>1000000</value><shrsOrPrnAmt><sshPrnamt>5000</sshPrnamt><sshPrnamtType>SH</sshPrnamtType></shrsOrPrnAmt></infoTable>
+  <infoTable><nameOfIssuer>APPLE INC</nameOfIssuer><titleOfClass>COM</titleOfClass><cusip>037833100</cusip>
+    <value>4000000</value><shrsOrPrnAmt><sshPrnamt>20000</sshPrnamt><sshPrnamtType>SH</sshPrnamtType></shrsOrPrnAmt>
+    <putCall>Put</putCall></infoTable>
+  <infoTable><nameOfIssuer>TESLA INC</nameOfIssuer><titleOfClass>NOTE 2.000% 5/1</titleOfClass><cusip>88160RAG6</cusip>
+    <value>2000000</value><shrsOrPrnAmt><sshPrnamt>1500000</sshPrnamt><sshPrnamtType>PRN</sshPrnamtType></shrsOrPrnAmt></infoTable>
+</informationTable>"""
+
+
+@pytest.mark.xfail(strict=True, reason="QA-033: 옵션 행을 보유에 합치고 채권 원금을 주식 수로 셈")
+def test_QA033_옵션_행은_보유가_아니고_채권_원금은_주식_수가_아니다():
+    """
+    13F 정보표의 putCall 행은 옵션(기초자산 평가액)이라 롱 보유가 아닙니다. 합치면 풋이 보유로 보이고 비중 분모가
+    부풉니다(추적 기관 중 사이언·브리지워터 등이 보고). PRN 행의 sshPrnamt는 채권 원금이라 주식 수로 쓰지 않습니다.
+    """
+    holdings = {h["name"]: h for h in sec13f._parse_information_table(_INFO_TABLE, "2026-08-14")}
+
+    assert holdings["APPLE INC"]["value"] == 1_000_000
+    assert holdings["APPLE INC"]["shares"] == 5000
+    assert holdings["TESLA INC"]["value"] == 2_000_000
+    assert holdings["TESLA INC"]["shares"] is None
