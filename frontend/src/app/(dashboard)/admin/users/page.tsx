@@ -32,9 +32,17 @@ export default function AdminUsersPage() {
   const [password, setPassword] = useState("");
   const [tier, setTier] = useState("FREE");
 
+  // 저장하고 목록을 다시 읽을 때까지 그 행의 선택 상자를 막습니다. 그사이 다른 칸을 바꾸면 렌더 시점의 옛 값(역할·등급)을
+  // 함께 보내 앞의 변경을 되돌렸습니다(QA-051).
+  const [savingId, setSavingId] = useState<number | null>(null);
   const change = async (row: AdminUser, role: string, nextTier: string) => {
-    await update.run(row.id, role, nextTier);
-    void users.reload();
+    setSavingId(row.id);
+    try {
+      await update.run(row.id, role, nextTier);
+      await users.reload();
+    } finally {
+      setSavingId(null);
+    }
     void audit.reload();
   };
 
@@ -71,6 +79,7 @@ export default function AdminUsersPage() {
                 <Select
                   label={`${row.email} 역할`}
                   value={row.role}
+                  disabled={savingId === row.id}
                   onChange={(value) => void change(row, value, row.tier)}
                   options={[{ value: "OWNER", label: "운영자" }, { value: "MEMBER", label: "회원" }]}
                 />
@@ -83,6 +92,7 @@ export default function AdminUsersPage() {
                 <Select
                   label={`${row.email} 등급`}
                   value={row.tier}
+                  disabled={savingId === row.id}
                   onChange={(value) => void change(row, row.role, value)}
                   options={[{ value: "FREE", label: "무료" }, { value: "PRO", label: "유료" }]}
                 />

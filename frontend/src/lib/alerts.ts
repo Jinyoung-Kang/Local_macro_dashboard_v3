@@ -21,3 +21,13 @@ export function unreadBadge(unread: number | null | undefined): string | null {
   if (!unread || unread <= 0) return null;
   return unread > 99 ? "99+" : String(unread);
 }
+
+/**
+ * 알림을 읽음 처리했다는 신호. 사이드바·탭 제목의 읽지 않은 수는 레이아웃이 5분마다 읽어, 알림함에서 읽어도 최대
+ * 5분 그대로였습니다(QA-051). 레이아웃이 이 이벤트를 듣고 바로 다시 읽습니다.
+ */
+export const ALERTS_READ_EVENT = "macrodash:alerts-read";
+
+export function notifyAlertsRead(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(ALERTS_READ_EVENT));
+}

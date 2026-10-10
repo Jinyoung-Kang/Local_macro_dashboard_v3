@@ -40,7 +40,7 @@ afterEach(() => cleanup());
 
 describe("QA-051", () => {
   // 수정 전에는 run이 성공·실패를 돌려주지 않아, 비밀번호 변경이 실패해도 화면이 입력 세 칸을 지웠다.
-  it.fails("버튼 동작(run)은 실패하면 false를 돌려준다 — 실패한 비밀번호 변경이 입력을 지우지 않게", async () => {
+  it("버튼 동작(run)은 실패하면 false를 돌려준다 — 실패한 비밀번호 변경이 입력을 지우지 않게", async () => {
     const { result } = renderHook(() => useAsyncAction(() => Promise.reject(new Error("지금 비밀번호가 올바르지 않습니다.")), "실패"));
     let ok: unknown;
     await act(async () => {
@@ -50,8 +50,8 @@ describe("QA-051", () => {
   });
 
   // 수정 전에는 로그아웃 요청이 실패하면 처리되지 않은 rejection만 남고 화면에 아무 반응이 없었다.
-  // (그 rejection이 테스트 러너 전체를 실패시켜 it.fails로 둘 수 없어, 수정 전에는 건너뜁니다 — 백엔드의 @Disabled와 같음)
-  it.skip("로그아웃이 실패하면 화면에 알린다", async () => {
+  // (그 rejection이 테스트 러너 전체를 실패시켜, 수정 전에는 it.skip으로 두었습니다 — 백엔드의 @Disabled와 같음)
+  it("로그아웃이 실패하면 화면에 알린다", async () => {
     api.auth.logout.mockRejectedValue(new Error("백엔드 API에 연결하지 못했습니다"));
     render(<Sidebar readMode="auto" user={{ email: "m@test.local", role: "MEMBER", tier: "PRO", demo: false }} unread={0} />);
 
@@ -61,7 +61,7 @@ describe("QA-051", () => {
   });
 
   // 수정 전에는 알림함만 다시 읽고 사이드바·탭 제목의 읽지 않은 수는 최대 5분 그대로였다.
-  it.fails("모두 읽음을 누르면 읽지 않은 수를 다시 읽으라는 신호를 보낸다", async () => {
+  it("모두 읽음을 누르면 읽지 않은 수를 다시 읽으라는 신호를 보낸다", async () => {
     reads["/api/alerts/rules"] = () => Promise.resolve({ available: true, rules: [] });
     reads["/api/alerts/inbox"] = () => Promise.resolve({ available: true, unread: 2, items: [] });
     api.apiPost.mockResolvedValue({ changed: 2 });
@@ -76,7 +76,7 @@ describe("QA-051", () => {
   });
 
   // 수정 전에는 역할을 바꾼 응답·목록 갱신 전에 등급을 바꾸면, 옛 역할을 함께 보내 첫 변경을 되돌렸다.
-  it.fails("사용자 관리: 저장하고 목록을 다시 읽는 동안에는 그 행의 선택 상자를 막는다", async () => {
+  it("사용자 관리: 저장하고 목록을 다시 읽는 동안에는 그 행의 선택 상자를 막는다", async () => {
     reads["/api/admin/users"] = () => Promise.resolve({ users: [
       { id: 7, email: "m@test.local", role: "MEMBER", tier: "FREE", verified: true, createdAt: "2026-10-01T00:00:00Z" }] });
     api.apiPost.mockReturnValue(new Promise(() => {}));   // 저장이 끝나지 않음

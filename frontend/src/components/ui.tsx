@@ -262,10 +262,13 @@ export function Select({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** 저장 중처럼 잠깐 고를 수 없을 때. */
+  disabled?: boolean;
   /**
    * disabled를 준 항목은 목록에 보이지만 고를 수 없습니다.
    *
@@ -286,8 +289,9 @@ export function Select({
       {label}
       <select
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full max-w-full rounded-md border border-border bg-surface-hover px-2 py-1.5 text-sm text-body outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent sm:max-w-[22rem]"
+        className="w-full max-w-full disabled:opacity-60 rounded-md border border-border bg-surface-hover px-2 py-1.5 text-sm text-body outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent sm:max-w-[22rem]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value} disabled={option.disabled}>

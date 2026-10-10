@@ -10,7 +10,7 @@ import { RefreshProvider, useRefreshSignal } from "@/hooks/useRefreshSignal";
 import { SessionUserProvider } from "@/hooks/useSessionUser";
 import { endpoints } from "@/lib/endpoints";
 import type { SessionResponse } from "@/lib/types";
-import { titleWithUnread } from "@/lib/alerts";
+import { ALERTS_READ_EVENT, titleWithUnread } from "@/lib/alerts";
 
 /**
  * 대시보드 공통 레이아웃 — 사이드바 + 거래소 시계.
@@ -67,6 +67,13 @@ function DashboardShell({
   const alerts = useApi<{ unread: number }>(endpoints.alerts.unreadCount, 300_000, { followRefresh: false });
   const unread = alerts.data?.unread ?? 0;
   useDocumentTitle(pathname, unread);
+  // 알림함에서 읽음 처리하면 바로 다시 읽습니다(5분을 기다리지 않음, QA-051).
+  const reloadUnread = alerts.reload;
+  useEffect(() => {
+    const onRead = () => void reloadUnread();
+    window.addEventListener(ALERTS_READ_EVENT, onRead);
+    return () => window.removeEventListener(ALERTS_READ_EVENT, onRead);
+  }, [reloadUnread]);
   // 수동 새로고침에는 반응하지 않습니다(followRefresh: false). 반응하면 새로고침마다
   // 아래의 "세션을 확인하는 중…"이 떠 화면 전체가 다시 그려지고 화면 상태가 초기화됐습니다.
   const session = useApi<SessionResponse>(endpoints.auth.session, 0, {

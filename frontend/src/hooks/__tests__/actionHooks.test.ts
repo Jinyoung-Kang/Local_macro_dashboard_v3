@@ -61,7 +61,7 @@ describe("useAsyncAction", () => {
     const { result, unmount } = renderHook(() =>
       useAsyncAction(() => new Promise<string>((resolve) => { finish = resolve; }), "기본 문구"));
 
-    let pending!: Promise<void>;
+    let pending!: Promise<boolean>;
     act(() => {
       pending = result.current.run();
     });

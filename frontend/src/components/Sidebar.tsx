@@ -66,9 +66,16 @@ export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: 
   //  읽으므로 아무 일도 일어나지 않아 사용자가 직접 새로고침해야 했습니다.)
   const { requestRefresh, collecting, message } = useRefreshSignal();
 
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const logout = async () => {
-    await auth.logout();
-    router.push("/login");
+    setLogoutError(null);
+    try {
+      await auth.logout();
+      router.push("/login");
+    } catch (err) {
+      // 실패를 삼키면 버튼이 아무 반응 없이 끝나고 세션은 그대로입니다(QA-051).
+      setLogoutError(`로그아웃하지 못했습니다 — ${err instanceof Error ? err.message : "다시 시도하세요"}`);
+    }
   };
 
   return (
@@ -164,6 +171,7 @@ export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: 
               </Link>
             )}
             <Button onClick={logout}>로그아웃</Button>
+            {logoutError && <p className="text-[11px] text-warn" role="alert">{logoutError}</p>}
           </>
         )}
         {/*

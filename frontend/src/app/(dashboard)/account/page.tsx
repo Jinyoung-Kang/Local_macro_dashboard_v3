@@ -42,10 +42,12 @@ export default function AccountPage() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (mismatch) return;
-    await change.run(current, next);
-    setCurrent("");
-    setNext("");
-    setConfirm("");
+    // 실패하면(지금 비밀번호 틀림 등) 입력을 남겨 고쳐 다시 보낼 수 있게 합니다(QA-051).
+    if (await change.run(current, next)) {
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+    }
     void sessions.reload();
   };
 

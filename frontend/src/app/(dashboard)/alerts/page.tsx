@@ -6,7 +6,7 @@ import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useSessionUser } from "@/hooks/useSessionUser";
 import { DEMO_READ_ONLY, isDemo } from "@/lib/access";
-import { ALERT_KINDS } from "@/lib/alerts";
+import { ALERT_KINDS, notifyAlertsRead } from "@/lib/alerts";
 import { apiDelete, apiPost } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
 import { EMPTY, formatKst } from "@/lib/format";
@@ -75,7 +75,7 @@ export default function AlertsPage() {
         title="알림함"
         subtitle={`읽지 않은 알림 ${inbox.data ? `${inbox.data.unread}건` : EMPTY} · 90일 보관`}
         actions={
-          <Button onClick={async () => { await read.run(null); void inbox.reload(); }} disabled={demo || read.busy || !inbox.data?.unread}>
+          <Button onClick={async () => { await read.run(null); void inbox.reload(); notifyAlertsRead(); }} disabled={demo || read.busy || !inbox.data?.unread}>
             모두 읽음
           </Button>
         }
@@ -110,7 +110,7 @@ export default function AlertsPage() {
                   <button
                     type="button"
                     className="mt-2 text-[11px] text-muted underline hover:text-accent"
-                    onClick={async () => { await read.run([item.id]); void inbox.reload(); }}
+                    onClick={async () => { await read.run([item.id]); void inbox.reload(); notifyAlertsRead(); }}
                   >
                     읽음
                   </button>

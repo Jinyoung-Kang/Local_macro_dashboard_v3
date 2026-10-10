@@ -29,7 +29,8 @@ export function useMountedRef() {
  * @param action         실제로 부를 함수
  * @param failureMessage 오류가 Error가 아닐 때 보여 줄 문구
  * @returns `{ run, busy, result, error }`
- *   - run: 부르기. 시작할 때 오류를 지우고, 실패해도 앞서 받은 결과는 남깁니다
+ *   - run: 부르기. 시작할 때 오류를 지우고, 실패해도 앞서 받은 결과는 남깁니다. 성공하면 true, 실패하면 false를
+ *     돌려줍니다 — 성공했을 때만 입력을 지우는 화면이 씁니다(QA-051)
  *   - 화면을 떠난 뒤 끝나면 상태를 바꾸지 않습니다
  */
 export function useAsyncAction<Args extends unknown[], T>(
@@ -43,16 +44,18 @@ export function useAsyncAction<Args extends unknown[], T>(
   const { notifyUnauthorized } = useRefreshSignal();
 
   const run = useCallback(
-    async (...args: Args) => {
+    async (...args: Args): Promise<boolean> => {
       setBusy(true);
       setError(null);
       try {
         const value = await action(...args);
         if (mounted.current) setResult(value);
+        return true;
       } catch (err) {
         // 세션이 끝났으면 화면 읽기(useApi)와 같이 로그인 화면으로 보냅니다 — 예전에는 배너만 떴습니다(QA-044).
         if (err instanceof UnauthorizedError) notifyUnauthorized();
         if (mounted.current) setError(errorMessage(err, failureMessage));
+        return false;
       } finally {
         if (mounted.current) setBusy(false);
       }
