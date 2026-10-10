@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   deltaColor, withoutLeadingIcon, formatAge, formatBillionUsd, formatKrw, formatNumber, formatPercent, formatSampleWindow, formatShares,
   formatSigned, formatSignedKrw, formatTrillionDelta, formatTrillionUsd, formatUsd, formatUsdWithKrw,
+  formatLatency,
 } from "@/lib/format";
 
 describe("값이 없으면 —", () => {
@@ -103,5 +104,13 @@ describe("제목 앞 아이콘 떼기", () => {
     expect(withoutLeadingIcon("🏛️ 미국 국채 수익률")).toBe("미국 국채 수익률");
     expect(withoutLeadingIcon("🇰🇷 국내 지수")).toBe("국내 지수");
     expect(withoutLeadingIcon("10Y-2Y 스프레드")).toBe("10Y-2Y 스프레드");
+  });
+});
+
+describe("AI 소요 시간 (화면에서 옮김, 동작 동일)", () => {
+  it("1분 미만은 소수 한 자리 초, 1분 이상은 분·초, 모르면 미상", () => {
+    expect(formatLatency(4200)).toBe("4.2초");
+    expect(formatLatency(222_134)).toBe("3분 42초");
+    expect(formatLatency(undefined)).toBe("소요 시간 미상");
   });
 });

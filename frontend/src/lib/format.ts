@@ -393,3 +393,15 @@ export function statusColor(color: string | null | undefined): string {
 export function withoutLeadingIcon(text: string): string {
   return text.replace(/^[\p{Extended_Pictographic}\p{Regional_Indicator}\u200d\ufe0f\s]+/u, "");
 }
+
+/** 밀리초를 사람이 읽는 시간으로. 3분 42초가 "222134ms"로 보이면 감이 안 옵니다. */
+export function formatLatency(latencyMs?: number): string {
+  if (latencyMs === undefined || latencyMs === null) {
+    return "소요 시간 미상";
+  }
+  const seconds = latencyMs / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}초`;
+  }
+  return `${Math.floor(seconds / 60)}분 ${Math.round(seconds % 60)}초`;
+}

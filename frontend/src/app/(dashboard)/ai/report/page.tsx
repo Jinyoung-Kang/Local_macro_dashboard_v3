@@ -10,7 +10,7 @@ import { useSessionUser } from "@/hooks/useSessionUser";
 import { isDemo } from "@/lib/access";
 import { defaultEngineId, demoQuotaNote, engineOptions, quotaLabel } from "@/lib/aiEngines";
 import { apiPost } from "@/lib/api";
-import { formatKst } from "@/lib/format";
+import { formatKst, formatLatency } from "@/lib/format";
 import type { AiEngines, AiResponse, SnapshotText } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
@@ -238,16 +238,4 @@ export default function AiReportPage() {
       )}
     </div>
   );
-}
-
-/** 밀리초를 사람이 읽는 시간으로. 3분 42초가 "222134ms"로 보이면 감이 안 옵니다. */
-function formatLatency(latencyMs?: number): string {
-  if (latencyMs === undefined || latencyMs === null) {
-    return "소요 시간 미상";
-  }
-  const seconds = latencyMs / 1000;
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}초`;
-  }
-  return `${Math.floor(seconds / 60)}분 ${Math.round(seconds % 60)}초`;
 }
