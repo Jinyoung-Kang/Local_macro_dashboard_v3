@@ -1,6 +1,7 @@
 package com.macrodash.feature.toss;
 
 import com.macrodash.collector.CollectorClient;
+import com.macrodash.read.StoreReader;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -18,9 +19,11 @@ import java.util.Optional;
 public class TossService {
 
     private final CollectorClient collector;
+    private final StoreReader store;
 
-    public TossService(CollectorClient collector) {
+    public TossService(CollectorClient collector, StoreReader store) {
         this.collector = collector;
+        this.store = store;
     }
 
     public Map<String, Object> diagnostics() {

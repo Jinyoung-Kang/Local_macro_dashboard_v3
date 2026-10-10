@@ -44,6 +44,12 @@ class TossControllerTest {
     }
 
     private static TossController controller(CollectorClient collector) {
-        return new TossController(new TossService(collector));
+        return new TossController(new TossService(collector, readMode(com.macrodash.config.AppProperties.ReadMode.AUTO)));
+    }
+
+    static com.macrodash.read.StoreReader readMode(com.macrodash.config.AppProperties.ReadMode mode) {
+        com.macrodash.read.StoreReader store = mock(com.macrodash.read.StoreReader.class);
+        when(store.readMode()).thenReturn(mode);
+        return store;
     }
 }
