@@ -117,3 +117,46 @@ def test_single_key_override_failure_also_fails_the_futures_card(no_snapshot, mo
     cards = {item["key"]: item for item in result["categories"][0]["items"]}
     assert cards["us02y"]["status"] == "fail"
     assert set(result["rates"]) == {"us10y", "us30y"}
+
+
+_STALE = {"isStale": True, "staleReason": "HTTP 429", "note": "⚠️ 이전 값", "collectedAt": "2026-10-11 09:00:00 KST"}
+
+
+@pytest.mark.xfail(strict=True, reason="QA-030: 이어받은 값을 지금 받은 값처럼 카드에 넣음")
+def test_QA030_이어받은_수익률은_이전_값으로_표시하고_그때_시각을_쓴다(no_snapshot, monkeypatch):
+    """
+    TradingView가 끊겨 scraper_markets가 직전 값을 이어받으면(isStale), 국채 카드는 그 값을 '현재 시각' 수집값으로
+    적고 isStale을 잃었습니다 — 몇 시간 지난 금리가 지금 값처럼 화면·AI 텍스트·스프레드에 들어갔습니다.
+    """
+    monkeypatch.setattr(
+        macro_cards.scraper_service, "collect_scraped_markets", lambda: _scraped(us10y=dict(_STALE))
+    )
+
+    result = macro_cards.apply_bond_override(_payload())
+
+    card = {item["key"]: item for item in result["categories"][0]["items"]}["us10y"]
+    assert card["isStale"] is True
+    assert card["staleReason"] == "HTTP 429"
+    assert "2026-10-11 09:00" in card["lastTs"]
+    assert result["rates"]["us10y"]["isStale"] is True
+
+
+class _Snap:
+    collected_at = None
+
+    def __init__(self, payload):
+        self.payload = payload
+
+
+@pytest.mark.xfail(strict=True, reason="QA-030: 이어받은 지수 선물 값을 지금 받은 값처럼 카드에 넣음")
+def test_QA030_이어받은_지수_선물도_이전_값으로_표시한다(monkeypatch):
+    items = [{"key": "kospi200_night", "status": "ok", "price": 350.0, "previousClose": 348.0,
+              "provider": "TradingView Scanner", **_STALE}]
+    monkeypatch.setattr(macro_cards.store, "read_snapshot", lambda *_a, **_k: _Snap({"items": items}))
+    payload = {"categories": [{"id": indicators.SCRAPED_INJECT_CATEGORY, "title": "아시아", "items": []}]}
+
+    result = macro_cards.inject_scraped_indices(payload)
+
+    card = {item["key"]: item for item in result["categories"][0]["items"]}["kospi200_night_scraped"]
+    assert card["isStale"] is True
+    assert "2026-10-11 09:00" in card["lastTs"]
