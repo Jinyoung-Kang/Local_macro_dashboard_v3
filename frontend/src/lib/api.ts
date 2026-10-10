@@ -25,8 +25,13 @@ const BACKEND_PORT = process.env.NEXT_PUBLIC_BACKEND_PORT || "8080";
  * 화면을 연 주소(hostname)에 백엔드 포트만 붙이면 어느 기기에서 열어도 같은 호스트의
  * 백엔드를 부르고, 쿠키도 같은 사이트가 됩니다. 전체 주소를 꼭 고정해야 하면(프록시)
  * NEXT_PUBLIC_API_BASE로 덮어씁니다.
+ *
+ * `NEXT_PUBLIC_API_BASE=/`는 **같은 출처**입니다(빈 문자열 → `/api/...` 상대 경로). 프록시가 화면과
+ * `/api`를 한 주소로 묶을 때(AWS 배포, ADR 0012) 씁니다 — 이미지에 공개 주소를 박지 않아 같은 이미지가
+ * 공개 주소와 관리자 터널(localhost) 양쪽에서 돕니다.
  */
 export function apiBase(): string {
+  if (BUILD_TIME_BASE === "/") return "";
   if (BUILD_TIME_BASE) return BUILD_TIME_BASE;
   if (typeof window === "undefined") return `http://localhost:${BACKEND_PORT}`;
   return `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`;

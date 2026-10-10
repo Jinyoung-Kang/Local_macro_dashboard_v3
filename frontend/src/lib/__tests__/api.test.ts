@@ -24,6 +24,32 @@ describe("apiBase", () => {
   });
 });
 
+describe("apiBase — NEXT_PUBLIC_API_BASE", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  async function apiBaseWith(value: string) {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE", value);
+    vi.resetModules();
+    return (await import("@/lib/api")).apiBase;
+  }
+
+  it("'/'는 같은 출처 — 상대 경로라 '//api'(다른 호스트로 읽힘)가 되지 않는다", async () => {
+    const base = await apiBaseWith("/");
+    vi.stubGlobal("window", { location: { protocol: "https:", hostname: "d1.cloudfront.net" } });
+    expect(base()).toBe("");
+    expect(`${base()}/api/x`).toBe("/api/x");
+  });
+
+  it("전체 주소는 그대로", async () => {
+    const base = await apiBaseWith("https://api.example.test");
+    expect(base()).toBe("https://api.example.test");
+  });
+});
+
 describe("요청 헤더", () => {
   afterEach(() => vi.unstubAllGlobals());
 

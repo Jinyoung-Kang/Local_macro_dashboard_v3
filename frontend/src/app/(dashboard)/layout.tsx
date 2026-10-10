@@ -160,7 +160,7 @@ docker compose ps    # backend가 running인지
 make logs S=backend  # 기동 실패 원인`}
         </pre>
         <p className="mt-3 text-xs text-muted">
-          화면이 찾는 주소: <code className="text-body">{apiBase()}</code> ·{" "}
+          화면이 찾는 주소: <code className="text-body">{apiBase() || "같은 출처 /api"}</code> ·{" "}
           {retrying ? "다시 확인하는 중…" : `${SESSION_RETRY_MS / 1000}초마다 자동으로 다시 확인합니다`}
         </p>
         <button
