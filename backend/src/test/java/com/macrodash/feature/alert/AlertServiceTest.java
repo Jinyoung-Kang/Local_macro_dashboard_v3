@@ -65,6 +65,26 @@ class AlertServiceTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("QA-041 재현 — 수정 전에는 껐던 종목 규칙을 켤 때 관심 종목 상한을 다시 보지 않는다")
+    @DisplayName("QA-041 꺼 둔 종목 규칙을 다시 켤 때도 관심 종목 상한(사용자 20·전체 60)을 본다 — 넘친 종목이 조용히 수집에서 빠지지 않게")
+    void reEnablingStockRuleChecksCaps() {
+        AlertStore store = mock(AlertStore.class);
+        AlertStore.Rule disabled = new AlertStore.Rule(9, PRO.id(), "FOREIGN_STREAK",
+                MAPPER.createObjectNode().put("target", "STOCK").put("code", "000660").put("n", 5), false,
+                java.time.Instant.now());
+        when(store.rules(PRO.id())).thenReturn(List.of(disabled));
+        when(store.countStockCodes(null)).thenReturn(60);
+        when(store.hasStockCode("000660")).thenReturn(false);
+        AlertService service = new AlertService(store, MAPPER);
+
+        AlertService.Result result = service.setEnabled(PRO, 9, true);
+
+        assertThat(result.status()).isEqualTo(400);
+        assertThat(result.message()).contains("수집 범위");
+        verify(store, never()).setEnabled(anyLong(), anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
     @DisplayName("확정 기록만 — 시장은 오늘 기록을 빼고, 종목은 저녁 확정 칸이 모두 찬 오늘 기록만 쓴다")
     void finalizedRecordsOnly() {
         LocalDate today = LocalDate.of(2026, 10, 9);
