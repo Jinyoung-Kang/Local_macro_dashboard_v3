@@ -12,6 +12,7 @@ import {
   Select,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { useRemembered } from "@/hooks/useRemembered";
 import { SOURCES } from "@/lib/sources";
 import { EMPTY, formatNumber, formatPercent } from "@/lib/format";
 import type { FxSeriesResponse } from "@/lib/types";
@@ -40,7 +41,8 @@ export function FxCompareSection() {
     600_000,
   );
 
-  const catalog = data?.catalog ?? [];
+  // 계열 버튼은 응답의 카탈로그로 그립니다. 새 선택을 기다리는 동안에도 버튼이 사라지지 않게 마지막 카탈로그를 씁니다(QA-047).
+  const catalog = useRemembered(data?.catalog) ?? [];
   const series = (data?.series ?? []).filter((entry) => entry.available);
 
   const toggle = (id: string) => {

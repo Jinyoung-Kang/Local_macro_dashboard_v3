@@ -35,13 +35,6 @@ export default function SectorPage() {
     300_000,
   );
 
-  if (loading && !data) {
-    return <Loading label="섹터 데이터를 불러오는 중…" />;
-  }
-  if (error) {
-    return <ErrorState message={error} onRetry={reload} />;
-  }
-
   const sectors = data?.sectors ?? [];
   const assets = data?.assetClasses ?? [];
 
@@ -68,9 +61,12 @@ export default function SectorPage() {
         />
       </header>
 
-      {!data?.available && (
+      {/* 선택 상자가 있는 첫 카드는 늘 그리고 본문만 로딩·오류로 바꿉니다 — 페이지 전체를 바꾸면 방금 조작한
+          선택 상자가 사라지고 키보드 포커스를 잃었습니다(QA-047). */}
+      {error && <ErrorState message={error} onRetry={reload} />}
+      {data && !data.available && (
         <Banner tone="warn">
-          {data?.message ?? "섹터 데이터가 없습니다. 수집기를 실행하세요."}
+          {data.message ?? "섹터 데이터가 없습니다. 수집기를 실행하세요."}
         </Banner>
       )}
 
@@ -99,27 +95,35 @@ export default function SectorPage() {
           </div>
         }
       >
-        <HorizontalBars
-          data={chartData}
-          unit={mode === "alpha" ? "%p" : "%"}
-          digits={2}
-          valueName={mode === "alpha" ? `${period} 초과성과` : `${period} 수익률`}
-          height={Math.max(260, chartData.length * 28)}
-        />
+        {loading && !data ? (
+          <Loading label="섹터 데이터를 불러오는 중…" />
+        ) : (
+          <HorizontalBars
+            data={chartData}
+            unit={mode === "alpha" ? "%p" : "%"}
+            digits={2}
+            valueName={mode === "alpha" ? `${period} 초과성과` : `${period} 수익률`}
+            height={Math.max(260, chartData.length * 28)}
+          />
+        )}
       </Card>
 
-      <Card
-        title="섹터 상세" source={SOURCES.yahooEtf}
-        subtitle={`표본이 부족한 기간은 —로 표시합니다. 순위는 위에서 고른 ${period} 기준입니다.`}
-      >
-        <ReturnsTable rows={sectors} period={period} kindLabel="유형" />
-      </Card>
+      {data && (
+        <>
+          <Card
+            title="섹터 상세" source={SOURCES.yahooEtf}
+            subtitle={`표본이 부족한 기간은 —로 표시합니다. 순위는 위에서 고른 ${period} 기준입니다.`}
+          >
+            <ReturnsTable rows={sectors} period={period} kindLabel="유형" />
+          </Card>
 
-      <Card title="자산군 상세" source={SOURCES.yahooEtf} subtitle="주식·채권·원자재·통화 전반의 상대 성과">
-        {/* 초과성과(α)는 S&P 500 대비 지표라 자산군에는 의미가 없습니다.
-            전부 "—"인 열을 남겨 두면 "계산이 실패했나?"로 읽힙니다. */}
-        <ReturnsTable rows={assets} period={period} kindLabel="자산군" showAlpha={false} />
-      </Card>
+          <Card title="자산군 상세" source={SOURCES.yahooEtf} subtitle="주식·채권·원자재·통화 전반의 상대 성과">
+            {/* 초과성과(α)는 S&P 500 대비 지표라 자산군에는 의미가 없습니다.
+                전부 "—"인 열을 남겨 두면 "계산이 실패했나?"로 읽힙니다. */}
+            <ReturnsTable rows={assets} period={period} kindLabel="자산군" showAlpha={false} />
+          </Card>
+        </>
+      )}
     </div>
   );
 }

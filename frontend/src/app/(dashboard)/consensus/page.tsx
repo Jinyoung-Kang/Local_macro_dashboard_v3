@@ -14,6 +14,7 @@ import {
   Table,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { useRemembered } from "@/hooks/useRemembered";
 import { useUsdKrw } from "@/hooks/useUsdKrw";
 import { EMPTY, formatCurrency, formatNumber } from "@/lib/format";
 import { isSelected, toggleSelection } from "@/lib/selection";
@@ -49,6 +50,9 @@ export default function ConsensusPage() {
     setSelected((previous) => toggleSelection(allCiks, previous, cik));
   };
 
+  // 기준 분기 선택지는 응답에 딸려 옵니다. 고른 분기의 응답을 기다리는 동안 선택지가 '최신 분기' 하나로 줄면
+  // 화면은 최신을 보이는데 요청은 고른 분기로 나갔습니다 — 마지막 목록을 씁니다(QA-047).
+  const availableDates = useRemembered(data?.availableDates);
   const chartData = (data?.rows ?? [])
     .slice(0, 15)
     .map((row) => ({
@@ -93,7 +97,7 @@ export default function ConsensusPage() {
             onChange={setReportDate}
             options={[
               { value: "", label: "각 기관의 최신 분기" },
-              ...(data?.availableDates ?? []).map((date) => ({ value: date, label: date })),
+              ...(availableDates ?? []).map((date) => ({ value: date, label: date })),
             ]}
           />
           <Select

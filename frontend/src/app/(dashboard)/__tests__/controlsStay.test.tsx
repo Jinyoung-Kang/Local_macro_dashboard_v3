@@ -47,7 +47,7 @@ describe("QA-047 조건을 바꿔도 컨트롤이 남는다", () => {
 
   for (const { name, Page, path, label, next, body } of cases) {
     // 수정 전에는 로딩 중 페이지 전체를 바꿔 선택 상자가 사라졌다.
-    it.fails(`${name}: 기간을 바꾼 뒤 새 응답을 기다리는 동안에도 '${label}' 선택 상자가 그대로`, async () => {
+    it(`${name}: 기간을 바꾼 뒤 새 응답을 기다리는 동안에도 '${label}' 선택 상자가 그대로`, async () => {
       answerOnly(path, body);
       render(<Page />);
       const select = (await screen.findByLabelText(label)) as HTMLSelectElement;
@@ -59,7 +59,7 @@ describe("QA-047 조건을 바꿔도 컨트롤이 남는다", () => {
     });
   }
 
-  it.fails("매크로: 자동 갱신 간격이 1분 경계를 넘어(live 경로가 바뀜) 새 응답을 기다리는 동안에도 선택 상자가 그대로", async () => {
+  it("매크로: 자동 갱신 간격이 1분 경계를 넘어(live 경로가 바뀜) 새 응답을 기다리는 동안에도 선택 상자가 그대로", async () => {
     answerOnly("/api/macro/overview?live=true", { available: true, categories: [] });   // 기본 간격은 1분 이하
     render(<MacroPage />);
     const select = (await screen.findByLabelText("자동 갱신 간격")) as HTMLSelectElement;
@@ -69,7 +69,7 @@ describe("QA-047 조건을 바꿔도 컨트롤이 남는다", () => {
     expect(select.isConnected).toBe(true);
   });
 
-  it.fails("환율 비교: 계열을 켜고 새 응답을 기다리는 동안에도 계열 버튼이 그대로", async () => {
+  it("환율 비교: 계열을 켜고 새 응답을 기다리는 동안에도 계열 버튼이 그대로", async () => {
     let first = true;
     api.apiGetShared.mockImplementation((path: string) => {
       if (path.startsWith("/api/macro/fx") && first) {
@@ -87,7 +87,7 @@ describe("QA-047 조건을 바꿔도 컨트롤이 남는다", () => {
     expect(button.isConnected).toBe(true);
   });
 
-  it.fails("13F 교집합: 기준 분기를 고르고 새 응답을 기다리는 동안 선택 상자가 고른 분기를 그대로 보인다", async () => {
+  it("13F 교집합: 기준 분기를 고르고 새 응답을 기다리는 동안 선택 상자가 고른 분기를 그대로 보인다", async () => {
     let first = true;
     api.apiGetShared.mockImplementation((path: string) => {
       if (path.startsWith("/api/sec13f/consensus") && first) {

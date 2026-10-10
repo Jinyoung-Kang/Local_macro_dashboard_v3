@@ -82,12 +82,6 @@ export default function MacroPage() {
   const now = useMinuteClock();
   const krOfficial = useKrOfficialHolidays(now);
 
-  if (overview.loading && !overview.data) {
-    return <Loading label="매크로 지표를 불러오는 중…" />;
-  }
-  if (overview.error) {
-    return <ErrorState message={overview.error} onRetry={overview.reload} />;
-  }
 
   const data = overview.data;
 
@@ -123,100 +117,109 @@ export default function MacroPage() {
         </div>
       </header>
 
-      {/* 상단에 둡니다 — 화면을 스크롤하며 눈으로 옮겨 적지 않아도 되도록,
-          "지금 이 대시보드가 들고 있는 값 전부"를 먼저 꺼낼 수 있게 합니다. */}
-      <RawSnapshotCard />
-
-      {!data?.available && (
-        <Banner tone="warn">
-          {data?.message ?? "매크로 데이터가 없습니다. 수집기를 실행하세요."}
-        </Banner>
-      )}
-
-      {data?.categories?.map((category) => (
-        <Card
-          key={category.id}
-          title={category.title}
-          subtitle={category.note ? `데이터 지연: ${category.note}` : undefined}
-          source={uniqueSources(category.items.map((item) => itemSource(item))) || undefined}
-        >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {category.items.map((item) => (
-              <Metric
-                key={item.key}
-                label={
-                  // 이름과 배지를 한 줄에 두면 이름이 긴 카드(엔/원 100엔당)만 배지가
-                  // 다음 줄로 밀려, 같은 줄 카드끼리 값의 높이가 어긋났습니다.
-                  // 모든 카드를 "이름 줄 + 배지 줄"로 같은 구조로 둡니다.
-                  <span className="flex flex-col gap-1">
-                    <span>{item.name}</span>
-                    <span className="flex min-h-5 flex-wrap items-center gap-1">
-                      {item.note && <SourceBadge>{item.note}</SourceBadge>}
-                      <SessionBadge
-                        market={item.market}
-                        now={now}
-                        krOfficial={krOfficial}
-                        lastTs={item.lastTs}
-                        collectedAt={data?.collectedAtKst}
-                      />
-                    </span>
-                  </span>
-                }
-                value={item.status === "fail" ? "수집 실패" : item.priceStr ?? EMPTY}
-                delta={item.delta}
-                deltaText={item.deltaStr ?? EMPTY}
-                tone={item.status === "fail" ? "text-muted" : undefined}
-                source={itemSource(item)}
-                caption={
-                  <span className="flex flex-col gap-0.5">
-                    <span>전일: {item.prevStr ?? EMPTY}</span>
-                    {item.lastTs && <span>{formatKst(item.lastTs)}</span>}
-                    {item.prevSource && <span>전일값 출처: {item.prevSource}</span>}
-                  </span>
-                }
-              />
-            ))}
-          </div>
-        </Card>
-      ))}
-
-      {/* 환율 카드 바로 아래에 둡니다 — 위에서 "지금 얼마인지"를 보고,
-          여기서 "어디서 왔는지"를 봅니다. */}
-      <FxCompareSection />
-
-      {data?.spreads && (
+      {/* 자동 갱신 간격(머리말)은 늘 그리고 본문만 로딩·오류로 바꿉니다 — 1분 경계를 넘으면 경로(live)가 바뀌어
+          페이지 전체가 로딩으로 바뀌고 방금 조작한 선택 상자가 사라졌습니다(QA-047). */}
+      {overview.loading && !data && <Loading label="매크로 지표를 불러오는 중…" />}
+      {overview.error && <ErrorState message={overview.error} onRetry={overview.reload} />}
+      {data && (
         <>
-          <SpreadSection
-            title="10Y−2Y 장단기 금리차"
-            block={data.spreads.official10y2y}
-          />
-          <SpreadSection
-            title="30Y−2Y 장단기 금리차"
-            block={data.spreads.official30y2y}
-          />
+
+        {/* 상단에 둡니다 — 화면을 스크롤하며 눈으로 옮겨 적지 않아도 되도록,
+            "지금 이 대시보드가 들고 있는 값 전부"를 먼저 꺼낼 수 있게 합니다. */}
+        <RawSnapshotCard />
+
+        {!data?.available && (
+          <Banner tone="warn">
+            {data?.message ?? "매크로 데이터가 없습니다. 수집기를 실행하세요."}
+          </Banner>
+        )}
+
+        {data?.categories?.map((category) => (
           <Card
-            title="장단기 금리차 해석 기준"
-            subtitle="역사적 분포에 근거한 참고치이며 투자 판단의 근거가 아닙니다."
-            source={SOURCES.internalRules}
+            key={category.id}
+            title={category.title}
+            subtitle={category.note ? `데이터 지연: ${category.note}` : undefined}
+            source={uniqueSources(category.items.map((item) => itemSource(item))) || undefined}
           >
-            <Table
-              rows={SPREAD_TABLE}
-              rowKey={(row) => row.state}
-              columns={[
-                { key: "state", header: "시장 상태", render: (row) => row.state },
-                { key: "value", header: "스프레드", render: (row) => row.value },
-                { key: "reading", header: "시장의 심리 및 해석", render: (row) => row.reading },
-                { key: "outcome", header: "경제적 귀결", render: (row) => row.outcome },
-              ]}
-            />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {category.items.map((item) => (
+                <Metric
+                  key={item.key}
+                  label={
+                    // 이름과 배지를 한 줄에 두면 이름이 긴 카드(엔/원 100엔당)만 배지가
+                    // 다음 줄로 밀려, 같은 줄 카드끼리 값의 높이가 어긋났습니다.
+                    // 모든 카드를 "이름 줄 + 배지 줄"로 같은 구조로 둡니다.
+                    <span className="flex flex-col gap-1">
+                      <span>{item.name}</span>
+                      <span className="flex min-h-5 flex-wrap items-center gap-1">
+                        {item.note && <SourceBadge>{item.note}</SourceBadge>}
+                        <SessionBadge
+                          market={item.market}
+                          now={now}
+                          krOfficial={krOfficial}
+                          lastTs={item.lastTs}
+                          collectedAt={data?.collectedAtKst}
+                        />
+                      </span>
+                    </span>
+                  }
+                  value={item.status === "fail" ? "수집 실패" : item.priceStr ?? EMPTY}
+                  delta={item.delta}
+                  deltaText={item.deltaStr ?? EMPTY}
+                  tone={item.status === "fail" ? "text-muted" : undefined}
+                  source={itemSource(item)}
+                  caption={
+                    <span className="flex flex-col gap-0.5">
+                      <span>전일: {item.prevStr ?? EMPTY}</span>
+                      {item.lastTs && <span>{formatKst(item.lastTs)}</span>}
+                      {item.prevSource && <span>전일값 출처: {item.prevSource}</span>}
+                    </span>
+                  }
+                />
+              ))}
+            </div>
           </Card>
+        ))}
+
+        {/* 환율 카드 바로 아래에 둡니다 — 위에서 "지금 얼마인지"를 보고,
+            여기서 "어디서 왔는지"를 봅니다. */}
+        <FxCompareSection />
+
+        {data?.spreads && (
+          <>
+            <SpreadSection
+              title="10Y−2Y 장단기 금리차"
+              block={data.spreads.official10y2y}
+            />
+            <SpreadSection
+              title="30Y−2Y 장단기 금리차"
+              block={data.spreads.official30y2y}
+            />
+            <Card
+              title="장단기 금리차 해석 기준"
+              subtitle="역사적 분포에 근거한 참고치이며 투자 판단의 근거가 아닙니다."
+              source={SOURCES.internalRules}
+            >
+              <Table
+                rows={SPREAD_TABLE}
+                rowKey={(row) => row.state}
+                columns={[
+                  { key: "state", header: "시장 상태", render: (row) => row.state },
+                  { key: "value", header: "스프레드", render: (row) => row.value },
+                  { key: "reading", header: "시장의 심리 및 해석", render: (row) => row.reading },
+                  { key: "outcome", header: "경제적 귀결", render: (row) => row.outcome },
+                ]}
+              />
+            </Card>
+          </>
+        )}
+
+        <RiskSection risk={risk.data} loading={risk.loading} />
+        <AdvancedSection data={advanced.data} loading={advanced.loading} />
+        <SingleChartSection />
+        <ScrapedSection />
         </>
       )}
-
-      <RiskSection risk={risk.data} loading={risk.loading} />
-      <AdvancedSection data={advanced.data} loading={advanced.loading} />
-      <SingleChartSection />
-      <ScrapedSection />
     </div>
   );
 }
