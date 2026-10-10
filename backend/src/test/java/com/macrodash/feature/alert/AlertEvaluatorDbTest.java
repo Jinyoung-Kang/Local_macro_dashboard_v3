@@ -60,6 +60,7 @@ class AlertEvaluatorDbTest {
     @AfterEach
     void cleanUp() {
         jdbc.update("DELETE FROM alert_events WHERE event_key LIKE 'regime:2099-%'");
+        jdbc.update("DELETE FROM alert_events WHERE event_key LIKE 'streak:%:2099-%'");
         jdbc.update("DELETE FROM regime_log WHERE verdict_date >= '2099-01-01'");
         jdbc.update("DELETE FROM users WHERE email = ?", EMAIL);
     }
@@ -135,6 +136,37 @@ class AlertEvaluatorDbTest {
 
         assertThat(alerts.inbox(userId, 10)).singleElement()
                 .satisfies(item -> assertThat(item.occurredOn()).isEqualTo(DAY.plusDays(7)));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Disabled("QA-040 재현 — 수정 전에는 날짜만 보고 어제 기록을 확정치로 쓴다(어제 장중에 받은 값이어도)")
+    @DisplayName("QA-040 시장 수급은 그날이 지난 뒤 다시 받은 기록만 확정 — 장중에 마지막으로 받은 값으로 연속을 세지 않는다")
+    @SuppressWarnings("unchecked")
+    void marketFlowsCollectedIntradayAreNotFinal() throws Exception {
+        new AlertService(alerts, MAPPER).create(new CurrentUser(userId, EMAIL, "MEMBER", "PRO", null),
+                "FOREIGN_STREAK", MAPPER.readTree("{\"target\":\"KOSPI\",\"n\":3}"));
+        tools.jackson.databind.JsonNode payload = MAPPER.readTree("""
+                {"markets":{"KOSPI":{"records":[
+                  {"date":"2099-03-11","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-10","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-09","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-06","investors":{"foreigner":{"net":-100}}}]}}}
+                """);
+        // 마지막 성공 수집이 어제(03-11) 11시 KST — 그 뒤 실행은 모두 실패해 저장본이 장중 값 그대로 남았습니다.
+        com.macrodash.store.Snapshot snapshot = new com.macrodash.store.Snapshot(
+                com.macrodash.store.Datasets.SNAP_TOSS_MARKET_FLOWS, payload, "json", "ok", null,
+                Instant.parse("2099-03-11T02:00:00Z"));
+        StoreReader store = mock(StoreReader.class);
+        when(store.quietly(any())).thenAnswer(call -> ((Supplier<Object>) call.getArgument(0)).get());
+        when(store.read(org.mockito.ArgumentMatchers.eq(com.macrodash.store.Datasets.SNAP_TOSS_MARKET_FLOWS),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(java.util.Optional.of(snapshot));
+        Clock clock = Clock.fixed(Instant.parse("2099-03-12T03:00:00Z"), ZoneOffset.UTC);   // 03-12 12시 KST
+        AlertEvaluator evaluator = new AlertEvaluator(alerts, regimeLog, store, mock(StoreRepository.class), MAPPER, clock);
+
+        evaluator.evaluate();
+
+        assertThat(alerts.inbox(userId, 10)).as("03-11 장중 값은 확정이 아니라 연속은 2일").isEmpty();
     }
 
     @Test
