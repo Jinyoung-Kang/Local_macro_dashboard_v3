@@ -72,7 +72,7 @@ public class AnalyticsController {
      */
     @GetMapping("/analytics/regime/log")
     public Map<String, Object> regimeLog(@RequestParam(defaultValue = "90") int limit, HttpServletRequest request) {
-        return regimeLog.recent(limit, isPro(request));
+        return regimeLog.recent(limit, CurrentUser.paid(request));
     }
 
     /**
@@ -82,16 +82,10 @@ public class AnalyticsController {
     @GetMapping("/analytics/regime/track-record")
     public Map<String, Object> regimeTrackRecord(@RequestParam(defaultValue = "SPY") String asset,
                                                  HttpServletRequest request) {
-        boolean pro = isPro(request);
+        boolean pro = CurrentUser.paid(request);
         // 등급마다 응답 범위가 달라 캐시 키에 등급을 넣습니다 — 빼면 서로의 캐시된 응답을 받습니다.
         return cache.get("analytics.regime.track:" + asset + ":" + (pro ? "pro" : "free"),
                 () -> trackRecord.trackRecord(asset, pro));
-    }
-
-    /** 유료 기능을 쓸 수 있는가(운영자 포함). 세션 필터를 거치지 않은 호출(테스트)은 제한 없음으로 봅니다. */
-    private static boolean isPro(HttpServletRequest request) {
-        CurrentUser user = CurrentUser.of(request);
-        return user == null || user.isPro();
     }
 
     // ----------------------------------------------------- 🩺 스코어카드
