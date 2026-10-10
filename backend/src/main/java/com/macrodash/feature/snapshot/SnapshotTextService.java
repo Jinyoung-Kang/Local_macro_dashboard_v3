@@ -90,7 +90,7 @@ public class SnapshotTextService {
         List<String> lines = new ArrayList<>();
         lines.add("📋 [Local Macro Dashboard — 수집 데이터 원본 스냅샷]");
         lines.add("생성 시각: " + Kst.stamp(generatedAt));
-        lines.add("표기: 최신값 | 전일/직전 대비 | 직전값");
+        lines.add("표기: 최신값 | 전일 종가 대비 | 전일 종가");
         // 값의 성격을 머리말에서 먼저 정의합니다. 같은 화면에 "어제 확정치"와
         // "지금 스크래핑 시세"가 함께 있는데, 복사해서 다른 곳에 붙이면 그 구분이
         // 사라집니다. 텍스트 자체가 구분을 들고 다니게 합니다.
@@ -161,7 +161,7 @@ public class SnapshotTextService {
                     String status = Json.asText(item, "status");
                     String name = Json.asText(item, "name");
                     if ("ok".equals(status) || "single".equals(status)) {
-                        lines.add("- %s: %s | %s | 직전: %s%s".formatted(
+                        lines.add("- %s: %s | %s | 전일: %s%s".formatted(
                                 name,
                                 orNa(Json.asText(item, "priceStr")),
                                 orNa(Json.asText(item, "deltaStr")),

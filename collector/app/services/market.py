@@ -359,19 +359,25 @@ def _build_card(spec: dict, payload: dict | None) -> dict:
     current = raw_current * scale
     last_ts = _format_timestamp(points[-1]["date"], is_intraday)
 
+    # '직전'은 전일(직전 거래일) 종가입니다(결정 2026-10-11, QA-053). 예전에는 분봉이면 바로 앞 1분봉이라 등락률이
+    # 1분 변화였고, 같은 화면의 국채 카드(전일 종가)와 기준이 달랐습니다.
     previous = None
     prev_source = None
 
-    if len(points) >= 2 and points[-2]["close"] is not None:
-        candidate = points[-2]["close"] * scale
-        if candidate != current:
-            previous = candidate
+    if is_intraday:
+        # 5일치 분봉에 전 거래일 장이 들어 있습니다 — 추가 호출 없이 그 마지막 체결을 씁니다.
+        session_close = _previous_session_close(points)
+        if session_close is not None:
+            previous = session_close * scale
+            prev_source = "분봉의 직전 거래일 마지막 체결"
+    elif len(points) >= 2 and points[-2]["close"] is not None:
+        previous = points[-2]["close"] * scale       # 일봉 — 바로 앞 봉이 전일 종가
 
     if previous is None:
-        # 분봉이 정체됐거나 봉이 하나뿐입니다. 일봉에서 직전 거래일 종가를
+        # 분봉에 전 거래일이 없거나 봉이 하나뿐입니다. 일봉에서 직전 거래일 종가를
         # 찾습니다. 못 찾으면 "변화 없음(0.00%)"으로 위장하지 않고 N/A입니다.
         daily_prev = previous_close_from_daily(spec["ticker"], points[-1]["date"])
-        if daily_prev is not None and daily_prev * scale != current:
+        if daily_prev is not None:
             previous = daily_prev * scale
             prev_source = "일봉 직전 거래일 종가"
 
@@ -407,6 +413,23 @@ def _build_card(spec: dict, payload: dict | None) -> dict:
     if prev_source:
         card["prevSource"] = prev_source
     return card
+
+
+def _previous_session_close(points: list[dict]) -> float | None:
+    """분봉에서 마지막 봉의 거래일(거래소 현지 날짜)보다 앞선 날의 마지막 종가. 없으면 None."""
+    try:
+        current_day = pd.Timestamp(points[-1]["date"]).date()
+    except (TypeError, ValueError):
+        return None
+    for point in reversed(points[:-1]):
+        if point.get("close") is None:
+            continue
+        try:
+            if pd.Timestamp(point["date"]).date() < current_day:
+                return float(point["close"])
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def _format_timestamp(iso_text: str, is_intraday: bool) -> str:

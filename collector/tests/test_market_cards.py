@@ -34,11 +34,18 @@ def _payload(points, *, intraday=True):
     }
 
 
+def _two_sessions(previous_day: tuple, today: tuple):
+    """전 거래일 분봉 + 오늘 분봉(5일치 분봉 수집과 같은 모양)."""
+    return (_points(*previous_day, base_date="2026-09-10T15:00:00+09:00")
+            + _points(*today, base_date="2026-09-11T09:00:00+09:00"))
+
+
 SPEC = {"key": "dxy", "name": "달러 인덱스 (DXY)", "ticker": "DX-Y.NYB", "note": "실시간"}
 
 
 def test_normal_card_has_delta_and_previous():
-    card = market._build_card(SPEC, _payload(_points(100.0, 101.0)))
+    # 전 거래일 마지막 체결 100 → 오늘 101 (QA-053: '직전'은 전일 종가)
+    card = market._build_card(SPEC, _payload(_two_sessions((100.0,), (101.0,))))
 
     assert card["status"] == "ok"
     assert card["price"] == pytest.approx(101.0)
@@ -98,7 +105,7 @@ def test_jpy_scale_decided_by_raw_price(monkeypatch):
         market, "previous_close_from_daily", lambda symbol, current=None: None
     )
     spec = {"key": "jpykrw", "name": "엔/원 100엔당", "ticker": "JPYKRW=X", "note": "실시간"}
-    card = market._build_card(spec, _payload(_points(9.10, 9.30)))
+    card = market._build_card(spec, _payload(_two_sessions((9.10,), (9.30,))))
 
     assert card["price"] == pytest.approx(930.0)
     assert card["prevValue"] == pytest.approx(910.0)
@@ -183,13 +190,7 @@ def test_rates_include_every_bond_key(monkeypatch):
     assert result["rates"]["us30y"]["previous"] == pytest.approx(4.6)
 
 
-def _two_sessions(previous_day: tuple, today: tuple):
-    """전 거래일 분봉 + 오늘 분봉(5일치 분봉 수집과 같은 모양)."""
-    return (_points(*previous_day, base_date="2026-09-10T15:00:00+09:00")
-            + _points(*today, base_date="2026-09-11T09:00:00+09:00"))
 
-
-@pytest.mark.xfail(strict=True, reason="QA-053: 장중 카드의 '직전'이 1분 전 봉이라 등락률이 1분 변화")
 def test_QA053_장중_카드의_직전은_전_거래일_마지막_체결이다(monkeypatch):
     """
     장중 카드가 points[-2](바로 앞 1분봉)를 '직전'으로 써서, 국채 카드(전일 종가)와 달리 환율·원자재·지수 카드의

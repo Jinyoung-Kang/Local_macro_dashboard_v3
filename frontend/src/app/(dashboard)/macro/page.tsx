@@ -169,7 +169,7 @@ export default function MacroPage() {
                 source={itemSource(item)}
                 caption={
                   <span className="flex flex-col gap-0.5">
-                    <span>직전: {item.prevStr ?? EMPTY}</span>
+                    <span>전일: {item.prevStr ?? EMPTY}</span>
                     {item.lastTs && <span>{formatKst(item.lastTs)}</span>}
                     {item.prevSource && <span>전일값 출처: {item.prevSource}</span>}
                   </span>
