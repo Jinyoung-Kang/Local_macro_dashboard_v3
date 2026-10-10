@@ -75,6 +75,28 @@ class AuthControllerTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("QA-024 재현 — 수정 전에는 지금 비밀번호 재확인에 시도 제한이 없다")
+    @DisplayName("QA-024 비밀번호 변경·탈퇴의 '지금 비밀번호' 확인도 연속 실패하면 느려지고 429 — 훔친 세션으로 대입하지 못하게")
+    void reauthenticationIsThrottled() {
+        long memberId = db.user("member", "member-password-1", "MEMBER", "FREE");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.0.0.9");
+        request.setAttribute(CurrentUser.ATTRIBUTE,
+                new CurrentUser(memberId, db.email("member"), "MEMBER", "FREE", null, false));
+
+        for (int i = 0; i < 5; i++) {   // 무료 시도 5회 (LoginThrottle.FREE_ATTEMPTS)
+            assertThat(controller.changePassword(new AuthController.PasswordRequest("wrong", "new-password-12345"), request)
+                    .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+        assertThat(controller.changePassword(new AuthController.PasswordRequest("wrong", "new-password-12345"), request)
+                .getStatusCode()).as("비밀번호 변경").isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(controller.deleteAccount(new AuthController.DeleteRequest("wrong"), request).getStatusCode())
+                .as("탈퇴도 같은 사용자 기록").isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(controller.changePassword(new AuthController.PasswordRequest("member-password-1", "new-password-12345"),
+                request).getStatusCode()).as("맞는 비밀번호는 그래도 통과").isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     @DisplayName("세션 확인은 로그인돼 있을 때만 사용자·읽기 모드를 함께 준다")
     void sessionCarriesUserOnlyWhenAuthenticated() {
         properties.setReadMode("store_only");
