@@ -45,6 +45,7 @@
 **데모 열람**(ADR 0013, AWS 공개 데모에서만 — 기본은 꺼짐): 백엔드에 `DASHBOARD_DEMO_VIEWER_TOKEN`이 있고 요청 헤더
 `X-Demo-Viewer`가 그 값과 같으면, 세션 쿠키 없이 일반 회원·유료 등급의 데모 사용자로 GET을 받습니다(운영 경로는 그대로 403).
 GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_read_only","message":"데모에서는 조회만 가능합니다."}`입니다.
+예외는 AI 리포트 생성(POST `/api/ai/report`) 하나로, 방문자 전체가 하루 한도를 함께 씁니다(ADR 0014, 아래 🤖 AI 절).
 유효한 세션 쿠키가 있으면 세션이 먼저이고, 기능이 꺼져 있거나 값이 틀리면 헤더는 없는 것과 같습니다(401).
 
 ### 모든 응답에 공통인 것
@@ -201,10 +202,10 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 
 | 경로 | 설명 |
 |---|---|
-| `GET /api/ai/engines` | 엔진 목록 + 키 보유 여부 + 예상 속도(`speedHint`)·대기 한도 |
+| `GET /api/ai/engines` | `{engines:[{id, label, provider, model, description, speedHint, available, unavailableReason}], keys, enabled, timeoutSeconds, autoAttemptSeconds, autoBudgetSeconds}`. `available`은 이 배포에서 허용됐고(`AI_ENGINES`, ADR 0014) 키도 있는지이고, 못 쓰면 `unavailableReason`이 `not_allowed`(허용 목록 밖 — 키가 있어도)·`no_key`(쓸 수 있으면 null). `auto`는 허용 목록이 없으면 키가 하나라도 있을 때, 있으면 키가 있는 허용 엔진이 둘 이상일 때만 씁니다. `keys`는 제공자별 키 유무(허용 목록과 무관), `enabled`는 키가 있는 허용 엔진이 하나라도 있는지. 데모 열람에게만 `quota: {used, limit, shared: true}`(방문자 공용 하루 한도의 오늘 사용량) |
 | `GET /api/ai/report-types` | 리포트 종류 |
 | `GET /api/ai/snapshot-text` | AI에 전달되는 원본 텍스트 (본문은 `/api/snapshot/text`와 같습니다) |
-| `POST /api/ai/report` | `{engineId, reportType, extraInstruction}` |
+| `POST /api/ai/report` | `{engineId, reportType, extraInstruction}` → 엔진 응답(`status`·`response`·`error`·`provider`·`model`·`failoverPath` 등) + `reportType`·`promptChars`·`quota: {used, limit}`(운영자는 `limit: null`). 하루(KST) 한도를 다 쓰면 엔진을 부르지 않고 200 `{status: false, error, quota}`이며, 엔진이 모두 실패하면 한 건을 되돌립니다. 허용 목록 밖 엔진·못 쓰는 `auto`(엔진 미지정 포함)는 외부 호출 없이 `{status: false, error: "이 배포에서는 쓸 수 없는 엔진입니다: …"}`. **데모 열람**은 방문자 전체가 하루 `AI_DEMO_DAILY_LIMIT`건(기본 20, 백엔드 메모리 — 재시작하면 0부터)을 함께 쓰고 `quota`에 `shared: true`가 붙습니다. 다 쓰면 `error`는 "데모의 오늘 AI 리포트 한도(N건)를 모두 썼습니다. 내일(KST 0시) 다시 시도해 주세요." |
 | `POST /api/ai/test?engineId=&prompt=` | 연결 테스트 |
 | `GET /api/ai/toss/diagnostics` | 토스 연결 진단 |
 | `GET /api/ai/toss/exchange-rate?base=USD&quote=KRW` | 환율 조회 |

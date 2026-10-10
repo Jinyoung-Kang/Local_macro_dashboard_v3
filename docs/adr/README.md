@@ -19,3 +19,4 @@
 | [0011](0011-alert-pipeline-inbox.md) | 알림 파이프라인: 사건/알림함 분리, 매번 전부 평가(멱등), 국면은 3일 확정, 잠정치·백필 금지, 화면 알림함만 |
 | [0012](0012-aws-demo-deployment.md) | AWS 데모 배포: RDS · 앞단 프록시 뒤 같은 출처(`NEXT_PUBLIC_API_BASE=/`) · 프록시 IP 신뢰 · 공개 데모에서 닫는 것 |
 | [0013](0013-demo-viewer-mode.md) | 데모 열람: 접근 코드를 통과한 공개 방문자는 로그인 없이 읽기 전용(앞단이 붙이는 `X-Demo-Viewer` 토큰, 기본 꺼짐) |
+| [0014](0014-aws-demo-ai-report.md) | AWS 데모의 AI 리포트: 엔진 허용 목록(`AI_ENGINES`) · 데모 방문자 공용 하루 한도(메모리) · 데모 쓰기는 `POST /api/ai/report` 하나 |

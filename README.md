@@ -264,6 +264,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | `APP_PASSWORD` | 처음 운영자 계정의 비밀번호. `make setup`이 무작위로 만듭니다. 비었거나 `admin1234@`면 계정을 만들지 않음 |
 | `MAIL_HOST`·`MAIL_PORT`·`MAIL_USERNAME`·`MAIL_PASSWORD` | 계정 메일(가입 인증·비밀번호 재설정). 없으면 가입·재설정만 꺼짐(운영자 로그인·나머지는 정상) |
 | `AI_DAILY_LIMIT` | 유료 회원의 하루 AI 리포트 한도(기본 20). 운영자는 한도 없음, 무료 회원은 쓸 수 없음 |
+| `AI_ENGINES` | 쓸 AI 엔진 ID만 쉼표로(예: `anthropic_haiku`). 비우면 키가 있는 엔진을 모두 씀(기본). 모르는 ID면 백엔드가 기동하지 않음([ADR 0014](docs/adr/0014-aws-demo-ai-report.md)) |
 | `FRED_API_KEY` | FRED 웹 CSV로 폴백 (대부분 정상) |
 | `SEC_USER_AGENT` | **키가 아니라 본인 이메일입니다.** 없으면 13F 수집만 멈춥니다 |
 | `KRX_API_KEY` | KRX 선물이 KODEX 200 기반 **추정치**로 폴백 (`isEstimated` 표시) |
@@ -307,9 +308,12 @@ docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d --
 
 - DB는 postgres 컨테이너 대신 RDS(`RDS_HOST`, TLS)입니다. 화면·API는 `127.0.0.1`에만 열고, 앞단 프록시가 한 주소로 묶습니다.
 - 추가로 필요한 값은 [.env.aws.example](.env.aws.example)에 이름만 있습니다(`RDS_HOST`·`PUBLIC_ORIGIN` 등).
-- 공개 데모에서는 메일 가입·유료 AI·화면 조회가 일으키는 수집을 끕니다. 운영자 경로와 계정 변경은 앞단에서 막습니다.
+- 공개 데모에서는 메일 가입·무료 AI 엔진·화면 조회가 일으키는 수집을 끕니다. 운영자 경로와 계정 변경은 앞단에서 막습니다.
 - 방문자는 앞단의 접근 코드만 통과하면 로그인 없이 읽기 전용으로 봅니다(데모 열람, `DEMO_VIEWER_TOKEN` 32자 이상,
   [ADR 0013](docs/adr/0013-demo-viewer-mode.md)). 값을 비우면 꺼지고, 로컬 실행은 지금처럼 로그인이 필요합니다.
+- AI 리포트는 Claude Haiku 5.5 하나로만 만들고(`AI_ENGINES=anthropic_haiku`, 키는 `.env`의 `ANTHROPIC_API_KEY`), 데모 방문자
+  전체가 하루 `AI_DEMO_DAILY_LIMIT`건(기본 20)을 함께 씁니다. 데모 열람의 쓰기는 이 요청 하나만 열려 있습니다
+  ([ADR 0014](docs/adr/0014-aws-demo-ai-report.md)). 앞단 Caddy 공개 쪽도 `POST /api/ai/report`를 통과시켜야 합니다.
 
 ---
 

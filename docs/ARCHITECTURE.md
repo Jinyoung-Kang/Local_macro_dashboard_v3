@@ -193,9 +193,9 @@ config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 | 권한 밖 기능 호출 | 경로별 접근 정책(공개·회원·유료·운영자). 미분류 경로는 빌드 실패 | `AccessPolicy`, `AccessPolicyTest` |
 | 다른 출처의 상태 변경 요청 | POST·PUT·DELETE의 `Origin`이 CORS 허용 목록에 없으면 403 | `SessionFilter.foreignOrigin` |
 | 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단) | `WebConfig.SessionFilter` |
-| 헤더로 로그인 건너뛰기(데모 열람, AWS만) | 기본 꺼짐. 켜려면 32자 이상 토큰(짧으면 기동 실패), 해시를 상수 시간 비교, 세션이 먼저, GET만(쓰기·HEAD 403), 운영 경로 403. 백엔드는 루프백에만 열고 앞단이 헤더를 붙이거나 지움(ADR 0013) | `DemoViewer`, `SessionFilter.demoForbidden` |
+| 헤더로 로그인 건너뛰기(데모 열람, AWS만) | 기본 꺼짐. 켜려면 32자 이상 토큰(짧으면 기동 실패), 해시를 상수 시간 비교, 세션이 먼저, GET만(쓰기·HEAD 403 — AI 리포트 생성 POST 하나만 예외, ADR 0014), 운영 경로 403. 백엔드는 루프백에만 열고 앞단이 헤더를 붙이거나 지움(ADR 0013) | `DemoViewer`, `SessionFilter.demoForbidden` |
 | 응답 가로채기·끼워 넣기 | `nosniff`, `no-store`, `X-Frame-Options: DENY`, `frame-ancestors 'none'` | `SessionFilter`, `next.config.mjs` |
-| 유료 AI API 비용 폭주 | 사용자 입력 2,000자 상한(400) | `AiController` |
+| 유료 AI API 비용 폭주 | 사용자 입력 2,000자 상한(400). 하루 한도(유료 회원은 사용자별 DB, 데모 방문자는 공용 메모리). 배포별 엔진 허용 목록(AWS 데모는 Haiku 하나, ADR 0014) | `AiController`, `UsageService`, `AiService` |
 | 로그로 API 키 유출 | 로깅 계층에서 키 파라미터 가림(`serviceKey`·`crtfc_key`·`key` 등 포함) | `collector/app/logredact.py` |
 
 **주의** — 실패 횟수는 (접속 주소, 이메일) 기준입니다. X-Forwarded-For는 위조할 수

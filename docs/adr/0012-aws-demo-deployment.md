@@ -1,6 +1,7 @@
 # 0012. AWS 데모 배포 — RDS · 앞단 프록시 뒤 같은 출처 · 공개 데모에서 닫는 것
 
 - 상태: 채택 (2026-10). 방문자 로그인(결정 4의 마지막 줄)은 [ADR 0013](0013-demo-viewer-mode.md) 데모 열람이 대체합니다.
+  공개 데모의 AI(결정 4의 "유료 AI 키"·"AI 쓰기")는 [ADR 0014](0014-aws-demo-ai-report.md)가 바꿉니다.
 - 지키는 방법: `compose.aws.yml`, `frontend/src/lib/__tests__/api.test.ts`(`NEXT_PUBLIC_API_BASE=/`)
 
 ## 배경
@@ -31,10 +32,13 @@
    - 화면·API 포트는 `127.0.0.1`에만 연다. 그래서 그 대역으로 닿을 수 있는 것은 같은 호스트의 Caddy뿐이다.
    - Caddy는 CloudFront 대역에서 온 값만 믿고, 결정한 클라이언트 IP 하나로 헤더를 덮어써 보낸다.
 4. **공개 데모에서 닫는 것**
-   - 앱 설정으로 닫는 것: 메일(`MAIL_HOST` 비움 → 가입·재설정 불가), 유료 AI 키, `DASHBOARD_READ_MODE=store_only`
+   - 앱 설정으로 닫는 것: 메일(`MAIL_HOST` 비움 → 가입·재설정 불가), ~~유료 AI 키~~, `DASHBOARD_READ_MODE=store_only`
+     → AI는 Claude Haiku 5.5 하나만(`AI_ENGINES`)·데모 방문자 공용 하루 한도로 엽니다([ADR 0014](0014-aws-demo-ai-report.md)).
+     무료 엔진 키는 계속 비웁니다.
    - 앞단 Caddy에서 막는 것:
      - 운영자 경로(`/api/status*`, `/api/admin/*` 등): 404
-     - 계정을 바꾸는 쓰기(비밀번호 변경, 탈퇴, 전체 로그아웃, 가입, 재설정, AI 쓰기): 403
+     - 계정을 바꾸는 쓰기(비밀번호 변경, 탈퇴, 전체 로그아웃, 가입, 재설정, ~~AI 쓰기~~): 403
+       → AI 리포트 생성(`POST /api/ai/report`)은 통과시킵니다([ADR 0014](0014-aws-demo-ai-report.md)).
    - ~~방문자는 접근 코드로 잠금을 푼 뒤 데모 member 계정으로 로그인한다.~~ → 방문자는 잠금을 풀면 로그인 없이
      읽기 전용으로 봅니다(데모 열람, [ADR 0013](0013-demo-viewer-mode.md)). 운영자는 관리자 터널에서 계정으로 로그인합니다.
 
