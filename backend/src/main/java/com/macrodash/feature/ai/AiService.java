@@ -156,6 +156,8 @@ public class AiService {
 
     /** 엔진을 못 쓰는 이유(화면이 라벨을 고름) — 이 배포의 허용 목록 밖. */
     static final String NOT_ALLOWED = "not_allowed";
+    /** 결과 키: 이 호출이 모델에 닿아 과금됐을 수 있는가(실패여도 true일 수 있음). 사용량 되돌림이 봅니다. */
+    public static final String CHARGED = "charged";
 
     /** 엔진을 못 쓰는 이유 — 허용됐지만 키가 없음. */
     static final String NO_KEY = "no_key";
@@ -487,6 +489,7 @@ public class AiService {
      */
     private Map<String, Object> withFailover(String prompt, String systemPrompt) {
         List<String> attempts = new ArrayList<>();
+        boolean charged = false;
         long deadline = System.currentTimeMillis() + autoBudgetSeconds * 1000L;
 
         for (String engineId : FAILOVER_ORDER) {
@@ -508,6 +511,7 @@ public class AiService {
             }
 
             Map<String, Object> result = call(engine, prompt, systemPrompt, attemptSeconds);
+            charged |= Boolean.TRUE.equals(result.get(CHARGED));
             attempts.add("%s (%.1fs): %s".formatted(
                     engineId,
                     millisOf(result) / 1000.0,
@@ -527,6 +531,7 @@ public class AiService {
                         + "(자동 탐색 예산 %d초 · 엔진당 %d초)."
                                 .formatted(autoBudgetSeconds, autoAttemptSeconds));
         failed.put("failoverPath", attempts);
+        failed.put(CHARGED, charged);
         return failed;
     }
 
@@ -596,13 +601,13 @@ public class AiService {
             String text = extractOpenAiText(response);
 
             if (text == null || text.isBlank()) {
-                return failure(label, "응답 텍스트 추출 실패", elapsed);
+                return chargedFailure(label, "응답 텍스트 추출 실패", elapsed);
             }
             return success(label, model, text.trim(), elapsed);
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - started;
             log.warn("AI 호출 실패 ({}, 한도 {}초): {}", label, attemptSeconds, e.getMessage());
-            return failure(label, describe(e, attemptSeconds), elapsed);
+            return failureAfter(e, label, describe(e, attemptSeconds), elapsed);
         }
     }
 
@@ -644,7 +649,7 @@ public class AiService {
                     byte[] raw = readAll(response);
 
                     if (status.isError()) {
-                        throw new IllegalStateException(
+                        throw new ProviderRejected(
                                 "HTTP %s — %s".formatted(status.value(), preview(raw)));
                     }
                     if (raw.length == 0) {
@@ -770,7 +775,7 @@ public class AiService {
                         .map(details -> details.category().map(String::valueOf).orElse("분류 없음")
                                 + details.explanation().map(text -> " — " + text).orElse(""))
                         .orElse("사유 없음");
-                return failure(label, "Claude가 이 요청을 거절했습니다(refusal): " + reason, elapsed);
+                return chargedFailure(label, "Claude가 이 요청을 거절했습니다(refusal): " + reason, elapsed);
             }
 
             String text = textOf(message);
@@ -778,7 +783,7 @@ public class AiService {
                 String why = StopReason.MAX_TOKENS.equals(stop)
                         ? "출력 한도(%d 토큰)에 걸려 답을 쓰기 전에 끝났습니다".formatted(ANTHROPIC_MAX_TOKENS)
                         : "응답 텍스트 추출 실패 (stop_reason=" + stop + ")";
-                return failure(label, why, elapsed);
+                return chargedFailure(label, why, elapsed);
             }
 
             Map<String, Object> out = success(label, model, text.trim(), elapsed);
@@ -802,17 +807,25 @@ public class AiService {
                     : e.statusCode() == 529 ? " — Anthropic 서버가 과부하입니다. 잠시 후 다시 시도하세요." : "";
             return anthropicFailure(label, started, "HTTP %d (%s)%s".formatted(e.statusCode(), type, hint), e);
         } catch (AnthropicIoException e) {
-            return anthropicFailure(label, started, describe(e, attemptSeconds), e);
+            return anthropicFailure(label, started, describe(e, attemptSeconds), e, reachedModel(e));
         } catch (RuntimeException e) {
-            return anthropicFailure(label, started, describe(e, attemptSeconds), e);
+            return anthropicFailure(label, started, describe(e, attemptSeconds), e, reachedModel(e));
         }
     }
 
+    /** HTTP 오류 상태(401·403·404·429·5xx)로 끝난 호출 — 제공자가 요청을 받지 않았으므로 과금되지 않았습니다. */
     private Map<String, Object> anthropicFailure(String label, long started, String message, Exception e) {
+        return anthropicFailure(label, started, message, e, false);
+    }
+
+    private Map<String, Object> anthropicFailure(String label, long started, String message, Exception e,
+                                                 boolean charged) {
         long elapsed = System.currentTimeMillis() - started;
         // 예외 문구에는 키가 들어가지 않지만, 요청 주소는 지웁니다(describe와 같은 규칙).
         log.warn("Claude 호출 실패 ({}): {}", label, String.valueOf(e.getMessage()).replaceAll("https?://\\S+", "<url>"));
-        return failure(label, message, elapsed);
+        Map<String, Object> out = failure(label, message, elapsed);
+        out.put(CHARGED, charged);
+        return out;
     }
 
     /** 응답의 텍스트 블록만 순서대로 이어 붙입니다(사고 블록은 건너뜀). */
@@ -868,12 +881,12 @@ public class AiService {
                     return success(label, model, text.trim(), elapsed);
                 }
             }
-            return failure(label, "응답 실패: "
+            return chargedFailure(label, "응답 실패: "
                     + (response == null ? "null" : response.path("errors").toString()), elapsed);
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - started;
             log.warn("Cloudflare AI 호출 실패 (한도 {}초): {}", attemptSeconds, e.getMessage());
-            return failure(label, describe(e, attemptSeconds), elapsed);
+            return failureAfter(e, label, describe(e, attemptSeconds), elapsed);
         }
     }
 
@@ -965,6 +978,7 @@ public class AiService {
     private Map<String, Object> success(String provider, String model, String text, long elapsedMs) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("status", true);
+        out.put(CHARGED, true);
         out.put("provider", provider);
         out.put("model", model);
         out.put("response", text);
@@ -978,9 +992,60 @@ public class AiService {
         return failure(provider, error, 0);
     }
 
+    /** 모델이 응답한 뒤의 실패(거절·빈 응답·출력 한도) — 입력 토큰은 이미 과금됐습니다. */
+    private Map<String, Object> chargedFailure(String provider, String error, long elapsedMs) {
+        Map<String, Object> out = failure(provider, error, elapsedMs);
+        out.put(CHARGED, true);
+        return out;
+    }
+
+    /** 예외로 끝난 호출 — 연결 단계에서 끝났거나 제공자가 HTTP 오류로 거절했으면 과금되지 않았습니다. */
+    private Map<String, Object> failureAfter(Exception e, String provider, String error, long elapsedMs) {
+        Map<String, Object> out = failure(provider, error, elapsedMs);
+        out.put(CHARGED, reachedModel(e));
+        return out;
+    }
+
+    /**
+     * 이 예외로 끝난 호출이 모델에 닿았을(과금됐을) 수 있는가. 연결을 맺지 못했거나(DNS·연결 거부·연결 시간 초과)
+     * 제공자가 HTTP 오류 상태로 거절했으면 아니고, 그 밖(응답을 기다리다 시간 초과 등)은 알 수 없어 <b>닿은 것으로</b>
+     * 봅니다 — 되돌리지 않는 쪽이 비용 상한을 지킵니다(QA-021).
+     */
+    static boolean reachedModel(Throwable e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ProviderRejected
+                    || cause instanceof java.net.ConnectException
+                    || cause instanceof java.net.UnknownHostException
+                    || cause instanceof java.net.NoRouteToHostException
+                    || cause instanceof java.net.http.HttpConnectTimeoutException) {
+                return false;
+            }
+            if (cause instanceof java.net.SocketTimeoutException
+                    && String.valueOf(cause.getMessage()).toLowerCase(java.util.Locale.ROOT).contains("connect")) {
+                return false;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return true;
+    }
+
+    /** 제공자가 HTTP 오류 상태로 답한 호출. */
+    static final class ProviderRejected extends IllegalStateException {
+        ProviderRejected(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * 모델에 닿기 전에 끝난 실패(설정 없음·허용 목록 밖·키 없음·제공자가 거절한 요청) — {@code charged: false}.
+     * 사용량 한도는 이런 실패만 되돌립니다(QA-021).
+     */
     private Map<String, Object> failure(String provider, String error, long elapsedMs) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("status", false);
+        out.put(CHARGED, false);
         out.put("provider", provider);
         out.put("response", "");
         out.put("error", error);

@@ -50,7 +50,7 @@ public class AiReportService {
     public Map<String, Object> report(String engineId, String requestedType, String extraInstruction,
                                       CurrentUser user) {
         // 유료 API 비용 상한 — 사용자별 하루 한도(운영자는 한도 없음), 데모 열람은 방문자 전체의 공용 하루 한도(ADR 0014).
-        // 엔진이 모두 실패하면 되돌립니다.
+        // 모델에 닿지 않고 끝난 실패만 되돌립니다(QA-021).
         UsageService.Quota quota = user == null ? null : usage.consume(user, UsageService.AI_REPORT);
         if (quota != null && !quota.allowed()) {
             Map<String, Object> out = new LinkedHashMap<>();
@@ -63,6 +63,19 @@ public class AiReportService {
             out.put("quota", quotaMap(quota));
             return out;
         }
+        try {
+            return generate(engineId, requestedType, extraInstruction, user, quota);
+        } catch (RuntimeException e) {
+            // 엔진을 부르기 전(원본 텍스트 조립 등)이나 엔진 호출 밖에서 끝났습니다 — 쓰지 못한 호출이라 되돌립니다.
+            if (quota != null) {
+                usage.refund(user, UsageService.AI_REPORT);
+            }
+            throw e;
+        }
+    }
+
+    private Map<String, Object> generate(String engineId, String requestedType, String extraInstruction,
+                                         CurrentUser user, UsageService.Quota quota) {
         Map<String, String> prompts = snapshotText.reportPrompts();
         String reportType = (requestedType == null || !prompts.containsKey(requestedType))
                 ? prompts.keySet().iterator().next()
@@ -87,7 +100,9 @@ public class AiReportService {
         out.put("reportType", reportType);
         out.put("promptChars", prompt.length());
         if (quota != null) {
-            if (!Boolean.TRUE.equals(result.get("status"))) {
+            // 되돌리는 것은 모델에 닿지 않은 실패뿐입니다. 거절·빈 응답·응답 대기 시간 초과는 이미 과금됐을 수 있어
+            // 되돌리면, 거절을 유도하는 지시로 하루 한도 없이 비용을 쓸 수 있었습니다(QA-021).
+            if (!Boolean.TRUE.equals(result.get("status")) && !Boolean.TRUE.equals(result.get(AiService.CHARGED))) {
                 usage.refund(user, UsageService.AI_REPORT);
                 quota = quota.refunded();
             }

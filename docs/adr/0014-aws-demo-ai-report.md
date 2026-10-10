@@ -6,7 +6,8 @@
     `auto`는 키가 있는 허용 엔진이 둘 이상일 때만, 모르는 ID·`auto`는 기동 실패(ID 모양이 아닌 값은 문구에 없음),
     목록 밖 엔진·못 쓰는 `auto`는 네트워크 없이 실패, 폴오버·번역기도 허용된 것만
   - `UsageServiceDemoPoolTest`: 방문자 공용 한도, DB에 쓰지 않음, 실패 되돌림, KST 0시에 새로 셈, 동시 요청
-  - `AiReportFlowTest`: 데모 한도 소진 응답 모양(엔진 호출 없음)·실패 되돌림·엔진 목록의 `quota`
+  - `AiReportFlowTest`: 데모 한도 소진 응답 모양(엔진 호출 없음)·실패 되돌림·엔진 목록의 `quota`, 과금된 실패는 되돌리지 않음(QA-021)
+  - `AiServiceAnthropicTest`: 실패 결과의 `charged`(거절은 true, 429·키 없음은 false)
   - `SessionFilterTest`(데모 열람): `POST /api/ai/report`만 통과, 같은 경로의 다른 메서드·HEAD·`/api/ai/test`는 403
   - `ApiIntegrationTest`: 데모 열람의 AI 리포트 요청까지 사용자별 테이블에 아무것도 쓰지 않음
   - 화면: `lib/__tests__/aiEngines.test.ts`, `app/(dashboard)/__tests__/demoViewer.test.tsx`·`actions.test.tsx`
@@ -52,7 +53,10 @@
 4. **데모 공용 하루 한도 `AI_DEMO_DAILY_LIMIT`**(`dashboard.ai.demo-daily-limit`, 기본 20).
    - 데모 방문자 **전체가 함께** 씁니다. 백엔드 메모리(`UsageService`)에서 세고, `usage_counters`에는 쓰지 않습니다.
    - 한국 날짜가 바뀌면(KST 0시) 새로 셉니다. 동시 요청은 한 객체의 잠금 안에서 세어 한도를 넘지 않습니다.
-   - 엔진이 모두 실패하면 한 건을 되돌립니다(계정 한도와 같은 규칙).
+   - ~~엔진이 모두 실패하면 한 건을 되돌립니다.~~ → **모델에 닿지 않은 실패만** 되돌립니다(계정 한도와 같은 규칙, QA-021, 2026-10-11).
+     되돌리는 것은 설정 없음·허용 목록 밖·키 없음·제공자의 HTTP 오류(401·403·404·429·5xx)·연결 실패와, 엔진을 부르기 전에 난 예외입니다.
+     거절(refusal)·빈 응답·출력 한도·응답 대기 시간 초과는 입력 토큰이 이미 과금됐을 수 있어 되돌리지 않습니다.
+     예전 규칙은 지시로 거절을 유도하면 하루 한도 없이 반복 과금할 수 있었습니다. 엔진 결과의 `charged`가 이 구분입니다.
    - 다 쓰면 계정 한도 소진과 같은 모양으로 답하고 엔진을 부르지 않습니다 — 200
      `{"status": false, "error": "데모의 오늘 AI 리포트 한도(N건)를 모두 썼습니다. 내일(KST 0시) 다시 시도해 주세요.", "quota": {"used": N, "limit": N, "shared": true}}`.
    - `GET /api/ai/engines`는 데모 열람에게만 `quota: {used, limit, shared: true}`를 붙입니다. 화면은 생성 버튼 옆에
@@ -105,5 +109,6 @@
     배포 때 그 설정을 확인합니다.
 - 배포 확인(2026-10-11): AWS에서 Haiku 리포트 한 건이 **52초**(입력 약 10.5k · 출력 약 10.6k 토큰)였습니다. CloudFront 원본 응답 한도
   60초에 너무 가까워 Macro 배포판만 **120초**로 올렸고(이 계정의 기본 할당량 'Response timeout per origin' = 120초, 증설 신청 불필요),
-  `compose.aws.yml`의 `AI_TIMEOUT_SECONDS`를 **110초**로 낮춰 앱이 앞단보다 먼저 포기하게 했습니다(실패하면 공용 한도를 되돌림).
+  `compose.aws.yml`의 `AI_TIMEOUT_SECONDS`를 **110초**로 낮춰 앱이 앞단보다 먼저 포기하게 했습니다(방문자는 오류 페이지 대신 실패 안내를 받음.
+  ~~실패하면 공용 한도를 되돌림~~ — 응답 대기 시간 초과는 과금됐을 수 있어 되돌리지 않습니다, QA-021).
   Caddy 는 응답 대기 한도가 없습니다. 공개 쪽 Caddy 규칙(`POST /api/ai/report`만 통과)은 로컬 Caddy 로 확인했습니다.

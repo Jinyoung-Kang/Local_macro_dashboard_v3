@@ -139,7 +139,6 @@ class AiReportFlowTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-021 재현 — 수정 전에는 과금된 실패(거절 유도)도 되돌려 데모 상한 없이 반복 과금")
     @DisplayName("QA-021 모델이 응답한 뒤의 실패(과금됨)는 한도를 되돌리지 않는다 — 거절을 유도해 상한 없이 부르지 못하게")
     void chargedFailureIsNotRefunded() {
         com.macrodash.store.UsageStore store = mock(com.macrodash.store.UsageStore.class);
@@ -154,7 +153,6 @@ class AiReportFlowTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-021 재현 — 수정 전에는 차감 뒤 예외가 나면 되돌리지 않는다")
     @DisplayName("QA-021 한도를 쓴 뒤 원본 텍스트를 만들다 예외가 나면 엔진을 부르지 않았으므로 되돌린다")
     void exceptionBeforeCallingEngineIsRefunded() {
         com.macrodash.store.UsageStore store = mock(com.macrodash.store.UsageStore.class);

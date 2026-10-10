@@ -116,7 +116,6 @@ class AiServiceAnthropicTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-021 재현 — 수정 전에는 결과에 과금 여부가 없어 모든 실패를 되돌린다")
     @DisplayName("QA-021 모델이 응답한 뒤의 실패(거절)는 과금된 것으로, 거절된 요청(429)·키 없음은 과금되지 않은 것으로 표시한다")
     void marksWhetherTheFailedCallWasCharged() throws Exception {
         String refused = startServer(200, message("[]", "refusal", ""));
