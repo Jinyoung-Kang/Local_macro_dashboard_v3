@@ -181,3 +181,25 @@ def test_rates_include_every_bond_key(monkeypatch):
     assert set(result["rates"]) == set(indicators.BOND_SCANNER_KEYS)
     assert result["rates"]["us30y"]["current"] == pytest.approx(4.7)
     assert result["rates"]["us30y"]["previous"] == pytest.approx(4.6)
+
+
+def _two_sessions(previous_day: tuple, today: tuple):
+    """전 거래일 분봉 + 오늘 분봉(5일치 분봉 수집과 같은 모양)."""
+    return (_points(*previous_day, base_date="2026-09-10T15:00:00+09:00")
+            + _points(*today, base_date="2026-09-11T09:00:00+09:00"))
+
+
+@pytest.mark.xfail(strict=True, reason="QA-053: 장중 카드의 '직전'이 1분 전 봉이라 등락률이 1분 변화")
+def test_QA053_장중_카드의_직전은_전_거래일_마지막_체결이다(monkeypatch):
+    """
+    장중 카드가 points[-2](바로 앞 1분봉)를 '직전'으로 써서, 국채 카드(전일 종가)와 달리 환율·원자재·지수 카드의
+    등락률이 1분 변화였습니다(AI 텍스트에도 같은 값). 결정(2026-10-11): 전일(직전 거래일) 종가로 통일.
+    """
+    monkeypatch.setattr(market, "previous_close_from_daily", lambda symbol, current=None: pytest.fail("분봉으로 충분"))
+
+    card = market._build_card(SPEC, _payload(_two_sessions((99.0, 100.0), (102.0, 103.0))))
+
+    assert card["prevValue"] == pytest.approx(100.0)
+    assert card["delta"] == pytest.approx(3.0)
+    assert card["pct"] == pytest.approx(3.0)
+    assert card["prevSource"] == "분봉의 직전 거래일 마지막 체결"
