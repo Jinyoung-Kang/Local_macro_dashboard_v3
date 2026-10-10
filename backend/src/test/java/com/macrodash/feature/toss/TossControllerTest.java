@@ -47,6 +47,19 @@ class TossControllerTest {
         return new TossController(new TossService(collector, readMode(com.macrodash.config.AppProperties.ReadMode.AUTO)));
     }
 
+    @Test
+    @org.junit.jupiter.api.Disabled("QA-022 재현 — 수정 전에는 store_only에서도 토스 환율·지수가 운영자 키로 외부를 부른다")
+    @DisplayName("QA-022 store_only면 토스 환율·지수 조회가 수집기를 부르지 않는다")
+    void storeOnlyDoesNotCallToss() {
+        CollectorClient collector = mock(CollectorClient.class);
+        TossController controller = new TossController(new TossService(collector,
+                readMode(com.macrodash.config.AppProperties.ReadMode.STORE_ONLY)));
+
+        assertThat(controller.tossExchangeRate("USD", "KRW")).containsEntry("ok", false);
+        assertThat(controller.tossIndices("KOSPI")).containsEntry("ok", false);
+        org.mockito.Mockito.verifyNoInteractions(collector);
+    }
+
     static com.macrodash.read.StoreReader readMode(com.macrodash.config.AppProperties.ReadMode mode) {
         com.macrodash.read.StoreReader store = mock(com.macrodash.read.StoreReader.class);
         when(store.readMode()).thenReturn(mode);
