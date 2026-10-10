@@ -204,3 +204,27 @@ def test_QA053_장중_카드의_직전은_전_거래일_마지막_체결이다(m
     assert card["delta"] == pytest.approx(3.0)
     assert card["pct"] == pytest.approx(3.0)
     assert card["prevSource"] == "분봉의 직전 거래일 마지막 체결"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-058: 세션형 선물의 '전일'이 달력 날짜 기준 — 수정 커밋에서 뺌")
+def test_QA058_선물의_전일은_직전_세션의_일봉_종가다(monkeypatch):
+    """
+    CME 선물은 전날 18:00 ET에 세션이 시작합니다. 분봉을 달력 날짜로 나누면 한국 낮(ET 저녁)에는 '전일'이 직전 ET
+    자정 무렵 체결이 됐습니다. 직전 세션의 종가는 일봉(세션 거래일로 표기, 종가 = 정산가)에 있습니다.
+    """
+    spec = {"key": "wti", "name": "WTI 원유 ($)", "ticker": "CL=F", "note": "15분 지연"}
+    intraday = [
+        {"date": "2026-10-05T23:59:00-04:00", "close": 89.0},   # 10-06 세션 한가운데
+        {"date": "2026-10-06T16:55:00-04:00", "close": 89.91},  # 10-06 세션 마지막 체결
+        {"date": "2026-10-06T20:00:00-04:00", "close": 90.5},   # 10-07 세션(18:00 ET 시작)
+    ]
+    daily = [
+        {"date": "2026-10-05T00:00:00-04:00", "close": 88.0},
+        {"date": "2026-10-06T00:00:00-04:00", "close": 89.44},  # 10-06 세션 정산가
+    ]
+    monkeypatch.setattr(market, "collect_ticker", lambda symbol, period: {"points": daily})
+
+    card = market._build_card(spec, _payload(intraday))
+
+    assert card["prevValue"] == pytest.approx(89.44)
+    assert card["prevSource"] == "일봉 직전 거래일 종가"
