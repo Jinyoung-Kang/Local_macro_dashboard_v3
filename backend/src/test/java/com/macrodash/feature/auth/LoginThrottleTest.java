@@ -1,5 +1,6 @@
 package com.macrodash.feature.auth;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -127,5 +128,19 @@ class LoginThrottleTest {
             wrong("10.0.0.1|victim0@example.com");
         }
         assertThat(throttle.isSlowed("10.0.0.1|victim0@example.com")).isTrue();
+    }
+
+    @Test
+    @Disabled("QA-055: 기록이 꽉 차면 새 키는 기록하지 않아 느린 차선을 피함 — 수정 커밋에서 켬")
+    @DisplayName("QA-055: 기록이 꽉 찬 뒤 처음 보는 키도 느린 차선으로 간다 — 맵을 채워 대입 지연을 끄지 못하게")
+    void newKeysAreSlowedWhileFull() {
+        for (int i = 0; i < LoginThrottle.MAX_TRACKED; i++) {
+            wrong("10.0.0.1|junk" + i + "@example.com");
+        }
+        String target = "10.0.0.1|owner@example.com";
+        for (int i = 0; i < 20; i++) {
+            wrong(target);
+        }
+        assertThat(throttle.isSlowed(target)).isTrue();
     }
 }
