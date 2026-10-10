@@ -153,6 +153,8 @@ services:
       CEREBRAS_API_KEY: "${CEREBRAS_API_KEY:-}"
       CLOUDFLARE_ACCOUNT_ID: "${CLOUDFLARE_ACCOUNT_ID:-}"
       CLOUDFLARE_API_TOKEN: "${CLOUDFLARE_API_TOKEN:-}"
+      # 쓸 엔진 허용 목록(ADR 0014). 비면 키가 있는 엔진을 모두 씀(기본)
+      AI_ENGINES: "${AI_ENGINES:-}"
     ports:
       - "${WEB_BIND_HOST:-0.0.0.0}:${BACKEND_PORT:-8080}:8080"
     healthcheck:

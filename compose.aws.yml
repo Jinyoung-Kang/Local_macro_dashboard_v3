@@ -7,12 +7,16 @@
 #   · postgres 컨테이너 대신 RDS(PostgreSQL 18, TLS) — 접속 주소는 RDS_HOST
 #   · 화면·API는 127.0.0.1에만 열고, 앞단(Caddy)이 둘을 한 주소(같은 출처)로 묶음 → 프론트는 NEXT_PUBLIC_API_BASE=/
 #   · 앞단이 넘긴 X-Forwarded-For를 Tomcat이 믿음(내부 대역에서 온 것만) → 로그인 제한이 방문자 IP별로 동작
-#   · 공개 데모라 끄는 것: 메일(가입·재설정), 유료 AI 키, 화면 조회가 수집을 일으키는 것(store_only)
+#   · 공개 데모라 끄는 것: 메일(가입·재설정), 화면 조회가 수집을 일으키는 것(store_only),
+#     무료 AI 엔진 키(NVIDIA·Cerebras·Cloudflare는 비움)
 #   · 데모 열람(ADR 0013): 앞단 공개 쪽이 접근 코드를 확인한 요청에 X-Demo-Viewer 헤더로 DEMO_VIEWER_TOKEN을 실으면
 #     로그인 없이 읽기 전용(GET만). 비우면 꺼짐(방문자도 로그인 화면). 운영자 쪽(관리자 터널)은 헤더를 지움
+#   · AI 리포트(ADR 0014): 엔진은 Claude Haiku 5.5 하나만(AI_ENGINES), 키는 .env의 ANTHROPIC_API_KEY(비우면 AI 꺼짐).
+#     데모 열람의 쓰기는 POST /api/ai/report 하나만 열리고, 방문자 전체가 하루 AI_DEMO_DAILY_LIMIT건(기본 20,
+#     메모리 — 재시작하면 0부터)을 함께 씀. 앞단 Caddy 공개 쪽도 이 경로 하나만 POST를 통과시켜야 함
 #   · DB 연결 수를 줄임(RDS db.t4g.micro 한 대를 세 프로젝트가 나눠 씀)
 # 필요한 값(.env, 이름은 .env.aws.example): RDS_HOST · PUBLIC_ORIGIN · DATABASE_USER · DATABASE_PASSWORD ·
-#   DEMO_VIEWER_TOKEN(32자 이상, 앞단 Caddy와 같은 값) 외 기존 값
+#   DEMO_VIEWER_TOKEN(32자 이상, 앞단 Caddy와 같은 값) · ANTHROPIC_API_KEY · AI_DEMO_DAILY_LIMIT(선택) 외 기존 값
 # =============================================================================
 services:
   postgres:
@@ -38,7 +42,10 @@ services:
       # 데모 열람 토큰 — 비면 꺼짐, 32자보다 짧으면 백엔드가 기동하지 않음(약한 토큰으로 켜지 않게).
       DASHBOARD_DEMO_VIEWER_TOKEN: ${DEMO_VIEWER_TOKEN:-}
       MAIL_HOST: ""
-      ANTHROPIC_API_KEY: ""
+      # AI 리포트(ADR 0014) — 운영자의 Anthropic 계정으로 Haiku 하나만. 다른 엔진은 키를 비우고 허용 목록에서도 뺌.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_ENGINES: anthropic_haiku
+      AI_DEMO_DAILY_LIMIT: ${AI_DEMO_DAILY_LIMIT:-20}
       NVIDIA_API_KEY: ""
       CEREBRAS_API_KEY: ""
       CLOUDFLARE_API_TOKEN: ""
