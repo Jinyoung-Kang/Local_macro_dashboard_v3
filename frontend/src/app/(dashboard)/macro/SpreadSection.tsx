@@ -73,6 +73,9 @@ export function SpreadSection({
           <p className="mb-2 text-[11px] font-semibold text-body">
             스크래핑 참고 시세 · TradingView
             <span className="ml-1 font-normal text-muted">(지금, 공식 확정치 아님)</span>
+            {scraped?.isStale && (
+              <span className="ml-1 font-normal text-warn">⚠️ 이전 값 포함(수집 실패)</span>
+            )}
           </p>
           {scraped ? (
             <div className="grid gap-3 sm:grid-cols-3">

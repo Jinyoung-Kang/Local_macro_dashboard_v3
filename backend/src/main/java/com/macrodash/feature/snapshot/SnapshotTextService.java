@@ -189,7 +189,8 @@ public class SnapshotTextService {
                 lines.add("- 미국채 " + longYears + "년물: " + format(rt.get("longValue"), "%"));
                 lines.add("- 미국채 " + shortYears + "년물: " + format(rt.get("shortValue"), "%"));
                 lines.add("- " + longYears + "Y-" + shortYears + "Y 스프레드 (TradingView 참고 시세로 계산): "
-                        + format(rt.get("spread"), "%p"));
+                        + format(rt.get("spread"), "%p")
+                        + (Boolean.TRUE.equals(rt.get("isStale")) ? " ⚠️ 수집 실패로 이전 금리가 섞임" : ""));
                 lines.add("- 스프레드 직전 대비: " + format(rt.get("delta"), "%p"));
             }
             Object official = map.get("official10y2y");

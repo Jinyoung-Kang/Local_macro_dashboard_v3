@@ -5,7 +5,6 @@ import com.macrodash.config.AppProperties;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -105,7 +104,6 @@ class MacroSpreadKeysTest {
     }
 
     @Test
-    @Disabled("QA-060: 이전 금리로 계산한 스프레드에 표시가 없음 — 수정 커밋에서 켬")
     @DisplayName("QA-060: 이어받은(이전) 금리로 계산한 실시간 스프레드는 isStale을 단다")
     void spreadFromCarriedRateIsMarkedStale() throws Exception {
         Map<String, Object> spreads = child(overview("""

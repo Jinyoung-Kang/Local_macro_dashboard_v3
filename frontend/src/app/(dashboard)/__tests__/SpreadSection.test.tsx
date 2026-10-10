@@ -34,7 +34,7 @@ describe("SpreadSection 변화 칸", () => {
 });
 
 describe("SpreadSection 스크래핑 패널 (QA-060)", () => {
-  it.fails("이전(이어받은) 금리로 계산한 스프레드는 '이전 값'으로 표시한다", () => {
+  it("이전(이어받은) 금리로 계산한 스프레드는 '이전 값'으로 표시한다", () => {
     const scraped = {
       longValue: 4.1, shortValue: 3.6, spread: 0.5, previousSpread: 0.45, delta: 0.05, isStale: true,
     };

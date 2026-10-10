@@ -111,6 +111,11 @@ public class MacroService {
         Double us30 = rates == null ? null : Json.asDouble(Json.child(rates, "us30y"), "current");
         Double us30Prev = rates == null ? null : Json.asDouble(Json.child(rates, "us30y"), "previous");
 
+        // 수집 실패로 이어받은 금리(isStale)로 계산한 스프레드는 '지금 시장'이 아닙니다 — 표시를 함께 내립니다(QA-060).
+        boolean us02Stale = rates != null && Json.asBoolean(Json.child(rates, "us02y"), "isStale");
+        boolean us10Stale = rates != null && Json.asBoolean(Json.child(rates, "us10y"), "isStale");
+        boolean us30Stale = rates != null && Json.asBoolean(Json.child(rates, "us30y"), "isStale");
+
         // 스크래핑 시세로 계산한 "지금" 스프레드.
         //
         // 공식(FRED) 확정치는 하루 이상 늦게 나옵니다. 두 값은 서로를 대체하는
@@ -121,16 +126,16 @@ public class MacroService {
         // 예전에는 10Y−2Y에만 스크래핑 값이 있었습니다. 30Y−2Y 카드는 공식
         // 확정치만 보여 줘서, 같은 화면의 두 카드가 서로 다른 것을 재고 있는데도
         // 그 차이가 드러나지 않았습니다.
-        out.put("realtime", scrapedSpread(us10, us02, us10Prev, us02Prev, "us10y", "us02y"));
+        out.put("realtime", scrapedSpread(us10, us02, us10Prev, us02Prev, "us10y", "us02y", us10Stale || us02Stale));
 
         Map<String, Object> official10y2y = officialSpread("DGS10", "DGS2");
         official10y2y.put("scraped",
-                scrapedSpread(us10, us02, us10Prev, us02Prev, "us10y", "us02y"));
+                scrapedSpread(us10, us02, us10Prev, us02Prev, "us10y", "us02y", us10Stale || us02Stale));
         out.put("official10y2y", official10y2y);
 
         Map<String, Object> official30y2y = officialSpread("DGS30", "DGS2");
         official30y2y.put("scraped",
-                scrapedSpread(us30, us02, us30Prev, us02Prev, "us30y", "us02y"));
+                scrapedSpread(us30, us02, us30Prev, us02Prev, "us30y", "us02y", us30Stale || us02Stale));
         out.put("official30y2y", official30y2y);
         return out;
     }
@@ -143,7 +148,7 @@ public class MacroService {
      */
     private Map<String, Object> scrapedSpread(Double longValue, Double shortValue,
                                               Double longPrev, Double shortPrev,
-                                              String longKey, String shortKey) {
+                                              String longKey, String shortKey, boolean stale) {
         Double spread = SeriesMath.difference(longValue, shortValue);
         Double previousSpread = SeriesMath.difference(longPrev, shortPrev);
 
@@ -161,6 +166,7 @@ public class MacroService {
         out.put("spread", spread);
         out.put("previousSpread", previousSpread);
         out.put("delta", SeriesMath.difference(spread, previousSpread));
+        out.put("isStale", stale);
         return out;
     }
 

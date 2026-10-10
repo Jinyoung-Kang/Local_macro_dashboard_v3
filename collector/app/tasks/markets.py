@@ -100,10 +100,11 @@ def task_macro_collected() -> str:
         carried += _carry_over_failed_items(category["items"], previous_items)
     # 스프레드 계산용 금리(rates)도 이어받은 카드는 직전 값으로 — 카드는 살았는데 금리만 비면
     # 10Y-2Y 스프레드가 "데이터 없음"이 됩니다.
+    # 이어받았다는 표시도 함께 — 없으면 백엔드가 이전 금리로 '실시간' 스프레드를 표시 없이 냅니다(QA-060).
     previous_rates = previous.get("rates") or {}
     for key in carried:
-        if key in previous_rates:
-            payload.setdefault("rates", {})[key] = previous_rates[key]
+        if isinstance(previous_rates.get(key), dict):
+            payload.setdefault("rates", {})[key] = {**previous_rates[key], "isStale": True}
 
     payload["updatedAt"] = market_service.now_kst_text()
     store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, payload)

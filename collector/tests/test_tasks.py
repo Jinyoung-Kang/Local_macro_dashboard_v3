@@ -368,11 +368,10 @@ def test_QA001_partial_failure_keeps_previous_card_values(store, monkeypatch):
     assert items["usdkrw"]["status"] == "ok"
     assert items["usdkrw"]["isStale"] is True
     assert "이전 값" in items["usdkrw"]["note"]
-    assert saved["rates"]["us10y"] == {"current": 4.12, "previous": 4.10}   # 스프레드용 금리도 이어받음
+    assert saved["rates"]["us10y"] == {"current": 4.12, "previous": 4.10, "isStale": True}   # 스프레드용 금리도 이어받음(QA-060)
     assert "이전 값" in detail
 
 
-@pytest.mark.xfail(strict=True, reason="QA-060: 이어받은 금리에 isStale이 없음 — 수정 커밋에서 뺌")
 def test_QA060_이어받은_카드의_스프레드용_금리도_이전_값으로_표시한다(store, monkeypatch):
     """카드는 '이전 값'인데 스프레드용 금리는 표시 없이 이어받아, 백엔드가 이전 금리로 '실시간' 스프레드를 냈습니다."""
     store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, {

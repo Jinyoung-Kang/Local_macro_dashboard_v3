@@ -71,6 +71,8 @@ export interface ScrapedSpread {
   spread: number | null;
   previousSpread: number | null;
   delta: number | null;
+  /** 수집 실패로 이어받은 이전 금리가 섞였으면 true — '지금 시장' 값이 아닙니다. */
+  isStale?: boolean;
 }
 
 export interface RiskEntry {
