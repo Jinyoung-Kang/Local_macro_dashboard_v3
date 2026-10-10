@@ -34,11 +34,12 @@ public record CurrentUser(long id, String email, String role, String tier, UUID 
     }
 
     /**
-     * 이 요청이 유료 범위를 볼 수 있는가(운영자 포함). 세션 필터를 거치지 않은 호출(테스트)은 제한 없음으로 봅니다.
+     * 이 요청이 유료 범위를 볼 수 있는가(운영자 포함). 사용자가 없으면 볼 수 없습니다 — 예전에는 테스트 편의로 '제한 없음'으로
+     * 봐서, 필터 설정이 어긋나 사용자 없이 들어온 요청에 유료 범위가 열릴 수 있었습니다(QA-043).
      */
     public static boolean paid(HttpServletRequest request) {
         CurrentUser user = of(request);
-        return user == null || user.isPro();
+        return user != null && user.isPro();
     }
 
     /** 세션 필터를 통과한 요청이면 항상 있습니다. 공개 경로에서는 null일 수 있습니다. */
