@@ -2,7 +2,6 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -169,7 +168,6 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @Disabled("QA-017 재현 — 수정 전에는 실패합니다(HEAD 가 접근 정책 표를 건너뜀)")
     @DisplayName("HEAD도 GET과 같은 접근 검사 — 무료 회원은 운영·유료 경로가 403, 회원 경로는 200(QA-017)")
     void headRequestsFollowGetAccessPolicy() {
         long memberId = users.findByEmail(MEMBER).orElseThrow().id();

@@ -137,8 +137,8 @@ public class WebConfig implements WebMvcConfigurer {
          * 상관없이(로그인·가입 같은 공개 경로 포함) 403입니다. 유효한 세션 쿠키가 함께 오면 세션이 이기므로 막지 않습니다.
          * 헤더가 없거나 틀리면(기능이 꺼져 있으면 늘) 아무것도 하지 않습니다 — 평소처럼 401·정책 검사로 갑니다.
          *
-         * <p>HEAD도 막습니다. 스프링은 HEAD를 GET 처리기로 돌리는데 접근 정책 표에는 HEAD 줄이 없어(표에 없으면 MEMBER)
-         * 운영자·유료 GET 처리기가 실행됩니다. 화면은 HEAD를 쓰지 않습니다.
+         * <p>HEAD도 막습니다 — 화면은 HEAD를 쓰지 않고, 앞단(Caddy)도 같은 규칙입니다. HEAD가 접근 정책 표를 건너뛰던
+         * 결함(QA-017)은 {@link AccessPolicy#required}가 HEAD를 GET으로 보게 고쳤고, 이 차단은 그 위의 한 겹입니다.
          */
         boolean demoForbidden(HttpServletRequest request) {
             String method = request.getMethod();

@@ -122,10 +122,16 @@ public final class AccessPolicy {
         }
     }
 
-    /** 이 요청에 필요한 접근. 표에 없으면(404가 될 요청) 로그인만 요구합니다. */
+    /**
+     * 이 요청에 필요한 접근. 표에 없으면(404가 될 요청) 로그인만 요구합니다.
+     *
+     * <p>HEAD는 같은 경로의 GET으로 봅니다 — 스프링은 HEAD를 GET 처리기로 돌리므로, 따로 보면 표에 없는 요청(로그인만)이
+     * 되어 무료 회원이 운영자·유료 GET 처리기를 실행했습니다(QA-017).
+     */
     public static Access required(String method, String path) {
+        String effective = "HEAD".equalsIgnoreCase(method) ? "GET" : method;
         for (Rule rule : RULES) {
-            if (rule.method().equalsIgnoreCase(method) && rule.path().matcher(path).matches()) {
+            if (rule.method().equalsIgnoreCase(effective) && rule.path().matcher(path).matches()) {
                 return rule.access();
             }
         }
