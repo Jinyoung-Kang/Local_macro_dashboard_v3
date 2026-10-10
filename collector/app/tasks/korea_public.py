@@ -126,7 +126,9 @@ def task_fsc_prices() -> str:
             raise EmptyResult("DATA_GO_KR_SERVICE_KEY 미설정 — .env에 공공데이터포털 인증키를 넣으세요") from None
         except publicapi.PublicApiError as exc:
             reasons.append(f"{day}: {exc}")
-            if budget.exhausted:
+            # 보충 중이면 실패한 날에서 멈춥니다. 뒤 날짜를 먼저 저장하면 저장된 마지막 기준일이 그날을 앞질러
+            # 다음 실행이 그날을 다시 받지 않았습니다(QA-034). 시작점을 찾는 중(저장본 없음)이면 하루 앞을 봅니다.
+            if budget.exhausted or stored_latest:
                 break
             continue
         if not rows:

@@ -258,7 +258,6 @@ def test_하루치는_한_트랜잭션이라_중간에_실패하면_종목도_�
     assert store.read_timeseries(catalog.TS_FSC_MARKET, "KOSPI.marketCap") == []
 
 
-@pytest.mark.xfail(strict=True, reason="QA-034: 보충 중 실패한 날을 건너뛰고 뒤 날짜를 저장해 그날이 영영 빠짐")
 def test_QA034_보충_중_실패한_날에서_멈춰_다음_실행이_그날부터_다시_받는다(monkeypatch):
     """
     [목·금·월]을 보충하다 목요일이 오류를 내면 예전에는 금·월을 저장했고, 저장된 마지막 기준일이 월요일로
@@ -281,6 +280,8 @@ def test_QA034_보충_중_실패한_날에서_멈춰_다음_실행이_그날부�
         return [fsc.normalize(SAMSUNG)], fsc.URL
 
     monkeypatch.setattr(tasks.fsc_service, "fetch_day", fetch)
-    tasks.task_fsc_prices()
+    with pytest.raises(tasks.EmptyResult) as caught:
+        tasks.task_fsc_prices()
 
     assert fake.observations == [], "실패한 날 뒤의 날짜를 먼저 저장하면 그날은 다시 받지 않습니다"
+    assert "2페이지 응답 오류" in str(caught.value), "실패 사유가 상태 화면에 남습니다"
