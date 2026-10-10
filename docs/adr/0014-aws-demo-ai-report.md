@@ -103,4 +103,7 @@
   - 앞단 Caddy 공개 쪽: GET 밖 `/api/*` 차단에서 `POST /api/ai/report` 하나를 뺍니다. 관리자 쪽은 그대로입니다.
   - 리포트 생성은 수 초~수십 초 걸립니다. 앞단(CloudFront·Caddy)의 응답 대기 한도가 이보다 짧으면 방문자는 오류를 받으므로,
     배포 때 그 설정을 확인합니다.
-- 검증은 로컬 테스트까지입니다. AWS에서의 실제 Haiku 호출과 Caddy 규칙은 이 변경에서 확인하지 않았습니다.
+- 배포 확인(2026-10-11): AWS에서 Haiku 리포트 한 건이 **52초**(입력 약 10.5k · 출력 약 10.6k 토큰)였습니다. CloudFront 원본 응답 한도
+  60초에 너무 가까워 Macro 배포판만 **120초**로 올렸고(이 계정의 기본 할당량 'Response timeout per origin' = 120초, 증설 신청 불필요),
+  `compose.aws.yml`의 `AI_TIMEOUT_SECONDS`를 **110초**로 낮춰 앱이 앞단보다 먼저 포기하게 했습니다(실패하면 공용 한도를 되돌림).
+  Caddy 는 응답 대기 한도가 없습니다. 공개 쪽 Caddy 규칙(`POST /api/ai/report`만 통과)은 로컬 Caddy 로 확인했습니다.
