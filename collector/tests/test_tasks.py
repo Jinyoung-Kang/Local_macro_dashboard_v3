@@ -169,7 +169,7 @@ def test_sec_13f_q1_is_derived_from_q8(store, monkeypatch):
     monkeypatch.setenv("SEC_USER_AGENT", "test@example.com")
     calls = {"count": 0}
 
-    def fake_collect(cik, quarters):
+    def fake_collect(cik, quarters, previous_quarters=None):
         calls["count"] += 1
         return {
             "cik": cik,

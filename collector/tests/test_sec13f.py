@@ -134,7 +134,6 @@ def three_filings_middle_fails(monkeypatch):
     monkeypatch.setattr(sec13f, "_collect_one_filing", lambda session, filing_date, url: done[filing_date])
 
 
-@pytest.mark.xfail(strict=True, reason="QA-031: 받지 못한 공시를 건너뛰고 분기가 밀린 결과를 성공으로 돌려줌")
 def test_QA031_공시_하나를_받지_못하면_분기가_밀린_결과를_내지_않는다(three_filings_middle_fails):
     """
     가운데 분기를 건너뛰면 0번(2026Q2)과 1번(2025Q4)이 '최신 대 직전'으로 비교됩니다. 직전 저장본에도 그 공시가 없으면
@@ -146,7 +145,6 @@ def test_QA031_공시_하나를_받지_못하면_분기가_밀린_결과를_내�
     assert "받지 못" in result["error"]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-031: 직전 저장본의 같은 공시를 이어받지 않음")
 def test_QA031_받지_못한_공시는_직전_저장본의_같은_공시를_이어받는다(three_filings_middle_fails):
     previous = [_quarter("2026-05-15", "2026-03-31")]
 

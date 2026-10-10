@@ -45,7 +45,10 @@ def task_sec_13f() -> str:
 
     def collect(item):
         name, cik = item
-        return name, cik, sec_service.collect_13f(cik, quarters)
+        # 받지 못한 공시는 직전 저장본의 같은 공시로 잇습니다(QA-031).
+        previous = store.read_snapshot(catalog.snap_sec_13f(cik, quarters))
+        previous_quarters = (previous.payload or {}).get("quarters") if previous else None
+        return name, cik, sec_service.collect_13f(cik, quarters, previous_quarters=previous_quarters)
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         for name, cik, payload in pool.map(collect, targets):

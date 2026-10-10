@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 EDGAR_BROWSE = "https://www.sec.gov/cgi-bin/browse-edgar"
 
 
-def collect_13f(cik: str, max_quarters: int = 8) -> dict:
+def collect_13f(cik: str, max_quarters: int = 8, previous_quarters: list[dict] | None = None) -> dict:
     """
     최근 max_quarters개 분기의 13F를 수집합니다.
 
@@ -47,6 +47,10 @@ def collect_13f(cik: str, max_quarters: int = 8) -> dict:
       ]
     }
     quarters는 최신 분기가 앞입니다(q1은 q8의 앞부분과 같습니다).
+
+    공시 하나를 받지 못하면(시간 초과·403·XML 없음) 직전 저장본(``previous_quarters``)의 **같은 공시**를
+    이어받고 ``isStale``을 붙입니다. 직전 저장본에도 없으면 그 기관은 실패입니다 — 건너뛰면 분기가 한 칸
+    밀려, 백엔드가 0번·1번을 '최신 대 직전'으로 비교할 때 두 분기 떨어진 공시를 비교했습니다(QA-031).
     """
     try:
         session = get_sec_session()
@@ -82,12 +86,28 @@ def collect_13f(cik: str, max_quarters: int = 8) -> dict:
     if not links:
         return _fail(cik, "조회된 13F-HR 공시 문서가 없습니다.")
 
+    previous_by_filing = {
+        q.get("filingDate"): q for q in (previous_quarters or []) if isinstance(q, dict) and q.get("filingDate")
+    }
     quarters = []
+    missing: list[str] = []
     for filing_date, doc_url in links:
         holdings = _collect_one_filing(session, filing_date, doc_url)
         if holdings is None:
+            kept = previous_by_filing.get(filing_date)
+            if kept is None:
+                missing.append(filing_date)
+            else:
+                quarters.append({**kept, "isStale": True})
             continue
         quarters.append(holdings)
+
+    if missing:
+        return _fail(
+            cik,
+            f"공시 {len(missing)}건({', '.join(missing)})을 받지 못했습니다 — "
+            "분기가 밀리지 않게 직전 저장본을 유지합니다.",
+        )
 
     if not quarters:
         return _fail(
