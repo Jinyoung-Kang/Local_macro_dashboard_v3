@@ -8,8 +8,11 @@
 #   · 화면·API는 127.0.0.1에만 열고, 앞단(Caddy)이 둘을 한 주소(같은 출처)로 묶음 → 프론트는 NEXT_PUBLIC_API_BASE=/
 #   · 앞단이 넘긴 X-Forwarded-For를 Tomcat이 믿음(내부 대역에서 온 것만) → 로그인 제한이 방문자 IP별로 동작
 #   · 공개 데모라 끄는 것: 메일(가입·재설정), 유료 AI 키, 화면 조회가 수집을 일으키는 것(store_only)
+#   · 데모 열람(ADR 0013): 앞단 공개 쪽이 접근 코드를 확인한 요청에 X-Demo-Viewer 헤더로 DEMO_VIEWER_TOKEN을 실으면
+#     로그인 없이 읽기 전용(GET만). 비우면 꺼짐(방문자도 로그인 화면). 운영자 쪽(관리자 터널)은 헤더를 지움
 #   · DB 연결 수를 줄임(RDS db.t4g.micro 한 대를 세 프로젝트가 나눠 씀)
-# 필요한 값(.env, 이름은 .env.aws.example): RDS_HOST · PUBLIC_ORIGIN · DATABASE_USER · DATABASE_PASSWORD 외 기존 값
+# 필요한 값(.env, 이름은 .env.aws.example): RDS_HOST · PUBLIC_ORIGIN · DATABASE_USER · DATABASE_PASSWORD ·
+#   DEMO_VIEWER_TOKEN(32자 이상, 앞단 Caddy와 같은 값) 외 기존 값
 # =============================================================================
 services:
   postgres:
@@ -32,6 +35,8 @@ services:
       # 앞단(Caddy)이 X-Forwarded-For를 클라이언트 IP 하나로 덮어써 보냄. Tomcat RemoteIpValve는
       # 내부 대역(기본값: 10/8 · 172.16/12 · 192.168/16 · 127/8)에서 온 요청의 헤더만 믿는다.
       SERVER_FORWARDHEADERSSTRATEGY: native
+      # 데모 열람 토큰 — 비면 꺼짐, 32자보다 짧으면 백엔드가 기동하지 않음(약한 토큰으로 켜지 않게).
+      DASHBOARD_DEMO_VIEWER_TOKEN: ${DEMO_VIEWER_TOKEN:-}
       MAIL_HOST: ""
       ANTHROPIC_API_KEY: ""
       NVIDIA_API_KEY: ""
