@@ -4,7 +4,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -25,7 +24,6 @@ class AiServiceLogRedactionTest {
     }
 
     @Test
-    @Disabled("QA-025 재현 — 수정 전에는 실패 로그가 예외 문구(요청 URL 포함)를 그대로 남긴다")
     @DisplayName("QA-025 연결 실패 로그에 요청 주소(계정 ID가 든 경로)를 남기지 않는다")
     void failureLogDoesNotCarryRequestUrl() {
         appender.start();

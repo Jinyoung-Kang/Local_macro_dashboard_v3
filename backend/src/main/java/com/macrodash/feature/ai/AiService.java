@@ -606,7 +606,7 @@ public class AiService {
             return success(label, model, text.trim(), elapsed);
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - started;
-            log.warn("AI 호출 실패 ({}, 한도 {}초): {}", label, attemptSeconds, e.getMessage());
+            log.warn("AI 호출 실패 ({}, 한도 {}초): {}", label, attemptSeconds, withoutUrls(e.getMessage()));
             return failureAfter(e, label, describe(e, attemptSeconds), elapsed);
         }
     }
@@ -695,7 +695,7 @@ public class AiService {
     String describe(Exception e, int waitedSeconds) {
         // 스프링의 I/O 예외 문구에는 요청 URL 전체가 들어갑니다. Cloudflare 주소에는 계정 ID가
         // 경로에 있어, DNS 실패·연결 거부 때 그 ID가 화면과 로그로 나갔습니다. 주소는 지웁니다.
-        String raw = String.valueOf(e.getMessage()).replaceAll("https?://\\S+", "<url>");
+        String raw = withoutUrls(e.getMessage());
         String lowered = raw.toLowerCase();
 
         if (lowered.contains("timed out") || lowered.contains("timeout")) {
@@ -714,6 +714,14 @@ public class AiService {
             return "호출 한도에 걸렸습니다(429). 잠시 후 다시 시도하거나 다른 엔진을 고르세요.";
         }
         return raw;
+    }
+
+    /**
+     * 예외 문구에서 요청 주소를 지웁니다. 스프링의 I/O 예외 문구에는 요청 URL 전체가 들어가고, Cloudflare 주소에는 경로에
+     * 계정 ID가 있습니다. 화면에 보이는 문구(describe)와 서버 로그 모두 이 함수를 거칩니다(QA-025).
+     */
+    static String withoutUrls(String message) {
+        return String.valueOf(message).replaceAll("https?://\\S+", "<url>");
     }
 
     private String extractOpenAiText(JsonNode response) {
@@ -822,7 +830,7 @@ public class AiService {
                                                  boolean charged) {
         long elapsed = System.currentTimeMillis() - started;
         // 예외 문구에는 키가 들어가지 않지만, 요청 주소는 지웁니다(describe와 같은 규칙).
-        log.warn("Claude 호출 실패 ({}): {}", label, String.valueOf(e.getMessage()).replaceAll("https?://\\S+", "<url>"));
+        log.warn("Claude 호출 실패 ({}): {}", label, withoutUrls(e.getMessage()));
         Map<String, Object> out = failure(label, message, elapsed);
         out.put(CHARGED, charged);
         return out;
@@ -885,7 +893,7 @@ public class AiService {
                     + (response == null ? "null" : response.path("errors").toString()), elapsed);
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - started;
-            log.warn("Cloudflare AI 호출 실패 (한도 {}초): {}", attemptSeconds, e.getMessage());
+            log.warn("Cloudflare AI 호출 실패 (한도 {}초): {}", attemptSeconds, withoutUrls(e.getMessage()));
             return failureAfter(e, label, describe(e, attemptSeconds), elapsed);
         }
     }
