@@ -29,7 +29,7 @@ class UsageAndAdminTest {
     @Test
     @DisplayName("유료 회원은 하루 한도까지, 동시에 눌러도 한도를 넘지 않는다. 무료는 0건, 운영자는 한도 없음")
     void dailyLimit() throws Exception {
-        UsageService usage = new UsageService(new UsageStore(db.jdbc), 3);
+        UsageService usage = new UsageService(new UsageStore(db.jdbc), 3, 20);
         long proId = db.user("pro", "pro passphrase!!", "MEMBER", "PRO");
         CurrentUser pro = new CurrentUser(proId, db.email("pro"), "MEMBER", "PRO", null);
 

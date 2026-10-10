@@ -32,8 +32,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,6 +49,7 @@ import java.util.regex.Pattern;
  *   <li>엔진 레지스트리 + 자동 폴오버(한 엔진이 실패하면 다음 엔진)</li>
  *   <li>응답이 한국어가 아니면 번역 전용 모델로 한 번 더 호출</li>
  *   <li>키가 없는 엔진은 <b>조용히 건너뛰지 않고</b> 이유를 남깁니다</li>
+ *   <li>배포마다 쓸 엔진을 허용 목록({@code AI_ENGINES})으로 좁힐 수 있습니다(비면 전부 — 기본·로컬, ADR 0014)</li>
  * </ul>
  *
  * <p>AI는 <b>수집된 데이터만</b> 근거로 삼습니다. 리포트 프롬프트에는 대시보드
@@ -150,6 +154,15 @@ public class AiService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** 엔진을 못 쓰는 이유(화면이 라벨을 고름) — 이 배포의 허용 목록 밖. */
+    static final String NOT_ALLOWED = "not_allowed";
+
+    /** 엔진을 못 쓰는 이유 — 허용됐지만 키가 없음. */
+    static final String NO_KEY = "no_key";
+
+    /** 오류 문구에 그대로 적어도 되는 값의 모양. 키를 잘못 넣었을 때 그 값이 기동 로그에 찍히지 않게 합니다. */
+    private static final Pattern PRINTABLE_ID = Pattern.compile("[A-Za-z0-9_.-]{1,40}");
+
     /**
      * Claude 응답 한도(토큰). Haiku 5.5는 사고(thinking)가 기본으로 켜져 있고 사고도 이 한도에 들어갑니다 —
      * 다른 엔진처럼 4096으로 두면 사고만 하다 답을 못 쓰고 끝날 수 있습니다. 출력 단가가 100만 토큰당
@@ -179,6 +192,10 @@ public class AiService {
 
     /** 테스트가 가짜 서버로 보낼 때만 씁니다. null이면 SDK 기본 주소(api.anthropic.com). */
     String anthropicBaseUrl;
+
+    /** NVIDIA·Cerebras 호출 주소. 테스트가 자동 탐색을 가짜 서버로만 돌릴 때(실제 호출 없이) 바꿉니다. */
+    String nvidiaUrl = NVIDIA_URL;
+    String cerebrasUrl = CEREBRAS_URL;
 
     @Value("${dashboard.ai.nvidia-api-key:}")
     private String nvidiaKey;
@@ -220,6 +237,14 @@ public class AiService {
      */
     private final int autoBudgetSeconds;
 
+    /**
+     * 이 배포에서 쓸 수 있는 엔진 ID(AI_ENGINES, ADR 0014). null이면 제한 없음 — 키가 있는 엔진은 모두 씁니다(기본·로컬).
+     *
+     * <p>AWS 공개 데모는 운영자의 Anthropic 계정으로 방문자가 리포트를 만들므로, 비용을 아는 엔진 하나(Haiku)로 묶습니다.
+     * 허용 목록 밖의 엔진은 키가 있어도 부르지 않고, 화면에는 "이 배포에서 사용 안 함"으로 보입니다.
+     */
+    private final Set<String> allowed;
+
     /** 테스트용 기본값. Spring은 아래 @Autowired 생성자를 씁니다. */
     public AiService() {
         this(240);
@@ -230,17 +255,69 @@ public class AiService {
         this(timeoutSeconds, 60, 180);
     }
 
+    /** 테스트용 — 허용 목록 없음(모든 엔진). */
+    public AiService(int timeoutSeconds, int autoAttemptSeconds, int autoBudgetSeconds) {
+        this(timeoutSeconds, autoAttemptSeconds, autoBudgetSeconds, "");
+    }
+
     // ⚠️ 생성자가 여럿이고 아무것도 표시하지 않으면 Spring은 무인자 생성자를 골라
     //    설정값을 조용히 무시합니다. 어느 쪽을 쓸지 명시해야 합니다.
     @Autowired
     public AiService(@Value("${dashboard.ai.timeout-seconds:240}") int timeoutSeconds,
                      @Value("${dashboard.ai.auto-attempt-seconds:60}") int autoAttemptSeconds,
-                     @Value("${dashboard.ai.auto-budget-seconds:180}") int autoBudgetSeconds) {
+                     @Value("${dashboard.ai.auto-budget-seconds:180}") int autoBudgetSeconds,
+                     @Value("${dashboard.ai.engines:}") String allowedEngines) {
         this.timeoutSeconds = Math.max(30, timeoutSeconds);
         // 시도 한도가 전체 한도보다 길면 의미가 없고, 너무 짧으면 멀쩡한 엔진도
         // 끊깁니다. 예산은 최소한 한 번은 시도할 수 있어야 합니다.
         this.autoAttemptSeconds = Math.min(this.timeoutSeconds, Math.max(20, autoAttemptSeconds));
         this.autoBudgetSeconds = Math.max(this.autoAttemptSeconds, autoBudgetSeconds);
+        this.allowed = allowList(allowedEngines);
+        if (allowed != null) {
+            log.info("AI 엔진 허용 목록(AI_ENGINES): {} — 목록 밖의 엔진은 키가 있어도 부르지 않습니다(ADR 0014).", allowed);
+        }
+    }
+
+    /**
+     * {@code AI_ENGINES} 값(쉼표로 구분한 엔진 ID)을 읽습니다. 비었으면 null(제한 없음).
+     *
+     * <p>모르는 ID나 {@code auto}가 있으면 기동을 멈춥니다 — 오타 하나로 엔진이 모두 조용히 꺼지거나, 의도와 다른
+     * 엔진이 열리지 않게 합니다. {@code auto}는 넣지 않습니다: 허용한 엔진 중 키가 있는 것이 둘 이상이면 저절로 켜집니다.
+     *
+     * @throws IllegalStateException 쓸 수 없는 ID가 있을 때. ID 모양이 아닌 값(키를 잘못 넣은 경우 등)은 문구에 적지 않습니다.
+     */
+    static Set<String> allowList(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        Set<String> known = new LinkedHashSet<>();
+        ENGINES.stream().map(Engine::id).filter(id -> !"auto".equals(id)).forEach(known::add);
+
+        Set<String> out = new LinkedHashSet<>();
+        List<String> rejected = new ArrayList<>();
+        int unprintable = 0;
+        for (String part : raw.split(",")) {
+            String id = part.strip();
+            if (id.isEmpty()) {
+                continue;
+            }
+            if (known.contains(id)) {
+                out.add(id);
+            } else if (PRINTABLE_ID.matcher(id).matches()) {
+                rejected.add(id);
+            } else {
+                unprintable++;
+            }
+        }
+        if (!rejected.isEmpty() || unprintable > 0) {
+            String what = String.join(", ", rejected)
+                    + (unprintable > 0 ? (rejected.isEmpty() ? "" : ", ") + "엔진 ID 모양이 아닌 값 %d개(값은 적지 않음)"
+                    .formatted(unprintable) : "");
+            throw new IllegalStateException(("AI_ENGINES에 쓸 수 없는 엔진 ID가 있습니다: %s — 쓸 수 있는 값: %s. "
+                    + "auto는 넣지 않습니다(허용한 엔진 중 키가 있는 것이 둘 이상이면 자동 탐색이 켜짐). "
+                    + "비우면 모든 엔진을 씁니다(ADR 0014).").formatted(what, String.join(", ", known)));
+        }
+        return out.isEmpty() ? null : Set.copyOf(out);
     }
 
     /** 실제로 적용된 대기 한도(초). 설정이 먹었는지 확인하는 용도. */
@@ -274,10 +351,16 @@ public class AiService {
         });
     }
 
-    /** 화면이 선택지를 그릴 때 쓰는 목록 + 키 보유 여부. */
+    /**
+     * 화면이 선택지를 그릴 때 쓰는 목록 + 키 보유 여부.
+     *
+     * <p>{@code available}은 "이 배포에서 허용됐고 키도 있다"입니다. 못 쓰면 {@code unavailableReason}이 이유를 줍니다
+     * ({@value #NOT_ALLOWED}·{@value #NO_KEY}, 쓸 수 있으면 null). {@code keys}는 허용 목록과 상관없이 키가 있는지입니다.
+     */
     public Map<String, Object> engines() {
         List<Map<String, Object>> list = new ArrayList<>();
         for (Engine engine : ENGINES) {
+            String reason = unavailableReason(engine);
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("id", engine.id());
             entry.put("label", engine.label());
@@ -285,7 +368,8 @@ public class AiService {
             entry.put("model", engine.model());
             entry.put("description", engine.description());
             entry.put("speedHint", SPEED_HINTS.getOrDefault(engine.id(), "보통"));
-            entry.put("available", hasKey(engine.provider()));
+            entry.put("available", reason == null);
+            entry.put("unavailableReason", reason);
             list.add(entry);
         }
 
@@ -296,7 +380,7 @@ public class AiService {
                 "nvidia", !nvidiaKey.isBlank(),
                 "cerebras", !cerebrasKey.isBlank(),
                 "cloudflare", !cloudflareAccountId.isBlank() && !cloudflareToken.isBlank()));
-        out.put("enabled", anyKeyPresent());
+        out.put("enabled", enabled());
         // 화면이 "얼마나 기다리면 되는지"를 미리 말할 수 있도록 함께 내려보냅니다.
         out.put("timeoutSeconds", timeoutSeconds);
         out.put("autoAttemptSeconds", autoAttemptSeconds);
@@ -309,22 +393,77 @@ public class AiService {
                 || (!cloudflareAccountId.isBlank() && !cloudflareToken.isBlank());
     }
 
+    /** AI 메뉴를 켤지 — 이 배포에서 허용된 엔진 중 키가 있는 것이 하나라도 있는가. 허용 목록이 없으면 {@link #anyKeyPresent}와 같습니다. */
+    public boolean enabled() {
+        return usableEngineCount() > 0;
+    }
+
+    /** 허용됐고 키도 있는 엔진 수(auto 제외). */
+    private long usableEngineCount() {
+        return ENGINES.stream()
+                .filter(engine -> !"auto".equals(engine.id()))
+                .filter(engine -> isAllowed(engine.id()) && hasKey(engine.provider()))
+                .count();
+    }
+
+    /** 허용 목록에 있는가(목록이 없으면 늘 true). auto는 {@link #unavailableReason}이 따로 판정합니다. */
+    private boolean isAllowed(String engineId) {
+        return allowed == null || allowed.contains(engineId);
+    }
+
+    /**
+     * 이 엔진을 못 쓰는 이유. 쓸 수 있으면 null.
+     *
+     * <ul>
+     *   <li>허용 목록 밖 → {@value #NOT_ALLOWED}(키가 없어도 이쪽이 먼저 — 화면이 "이 배포에서 사용 안 함"을 보임)</li>
+     *   <li>허용됐지만 키 없음 → {@value #NO_KEY}</li>
+     *   <li>auto — 허용 목록이 없으면 지금처럼 키가 하나라도 있으면 씀. 목록이 있으면 키가 있는 허용 엔진이 둘 이상일 때만
+     *       (하나뿐이면 고를 것이 없는 자동 탐색이라 엔진을 직접 고르게 함). 허용 엔진이 하나뿐이면 {@value #NOT_ALLOWED},
+     *       둘 이상인데 키가 모자라면 {@value #NO_KEY}.</li>
+     * </ul>
+     */
+    String unavailableReason(Engine engine) {
+        if ("auto".equals(engine.id())) {
+            if (allowed == null) {
+                return anyKeyPresent() ? null : NO_KEY;
+            }
+            if (allowed.size() < 2) {
+                return NOT_ALLOWED;
+            }
+            return usableEngineCount() >= 2 ? null : NO_KEY;
+        }
+        if (!isAllowed(engine.id())) {
+            return NOT_ALLOWED;
+        }
+        return hasKey(engine.provider()) ? null : NO_KEY;
+    }
+
     /** 엔진 1개 호출 (auto면 폴오버). */
     public Map<String, Object> generate(String engineId, String prompt, String systemPrompt) {
-        if (!anyKeyPresent()) {
-            return failure("설정 없음",
-                    "AI 키가 하나도 설정되지 않았습니다. Anthropic / NVIDIA / Cerebras / Cloudflare 중 "
-                            + "하나 이상을 설정하세요.");
+        if (!enabled()) {
+            return failure("설정 없음", allowed == null
+                    ? "AI 키가 하나도 설정되지 않았습니다. Anthropic / NVIDIA / Cerebras / Cloudflare 중 "
+                            + "하나 이상을 설정하세요."
+                    : "이 배포에서 쓰는 AI 엔진(%s)의 키가 설정되지 않았습니다."
+                            .formatted(String.join(", ", new TreeSet<>(allowed))));
         }
 
-        if (engineId == null || engineId.isBlank() || "auto".equals(engineId)) {
-            return withFailover(prompt, systemPrompt);
-        }
-
-        Engine engine = findEngine(engineId);
+        boolean auto = engineId == null || engineId.isBlank() || "auto".equals(engineId);
+        Engine engine = findEngine(auto ? "auto" : engineId);
 
         if (engine == null) {
             return failure(engineId, "지원하지 않는 AI 엔진입니다: " + engineId);
+        }
+        // 허용 목록 밖이면(자동 탐색은 쓸 수 없을 때) 네트워크에 나가지 않고 끝냅니다. 키 없음과 같은 실패 모양입니다.
+        // 허용됐지만 키가 없는 엔진은 아래 호출이 "API Key 누락"으로 끝냅니다(역시 네트워크 없음).
+        String reason = unavailableReason(engine);
+        if (NOT_ALLOWED.equals(reason) || (auto && reason != null)) {
+            return failure(engine.label(), "이 배포에서는 쓸 수 없는 엔진입니다: " + engine.label()
+                    + (auto ? " — 엔진을 직접 고르세요." : ""));
+        }
+
+        if (auto) {
+            return withFailover(prompt, systemPrompt);
         }
         // 사용자가 엔진을 직접 골랐다면 그 엔진을 끝까지 기다립니다.
         // 추론형 모델이 느린 것은 선택의 결과이지 고장이 아닙니다.
@@ -351,6 +490,10 @@ public class AiService {
         long deadline = System.currentTimeMillis() + autoBudgetSeconds * 1000L;
 
         for (String engineId : FAILOVER_ORDER) {
+            if (!isAllowed(engineId)) {
+                // 허용 목록 밖은 이 배포의 설정이라(키가 빠진 사고가 아님) 경로에 적지 않고 건너뜁니다.
+                continue;
+            }
             Engine engine = findEngine(engineId);
             if (engine == null || !hasKey(engine.provider())) {
                 attempts.add(engineId + ": 키 없음");
@@ -410,9 +553,9 @@ public class AiService {
         return switch (engine.provider()) {
             case "anthropic" -> callAnthropic(engine.label(), engine.model(),
                     prompt, systemPrompt, attemptSeconds);
-            case "nvidia" -> callOpenAiFormat(engine.label(), NVIDIA_URL, nvidiaKey,
+            case "nvidia" -> callOpenAiFormat(engine.label(), nvidiaUrl, nvidiaKey,
                     engine.model(), prompt, systemPrompt, attemptSeconds);
-            case "cerebras" -> callOpenAiFormat(engine.label(), CEREBRAS_URL, cerebrasKey,
+            case "cerebras" -> callOpenAiFormat(engine.label(), cerebrasUrl, cerebrasKey,
                     engine.model(), prompt, systemPrompt, attemptSeconds);
             case "cloudflare" -> callCloudflare(engine.label(), engine.model(),
                     prompt, systemPrompt, attemptSeconds);
@@ -751,10 +894,22 @@ public class AiService {
             return result;
         }
 
+        // 번역기는 제공자별로 따로입니다(Claude → Claude, NVIDIA → NVIDIA, 나머지 → Cloudflare). 허용 목록이 그 제공자의
+        // 엔진을 하나도 두지 않았으면 번역하지 않습니다 — 예: Cerebras만 허용했는데 Cloudflare 번역기를 부르면 안 됩니다.
+        String translator = switch (provider) {
+            case "anthropic", "nvidia" -> provider;
+            default -> "cloudflare";
+        };
+        if (!providerAllowed(translator)) {
+            result.put("translationInfo", "자동 번역 건너뜀 — 이 배포에서 쓰지 않는 번역기(%s)입니다. 분석 원문을 그대로 표시합니다."
+                    .formatted(translator));
+            return result;
+        }
+
         Map<String, Object> translated = switch (provider) {
             case "anthropic" -> callAnthropic("Claude 번역기", "claude-haiku-5-5",
                     text, TRANSLATION_PROMPT, attemptSeconds);
-            case "nvidia" -> callOpenAiFormat("NVIDIA 번역기", NVIDIA_URL, nvidiaKey,
+            case "nvidia" -> callOpenAiFormat("NVIDIA 번역기", nvidiaUrl, nvidiaKey,
                     TRANSLATORS.get("nvidia"), text, TRANSLATION_PROMPT, attemptSeconds);
             default -> callCloudflare("Cloudflare 번역기", TRANSLATORS.get("cloudflare"),
                     text, TRANSLATION_PROMPT, attemptSeconds);
@@ -788,6 +943,12 @@ public class AiService {
             count++;
         }
         return count;
+    }
+
+    /** 이 제공자의 엔진이 허용 목록에 하나라도 있는가(목록이 없으면 늘 true) — 번역기를 부를지 정합니다. */
+    private boolean providerAllowed(String provider) {
+        return allowed == null || ENGINES.stream()
+                .anyMatch(engine -> provider.equals(engine.provider()) && allowed.contains(engine.id()));
     }
 
     private boolean hasKey(String provider) {

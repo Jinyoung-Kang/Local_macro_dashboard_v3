@@ -87,4 +87,65 @@ class AiReportFlowTest {
         return new AiController(ai, new AiReportService(ai, snapshotText,
                 org.mockito.Mockito.mock(com.macrodash.feature.auth.UsageService.class)));
     }
+
+    /** 데모 열람(ADR 0013) 요청 — 세션 필터가 넣는 사용자 속성을 흉내 냅니다. */
+    private static org.springframework.mock.web.MockHttpServletRequest demoRequest() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.setAttribute(com.macrodash.support.CurrentUser.ATTRIBUTE, com.macrodash.feature.auth.DemoViewer.user());
+        return request;
+    }
+
+    /** 실제 사용량 서비스(데모 공용 한도 = demoLimit) — 저장소는 흉내이고, 데모는 저장소를 쓰지 않아야 합니다. */
+    private AiController controllerWithDemoLimit(com.macrodash.store.UsageStore store, int demoLimit) {
+        return new AiController(ai, new AiReportService(ai, snapshotText,
+                new com.macrodash.feature.auth.UsageService(store, 20, demoLimit)));
+    }
+
+    @Test
+    @DisplayName("데모 열람: 공용 하루 한도 안에서 리포트를 만들고, 다 쓰면 엔진을 부르지 않고 계정 한도와 같은 모양으로 알린다")
+    void demoSharedQuotaExhaustion() {
+        com.macrodash.store.UsageStore store = mock(com.macrodash.store.UsageStore.class);
+        when(ai.generate(anyString(), anyString(), anyString()))
+                .thenReturn(Map.of("status", true, "response", "결과"));
+        AiController controller = controllerWithDemoLimit(store, 1);
+
+        Map<String, Object> first = controller.report(new AiController.ReportRequest("anthropic_haiku", null, null), demoRequest());
+        assertThat(first).containsEntry("status", true)
+                .containsEntry("quota", Map.of("used", 1, "limit", 1, "shared", true));
+
+        Map<String, Object> second = controller.report(new AiController.ReportRequest("anthropic_haiku", null, null), demoRequest());
+        assertThat(second.keySet()).containsExactly("status", "error", "quota");
+        assertThat(second).containsEntry("status", false)
+                .containsEntry("error", "데모의 오늘 AI 리포트 한도(1건)를 모두 썼습니다. 내일(KST 0시) 다시 시도해 주세요.")
+                .containsEntry("quota", Map.of("used", 1, "limit", 1, "shared", true));
+        verify(ai, org.mockito.Mockito.times(1)).generate(anyString(), anyString(), anyString());
+        org.mockito.Mockito.verifyNoInteractions(store);
+    }
+
+    @Test
+    @DisplayName("데모 열람: 엔진이 실패하면 공용 한도를 되돌린다(계정 사용자와 같은 규칙)")
+    void demoFailureIsRefunded() {
+        com.macrodash.store.UsageStore store = mock(com.macrodash.store.UsageStore.class);
+        when(ai.generate(anyString(), anyString(), anyString()))
+                .thenReturn(Map.of("status", false, "error", "API Key 누락"));
+        AiController controller = controllerWithDemoLimit(store, 1);
+
+        for (int i = 0; i < 3; i++) {
+            Map<String, Object> out = controller.report(new AiController.ReportRequest("anthropic_haiku", null, null), demoRequest());
+            assertThat(out).as("시도 %d", i).containsEntry("status", false).containsEntry("error", "API Key 누락")
+                    .containsEntry("quota", Map.of("used", 0, "limit", 1, "shared", true));
+        }
+        org.mockito.Mockito.verifyNoInteractions(store);
+    }
+
+    @Test
+    @DisplayName("엔진 목록: 데모 열람에게만 공용 한도의 오늘 사용량(quota)을 함께 준다")
+    void enginesCarryDemoQuotaOnlyForDemo() {
+        when(ai.engines()).thenAnswer(invocation -> new LinkedHashMap<>(Map.of("enabled", true)));
+        AiController controller = controllerWithDemoLimit(mock(com.macrodash.store.UsageStore.class), 20);
+
+        assertThat(controller.engines(demoRequest()))
+                .containsEntry("quota", Map.of("used", 0, "limit", 20, "shared", true));
+        assertThat(controller.engines(new org.springframework.mock.web.MockHttpServletRequest())).doesNotContainKey("quota");
+    }
 }

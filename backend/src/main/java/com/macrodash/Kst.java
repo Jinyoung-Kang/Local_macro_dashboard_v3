@@ -38,6 +38,14 @@ public final class Kst {
         return LocalDate.now(ZONE);
     }
 
+    /**
+     * 주어진 시계 기준 한국 날짜 — 날짜가 바뀌는 순간을 테스트해야 하는 곳용. 시계의 시간대는 보지 않고
+     * 시각(Instant)만 KST로 바꿉니다.
+     */
+    public static LocalDate today(java.time.Clock clock) {
+        return LocalDate.ofInstant(clock.instant(), ZONE);
+    }
+
     /** 주어진 시계 기준 한국 시각 — 시각을 움직여야 하는 정기 작업 테스트용. */
     public static java.time.ZonedDateTime now(java.time.Clock clock) {
         return java.time.ZonedDateTime.now(clock.withZone(ZONE));

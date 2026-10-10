@@ -47,6 +47,10 @@ import static org.assertj.core.api.Assertions.assertThat;
         "dashboard.read-mode=store_only",
         "dashboard.collector-url=http://localhost:1",    // 수집기가 없어도 화면은 떠야 합니다
         "dashboard.ai.timeout-seconds=333",              // 설정 주입이 실제로 먹는지 확인용
+        // AI 키는 셸 환경과 상관없이 비웁니다 — 데모의 AI 리포트 요청이 외부(유료) 호출 없이 "키 없음"으로 끝나게.
+        "dashboard.ai.anthropic-api-key=", "dashboard.ai.nvidia-api-key=", "dashboard.ai.cerebras-api-key=",
+        "dashboard.ai.cloudflare-account-id=", "dashboard.ai.cloudflare-api-token=",
+        "dashboard.ai.demo-daily-limit=7",
         "dashboard.scheduler.enabled=false",             // 정기 작업이 테스트 DB에 쓰면 결과가 실행 시각에 따라 달라짐
         // 데모 열람(ADR 0013)을 켜 둡니다 — 헤더를 보내지 않는 다른 테스트는 평소와 같습니다(그것도 함께 확인됨).
         "dashboard.demo-viewer-token=" + ApiIntegrationTest.DEMO_TOKEN
@@ -389,7 +393,7 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("데모 열람(ADR 0013): 로그인 없이 화면 GET이 200(사용자별 테이블을 읽는 경로 포함)이고 DB에 아무것도 쓰지 않는다")
+    @DisplayName("데모 열람(ADR 0013): 로그인 없이 화면 GET이 200(사용자별 테이블을 읽는 경로 포함), AI 리포트 요청까지 DB에 아무것도 쓰지 않는다")
     void demoViewerReadsWithoutWriting() {
         HttpHeaders demo = new HttpHeaders();
         demo.add("X-Demo-Viewer", DEMO_TOKEN);
@@ -420,12 +424,26 @@ class ApiIntegrationTest {
         HttpHeaders demoJson = new HttpHeaders();
         demoJson.addAll(demo);
         demoJson.setContentType(MediaType.APPLICATION_JSON);
-        for (String path : List.of("/api/alerts/rules", "/api/alerts/inbox/read", "/api/ai/report", "/api/auth/logout")) {
+        for (String path : List.of("/api/alerts/rules", "/api/alerts/inbox/read", "/api/ai/test", "/api/auth/logout")) {
             ResponseEntity<JsonNode> write = rest.exchange(url(path), HttpMethod.POST,
                     new HttpEntity<>(Map.of("kind", "REGIME_CHANGE"), demoJson), JsonNode.class);
             assertThat(write.getStatusCode()).as(path).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(write.getBody().path("error").asString()).isEqualTo("demo_read_only");
         }
+
+        // AI 리포트는 데모의 유일한 쓰기(ADR 0014) — 공용 하루 한도(메모리)로 세고 DB에는 쓰지 않습니다.
+        // 이 테스트에는 AI 키가 없어 엔진 호출이 "키 없음"으로 끝나고(외부 호출 없음), 한도는 되돌려집니다.
+        JsonNode engines = rest.exchange(url("/api/ai/engines"), HttpMethod.GET, new HttpEntity<>(null, demo),
+                JsonNode.class).getBody();
+        assertThat(engines.path("quota").path("limit").asInt()).isEqualTo(7);
+        assertThat(engines.path("quota").path("shared").asBoolean()).isTrue();
+        ResponseEntity<JsonNode> report = rest.exchange(url("/api/ai/report"), HttpMethod.POST,
+                new HttpEntity<>(Map.of("engineId", "anthropic_haiku"), demoJson), JsonNode.class);
+        assertThat(report.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(report.getBody().path("status").asBoolean()).isFalse();
+        assertThat(report.getBody().path("quota").path("used").asInt()).as("실패는 되돌림").isZero();
+        assertThat(report.getBody().path("quota").path("limit").asInt()).isEqualTo(7);
+        assertThat(report.getBody().path("quota").path("shared").asBoolean()).isTrue();
 
         assertThat(userKeyedRowCounts()).as("사용자별 테이블의 행 수가 그대로").isEqualTo(before);
         for (String table : USER_KEYED_TABLES) {

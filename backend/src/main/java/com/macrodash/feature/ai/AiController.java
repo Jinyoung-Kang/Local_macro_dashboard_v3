@@ -30,9 +30,15 @@ public class AiController {
         this.reports = reports;
     }
 
+    /** 엔진 목록. 데모 열람이면 공용 하루 한도의 오늘 사용량({@code quota})을 함께 줍니다(ADR 0014). */
     @GetMapping("/engines")
-    public Map<String, Object> engines() {
-        return ai.engines();
+    public Map<String, Object> engines(jakarta.servlet.http.HttpServletRequest http) {
+        Map<String, Object> out = ai.engines();
+        Map<String, Object> quota = reports.sharedQuota(CurrentUser.of(http));
+        if (quota != null) {
+            out.put("quota", quota);
+        }
+        return out;
     }
 
     @GetMapping("/report-types")

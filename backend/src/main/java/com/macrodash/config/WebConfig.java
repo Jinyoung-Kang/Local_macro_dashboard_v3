@@ -133,8 +133,15 @@ public class WebConfig implements WebMvcConfigurer {
         }
 
         /**
+         * 데모 열람이 GET 밖에서 부를 수 있는 단 하나 — AI 리포트 생성(ADR 0014). DB에 쓰지 않고, 사용량은 방문자 전체가
+         * 함께 쓰는 메모리의 하루 한도로 셉니다({@code feature.auth.UsageService}). 등급 검사는 접근 정책 표 그대로(유료).
+         */
+        static final String DEMO_WRITABLE_PATH = "/api/ai/report";
+
+        /**
          * 데모 열람이 할 수 없는 요청인가(ADR 0013) — 데모 열람은 읽기 전용이라 GET·OPTIONS(CORS 사전 요청) 밖은 경로와
-         * 상관없이(로그인·가입 같은 공개 경로 포함) 403입니다. 유효한 세션 쿠키가 함께 오면 세션이 이기므로 막지 않습니다.
+         * 상관없이(로그인·가입 같은 공개 경로 포함) 403입니다. 예외는 {@code POST} {@link #DEMO_WRITABLE_PATH} 하나입니다
+         * (ADR 0014). 유효한 세션 쿠키가 함께 오면 세션이 이기므로 막지 않습니다.
          * 헤더가 없거나 틀리면(기능이 꺼져 있으면 늘) 아무것도 하지 않습니다 — 평소처럼 401·정책 검사로 갑니다.
          *
          * <p>HEAD도 막습니다 — 화면은 HEAD를 쓰지 않고, 앞단(Caddy)도 같은 규칙입니다. HEAD가 접근 정책 표를 건너뛰던
@@ -143,6 +150,9 @@ public class WebConfig implements WebMvcConfigurer {
         boolean demoForbidden(HttpServletRequest request) {
             String method = request.getMethod();
             if ("GET".equalsIgnoreCase(method) || "OPTIONS".equalsIgnoreCase(method)) {
+                return false;
+            }
+            if ("POST".equalsIgnoreCase(method) && DEMO_WRITABLE_PATH.equals(pathOf(request))) {
                 return false;
             }
             String header = request.getHeader(DemoViewer.HEADER);

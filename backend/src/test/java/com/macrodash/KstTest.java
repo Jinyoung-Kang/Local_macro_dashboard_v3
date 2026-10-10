@@ -43,6 +43,15 @@ class KstTest {
     }
 
     @Test
+    @DisplayName("today(clock)은 시계의 시간대가 UTC여도 서울 날짜 — 14:59 UTC는 같은 날, 15:00 UTC는 다음 날")
+    void todayWithClockUsesSeoul() {
+        java.time.Clock before = java.time.Clock.fixed(Instant.parse("2026-10-11T14:59:59Z"), java.time.ZoneOffset.UTC);
+        java.time.Clock after = java.time.Clock.fixed(Instant.parse("2026-10-11T15:00:00Z"), java.time.ZoneOffset.UTC);
+        assertThat(Kst.today(before)).isEqualTo(LocalDate.of(2026, 10, 11));
+        assertThat(Kst.today(after)).isEqualTo(LocalDate.of(2026, 10, 12));
+    }
+
+    @Test
     @DisplayName("화면 시각 형식: yyyy-MM-dd HH:mm KST (초 없음, KST로 변환)")
     void stampIsMinutePrecisionInKst() {
         Instant utc = Instant.parse("2026-09-25T15:30:59Z");

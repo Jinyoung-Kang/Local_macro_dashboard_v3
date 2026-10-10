@@ -49,13 +49,17 @@ public class AiReportService {
      */
     public Map<String, Object> report(String engineId, String requestedType, String extraInstruction,
                                       CurrentUser user) {
-        // 유료 API 비용 상한 — 사용자별 하루 한도(운영자는 한도 없음). 엔진이 모두 실패하면 되돌립니다.
+        // 유료 API 비용 상한 — 사용자별 하루 한도(운영자는 한도 없음), 데모 열람은 방문자 전체의 공용 하루 한도(ADR 0014).
+        // 엔진이 모두 실패하면 되돌립니다.
         UsageService.Quota quota = user == null ? null : usage.consume(user, UsageService.AI_REPORT);
         if (quota != null && !quota.allowed()) {
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("status", false);
-            out.put("error", "오늘 쓸 수 있는 AI 리포트 %d건을 모두 썼습니다. 내일(KST 0시) 다시 쓸 수 있습니다."
-                    .formatted(quota.limit()));
+            out.put("error", quota.shared()
+                    ? "데모의 오늘 AI 리포트 한도(%d건)를 모두 썼습니다. 내일(KST 0시) 다시 시도해 주세요."
+                            .formatted(quota.limit())
+                    : "오늘 쓸 수 있는 AI 리포트 %d건을 모두 썼습니다. 내일(KST 0시) 다시 쓸 수 있습니다."
+                            .formatted(quota.limit()));
             out.put("quota", quotaMap(quota));
             return out;
         }
@@ -85,17 +89,29 @@ public class AiReportService {
         if (quota != null) {
             if (!Boolean.TRUE.equals(result.get("status"))) {
                 usage.refund(user, UsageService.AI_REPORT);
-                quota = new UsageService.Quota(true, Math.max(0, quota.used() - 1), quota.limit());
+                quota = quota.refunded();
             }
             out.put("quota", quotaMap(quota));
         }
         return out;
     }
 
+    /**
+     * 데모 열람이면 오늘의 공용 AI 리포트 사용량({@code used}·{@code limit}·{@code shared: true}), 아니면 null.
+     * 화면이 생성 버튼 옆에 "데모 방문자 전체가 하루 N건을 함께 씁니다"를 적을 때 씁니다(엔진 목록 응답에 붙음).
+     */
+    public Map<String, Object> sharedQuota(CurrentUser user) {
+        return user != null && user.demo() ? quotaMap(usage.demoQuota()) : null;
+    }
+
+    /** 응답의 {@code quota}. 데모 열람의 공용 한도에만 {@code shared: true}를 붙입니다(계정 사용자의 모양은 그대로). */
     private static Map<String, Object> quotaMap(UsageService.Quota quota) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("used", quota.used());
         out.put("limit", quota.limit());
+        if (quota.shared()) {
+            out.put("shared", true);
+        }
         return out;
     }
 }

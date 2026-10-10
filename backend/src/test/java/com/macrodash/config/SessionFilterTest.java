@@ -226,13 +226,16 @@ class SessionFilterTest {
         }
 
         @Test
-        @DisplayName("데모 사용자는 GET·OPTIONS 밖(쓰기·HEAD)이 경로와 상관없이 403 demo_read_only")
+        @DisplayName("데모 사용자는 GET·OPTIONS 밖(쓰기·HEAD)이 경로와 상관없이 403 demo_read_only — POST /api/ai/report 하나만 예외")
         void writesAreReadOnly() throws Exception {
             WebConfig.SessionFilter on = filter(TOKEN);
             String[][] writes = {{"POST", "/api/alerts/rules"}, {"POST", "/api/alerts/rules/1"},
-                    {"DELETE", "/api/alerts/rules/1"}, {"POST", "/api/alerts/inbox/read"}, {"POST", "/api/ai/report"},
+                    {"DELETE", "/api/alerts/rules/1"}, {"POST", "/api/alerts/inbox/read"},
                     {"POST", "/api/auth/logout"}, {"POST", "/api/auth/login"}, {"POST", "/api/auth/signup"},
-                    {"PUT", "/api/alerts/rules/1"}, {"PATCH", "/api/alerts/rules/1"}, {"POST", "/api/status/refresh"}};
+                    {"PUT", "/api/alerts/rules/1"}, {"PATCH", "/api/alerts/rules/1"}, {"POST", "/api/status/refresh"},
+                    // AI 리포트 예외(ADR 0014)는 정확히 POST /api/ai/report만 — 같은 경로의 다른 메서드·비슷한 경로·연결 시험은 그대로
+                    {"PUT", "/api/ai/report"}, {"DELETE", "/api/ai/report"}, {"POST", "/api/ai/report/1"},
+                    {"POST", "/api/ai/test"}};
             for (String[] write : writes) {
                 Outcome outcome = send(on, write[0], write[1], TOKEN, null);
                 assertThat(outcome.status()).as(write[0] + " " + write[1]).isEqualTo(403);
@@ -245,6 +248,26 @@ class SessionFilterTest {
             Outcome head = send(on, "HEAD", "/api/status", TOKEN, null);
             assertThat(head.status()).as("HEAD").isEqualTo(403);
             assertThat(head.reached()).isFalse();
+        }
+
+        @Test
+        @DisplayName("데모 사용자의 POST /api/ai/report는 데모 사용자로 컨트롤러까지 간다(ADR 0014 — 공용 하루 한도는 서비스가 셈)")
+        void aiReportIsTheOnlyDemoWrite() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            Outcome outcome = send(on, "POST", "/api/ai/report", TOKEN, null);
+            assertThat(outcome.reached()).isTrue();
+            assertThat(outcome.user().demo()).isTrue();
+            assertThat(outcome.user().id()).isEqualTo(DemoViewer.USER_ID);
+
+            Outcome head = send(on, "HEAD", "/api/ai/report", TOKEN, null);
+            assertThat(head.status()).as("HEAD").isEqualTo(403);
+            assertThat(head.reached()).isFalse();
+            assertThat(send(off(), "POST", "/api/ai/report", TOKEN, null).status())
+                    .as("기능이 꺼져 있으면 평소처럼 401").isEqualTo(401);
+        }
+
+        private WebConfig.SessionFilter off() {
+            return filter("");
         }
 
         @Test

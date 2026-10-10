@@ -88,6 +88,11 @@ dashboard:
     auto-budget-seconds: ${AI_AUTO_BUDGET_SECONDS:180}
     # 유료 회원의 하루(KST) AI 리포트 한도 — 유료 API 비용 상한. 운영자는 한도 없음, 무료 회원은 쓸 수 없음.
     daily-limit: ${AI_DAILY_LIMIT:20}
+    # 이 배포에서 쓸 엔진 ID(쉼표로 구분, ADR 0014). 비우면 키가 있는 엔진을 모두 씁니다(기본·로컬).
+    # 모르는 ID가 있으면 기동하지 않습니다. auto는 넣지 않습니다 — 허용한 엔진 중 키가 있는 것이 둘 이상이면 켜집니다.
+    engines: ${AI_ENGINES:}
+    # 데모 열람(ADR 0013) 방문자 전체가 함께 쓰는 하루(KST) AI 리포트 한도 — 메모리에서 셉니다(재시작하면 0부터).
+    demo-daily-limit: ${AI_DEMO_DAILY_LIMIT:20}
 
 logging:
   level:
