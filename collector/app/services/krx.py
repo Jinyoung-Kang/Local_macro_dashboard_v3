@@ -278,11 +278,22 @@ def _parse_futures_day(date_str: str, rows: list[dict]) -> dict | None:
     }
 
 
+def _contract_changed(previous: dict, row: dict) -> bool:
+    """두 행의 계약(종목명)이 다른가. 어느 쪽이든 이름을 모르면 같은 계약으로 봅니다(예전 동작)."""
+    before, now = previous.get("contractName"), row.get("contractName")
+    return bool(before) and bool(now) and before != now
+
+
 def _derive_series(rows: list[dict]) -> None:
     """등락률·OI 증감·국면·COT OI Index를 계산해 rows를 갱신합니다."""
     for index, row in enumerate(rows):
         if index == 0:
             # 첫 행은 직전 종가가 없으므로 KRX 보고값이 있으면 그것을 씁니다.
+            row["changePct"] = row["changePctReported"]
+            row["oiChange"] = None
+        elif _contract_changed(rows[index - 1], row):
+            # 근월물이 바뀐 날(만기 롤오버) — 다른 계약끼리의 종가·OI 차는 변화가 아닙니다(QA-035). 등락률은 KRX가 그
+            # 계약 기준으로 보고한 값, OI 변화는 모름입니다(국면도 판정하지 않음).
             row["changePct"] = row["changePctReported"]
             row["oiChange"] = None
         else:

@@ -168,7 +168,6 @@ def test_missing_volume_or_open_interest_is_unknown_not_zero():
     assert rows[1]["cotOiIndex"] is None
 
 
-@pytest.mark.xfail(strict=True, reason="QA-035: 만기 롤오버 날 서로 다른 계약끼리 OI 변화를 계산")
 def test_QA035_근월물이_바뀐_날은_미결제약정_변화를_모른다():
     """
     근월물은 그날 거래량 1위로 고릅니다. 만기 무렵 거래가 다음 월물로 옮겨 가면 9월물 OI와 12월물 OI의 차를 '변화'로
@@ -185,7 +184,6 @@ def test_QA035_근월물이_바뀐_날은_미결제약정_변화를_모른다():
     assert rows[1]["marketPhase"] == krx.PHASE_UNKNOWN
 
 
-@pytest.mark.xfail(strict=True, reason="QA-035: KRX 일시 실패 때 확정 저장본을 추정치로 덮음")
 def test_QA035_KRX가_잠깐_실패해도_하루_안의_확정치를_추정치로_덮지_않는다(store, monkeypatch):
     from app import catalog, tasks
 

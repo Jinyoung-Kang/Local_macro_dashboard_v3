@@ -129,6 +129,10 @@ def task_fed_liquidity() -> str:
     return f"{len(rows)}행, 누적 {accumulated}행"
 
 
+# 이보다 새 확정 저장본이 있으면 KRX가 잠깐 실패해도 추정치로 덮지 않습니다(QA-035).
+KRX_CONFIRMED_KEEP_SECONDS = 26 * 3600
+
+
 def task_krx_futures() -> str:
     payload = krx_service.collect_futures_history(40)
     rows = payload.get("rows") or []
@@ -137,6 +141,13 @@ def task_krx_futures() -> str:
             "KRX 선물 빈 결과 — 기존 저장본 유지"
             + _reason_suffix([payload.get("error")] if payload.get("error") else [])
         )
+    if payload.get("isEstimated"):
+        previous = store.read_snapshot(catalog.SNAP_KRX_FUTURES)
+        if (previous and isinstance(previous.payload, dict) and previous.payload.get("rows")
+                and not previous.payload.get("isEstimated")
+                and previous.age_seconds < KRX_CONFIRMED_KEEP_SECONDS):
+            # 확정 미결제약정이 있는 저장본을 OI 없는 추정치로 1시간 덮으면 국면 판정이 그동안 사라집니다.
+            raise EmptyResult("KRX 확정치 조회 실패 — 하루 안의 확정 저장본을 추정치로 덮지 않습니다")
 
     store.put_snapshot(
         catalog.SNAP_KRX_FUTURES,
