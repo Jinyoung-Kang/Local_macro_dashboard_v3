@@ -250,6 +250,10 @@ def task_fx_history() -> str:
         series, previous_payload(catalog.SNAP_FX_HISTORY).get("series"), [spec["key"] for spec in specs],
         raw.get("error"), lambda entry: bool(entry.get("close")),
     )
+    # 이어받은 계열은 옛 order를 가져와 새로 매긴 번호와 겹칠 수 있습니다(QA-057). 정의 순서대로 다시 매깁니다.
+    ordered = [spec["key"] for spec in specs if spec["key"] in series]
+    for position, key in enumerate(ordered):
+        series[key]["order"] = position
     store.put_snapshot(
         catalog.SNAP_FX_HISTORY,
         {"period": indicators.FX_HISTORY_PERIOD, "series": series},

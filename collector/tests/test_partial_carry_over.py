@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 
 from app import catalog, equities, indicators, tasks
@@ -121,7 +120,6 @@ def test_QA056_오래_이어받은_항목은_더_잇지_않는다(store, monkeyp
     assert saved[c]["isStale"] is True and saved[c]["staleSince"], "처음 이어받을 때 그 시각을 적습니다"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-057: 이어받은 환율 계열의 order가 새로 받은 계열과 겹침 — 수정 커밋에서 뺌")
 def test_QA057_이어받은_환율_계열도_정의_순서대로_번호를_받는다(store, monkeypatch):
     """새로 받은 계열은 0부터 다시 번호를 매기는데 이어받은 계열은 옛 order를 그대로 가져, 화면 버튼 순서가 뒤바뀌었습니다."""
     specs = indicators.fx_history_specs()
