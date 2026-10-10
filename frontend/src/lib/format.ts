@@ -399,9 +399,11 @@ export function formatLatency(latencyMs?: number): string {
   if (latencyMs === undefined || latencyMs === null) {
     return "소요 시간 미상";
   }
-  const seconds = latencyMs / 1000;
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}초`;
+  // 반올림을 먼저 하고 단위를 나눕니다. 분·초를 따로 반올림하면 119.6초가 "1분 60초", 59.96초가 "60.0초"였습니다(QA-048).
+  const tenths = Math.round(latencyMs / 100);
+  if (tenths < 600) {
+    return `${(tenths / 10).toFixed(1)}초`;
   }
-  return `${Math.floor(seconds / 60)}분 ${Math.round(seconds % 60)}초`;
+  const total = Math.round(latencyMs / 1000);
+  return `${Math.floor(total / 60)}분 ${total % 60}초`;
 }
