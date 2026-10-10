@@ -46,13 +46,28 @@ public class TrackRecordService {
             new Asset("IEF", "미국채 7-10년 (IEF)", Datasets.SNAP_SECTOR_HISTORY, "sector_history"),
             new Asset("GLD", "금 (GLD)", Datasets.SNAP_SECTOR_HISTORY, "sector_history"));
 
+    /** 고정 한계. 재현 기간 줄은 입력·가격의 실제 시작일에서 만들어 맨 앞에 붙입니다({@link #periodLimit}, QA-063). */
     static final List<String> LIMITS = List.of(
-            "하이일드 스프레드 이력이 2023-09부터라 재현할 수 있는 기간이 약 3년입니다. 그 안에서 국면이 바뀐 횟수가 적어 표본이 작습니다.",
             "NFCI는 매주 과거 값이 개정됩니다. 재현에 쓴 값은 당시 발표값이 아니라, 오래된 구간은 처음 수집한 날의 개정본, "
                     + "최근 구간은 관측 1~2주 뒤의 값입니다. 라이브 판정 기록에는 이 문제가 없습니다.",
             "가격은 ETF 종가(배당 반영 수정주가)입니다. 지수 자체의 수익률이 아닙니다.",
             "과거 성과는 미래 수익을 보장하지 않습니다. 이 표는 판정의 설명력을 보여 줄 뿐 매매 권유가 아닙니다.",
             "같은 국면이 몇 주 이어지면 수익률 기간이 겹칩니다. 그래서 표본 수와 겹치지 않는 표본 수를 따로 적습니다.");
+
+    /**
+     * 재현 기간 한 줄 — 가장 늦게 시작하는 이력(입력 넷 또는 가격)과 실제 기간. 예전에는 하이일드 기준 '약 3년'을 고정으로
+     * 적어, 가격 이력이 2년뿐인 IEF·GLD에서 덧붙인 줄과 어긋났습니다(QA-042·QA-063).
+     */
+    static String periodLimit(Asset asset, LocalDate priceFrom, LocalDate inputsFrom, LocalDate from, LocalDate to,
+                              List<Map.Entry<String, LocalDate>> inputStarts) {
+        String latestStart = priceFrom.isAfter(inputsFrom)
+                ? asset.label() + " 가격 이력"
+                : inputStarts.stream().filter(entry -> entry.getValue().equals(inputsFrom)).map(Map.Entry::getKey)
+                        .findFirst().orElse("국면 입력") + " 이력";
+        double years = java.time.temporal.ChronoUnit.DAYS.between(from, to) / 365.25;
+        return "%s이 %s부터라 재현 기간은 약 %.1f년입니다. 그 안에서 국면이 바뀐 횟수가 적어 표본이 작습니다."
+                .formatted(latestStart, from, years);
+    }
 
     private final StoreRepository repository;
     private final StoreReader store;
@@ -106,14 +121,12 @@ public class TrackRecordService {
         LocalDate inputsFrom = latest(curve.firstKey(), nfci.firstKey(), hy.firstKey(), liquidity.firstKey());
         LocalDate from = latest(inputsFrom, prices.firstKey());
         LocalDate to = earliest(curve.lastKey(), nfci.lastKey(), hy.lastKey(), liquidity.lastKey());
-        if (prices.firstKey().isAfter(inputsFrom)) {
-            // 위 고정 문구의 '약 3년'은 하이일드 기준입니다. IEF·GLD처럼 가격 이력(2년)이 더 짧으면 그만큼 짧아집니다(QA-042).
-            List<String> limits = new ArrayList<>(LIMITS);
-            limits.add("%s 가격 이력이 %s부터라 이 자산의 재현 기간은 약 %.1f년입니다."
-                    .formatted(asset.label(), prices.firstKey(),
-                            java.time.temporal.ChronoUnit.DAYS.between(prices.firstKey(), to) / 365.25));
-            out.put("limits", limits);
-        }
+        List<String> limits = new ArrayList<>();
+        limits.add(periodLimit(asset, prices.firstKey(), inputsFrom, from, to,
+                List.of(Map.entry("하이일드 스프레드", hy.firstKey()), Map.entry("NFCI", nfci.firstKey()),
+                        Map.entry("장단기 금리차(T10Y3M)", curve.firstKey()), Map.entry("순유동성", liquidity.firstKey()))));
+        limits.addAll(LIMITS);
+        out.put("limits", limits);
         List<RegimeBacktest.Point> timeline = RegimeBacktest.timeline(curve, nfci, hy, liquidity, from, to);
         RegimeBacktest.Result result = RegimeBacktest.trackRecord(timeline, prices, HORIZONS);
 

@@ -5,7 +5,6 @@ import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreRepository;
 import com.macrodash.support.InvalidRequestException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -135,7 +134,6 @@ class TrackRecordServiceTest {
     }
 
     @Test
-    @Disabled("QA-063: 고정 문구 '약 3년'이 실제 기간 줄과 함께 남음 — 수정 커밋에서 켬")
     @DisplayName("QA-063 재현 기간은 한 줄, 실제 입력·가격 시작일에서 만든다 — 고정 문구 '약 3년'과 어긋나지 않게")
     @SuppressWarnings("unchecked")
     void reproducedPeriodIsOneComputedLine() {
@@ -145,7 +143,10 @@ class TrackRecordServiceTest {
             assertThat(limits).noneSatisfy(line -> assertThat(line).contains("약 3년"));
             assertThat(limits).filteredOn(line -> line.contains("재현 기간")).hasSize(1);
         }
-        List<String> full = (List<String>) service(0).trackRecord("SPY", true).get("limits");
-        assertThat(full).anySatisfy(line -> assertThat(line).contains("하이일드").contains(START.toString()));
+        // 가격이 입력보다 먼저 있으면 가장 늦게 시작하는 국면 입력을, 늦게 시작하면 가격 이력을 이유로 적는다
+        assertThat((List<String>) service(0).trackRecord("SPY", true).get("limits"))
+                .filteredOn(line -> line.contains("재현 기간")).allSatisfy(line -> assertThat(line).doesNotContain("가격 이력"));
+        assertThat((List<String>) service(200).trackRecord("SPY", true).get("limits"))
+                .filteredOn(line -> line.contains("재현 기간")).allSatisfy(line -> assertThat(line).contains("가격 이력"));
     }
 }
