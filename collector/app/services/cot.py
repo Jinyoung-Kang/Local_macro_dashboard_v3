@@ -132,12 +132,8 @@ def _get_with_retry(params: dict, max_attempts: int = 3):
                 CFTC_URL,
                 params=params,
                 timeout=(5, 30),
-                headers={
-                    "User-Agent": (
-                        "local-macro-dashboard-v3/3.0 "
-                        "(data research contact: admin@example.com)"
-                    )
-                },
+                # CFTC(Socrata)는 연락처를 요구하지 않습니다. 자리표시 주소를 코드 기본값으로 싣지 않습니다(QA-038).
+                headers={"User-Agent": "local-macro-dashboard-v3/3.0"},
             )
             response.raise_for_status()
             return response, None

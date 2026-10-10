@@ -12,6 +12,10 @@ import uuid
 
 import pytest
 
+# TestClient의 기본 Host는 'testserver'입니다. 운영 기본 허용 목록에는 두지 않고(QA-038) 테스트에서만 더합니다 —
+# app.main이 불러와지기 전에(이 파일이 먼저 실행됨) 정해야 미들웨어가 이 목록으로 만들어집니다.
+os.environ.setdefault("COLLECTOR_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],collector,testserver")
+
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
