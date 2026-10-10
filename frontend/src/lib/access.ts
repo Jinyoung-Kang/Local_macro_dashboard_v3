@@ -29,9 +29,18 @@ export function visibleMenus<T extends { href: string }>(menus: readonly T[], us
   return menus.filter((menu) => !(OWNER_ONLY_MENUS as readonly string[]).includes(menu.href));
 }
 
+/** 데모 열람인가(ADR 0013) — 계정 없이 읽기만 하는 방문자. */
+export function isDemo(user: SessionUser | null | undefined): boolean {
+  return user?.demo === true;
+}
+
+/** 데모 열람에서 쓰기 버튼 옆에 적는 안내. 백엔드의 403 문구와 같은 뜻입니다. */
+export const DEMO_READ_ONLY = "데모에서는 조회만 가능합니다";
+
 /** 사이드바에 적을 역할·등급 이름. */
 export function roleLabel(user: SessionUser | null | undefined): string {
   if (!user) return "";
+  if (isDemo(user)) return "데모 열람";
   if (user.role === "OWNER") return "운영자";
   return user.tier === "PRO" ? "유료 회원" : "무료 회원";
 }

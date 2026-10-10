@@ -7,6 +7,7 @@ import { MENUS, Sidebar } from "@/components/Sidebar";
 import { useApi } from "@/hooks/useApi";
 import { apiBase } from "@/lib/api";
 import { RefreshProvider, useRefreshSignal } from "@/hooks/useRefreshSignal";
+import { SessionUserProvider } from "@/hooks/useSessionUser";
 import { endpoints } from "@/lib/endpoints";
 import type { SessionResponse } from "@/lib/types";
 import { titleWithUnread } from "@/lib/alerts";
@@ -116,17 +117,20 @@ function DashboardShell({
   }
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
-      {/* 읽기 모드는 세션 응답에 함께 옵니다. 예전에는 이 한 줄 때문에 페이지를 열 때마다
-          무거운 /api/status(수집기 상태 + DB 집계)를 불렀습니다. */}
-      <Sidebar readMode={data?.readMode} user={data?.user} unread={unread} />
-      <main tabIndex={-1} id="main" className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:h-screen lg:overflow-y-auto">
-        <div className="mb-5">
-          <MarketClock />
-        </div>
-        {children}
-      </main>
-    </div>
+    // 화면들이 세션을 다시 읽지 않고 사용자(데모 열람 여부 등)를 알 수 있게 내려 줍니다.
+    <SessionUserProvider user={data?.user}>
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        {/* 읽기 모드는 세션 응답에 함께 옵니다. 예전에는 이 한 줄 때문에 페이지를 열 때마다
+            무거운 /api/status(수집기 상태 + DB 집계)를 불렀습니다. */}
+        <Sidebar readMode={data?.readMode} user={data?.user} unread={unread} />
+        <main tabIndex={-1} id="main" className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:h-screen lg:overflow-y-auto">
+          <div className="mb-5">
+            <MarketClock />
+          </div>
+          {children}
+        </main>
+      </div>
+    </SessionUserProvider>
   );
 }
 

@@ -11,6 +11,8 @@ import { auth } from "@/lib/api";
  * 비밀번호는 백엔드가 검증하고, 세션은 httpOnly 쿠키로 유지됩니다.
  * (토큰을 브라우저 저장소에 두지 않습니다 — XSS로 새어 나갈 수 있습니다.)
  * 처음 쓰는 경우 운영자 계정은 .env의 OWNER_EMAIL·APP_PASSWORD로 만들어집니다.
+ *
+ * 데모 열람(ADR 0013 — AWS 공개 데모에서 접근 코드를 통과한 방문자)은 로그인하지 않으므로 대시보드 첫 화면으로 보냅니다.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -20,10 +22,21 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   // 가입·재설정은 백엔드에 메일 발송이 설정됐을 때만 보여 줍니다.
   const [mailAvailable, setMailAvailable] = useState(false);
+  const [demo, setDemo] = useState(false);
 
   useEffect(() => {
-    auth.session().then((s) => setMailAvailable(Boolean(s.mailAvailable))).catch(() => setMailAvailable(false));
-  }, []);
+    auth
+      .session()
+      .then((s) => {
+        if (s.authenticated && s.user?.demo) {
+          setDemo(true);
+          router.replace("/");
+          return;
+        }
+        setMailAvailable(Boolean(s.mailAvailable));
+      })
+      .catch(() => setMailAvailable(false));
+  }, [router]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -38,6 +51,15 @@ export default function LoginPage() {
       setBusy(false);
     }
   };
+
+  // 데모 열람이면 첫 화면으로 가는 동안 로그인 칸을 보이지 않습니다.
+  if (demo) {
+    return (
+      <main className="flex min-h-screen items-center justify-center text-sm text-muted">
+        대시보드로 이동하는 중…
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">

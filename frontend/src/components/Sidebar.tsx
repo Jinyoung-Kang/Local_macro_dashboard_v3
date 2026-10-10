@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
-import { isOwner, lockedFor, roleLabel, visibleMenus } from "@/lib/access";
+import { DEMO_READ_ONLY, isDemo, isOwner, lockedFor, roleLabel, visibleMenus } from "@/lib/access";
 import { unreadBadge } from "@/lib/alerts";
 import type { SessionUser } from "@/lib/types";
 
@@ -146,16 +146,26 @@ export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: 
         )}
         {message && <p className="text-[11px] leading-relaxed text-muted">{message}</p>}
 
-        {user && (
-          <Link
-            href="/account"
-            className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] text-body hover:border-accent/30"
-          >
-            {user.email}
-            <span className="ml-1 text-muted">· {roleLabel(user)}</span>
-          </Link>
+        {/* 데모 열람(ADR 0013)은 계정·세션이 없어 내 계정·로그아웃이 없습니다. 접근은 앞단의 접근 코드가 정합니다. */}
+        {isDemo(user) ? (
+          <p className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] text-body">
+            {roleLabel(user)}
+            <span className="ml-1 text-muted">· {DEMO_READ_ONLY}</span>
+          </p>
+        ) : (
+          <>
+            {user && (
+              <Link
+                href="/account"
+                className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] text-body hover:border-accent/30"
+              >
+                {user.email}
+                <span className="ml-1 text-muted">· {roleLabel(user)}</span>
+              </Link>
+            )}
+            <Button onClick={logout}>로그아웃</Button>
+          </>
         )}
-        <Button onClick={logout}>로그아웃</Button>
         {/*
           지금 화면이 "어느 코드"인지 항상 보이게 둡니다.
           git pull 뒤에도 화면이 그대로일 때, 코드를 못 받은 것인지 화면이

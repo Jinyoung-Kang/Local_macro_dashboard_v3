@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 import { Banner, Button, Card, ErrorState, Loading, Select, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useSessionUser } from "@/hooks/useSessionUser";
+import { DEMO_READ_ONLY, isDemo } from "@/lib/access";
 import { ALERT_KINDS } from "@/lib/alerts";
 import { apiDelete, apiPost } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
@@ -17,8 +19,10 @@ type Result = { ok: boolean; message: string };
  *
  * 알림은 대시보드를 열어야 보입니다(메일·메신저로 보내지 않음). 사이드바와 탭 제목에 읽지 않은 수가 뜹니다.
  * 규칙을 만든 날 이후의 사건만 들어오고, 사건은 수집이 확정된 데이터로만 만듭니다(잠정치 제외).
+ * 데모 열람(ADR 0013)은 읽기 전용이라 읽음 처리·규칙 만들기·켜기/끄기·지우기를 막습니다(백엔드도 403).
  */
 export default function AlertsPage() {
+  const demo = isDemo(useSessionUser());
   const inbox = useApi<InboxResponse>(endpoints.alerts.inbox(50), 300_000);
   const rules = useApi<AlertRulesResponse>(endpoints.alerts.rules, 0);
   const institutions = useApi<{ institutions?: { cik: string; name: string }[] }>(endpoints.institution.institutions, 0);
@@ -44,6 +48,7 @@ export default function AlertsPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (demo) return;
     const params: Record<string, unknown> =
       kind === "FOREIGN_STREAK" ? { target, n: Number(days), ...(target === "STOCK" ? { code } : {}) }
         : kind === "INSTITUTION_NEW" ? { cik }
@@ -70,14 +75,17 @@ export default function AlertsPage() {
         title="알림함"
         subtitle={`읽지 않은 알림 ${inbox.data?.unread ?? 0}건 · 90일 보관`}
         actions={
-          <Button onClick={async () => { await read.run(null); void inbox.reload(); }} disabled={read.busy || !inbox.data?.unread}>
+          <Button onClick={async () => { await read.run(null); void inbox.reload(); }} disabled={demo || read.busy || !inbox.data?.unread}>
             모두 읽음
           </Button>
         }
       >
         {inbox.error && <ErrorState message={inbox.error} onRetry={inbox.reload} />}
         {items.length === 0 ? (
-          <p className="text-xs text-muted">아직 알림이 없습니다. 아래에서 알림 규칙을 만드세요.</p>
+          <p className="text-xs text-muted">
+            {demo ? `아직 알림이 없습니다. ${DEMO_READ_ONLY}(알림 규칙은 계정으로 로그인해야 만들 수 있습니다).`
+              : "아직 알림이 없습니다. 아래에서 알림 규칙을 만드세요."}
+          </p>
         ) : (
           <ul className="flex flex-col gap-2">
             {items.map((item: InboxItem) => (
@@ -95,7 +103,7 @@ export default function AlertsPage() {
                   </span>
                 </div>
                 <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-body">{item.body}</p>
-                {!item.read && (
+                {!item.read && !demo && (
                   <button
                     type="button"
                     className="mt-2 text-[11px] text-muted underline hover:text-accent"
@@ -126,7 +134,7 @@ export default function AlertsPage() {
               key: "enabled",
               header: "상태",
               render: (row) => (
-                <Button onClick={async () => { await toggle.run(row.id, !row.enabled); reloadAll(); }}>
+                <Button disabled={demo} onClick={async () => { await toggle.run(row.id, !row.enabled); reloadAll(); }}>
                   {row.enabled ? "켜짐 — 끄기" : "꺼짐 — 켜기"}
                 </Button>
               ),
@@ -135,7 +143,7 @@ export default function AlertsPage() {
               key: "delete",
               header: "",
               render: (row) => (
-                <Button onClick={async () => { await remove.run(row.id); reloadAll(); }}>지우기</Button>
+                <Button disabled={demo} onClick={async () => { await remove.run(row.id); reloadAll(); }}>지우기</Button>
               ),
             },
           ]}
@@ -172,9 +180,10 @@ export default function AlertsPage() {
           {create.error && <Banner tone="warn">{create.error}</Banner>}
           {create.result && <Banner tone={create.result.ok ? "info" : "warn"}>{create.result.message}</Banner>}
           <Button variant="primary" type="submit"
-            disabled={create.busy || (kind === "INSTITUTION_NEW" && !cik) || (kind === "FOREIGN_STREAK" && target === "STOCK" && !/^\d{6}$/.test(code))}>
+            disabled={demo || create.busy || (kind === "INSTITUTION_NEW" && !cik) || (kind === "FOREIGN_STREAK" && target === "STOCK" && !/^\d{6}$/.test(code))}>
             {create.busy ? "만드는 중…" : "규칙 만들기"}
           </Button>
+          {demo && <p className="text-[11px] text-muted">{DEMO_READ_ONLY}</p>}
         </form>
       </Card>
     </div>

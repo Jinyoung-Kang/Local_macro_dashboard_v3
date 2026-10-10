@@ -6,6 +6,8 @@ import { Banner, Button, Card, Loading, Select, SourceBadge } from "@/components
 import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useElapsedSeconds } from "@/hooks/useElapsedSeconds";
+import { useSessionUser } from "@/hooks/useSessionUser";
+import { DEMO_READ_ONLY, isDemo } from "@/lib/access";
 import { apiPost } from "@/lib/api";
 import { formatKst } from "@/lib/format";
 import type { AiEngines, AiResponse, SnapshotText } from "@/lib/types";
@@ -19,8 +21,11 @@ import { ReportView } from "./ReportView";
  * 프롬프트에는 대시보드가 수집한 <b>원본 텍스트</b>가 그대로 들어갑니다.
  * 추정치·대용 지표에는 경고 문구가 함께 들어가므로, AI가 실제 지표의 임계치를
  * 추정치에 적용하는 것을 막습니다.
+ *
+ * 데모 열람(ADR 0013)은 읽기 전용이라 리포트 생성(POST)을 막습니다 — 원본 데이터 보기·복사는 그대로 씁니다.
  */
 export default function AiReportPage() {
+  const demo = isDemo(useSessionUser());
   const engines = useApi<AiEngines>(endpoints.ai.engines);
   const reportTypes = useApi<{ types: string[] }>(endpoints.ai.reportTypes);
   const snapshot = useApi<SnapshotText>(endpoints.snapshot.text);
@@ -115,11 +120,12 @@ export default function AiReportPage() {
           <Button
             variant="primary"
             onClick={generate}
-            disabled={busy || !engines.data?.enabled}
+            disabled={demo || busy || !engines.data?.enabled}
           >
             {busy ? `생성 중… ${elapsed}초 경과` : "🚀 리포트 생성"}
           </Button>
-          {engines.data && !engines.data.enabled && (
+          {demo && <span className="text-xs text-muted">{DEMO_READ_ONLY}</span>}
+          {!demo && engines.data && !engines.data.enabled && (
             <span className="text-xs text-muted">
               사용할 수 있는 AI 엔진이 없습니다 — .env에 ANTHROPIC·NVIDIA·Cloudflare·Cerebras 키 중 하나를 넣고 make up 하세요.
             </span>

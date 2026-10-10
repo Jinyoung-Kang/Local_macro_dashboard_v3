@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 import { Banner, Button, Card, ErrorState, Loading, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { roleLabel } from "@/lib/access";
+import { useSessionUser } from "@/hooks/useSessionUser";
+import { isDemo, roleLabel } from "@/lib/access";
 import { auth } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
 import { formatKst } from "@/lib/format";
@@ -14,11 +16,18 @@ import type { LoginSession, SessionResponse } from "@/lib/types";
  * 👤 내 계정 — 계정 정보, 비밀번호 변경, 로그인한 기기(세션) 목록과 "다른 기기 모두 로그아웃".
  *
  * 비밀번호를 바꾸면 백엔드가 다른 기기의 세션을 끊습니다(지금 기기는 남김, ADR 0010).
+ * 데모 열람(ADR 0013)은 계정이 없으므로 대시보드 첫 화면으로 보냅니다.
  */
 export default function AccountPage() {
-  const session = useApi<SessionResponse>(endpoints.auth.session, 0, { followRefresh: false });
-  const sessions = useApi<{ sessions: LoginSession[] }>(endpoints.auth.sessions, 0);
+  const router = useRouter();
+  const demo = isDemo(useSessionUser());
+  const session = useApi<SessionResponse>(demo ? null : endpoints.auth.session, 0, { followRefresh: false });
+  const sessions = useApi<{ sessions: LoginSession[] }>(demo ? null : endpoints.auth.sessions, 0);
   const user = session.data?.user;
+
+  useEffect(() => {
+    if (demo) router.replace("/");
+  }, [demo, router]);
 
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -40,6 +49,7 @@ export default function AccountPage() {
     void sessions.reload();
   };
 
+  if (demo) return <Loading label="대시보드로 이동하는 중…" />;
   if (session.loading && !session.data) return <Loading label="계정 정보를 읽는 중…" />;
   if (session.error) return <ErrorState message={session.error} onRetry={session.reload} />;
 
