@@ -185,17 +185,19 @@ config/ · web/   설정 · 인증 필터 · 공통 오류 응답
 |---|---|---|
 | XSS로 토큰 탈취 | 쿠키 `HttpOnly` (스크립트가 읽지 못함) | `AuthController` |
 | CSRF | 쿠키 `SameSite=Strict`. 화면(:3000)과 API(:8080)는 포트만 달라 같은 사이트 | `AuthController` |
-| 비밀번호 대입 | (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 잠금이 아니라 지연이라 맞는 비밀번호가 **잠기지는 않지만**, 공격자가 느린 차선을 계속 차지하는 순간에는 주인도 429를 받을 수 있고 1초 뒤 다시 시도하면 통과(Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 영구히 막았음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제 | `LoginThrottle` |
+| 비밀번호 대입 | (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 잠금이 아니라 지연이라 맞는 비밀번호가 **잠기지는 않지만**, 공격자가 느린 차선을 계속 차지하는 순간에는 주인도 429를 받을 수 있고 1초 뒤 다시 시도하면 통과(Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 영구히 막았음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제. 기억하는 기록은 1만 건까지(넘치면 새 키는 기록하지 않음). 비밀번호 변경·탈퇴의 '지금 비밀번호' 재확인도 사용자마다 같은 지연 | `LoginThrottle`, `AuthController` |
+| 해시로 메모리 고갈 | Argon2 해시(한 번 16MB)는 동시에 코어 수(최소 2)까지만. 3초 안에 자리가 나지 않으면 429 — 이메일을 바꿔 가며 보내는 인증 없는 로그인도 막힘 | `PasswordHasher` |
+| 큰 본문으로 메모리 고갈 | 로그인 없이 받는 POST는 4KB, 로그인한(데모 포함) 쓰기 요청은 64KB에서 파싱 전에 413 | `SessionFilter.capBody` |
 | 비밀번호 유출 | Argon2id 해시만 저장. 세션 토큰은 SHA-256만 저장(DB가 새어도 쿠키를 만들 수 없음) | `PasswordHasher`, `SessionStore` |
 | 계정 존재 여부 탐색 | 없는 이메일도 가짜 해시와 비교해 같은 시간·같은 401 | `AuthService.verify` |
 | 타이밍 공격 | 수집기 토큰 `hmac.compare_digest` | `collector/app/main.py` |
 | 로그아웃·비밀번호 변경 뒤 토큰 재사용 | DB 세션이라 다음 요청부터 거부, 재시작 후에도 유지(예전 JWT는 메모리 차단 목록이라 재시작 때 사라짐) | `SessionStore` |
 | 권한 밖 기능 호출 | 경로별 접근 정책(공개·회원·유료·운영자). 미분류 경로는 빌드 실패 | `AccessPolicy`, `AccessPolicyTest` |
 | 다른 출처의 상태 변경 요청 | POST·PUT·DELETE의 `Origin`이 CORS 허용 목록에 없으면 403 | `SessionFilter.foreignOrigin` |
-| 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단) | `WebConfig.SessionFilter` |
+| 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단). 정규화가 필요한 경로(`.`·`..` 조각, 인코딩된 점·슬래시, `//`, `;`)는 정책 검사 전에 400 — 정책(정규화 경로)과 처리기 매칭(날것 경로)이 다른 경로를 보지 않게 | `WebConfig.SessionFilter` |
 | 헤더로 로그인 건너뛰기(데모 열람, AWS만) | 기본 꺼짐. 켜려면 32자 이상 토큰(짧으면 기동 실패), 해시를 상수 시간 비교, 세션이 먼저, GET만(쓰기·HEAD 403 — AI 리포트 생성 POST 하나만 예외, ADR 0014), 운영 경로 403. 백엔드는 루프백에만 열고 앞단이 헤더를 붙이거나 지움(ADR 0013) | `DemoViewer`, `SessionFilter.demoForbidden` |
 | 응답 가로채기·끼워 넣기 | `nosniff`, `no-store`, `X-Frame-Options: DENY`, `frame-ancestors 'none'` | `SessionFilter`, `next.config.mjs` |
-| 유료 AI API 비용 폭주 | 사용자 입력 2,000자 상한(400). 하루 한도(유료 회원은 사용자별 DB, 데모 방문자는 공용 메모리). 배포별 엔진 허용 목록(AWS 데모는 Haiku 하나, ADR 0014) | `AiController`, `UsageService`, `AiService` |
+| 유료 AI API 비용 폭주 | 사용자 입력 2,000자 상한(400). 하루 한도(유료 회원은 사용자별 DB, 데모 방문자는 공용 메모리). 배포별 엔진 허용 목록(AWS 데모는 Haiku 하나, ADR 0014). 실패는 모델에 닿지 않았을 때만 한도를 되돌림(거절·빈 응답·대기 시간 초과는 과금됐을 수 있어 그대로) | `AiController`, `UsageService`, `AiService`, `AiReportService` |
 | 로그로 API 키 유출 | 로깅 계층에서 키 파라미터 가림(`serviceKey`·`crtfc_key`·`key` 등 포함) | `collector/app/logredact.py` |
 
 **주의** — 실패 횟수는 (접속 주소, 이메일) 기준입니다. X-Forwarded-For는 위조할 수
