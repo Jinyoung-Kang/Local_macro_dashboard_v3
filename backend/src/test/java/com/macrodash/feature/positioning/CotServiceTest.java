@@ -4,7 +4,6 @@ import com.macrodash.read.StoreReader;
 import com.macrodash.support.InvalidRequestException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -41,7 +40,6 @@ class CotServiceTest {
     }
 
     @Test
-    @Disabled("QA-061: 최신 주를 모르면 직전 주의 백분위가 찍힘 — 수정 커밋에서 켬")
     @DisplayName("QA-061: 최신 주 순포지션을 모르면 백분위도 모름 — 직전 주의 백분위를 최신 날짜 옆에 찍지 않는다")
     void percentileIsUnknownWhenLatestIsUnknown() throws Exception {
         ObjectMapper mapper = new ObjectMapper();

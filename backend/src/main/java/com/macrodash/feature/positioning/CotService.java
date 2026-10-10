@@ -327,7 +327,8 @@ public class CotService {
         out.put("change1w", changeOver(rows, 1));
         out.put("change4w", changeOver(rows, 4));
         out.put("change13w", changeOver(rows, 13));
-        out.put("percentile", SeriesMath.percentile(ncNet));
+        // 백분위는 마지막 원소를 '현재'로 봅니다. 최신 주를 모르면(null — 건너뛰고 모은 목록의 끝은 직전 주) 백분위도 모름입니다(QA-061).
+        out.put("percentile", Json.asDouble(latest, "ncNet") == null ? null : SeriesMath.percentile(ncNet));
 
         LocalDate reportDate = Json.parseDate(Json.asText(latest, "date"));
         out.put("ageDays", reportDate == null
