@@ -668,6 +668,9 @@ def fetch_toss_ranking(market: str, investor: str, trade_type: str, top_n: int) 
             "netVolume": net,
             "source": source,
             "collectedAt": kst.stamp(snap.collected_at) if snap.collected_at else None,
+            # 기준일은 토스 기록의 날짜(전 거래일일 수 있음), 금액은 추정치 — 이력에 쌓지 않습니다(QA-029).
+            "dataDate": _iso_date(target),
+            "isEstimated": True,
         })
     if not records:
         _TOSS_LAST_REASON["value"] = f"{target} 기준 {trade_type} 종목이 없습니다"
@@ -776,6 +779,8 @@ def fetch_pykrx_ranking(
             "netAmountEok": round(float(row["순매수거래대금"]) / 100_000_000.0, 1),
             "source": f"PyKrx ({target_date})",
             "collectedAt": collected_at,
+            # 폴백은 날짜를 거슬러 받으므로 조회한 날짜가 기준일입니다(QA-029). 없으면 오늘 거래일로 쌓였습니다.
+            "dataDate": _iso_date(target_date),
         })
 
     return _rank(records, trade_type, top_n)
@@ -838,6 +843,11 @@ def accumulate_history(
     백업 읽기가 시각이 다른 값을 섞어 "그날의 상위 N"이라고 돌려줍니다.
     """
     if not rows:
+        return 0
+    if any(row.get("isEstimated") for row in rows):
+        # 추정치(토스 '거래대금 상위 N종목 안' 순위 · 주식 수 × 현재가)는 시장 전체 순위가 아니고 금액도 추정입니다.
+        # 쌓으면 그날의 실제 상위 30을 교체합니다(QA-029). 화면에는 그대로 보이고, 이력에만 남기지 않습니다.
+        logger.info("수급 레이더 이력 누적 건너뜀: 추정치 (%s/%s/%s/%s)", market, investor, trade_type, interval_type)
         return 0
 
     obs_date = _iso_date(rows[0].get("dataDate"))

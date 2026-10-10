@@ -129,7 +129,6 @@ class _TossSnap:
     }
 
 
-@pytest.mark.xfail(strict=True, reason="QA-029: 토스 추정 순위가 기준일·추정 표시 없이 오늘 이력을 교체")
 def test_QA029_토스_추정_순위는_그날의_실제_이력을_지우지_않는다(store, session_20260911, monkeypatch):
     """
     토스 폴백은 '거래대금 상위 100종목 안'의 순위이고 금액은 주식 수 × 현재가 추정입니다. 기준일도 전 거래일일 수
@@ -147,7 +146,6 @@ def test_QA029_토스_추정_순위는_그날의_실제_이력을_지우지_않�
     assert _codes(store, combo, "2026-09-10") == set(), "추정치는 어느 날짜에도 쌓지 않습니다"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-029: PyKrx 행에 기준일이 없어 거슬러 받은 날짜의 값이 오늘로 쌓임")
 def test_QA029_PyKrx_행은_조회한_날짜를_기준일로_밝힌다(monkeypatch):
     import pandas as pd
 
