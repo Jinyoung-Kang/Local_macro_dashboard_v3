@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app import catalog, equities, indicators, tasks
 from app.tasks import toss as toss_tasks
@@ -98,7 +97,6 @@ def test_QA032_토스_레이더_대상(store, monkeypatch):
     assert stocks["000660"]["records"] == [{"date": "2026-09-10"}]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-056: 이어받기에 기한이 없음 — 수정 커밋에서 뺌")
 def test_QA056_오래_이어받은_항목은_더_잇지_않는다(store, monkeypatch):
     """
     목록에 남아 있는데 계속 실패하는 티커(폐지 종목)는 끝없이 이어받아졌습니다. 기관 위험 분석은 보유 종목 날짜의

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -25,6 +26,11 @@ RADAR_COMBINATIONS = (
 )
 
 DAUM_TREND_LOOKBACK = 25
+
+# 이어받기 기한(QA-056). 이보다 오래 실패한 항목은 더 잇지 않고 빠집니다 — 폐지 종목처럼 다시 오지 않는 항목이
+# 멈춘 값으로 남아 다른 계산(기관 위험 분석의 날짜 교집합, 업종 순위)을 묶지 않게. 주말·긴 연휴에 소스가
+# 하루 이틀 막히는 정도는 잇습니다.
+CARRY_OVER_MAX_AGE = timedelta(days=3)
 
 
 class EmptyResult(Exception):
@@ -54,18 +60,21 @@ def carry_over_missing(
     expected,
     reason: str | None,
     has_data: Callable[[dict], bool],
+    max_age: timedelta = CARRY_OVER_MAX_AGE,
 ) -> list[str]:
     """
     이번 수집에서 빠졌거나 빈 항목을 **직전 저장본의 같은 항목**으로 잇습니다(QA-032, fast 태스크의 QA-001과 같은 규칙).
 
     일부만 실패한 수집이 받은 것만으로 저장본을 덮으면, 빠진 항목의 마지막 정상 값이 다음 실행까지 사라졌습니다.
-    이어받은 항목은 값을 그대로 두고 ``isStale``·``staleReason``만 더합니다. 직전 저장본에도 없으면 그대로 빠집니다.
+    이어받은 항목은 값을 그대로 두고 ``isStale``·``staleReason``·``staleSince``(처음 이어받은 시각)만 더합니다.
+    직전 저장본에도 없거나, 이어받은 지 ``max_age``가 지났으면 빠집니다(QA-056).
 
     :param fresh: 이번에 받은 항목(키 → 항목). 이 사전을 고칩니다
     :param expected: 있어야 하는 키(태스크가 받으려던 목록) — 목록에서 뺀 키는 잇지 않습니다
     :return: 이어받은 키
     """
     previous = previous or {}
+    now = datetime.now(timezone.utc)
     carried: list[str] = []
     for key in expected:
         if key in fresh and isinstance(fresh[key], dict) and has_data(fresh[key]):
@@ -73,9 +82,24 @@ def carry_over_missing(
         before = previous.get(key)
         if not isinstance(before, dict) or not has_data(before):
             continue
-        fresh[key] = {**before, "isStale": True, "staleReason": reason or "수집 실패"}
+        since = _parse_time(before.get("staleSince")) if before.get("isStale") else None
+        if since is not None and now - since > max_age:
+            continue
+        fresh[key] = {**before, "isStale": True, "staleReason": reason or "수집 실패",
+                      "staleSince": (since or now).isoformat()}
         carried.append(key)
     return carried
+
+
+def _parse_time(text) -> datetime | None:
+    """staleSince 문자열 → 시각. 없거나 읽을 수 없으면 None(이번에 처음 이어받은 것으로 봄)."""
+    if not isinstance(text, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def previous_payload(name: str) -> dict:

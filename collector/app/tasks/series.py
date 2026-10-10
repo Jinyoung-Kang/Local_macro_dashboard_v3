@@ -344,6 +344,8 @@ def task_cot_history() -> str:
     carried = carry_over_missing(
         assets, previous_payload(catalog.SNAP_COT_HISTORY).get("assets"), list(assets),
         failed[0] if failed else None, lambda entry: bool(entry.get("rows")),
+        # 주간 자료라 한 번 빠지면 다음 발표까지 일주일 — 일별 계열보다 길게 잇습니다.
+        max_age=timedelta(days=21),
     )
     result["assets"] = assets
     store.put_snapshot(catalog.SNAP_COT_HISTORY, result)
