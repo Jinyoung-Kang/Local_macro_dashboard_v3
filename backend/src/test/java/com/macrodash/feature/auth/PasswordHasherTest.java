@@ -1,10 +1,11 @@
 package com.macrodash.feature.auth;
 
-import org.junit.jupiter.api.Disabled;
+import com.macrodash.support.TooManyRequestsException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -14,6 +15,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PasswordHasherTest {
 
@@ -53,7 +55,6 @@ class PasswordHasherTest {
     }
 
     @Test
-    @Disabled("QA-019 재현 — 수정 전에는 32개가 한꺼번에 돈다")
     @DisplayName("QA-019 비밀번호 해시는 동시에 코어 수(최소 2)까지만 돈다 — 인증 없는 로그인으로 메모리를 고갈시키지 못하게")
     void concurrentHashingIsBounded() throws Exception {
         SlowEncoder encoder = new SlowEncoder(100);
@@ -83,5 +84,22 @@ class PasswordHasherTest {
         pool.shutdown();
 
         assertThat(encoder.maxRunning.get()).as("동시에 돈 해시 수").isLessThanOrEqualTo(bound);
+    }
+
+    @Test
+    @DisplayName("QA-019 자리가 나지 않으면 기다리다 429로 거절한다 — 요청 스레드를 끝없이 붙잡지 않는다")
+    void rejectsWhenNoSlotFreesUp() throws Exception {
+        SlowEncoder encoder = new SlowEncoder(500);
+        PasswordHasher hasher = new PasswordHasher(encoder, 1, Duration.ofMillis(50));
+        Thread holder = new Thread(() -> hasher.matchesDummy("first"));
+        holder.start();
+        while (encoder.running.get() == 0) {
+            Thread.onSpinWait();
+        }
+
+        assertThatThrownBy(() -> hasher.matches("second", "hash:second"))
+                .isInstanceOf(TooManyRequestsException.class);
+        holder.join();
+        assertThat(hasher.matches("third", "hash:third")).as("자리가 나면 다시 받음").isTrue();
     }
 }

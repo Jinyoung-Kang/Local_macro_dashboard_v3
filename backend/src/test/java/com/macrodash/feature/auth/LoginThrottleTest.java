@@ -116,12 +116,16 @@ class LoginThrottleTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-019 재현 — 수정 전에는 15분 안의 실패 기록이 끝없이 쌓인다")
     @DisplayName("QA-019 이메일을 바꿔 가며 실패해도 기억하는 기록 수에 상한이 있다")
     void trackedFailuresAreBounded() {
         for (int i = 0; i < 25_000; i++) {
             wrong("10.0.0.1|victim" + i + "@example.com");
         }
-        assertThat(throttle.tracked()).isLessThanOrEqualTo(10_000);
+        assertThat(throttle.tracked()).isLessThanOrEqualTo(LoginThrottle.MAX_TRACKED);
+        // 이미 기억하는 키는 그대로 센다 — 꽉 찬 뒤에도 느린 차선에 든 키가 풀리지 않는다
+        for (int i = 0; i < LoginThrottle.FREE_ATTEMPTS; i++) {
+            wrong("10.0.0.1|victim0@example.com");
+        }
+        assertThat(throttle.isSlowed("10.0.0.1|victim0@example.com")).isTrue();
     }
 }

@@ -2,11 +2,13 @@ package com.macrodash.web;
 
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.Params;
+import com.macrodash.support.TooManyRequestsException;
 import com.macrodash.support.UpstreamUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -68,6 +70,15 @@ public class ApiExceptionHandler {
         log.warn("DB에 연결하지 못했습니다 ({} {}): {}", request.getMethod(), request.getRequestURI(),
                 e.getMostSpecificCause().getMessage());
         return respond(HttpStatus.SERVICE_UNAVAILABLE, messageFor(503));
+    }
+
+    /** 서버가 지금 처리할 여유가 없음(예: 비밀번호 해시 동시 실행 상한, QA-019). 잠시 뒤 다시 시도하면 됩니다. */
+    @ExceptionHandler(TooManyRequestsException.class)
+    ResponseEntity<ApiError> tooManyRequests(TooManyRequestsException e) {
+        long seconds = Math.max(1, e.retryAfter().toSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+                .body(new ApiError(errorCode(429), e.getMessage()));
     }
 
     /** {@code topN=abc}처럼 숫자·불리언 자리에 다른 값이 온 경우. 자바 타입 이름은 내보내지 않습니다. */

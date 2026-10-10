@@ -49,8 +49,15 @@ public class LoginThrottle {
     /** 느린 시도가 겹쳤을 때 돌려주는 Retry-After. */
     static final Duration BUSY_RETRY = Duration.ofSeconds(1);
 
-    /** 기록이 이보다 많아지면 오래된 것을 정리합니다(주소를 바꿔 가며 메모리를 채우는 공격 대비). */
-    private static final int MAX_TRACKED = 10_000;
+    /**
+     * 기억하는 기록의 상한(주소·이메일을 바꿔 가며 메모리를 채우는 공격 대비, QA-019). 차 있으면 오래된 것을 정리하고,
+     * 그래도 차 있으면 <b>새 키는 기록하지 않습니다</b> — 이미 느린 차선에 든 키는 그대로 느립니다. 키를 바꿔 가는
+     * 공격자는 어차피 무료 시도 안에 머무르므로 새 키를 잊어도 잃는 방어가 없고, 해시 자체의 동시 실행 상한은
+     * {@link PasswordHasher}가 맡습니다.
+     */
+    static final int MAX_TRACKED = 10_000;
+    /** 정리는 이 간격에 한 번만 — 차 있는 동안 실패마다 전체를 훑으면 그것이 CPU를 태웁니다. */
+    private static final Duration PRUNE_EVERY = Duration.ofSeconds(10);
 
     /** 시도 결과. {@code busy}면 비밀번호를 보지 않았습니다. */
     public record Outcome(boolean accepted, boolean busy, Duration retryAfter) {
@@ -66,6 +73,7 @@ public class LoginThrottle {
     }
 
     private final Map<String, Record> records = new ConcurrentHashMap<>();
+    private volatile Instant lastPrune = Instant.EPOCH;
     private final Semaphore slowLane = new Semaphore(1);
     private final Clock clock;
     private final Sleeper sleeper;
@@ -135,6 +143,9 @@ public class LoginThrottle {
      */
     Duration recordFailure(String client) {
         pruneIfLarge();
+        if (records.size() >= MAX_TRACKED && !records.containsKey(client)) {
+            return Duration.ZERO;
+        }
         Instant now = clock.instant();
         Record next = records.compute(client, (key, old) -> {
             boolean forgotten = old == null || old.lastFailure().plus(FORGET_AFTER).isBefore(now);
@@ -160,7 +171,12 @@ public class LoginThrottle {
         if (records.size() < MAX_TRACKED) {
             return;
         }
-        Instant cutoff = clock.instant().minus(FORGET_AFTER);
+        Instant now = clock.instant();
+        if (lastPrune.plus(PRUNE_EVERY).isAfter(now)) {
+            return;
+        }
+        lastPrune = now;
+        Instant cutoff = now.minus(FORGET_AFTER);
         records.entrySet().removeIf(entry -> entry.getValue().lastFailure().isBefore(cutoff));
     }
 }
