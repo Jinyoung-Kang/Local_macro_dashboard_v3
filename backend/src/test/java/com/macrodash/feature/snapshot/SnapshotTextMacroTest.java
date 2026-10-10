@@ -110,4 +110,26 @@ class SnapshotTextMacroTest {
 
         assertThat(text).contains("| 표본 백분위 46.7% (2023-10-09 이후 784개, 약 3.0년)");
     }
+
+    @Test
+    @org.junit.jupiter.api.Disabled("QA-030 재현 — 수정 전에는 이어받은 이전 값을 AI 텍스트에 현재 값처럼 적는다")
+    @DisplayName("QA-030 수집 실패로 이어받은 이전 값은 AI 텍스트에도 '이전 값'과 사유·시각을 붙인다")
+    void staleCardIsMarkedInAiText() throws Exception {
+        MacroService macro = mock(MacroService.class);
+        Map<String, Object> overview = new LinkedHashMap<>();
+        overview.put("available", true);
+        overview.put("collectedAtKst", "2026-10-11 15:10 KST");
+        overview.put("categories", MAPPER.readTree("""
+                [{"title":"🏛️ 미국 국채 수익률","items":[
+                  {"name":"미국채 10년물 수익률(%)","status":"ok","priceStr":"4.110","deltaStr":"+0.060 (+1.48%)",
+                   "prevStr":"4.050","isStale":true,"staleReason":"HTTP 429",
+                   "lastTs":"2026-10-11 09:00:00 KST (TradingView 수집 시각)"}]}]
+                """));
+        when(macro.overview()).thenReturn(overview);
+
+        String text = service(macro, mock(LiquidityService.class)).fullText();
+
+        assertThat(text).contains("미국채 10년물 수익률(%): 4.110").contains("이전 값").contains("HTTP 429")
+                .contains("2026-10-11 09:00");
+    }
 }
