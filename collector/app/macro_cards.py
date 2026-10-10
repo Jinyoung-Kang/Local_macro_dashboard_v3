@@ -85,8 +85,9 @@ def apply_bond_override(payload: dict) -> dict:
                 "priceStr": f"{price:,.3f}",
                 "status": "ok",
                 "source": source.get("provider", "TradingView Scanner"),
-                # Scanner 응답에는 체결 시각이 없으므로 "수집 시각"임을 밝힙니다.
-                "lastTs": f"{now_text} (TradingView 수집 시각)",
+                # Scanner 응답에는 체결 시각이 없으므로 "수집 시각"임을 밝힙니다. 이어받은 값이면 그 값을 받은 시각입니다.
+                "lastTs": f"{source.get('collectedAt') or now_text} (TradingView 수집 시각)",
+                **_stale_fields(source),
             })
 
             previous = source.get("previousClose")
@@ -123,6 +124,7 @@ def apply_bond_override(payload: dict) -> dict:
             payload.setdefault("rates", {})[key] = {
                 "current": item["price"],
                 "previous": item.get("prevValue"),
+                "isStale": bool(source.get("isStale")),
             }
 
     return _fail_unconverted_price_cards(payload, overridden)
@@ -232,6 +234,7 @@ def inject_scraped_indices(payload: dict) -> dict:
 
         price = float(source["price"])
         previous = source.get("previousClose")
+        taken = source.get("collectedAt") or collected
         card = {
             "key": card_key,
             "name": label,
@@ -241,10 +244,11 @@ def inject_scraped_indices(payload: dict) -> dict:
             "price": price,
             "priceStr": f"{price:,.2f}",
             "source": source.get("provider"),
-            "lastTs": f"{collected} (TradingView 수집 시각)" if collected else None,
+            "lastTs": f"{taken} (TradingView 수집 시각)" if taken else None,
             "isReference": True,
             # 추정치를 확정치처럼 보여 주면 교차 검증이 무의미해집니다.
             "isEstimated": bool(source.get("isEstimated")),
+            **_stale_fields(source),
         }
         if previous:
             previous = float(previous)
@@ -263,6 +267,20 @@ def inject_scraped_indices(payload: dict) -> dict:
         target["items"].append(card)
 
     return payload
+
+
+def _stale_fields(source: dict) -> dict:
+    """
+    수집 실패로 직전 값을 이어받은 원본(isStale)이면 카드에도 그 사실을 옮깁니다(QA-030). 옮기지 않으면 몇 시간 지난
+    값이 지금 받은 값처럼 화면·AI 텍스트·스프레드에 들어갑니다.
+    """
+    if not source.get("isStale"):
+        return {}
+    return {
+        "isStale": True,
+        "staleReason": source.get("staleReason") or "수집 실패",
+        "note": source.get("note") or "⚠️ 이전 값",
+    }
 
 
 def _usable(item: dict | None) -> bool:

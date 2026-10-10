@@ -122,7 +122,6 @@ def test_single_key_override_failure_also_fails_the_futures_card(no_snapshot, mo
 _STALE = {"isStale": True, "staleReason": "HTTP 429", "note": "⚠️ 이전 값", "collectedAt": "2026-10-11 09:00:00 KST"}
 
 
-@pytest.mark.xfail(strict=True, reason="QA-030: 이어받은 값을 지금 받은 값처럼 카드에 넣음")
 def test_QA030_이어받은_수익률은_이전_값으로_표시하고_그때_시각을_쓴다(no_snapshot, monkeypatch):
     """
     TradingView가 끊겨 scraper_markets가 직전 값을 이어받으면(isStale), 국채 카드는 그 값을 '현재 시각' 수집값으로
@@ -148,7 +147,6 @@ class _Snap:
         self.payload = payload
 
 
-@pytest.mark.xfail(strict=True, reason="QA-030: 이어받은 지수 선물 값을 지금 받은 값처럼 카드에 넣음")
 def test_QA030_이어받은_지수_선물도_이전_값으로_표시한다(monkeypatch):
     items = [{"key": "kospi200_night", "status": "ok", "price": 350.0, "previousClose": 348.0,
               "provider": "TradingView Scanner", **_STALE}]

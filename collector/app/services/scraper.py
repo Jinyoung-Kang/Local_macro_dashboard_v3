@@ -154,8 +154,13 @@ def collect_scraped_markets() -> dict:
     order = {config["key"]: index for index, config in enumerate(SCRAPER_MARKETS)}
     results.sort(key=lambda item: order.get(item["key"], 999))
 
+    # 항목마다 받은 시각을 남깁니다. 다음 수집이 실패해 이 값을 이어받아도(isStale) 언제 값인지 알 수 있습니다(QA-030).
+    stamp = kst.stamp()
+    for item in results:
+        if item.get("status") == "ok":
+            item["collectedAt"] = stamp
     return {
-        "updatedAt": kst.stamp(),
+        "updatedAt": stamp,
         "items": results,
     }
 
