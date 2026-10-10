@@ -140,12 +140,18 @@ public class AlertStore {
         if (ids == null) {
             return jdbc.update("UPDATE alert_deliveries SET read_at = now() WHERE user_id = ? AND read_at IS NULL", userId);
         }
-        int changed = 0;
-        for (Long id : ids) {
-            changed += jdbc.update("UPDATE alert_deliveries SET read_at = now() "
-                    + "WHERE id = ? AND user_id = ? AND read_at IS NULL", id, userId);
+        Long[] wanted = ids.stream().filter(java.util.Objects::nonNull).toArray(Long[]::new);
+        if (wanted.length == 0) {
+            return 0;
         }
-        return changed;
+        // 한 문장으로(건마다 UPDATE하면 요청 하나가 연결을 쥔 채 수천 번 왕복합니다 — QA-020).
+        return jdbc.update(connection -> {
+            java.sql.PreparedStatement statement = connection.prepareStatement("UPDATE alert_deliveries "
+                    + "SET read_at = now() WHERE user_id = ? AND id = ANY(?) AND read_at IS NULL");
+            statement.setLong(1, userId);
+            statement.setArray(2, connection.createArrayOf("bigint", wanted));
+            return statement;
+        });
     }
 
     /** 알림함 항목은 90일 보관합니다. 사건은 지우지 않습니다(중복 판정 키이자 기록). */

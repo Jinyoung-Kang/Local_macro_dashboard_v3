@@ -104,8 +104,11 @@ class AlertEvaluatorDbTest {
             assertThat(item.late()).isFalse();
         });
         assertThat(alerts.unreadCount(userId)).isEqualTo(1);
-        alerts.markRead(userId, null);
+        long itemId = inbox.get(0).id();
+        assertThat(alerts.markRead(userId + 1_000_000, List.of(itemId))).as("다른 사용자의 항목은 건드리지 않음").isZero();
+        assertThat(alerts.markRead(userId, List.of(itemId, -1L))).as("고른 것만 한 문장으로").isEqualTo(1);
         assertThat(alerts.unreadCount(userId)).isZero();
+        assertThat(alerts.markRead(userId, null)).as("이미 읽음").isZero();
     }
 
     @Test

@@ -108,6 +108,13 @@ public class WebConfig implements WebMvcConfigurer {
          */
         static final long MAX_LOGIN_BODY_BYTES = 4096;
 
+        /**
+         * 로그인한(또는 데모 열람) 쓰기 요청의 본문 상한(바이트, QA-020). Jackson 3의 기본 문자열 상한은 1억 자라,
+         * 상한이 없으면 데모 방문자가 {@code POST /api/ai/report}에 수천만 자를 보내 파싱만으로 힙을 고갈시킬 수
+         * 있었습니다(길이 검사는 파싱 뒤). 가장 큰 정상 본문이 AI 추가 지시 2,000자(한글 약 6KB)라 64KB면 넉넉합니다.
+         */
+        static final long MAX_WRITE_BODY_BYTES = 64 * 1024;
+
         private final AuthService authService;
         /** 상태를 바꾸는 요청(POST·PUT·DELETE)의 Origin이 이 목록(CORS와 같음)에 맞아야 합니다. */
         private final org.springframework.web.cors.CorsConfiguration origins = new org.springframework.web.cors.CorsConfiguration();
@@ -185,18 +192,10 @@ public class WebConfig implements WebMvcConfigurer {
             }
 
             if (isLoginPost(request)) {
-                // 본문을 상한까지만 읽습니다. Content-Length가 없는(chunked) 요청도 같은 상한을 받습니다.
-                byte[] body = request.getContentLengthLong() > MAX_LOGIN_BODY_BYTES
-                        ? null
-                        : request.getInputStream().readNBytes((int) MAX_LOGIN_BODY_BYTES + 1);
-                if (body == null || body.length > MAX_LOGIN_BODY_BYTES) {
-                    response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
-                    response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write(
-                            "{\"error\":\"too_large\",\"message\":\"요청이 너무 큽니다.\"}");
-                    return;
+                HttpServletRequest capped = capBody(request, response, MAX_LOGIN_BODY_BYTES);
+                if (capped != null) {
+                    chain.doFilter(capped, response);
                 }
-                chain.doFilter(new CappedBodyRequest(request, body), response);
                 return;
             }
 
@@ -226,7 +225,40 @@ public class WebConfig implements WebMvcConfigurer {
                 return;
             }
             request.setAttribute(CurrentUser.ATTRIBUTE, user.get());
+            if (hasBody(request)) {
+                HttpServletRequest capped = capBody(request, response, MAX_WRITE_BODY_BYTES);
+                if (capped != null) {
+                    chain.doFilter(capped, response);
+                }
+                return;
+            }
             chain.doFilter(request, response);
+        }
+
+        /** 본문을 받는 메서드(POST·PUT·PATCH·DELETE). */
+        static boolean hasBody(HttpServletRequest request) {
+            String method = request.getMethod();
+            return "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
+                    || "PATCH".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method);
+        }
+
+        /**
+         * 본문을 상한까지만 읽어 미리 읽은 본문을 넘기는 요청으로 바꿉니다. Content-Length가 없는(chunked) 요청도
+         * 같은 상한을 받습니다. 넘으면 413을 쓰고 null(컨트롤러로 보내지 않음).
+         */
+        static HttpServletRequest capBody(HttpServletRequest request, HttpServletResponse response, long limit)
+                throws IOException {
+            byte[] body = request.getContentLengthLong() > limit
+                    ? null
+                    : request.getInputStream().readNBytes((int) limit + 1);
+            if (body == null || body.length > limit) {
+                response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write(
+                        "{\"error\":\"too_large\",\"message\":\"요청이 너무 큽니다.\"}");
+                return null;
+            }
+            return new CappedBodyRequest(request, body);
         }
 
         /**

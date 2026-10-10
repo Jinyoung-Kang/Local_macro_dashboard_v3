@@ -1,6 +1,7 @@
 package com.macrodash.feature.alert;
 
 import com.macrodash.support.CurrentUser;
+import com.macrodash.support.InvalidRequestException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,6 +49,9 @@ public class AlertController {
 
     public record ReadRequest(List<Long> ids, Boolean all) {
     }
+
+    /** 고른 항목 읽음 처리의 한 번 상한(QA-020). 화면은 한 화면(최대 50개)씩만 보냅니다. */
+    static final int MAX_READ_IDS = 200;
 
     @GetMapping("/rules")
     public Map<String, Object> rules(HttpServletRequest request) {
@@ -103,6 +107,9 @@ public class AlertController {
         // {all:true}면 모두, 아니면 고른 것만(없으면 아무것도 바꾸지 않음).
         boolean all = body != null && Boolean.TRUE.equals(body.all());
         List<Long> ids = all ? null : (body == null || body.ids() == null ? List.of() : body.ids());
+        if (ids != null && ids.size() > MAX_READ_IDS) {
+            throw new InvalidRequestException("한 번에 " + MAX_READ_IDS + "개까지 읽음 처리할 수 있습니다.");
+        }
         int changed = alerts.markRead(CurrentUser.of(request), ids);
         return Map.of("ok", true, "changed", changed);
     }
