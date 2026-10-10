@@ -167,7 +167,6 @@ _INFO_TABLE = b"""<?xml version="1.0" encoding="UTF-8"?>
 </informationTable>"""
 
 
-@pytest.mark.xfail(strict=True, reason="QA-033: 옵션 행을 보유에 합치고 채권 원금을 주식 수로 셈")
 def test_QA033_옵션_행은_보유가_아니고_채권_원금은_주식_수가_아니다():
     """
     13F 정보표의 putCall 행은 옵션(기초자산 평가액)이라 롱 보유가 아닙니다. 합치면 풋이 보유로 보이고 비중 분모가

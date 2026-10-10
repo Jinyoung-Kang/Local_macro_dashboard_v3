@@ -262,7 +262,7 @@ def _parse_information_table(content: bytes, filing_date: str) -> list[dict]:
         if not node.tag.lower().endswith("infotable"):
             continue
 
-        name = cusip = title_class = ""
+        name = cusip = title_class = put_call = amount_type = ""
         value = shares = 0.0
 
         for child in node.iter():
@@ -278,8 +278,16 @@ def _parse_information_table(content: bytes, filing_date: str) -> list[dict]:
                 value = _to_float(text)
             elif tag.endswith("sshprnamt"):
                 shares = _to_float(text)
+            elif tag.endswith("sshprnamttype"):
+                amount_type = text.upper()
+            elif tag.endswith("putcall"):
+                put_call = text
 
         if not name or value <= 0:
+            continue
+        # 옵션(풋·콜) 행의 평가액은 기초자산 기준이라 롱 보유가 아닙니다. 합치면 풋이 보유로 보이고 비중 분모가
+        # 부풉니다(QA-033). 보유·비중에서 뺍니다.
+        if put_call:
             continue
 
         key = (name.strip().upper(), cusip.strip(), title_class.strip())
@@ -292,7 +300,11 @@ def _parse_information_table(content: bytes, filing_date: str) -> list[dict]:
             "weight": 0.0,
         })
         entry["value"] += value
-        entry["shares"] += shares
+        # PRN(채권 원금) 행의 수량은 주식 수가 아닙니다 — 모름(None)으로 둡니다(백엔드는 '비교 불가'로 처리).
+        if amount_type == "PRN" or entry["shares"] is None:
+            entry["shares"] = None
+        else:
+            entry["shares"] += shares
 
     return list(merged.values())
 
