@@ -120,7 +120,8 @@ public class AlertEvaluator {
         List<AlertRules.RegimeDay> days = new ArrayList<>();
         Map<LocalDate, JsonNode> inputsByDay = new LinkedHashMap<>();
         for (RegimeLogStore.Entry entry : entries) {
-            days.add(new AlertRules.RegimeDay(entry.verdictDate(), entry.code(), entry.label()));
+            days.add(new AlertRules.RegimeDay(entry.verdictDate(), entry.code(), entry.label(),
+                    inputStamp(entry.inputs())));
             inputsByDay.put(entry.verdictDate(), entry.inputs());
         }
         List<AlertRules.RegimeChange> changes = AlertRules.confirmedChanges(days, AlertRules.REGIME_CONFIRM_DAYS);
@@ -137,6 +138,26 @@ public class AlertEvaluator {
             alerts.insertEvent("REGIME_CHANGE", "regime:%s:%s>%s".formatted(change.confirmedOn(), change.fromCode(),
                     change.toCode()), change.confirmedOn(), text.title(), text.body(), payload);
         }
+    }
+
+    /** 입력들의 기준일을 이름 순으로 이은 문자열(예: "hy=2026-10-08;nfci=2026-10-03"). 하나도 없으면 null. */
+    static String inputStamp(JsonNode inputs) {
+        if (inputs == null || !inputs.isObject()) {
+            return null;
+        }
+        java.util.TreeMap<String, String> asOf = new java.util.TreeMap<>();
+        inputs.properties().forEach(entry -> {
+            String date = Json.asText(entry.getValue(), "asOf");
+            if (date != null) {
+                asOf.put(entry.getKey(), date);
+            }
+        });
+        if (asOf.isEmpty()) {
+            return null;
+        }
+        StringBuilder out = new StringBuilder();
+        asOf.forEach((key, date) -> out.append(key).append('=').append(date).append(';'));
+        return out.toString();
     }
 
     // ------------------------------------------------------------------ 외국인 연속 순매수

@@ -17,7 +17,18 @@ public final class AlertRules {
     public static final int REGIME_CONFIRM_DAYS = 3;
 
     /** 하루의 판정 기록. */
-    public record RegimeDay(LocalDate date, String code, String label) {
+    /**
+     * 판정 기록 하루.
+     *
+     * @param inputStamp 그날 판정에 쓴 입력들의 기준일을 한 문자열로(모르면 null). 직전 기록과 같으면 새 데이터가 없는
+     *                   날(주말 등)이라 세지 않습니다(QA-054).
+     */
+    public record RegimeDay(LocalDate date, String code, String label, String inputStamp) {
+
+        public RegimeDay(LocalDate date, String code, String label) {
+            this(date, code, label, null);
+        }
+
         boolean known() {
             return code != null && !"UNKNOWN".equals(code);
         }
@@ -47,10 +58,17 @@ public final class AlertRules {
         String runLabel = null;
         LocalDate runStart = null;
         int length = 0;
+        String lastStamp = null;
         for (RegimeDay day : ascending) {
             if (!day.known()) {
                 continue;
             }
+            // 입력 기준일이 직전 기록과 같으면 새 데이터가 없는 날입니다(토·일 기록은 금요일과 같은 입력). 세지도 끊지도
+            // 않습니다 — 세면 새 데이터 하루로 '3일 확정'이 됐습니다(결정 2026-10-11, QA-054).
+            if (day.inputStamp() != null && day.inputStamp().equals(lastStamp)) {
+                continue;
+            }
+            lastStamp = day.inputStamp();
             if (day.code().equals(run)) {
                 length++;
             } else {

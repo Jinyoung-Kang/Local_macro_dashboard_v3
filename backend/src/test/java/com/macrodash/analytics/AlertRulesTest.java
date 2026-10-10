@@ -51,6 +51,23 @@ class AlertRulesTest {
         assertThat(AlertRules.confirmedChanges(history, 3)).hasSize(2);
     }
 
+    @Test
+    @DisplayName("QA-054 입력 기준일이 직전 기록과 같은 날(새 데이터 없음)은 세지도 끊지도 않는다")
+    void sameInputsAreNotNewDays() {
+        List<AlertRules.RegimeDay> history = List.of(
+                new AlertRules.RegimeDay(D, "EXP", "EXP", "a"),
+                new AlertRules.RegimeDay(D.plusDays(1), "EXP", "EXP", "b"),
+                new AlertRules.RegimeDay(D.plusDays(2), "EXP", "EXP", "c"),
+                new AlertRules.RegimeDay(D.plusDays(3), "LATE", "LATE", "d"),
+                new AlertRules.RegimeDay(D.plusDays(4), "LATE", "LATE", "d"),    // 주말 — 같은 입력
+                new AlertRules.RegimeDay(D.plusDays(5), "LATE", "LATE", "d"),
+                new AlertRules.RegimeDay(D.plusDays(6), "LATE", "LATE", "e"),
+                new AlertRules.RegimeDay(D.plusDays(7), "LATE", "LATE", "f"));
+
+        assertThat(AlertRules.confirmedChanges(history, 3)).singleElement()
+                .satisfies(change -> assertThat(change.confirmedOn()).isEqualTo(D.plusDays(7)));
+    }
+
     private static List<AlertRules.DayNet> nets(Long... values) {
         List<AlertRules.DayNet> out = new ArrayList<>();
         for (int i = 0; i < values.length; i++) {

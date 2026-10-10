@@ -72,9 +72,9 @@ class AlertEvaluatorDbTest {
         return new AlertEvaluator(alerts, regimeLog, store, mock(StoreRepository.class), MAPPER, clock);
     }
 
+    /** 날마다 새 데이터(입력 기준일 = 그날)인 기록. 같은 기준일이 이어지면 새 데이터가 아니라 세지 않습니다(QA-054). */
     private void log(int day, String code, String label) {
-        regimeLog.insertIfAbsent(new RegimeLogStore.Entry(DAY.plusDays(day), code, label,
-                MAPPER.valueToTree(Map.of("nfci", Map.of("value", -0.4, "asOf", DAY.toString()))), List.of(), "v1"));
+        logWithInputDate(day, code, label, day);
     }
 
     @Test
@@ -118,7 +118,6 @@ class AlertEvaluatorDbTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-054 재현 — 수정 전에는 입력이 같은 주말 기록도 하루로 세어 새 데이터 하루로 3일 확정이 된다")
     @DisplayName("QA-054 국면 3일 확정은 새 데이터인 기록만 센다 — 입력 기준일이 직전과 같은 기록(주말)은 세지도 끊지도 않는다")
     void confirmationCountsOnlyNewData() {
         new AlertService(alerts, MAPPER).create(new CurrentUser(userId, EMAIL, "MEMBER", "PRO", null),
