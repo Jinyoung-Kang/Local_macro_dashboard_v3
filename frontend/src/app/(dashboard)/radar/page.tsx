@@ -623,7 +623,7 @@ function HistoryPanel({
   const [date, setDate] = useState("");
   // 고른 거래일 하루치만 받습니다(latest=true — 날짜를 안 골랐으면 이 조건의 가장 최근 거래일).
   // 예전에는 전 기간을 받아 화면에서 30행만 골랐습니다(1년치 합성 데이터: 7,800행·2.3MB).
-  const { data, loading } = useApi<{
+  const { data, loading, error, reload } = useApi<{
     dates: string[];
     obsDate?: string | null;
     note: string;
@@ -650,7 +650,9 @@ function HistoryPanel({
       }
     >
       {loading && !data && <Loading />}
-      {!loading && dates.length === 0 && (
+      {/* 조회가 실패했으면 '이력 없음'이 아니라 실패입니다(QA-046). */}
+      {error && <ErrorState message={error} onRetry={reload} />}
+      {!loading && !error && dates.length === 0 && (
         <Banner tone="info">
           아직 누적된 이력이 없습니다. 수집기를 꾸준히 돌리면 거래일별로 쌓입니다 —
           Naver·Daum·KRX는 과거 날짜 조회를 지원하지 않으므로 이 이력이 곧 백업입니다.
