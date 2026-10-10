@@ -15,3 +15,6 @@ d1eabeda0f4065e509a4bf55bf4cd58af60515ba:backend/src/test/java/com/macrodash/sup
 
 # da0148e: DART 테스트의 가짜 키(40자, 1234·abcd 반복 자리표시) — 실제 DART 키는 .env에만 있다.
 da0148e5c3339c22a50b28fd869f6641ff17559f:collector/tests/test_dart.py:generic-api-key:29
+
+# 91275c5: QA-030 테스트의 지수 선물 항목 키("kospi200_night") — 위 3a976e6과 같은 데이터셋 키 문자열이다.
+91275c58ae81e20d8540ac4dba457874f0da91bf:collector/tests/test_bond_override.py:generic-api-key:153
