@@ -142,7 +142,7 @@ make down            # 정지
 
 ```
 ┌──────────────┐  ①화면은 계산하지 않습니다. 받아서 그립니다.
-│  Frontend    │    Next.js 16 · React 18 · TypeScript · Tailwind · Recharts
+│  Frontend    │    Next.js 16 · React 19 · TypeScript · Tailwind · Recharts
 └──────┬───────┘
        │ REST (쿠키 세션)
 ┌──────▼───────┐  ②모든 계산·판정이 여기 있습니다. 수익률 매트릭스, 국면 판정,
@@ -402,7 +402,7 @@ docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d --
 
 | 영역 | 채택 | 왜 |
 |---|---|---|
-| Frontend | TypeScript · React 18 · Next.js 16 · Tailwind · Recharts | 15개 메뉴가 서로 다른 표·차트를 쓰므로 컴포넌트 재사용이 크게 이득 |
+| Frontend | TypeScript · React 19 · Next.js 16 · Tailwind · Recharts | 15개 메뉴가 서로 다른 표·차트를 쓰므로 컴포넌트 재사용이 크게 이득 |
 | Backend | Java 21 · Spring Boot 4.1 | 모든 계산을 한 계층에 모아 타입과 테스트로 고정 |
 | AI | Claude API (Haiku 5.5, 공식 Java SDK) · NVIDIA · Cerebras · Cloudflare | 수집 원본으로 리포트 생성. 엔진이 실패하면 다음 엔진으로 자동 전환 |
 | Store | PostgreSQL 16 | 수집기와 API가 다른 프로세스라 파일 공유 불가. JSONB로 저장해 SQL로 질의 |
