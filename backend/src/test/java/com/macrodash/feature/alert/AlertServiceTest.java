@@ -5,6 +5,7 @@ import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Holding;
 import com.macrodash.store.AlertStore;
 import com.macrodash.support.CurrentUser;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -81,6 +82,27 @@ class AlertServiceTest {
         assertThat(result.status()).isEqualTo(400);
         assertThat(result.message()).contains("수집 범위");
         verify(store, never()).setEnabled(anyLong(), anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    @Disabled("QA-062: 이미 켜 둔 종목도 사용자 상한에 걸림 — 수정 커밋에서 켬")
+    @DisplayName("QA-062 이미 켜 둔 종목의 다른 규칙은 사용자 상한(20종목)을 채운 상태에서도 켤 수 있다 — 종목 수가 늘지 않으므로")
+    void reEnablingRuleForAlreadyWatchedCodeIsAllowedAtUserCap() {
+        AlertStore store = mock(AlertStore.class);
+        AlertStore.Rule watching = new AlertStore.Rule(1, PRO.id(), "FOREIGN_STREAK",
+                MAPPER.createObjectNode().put("target", "STOCK").put("code", "000660").put("n", 5), true,
+                java.time.Instant.now());
+        AlertStore.Rule disabled = new AlertStore.Rule(9, PRO.id(), "FOREIGN_STREAK",
+                MAPPER.createObjectNode().put("target", "STOCK").put("code", "000660").put("n", 10), false,
+                java.time.Instant.now());
+        when(store.rules(PRO.id())).thenReturn(List.of(watching, disabled));
+        when(store.countStockCodes(PRO.id())).thenReturn(20);
+        when(store.countStockCodes(null)).thenReturn(30);
+        when(store.hasStockCode("000660")).thenReturn(true);
+        when(store.setEnabled(9, PRO.id(), true)).thenReturn(1);
+        AlertService service = new AlertService(store, MAPPER);
+
+        assertThat(service.setEnabled(PRO, 9, true).status()).isEqualTo(200);
     }
 
     @Test
