@@ -1,0 +1,48 @@
+# =============================================================================
+# compose.aws.yml — AWS 배포용 덧붙임 (ADR 0012). 로컬 실행에는 쓰지 않습니다.
+#
+#   docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d --build
+#
+# 바뀌는 것
+#   · postgres 컨테이너 대신 RDS(PostgreSQL 18, TLS) — 접속 주소는 RDS_HOST
+#   · 화면·API는 127.0.0.1에만 열고, 앞단(Caddy)이 둘을 한 주소(같은 출처)로 묶음 → 프론트는 NEXT_PUBLIC_API_BASE=/
+#   · 앞단이 넘긴 X-Forwarded-For를 Tomcat이 믿음(내부 대역에서 온 것만) → 로그인 제한이 방문자 IP별로 동작
+#   · 공개 데모라 끄는 것: 메일(가입·재설정), 유료 AI 키, 화면 조회가 수집을 일으키는 것(store_only)
+#   · DB 연결 수를 줄임(RDS db.t4g.micro 한 대를 세 프로젝트가 나눠 씀)
+# 필요한 값(.env, 이름은 .env.aws.example): RDS_HOST · PUBLIC_ORIGIN · DATABASE_USER · DATABASE_PASSWORD 외 기존 값
+# =============================================================================
+services:
+  postgres:
+    profiles: ["local-db"]          # RDS를 쓰므로 띄우지 않음
+
+  collector:
+    depends_on: !reset {}
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER:?}:${DATABASE_PASSWORD:?}@${RDS_HOST:?RDS_HOST 필요}:${RDS_PORT:-5432}/${DATABASE_NAME:-macrodash}?sslmode=require
+
+  backend:
+    depends_on: !reset {}
+    environment:
+      DATABASE_URL: jdbc:postgresql://${RDS_HOST:?RDS_HOST 필요}:${RDS_PORT:-5432}/${DATABASE_NAME:-macrodash}?sslmode=require
+      SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "4"
+      FRONTEND_ORIGIN: ${PUBLIC_ORIGIN:?PUBLIC_ORIGIN 필요 (예 https://dxxxx.cloudfront.net)}
+      PUBLIC_URL: ${PUBLIC_ORIGIN}
+      COOKIE_SECURE: "${COOKIE_SECURE:-true}"
+      DASHBOARD_READ_MODE: store_only
+      # 앞단(Caddy)이 X-Forwarded-For를 클라이언트 IP 하나로 덮어써 보냄. Tomcat RemoteIpValve는
+      # 내부 대역(기본값: 10/8 · 172.16/12 · 192.168/16 · 127/8)에서 온 요청의 헤더만 믿는다.
+      SERVER_FORWARDHEADERSSTRATEGY: native
+      MAIL_HOST: ""
+      ANTHROPIC_API_KEY: ""
+      NVIDIA_API_KEY: ""
+      CEREBRAS_API_KEY: ""
+      CLOUDFLARE_API_TOKEN: ""
+    ports: !override
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_API_BASE: "/"
+    ports: !override
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"

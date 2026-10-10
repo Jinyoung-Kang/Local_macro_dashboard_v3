@@ -17,3 +17,4 @@
 | [0009](0009-regime-track-record-point-in-time.md) | 국면 판정 성과: 시점 기준 재현(발표 지연), 다음 거래일 진입, 표본 부족은 숫자를 내지 않음 |
 | [0010](0010-accounts-and-db-sessions.md) | 계정과 DB 세션(토큰 해시 저장), 경로별 접근 정책 표(미분류 금지), 운영자 계정은 OWNER_EMAIL·APP_PASSWORD로 |
 | [0011](0011-alert-pipeline-inbox.md) | 알림 파이프라인: 사건/알림함 분리, 매번 전부 평가(멱등), 국면은 3일 확정, 잠정치·백필 금지, 화면 알림함만 |
+| [0012](0012-aws-demo-deployment.md) | AWS 데모 배포: RDS · 앞단 프록시 뒤 같은 출처(`NEXT_PUBLIC_API_BASE=/`) · 프록시 IP 신뢰 · 공개 데모에서 닫는 것 |

@@ -296,6 +296,19 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 화면·API만 `WEB_BIND_HOST`로 다른 기기에 열 수 있고, 그때는 계정 비밀번호를
 추측하기 어려운 값으로 두세요.
 
+### AWS 데모 배포
+
+포트폴리오 데모는 AWS(EC2 + RDS PostgreSQL 18, 평일 09–18시)에 올립니다. 로컬 실행과 다른 점은
+덧붙임 파일 [compose.aws.yml](compose.aws.yml) 하나에 있고, 이유는 [ADR 0012](docs/adr/0012-aws-demo-deployment.md)에 있습니다.
+
+```bash
+docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d --build
+```
+
+- DB는 postgres 컨테이너 대신 RDS(`RDS_HOST`, TLS)입니다. 화면·API는 `127.0.0.1`에만 열고, 앞단 프록시가 한 주소로 묶습니다.
+- 추가로 필요한 값은 [.env.aws.example](.env.aws.example)에 이름만 있습니다(`RDS_HOST`·`PUBLIC_ORIGIN` 등).
+- 공개 데모에서는 메일 가입·유료 AI·화면 조회가 일으키는 수집을 끕니다. 운영자 경로와 계정 변경은 앞단에서 막습니다.
+
 ---
 
 ## 6. 문제가 생기면
