@@ -5,7 +5,7 @@
  * localhost를 찾고, LAN IP를 박으면 맥의 localhost:3000에서 쿠키가 다른 사이트가 됩니다.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiBase, apiGet, apiPost } from "@/lib/api";
+import { apiBase, apiGet, apiPost, UnauthorizedError } from "@/lib/api";
 
 describe("apiBase", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -67,5 +67,23 @@ describe("요청 헤더", () => {
     await apiPost("/api/y", { a: 1 });
     const postHeaders = fetchMock.mock.calls[1][1].headers as Record<string, string>;
     expect(postHeaders["Content-Type"]).toBe("application/json");
+  });
+});
+
+describe("401 응답", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // QA-044 재현 — 수정 전에는 401이면 본문을 읽지 않고 고정 문구("로그인이 필요합니다.")를 썼다.
+  it.fails("QA-044 401이어도 서버가 준 문구를 쓴다 — 비밀번호가 틀렸는데 '로그인이 필요합니다'가 뜨지 않게", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ ok: false, message: "이메일 또는 비밀번호가 올바르지 않습니다." }),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    )));
+    vi.stubGlobal("window", { location: { protocol: "http:", hostname: "localhost" } });
+
+    const failure = (await apiPost("/api/auth/login", { email: "a@b.c", password: "x" }).catch((e: unknown) => e)) as Error;
+
+    expect(failure).toBeInstanceOf(UnauthorizedError);
+    expect(failure.message).toBe("이메일 또는 비밀번호가 올바르지 않습니다.");
   });
 });

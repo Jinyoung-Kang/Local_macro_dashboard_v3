@@ -7,7 +7,10 @@
  */
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createElement, type ReactNode } from "react";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { RefreshProvider, useRefreshSignal } from "@/hooks/useRefreshSignal";
+import { UnauthorizedError } from "@/lib/api";
 import { useElapsedSeconds } from "@/hooks/useElapsedSeconds";
 
 afterEach(() => {
@@ -16,6 +19,19 @@ afterEach(() => {
 });
 
 describe("useAsyncAction", () => {
+  // QA-044 재현 — 수정 전에는 쓰기 요청이 401을 받아도 배너만 띄우고 세션 만료로 처리하지 않았다(useApi만 처리).
+  it.fails("QA-044 401이면 세션 만료로 알린다 — 로그인 화면으로 보내게", async () => {
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(RefreshProvider, null, children);
+    const { result } = renderHook(() => ({
+      action: useAsyncAction(() => Promise.reject(new UnauthorizedError()), "기본 문구"),
+      signal: useRefreshSignal(),
+    }), { wrapper });
+
+    await act(() => result.current.action.run());
+
+    expect(result.current.signal.sessionLost).toBe(true);
+  });
+
   it("성공하면 결과, 실패하면 문구(앞 결과는 유지), 다시 시작하면 문구를 지운다", async () => {
     const action = vi.fn<(n: number) => Promise<string>>()
       .mockResolvedValueOnce("첫 결과")
