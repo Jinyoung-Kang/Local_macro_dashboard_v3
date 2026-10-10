@@ -114,3 +114,12 @@ describe("AI 소요 시간 (화면에서 옮김, 동작 동일)", () => {
     expect(formatLatency(undefined)).toBe("소요 시간 미상");
   });
 });
+
+describe("QA-048 AI 소요 시간의 경계", () => {
+  // 수정 전에는 분·초를 따로 반올림해 119.6초가 "1분 60초", 59.96초가 "60.0초"였다.
+  it.fails("반올림이 다음 단위로 넘어가면 올린다 — '1분 60초'·'60.0초'가 되지 않는다", () => {
+    expect(formatLatency(119_600)).toBe("2분 0초");
+    expect(formatLatency(59_960)).toBe("1분 0초");
+    expect(formatLatency(60_400)).toBe("1분 0초");
+  });
+});
