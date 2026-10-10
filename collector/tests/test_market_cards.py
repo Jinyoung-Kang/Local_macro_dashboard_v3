@@ -41,11 +41,13 @@ def _two_sessions(previous_day: tuple, today: tuple):
 
 
 SPEC = {"key": "dxy", "name": "달러 인덱스 (DXY)", "ticker": "DX-Y.NYB", "note": "실시간"}
+# 분봉의 전 거래일을 달력 날짜로 나눌 수 있는(세션이 하루 안에 끝나는) 상품. 세션형(선물·DXY)은 일봉을 씁니다(QA-058).
+DAY_SESSION_SPEC = {"key": "kospi", "name": "KOSPI", "ticker": "^KS11", "note": "실시간"}
 
 
 def test_normal_card_has_delta_and_previous():
     # 전 거래일 마지막 체결 100 → 오늘 101 (QA-053: '직전'은 전일 종가)
-    card = market._build_card(SPEC, _payload(_two_sessions((100.0,), (101.0,))))
+    card = market._build_card(DAY_SESSION_SPEC, _payload(_two_sessions((100.0,), (101.0,))))
 
     assert card["status"] == "ok"
     assert card["price"] == pytest.approx(101.0)
@@ -198,7 +200,7 @@ def test_QA053_장중_카드의_직전은_전_거래일_마지막_체결이다(m
     """
     monkeypatch.setattr(market, "previous_close_from_daily", lambda symbol, current=None: pytest.fail("분봉으로 충분"))
 
-    card = market._build_card(SPEC, _payload(_two_sessions((99.0, 100.0), (102.0, 103.0))))
+    card = market._build_card(DAY_SESSION_SPEC, _payload(_two_sessions((99.0, 100.0), (102.0, 103.0))))
 
     assert card["prevValue"] == pytest.approx(100.0)
     assert card["delta"] == pytest.approx(3.0)
@@ -206,7 +208,6 @@ def test_QA053_장중_카드의_직전은_전_거래일_마지막_체결이다(m
     assert card["prevSource"] == "분봉의 직전 거래일 마지막 체결"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-058: 세션형 선물의 '전일'이 달력 날짜 기준 — 수정 커밋에서 뺌")
 def test_QA058_선물의_전일은_직전_세션의_일봉_종가다(monkeypatch):
     """
     CME 선물은 전날 18:00 ET에 세션이 시작합니다. 분봉을 달력 날짜로 나누면 한국 낮(ET 저녁)에는 '전일'이 직전 ET

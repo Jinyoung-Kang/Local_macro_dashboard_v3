@@ -23,6 +23,7 @@ yfinance 기반 시세 수집 (티커 시계열 + 매크로 카드).
 from __future__ import annotations
 
 import logging
+from datetime import date, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -40,6 +41,12 @@ logger = logging.getLogger(__name__)
 yfcache.configure()
 
 KST = ZoneInfo("Asia/Seoul")
+NEW_YORK = ZoneInfo("America/New_York")
+
+# 세션이 전날 저녁(뉴욕 시각)에 시작하는 상품과 그 시작 시각(QA-058). 이 시각 이후의 체결은 다음 거래일 세션입니다.
+# CME 선물(=F)은 18:00 ET, ICE 달러인덱스는 19:30 ET 무렵(Yahoo 분봉 기준)에 시작합니다.
+_FUTURES_SESSION_START = time(18, 0)
+_DXY_SESSION_START = time(19, 0)
 
 MOVE_SYMBOLS = {"^MOVE", "MOVE", "MOVE:INDEX"}
 
@@ -364,13 +371,15 @@ def _build_card(spec: dict, payload: dict | None) -> dict:
     previous = None
     prev_source = None
 
-    if is_intraday:
+    # 세션형 상품(선물·달러인덱스)은 분봉을 달력 날짜로 나눌 수 없고, 전일 종가가 마지막 체결이 아니라 정산가입니다.
+    # 일봉(세션 거래일로 표기)에서 직전 세션 종가를 찾습니다(QA-058).
+    if is_intraday and _session_start(spec["ticker"]) is None:
         # 5일치 분봉에 전 거래일 장이 들어 있습니다 — 추가 호출 없이 그 마지막 체결을 씁니다.
         session_close = _previous_session_close(points)
         if session_close is not None:
             previous = session_close * scale
             prev_source = "분봉의 직전 거래일 마지막 체결"
-    elif len(points) >= 2 and points[-2]["close"] is not None:
+    elif not is_intraday and len(points) >= 2 and points[-2]["close"] is not None:
         previous = points[-2]["close"] * scale       # 일봉 — 바로 앞 봉이 전일 종가
 
     if previous is None:
@@ -432,6 +441,35 @@ def _previous_session_close(points: list[dict]) -> float | None:
     return None
 
 
+def _session_start(symbol: str | None) -> time | None:
+    """세션이 전날 저녁에 시작하는 상품이면 그 시작 시각(뉴욕), 아니면 None."""
+    if not symbol:
+        return None
+    if symbol.endswith("=F"):
+        return _FUTURES_SESSION_START
+    if symbol == "DX-Y.NYB":
+        return _DXY_SESSION_START
+    return None
+
+
+def session_day(symbol: str | None, iso_text: str) -> date | None:
+    """
+    체결 시각이 속한 거래일. 세션형 상품은 뉴욕 시각으로 세션 시작 이후면 다음 날,
+    그 밖은 거래소 현지 날짜(시각 문자열의 날짜)입니다. 읽을 수 없으면 None.
+    """
+    try:
+        stamp = pd.Timestamp(iso_text)
+    except (TypeError, ValueError):
+        return None
+    start = _session_start(symbol)
+    if start is None:
+        return stamp.date()
+    if stamp.tzinfo is None:
+        stamp = stamp.tz_localize("UTC")
+    local = stamp.tz_convert(NEW_YORK)
+    return local.date() + timedelta(days=1) if local.time() >= start else local.date()
+
+
 def _format_timestamp(iso_text: str, is_intraday: bool) -> str:
     """
     분봉이면 KST 체결 시각, 일봉이면 "거래일 + 일봉 기준".
@@ -467,10 +505,11 @@ def previous_close_from_daily(symbol: str, current_iso: str | None = None) -> fl
 
     if current_iso:
         try:
-            current_day = pd.Timestamp(current_iso).tz_localize(None).normalize()
+            # 세션형 상품은 세션 거래일로 비교합니다 — 저녁에 시작한 세션의 '전일'은 그날 정산가입니다(QA-058).
+            current_day = session_day(symbol, current_iso)
             earlier = [
                 p for p in closes
-                if pd.Timestamp(p["date"]).tz_localize(None).normalize() < current_day
+                if pd.Timestamp(p["date"]).date() < current_day
             ]
             if earlier:
                 return float(earlier[-1]["close"])
