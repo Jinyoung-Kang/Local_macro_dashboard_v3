@@ -394,6 +394,16 @@ export function withoutLeadingIcon(text: string): string {
   return text.replace(/^[\p{Extended_Pictographic}\p{Regional_Indicator}\u200d\ufe0f\s]+/u, "");
 }
 
+/**
+ * 숫자 + 단위. 모르는 값이면 단위 없이 "—"입니다 — "—%"·"—억 원"은 값이 있는 것처럼 읽혔습니다(QA-049).
+ *
+ * @param unit 숫자 바로 뒤에 붙일 글자(예: "%", "%p", "억 원", "일 전 공시")
+ */
+export function formatWithUnit(value: number | null | undefined, digits: number, unit: string): string {
+  const text = formatNumber(value, digits);
+  return text === EMPTY ? EMPTY : `${text}${unit}`;
+}
+
 /** 밀리초를 사람이 읽는 시간으로. 3분 42초가 "222134ms"로 보이면 감이 안 옵니다. */
 export function formatLatency(latencyMs?: number): string {
   if (latencyMs === undefined || latencyMs === null) {

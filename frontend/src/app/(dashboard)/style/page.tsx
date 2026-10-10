@@ -17,7 +17,7 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useUsdKrw } from "@/hooks/useUsdKrw";
-import { deltaColor, EMPTY, formatCurrency, formatNumber, formatPercent } from "@/lib/format";
+import { deltaColor, EMPTY, formatCurrency, formatNumber, formatPercent, formatWithUnit } from "@/lib/format";
 import type {
   GuruHoldersResponse,
   GuruProfilesResponse,
@@ -129,7 +129,7 @@ function ProfilesCard() {
               key: "top10Weight",
               header: "상위 10종목",
               align: "right",
-              render: (row) => `${formatNumber(row.top10Weight, 1)}%`,
+              render: (row) => formatWithUnit(row.top10Weight, 1, "%"),
             },
             {
               key: "turnover",
@@ -141,7 +141,7 @@ function ProfilesCard() {
                     {EMPTY}
                   </span>
                 ) : (
-                  `${formatNumber(row.turnover, 1)}%`
+                  formatWithUnit(row.turnover, 1, "%")
                 ),
             },
             {
@@ -375,9 +375,9 @@ function RiskCard() {
       {coverage && (
         <Banner tone={coverage.weight >= 70 ? "info" : "warn"}>
           <div>
-            커버리지 <b>{formatNumber(coverage.weight, 1)}%</b> — 보유 {coverage.totalHoldings}종목
+            커버리지 <b>{formatWithUnit(coverage.weight, 1, "%")}</b> — 보유 {coverage.totalHoldings}종목
             중 <b>{coverage.holdings}종목</b>의 가격을 찾았습니다. 아래 값은 이 비중만으로 낸
-            것이며, 나머지 {formatNumber(coverage.totalWeight - coverage.weight, 1)}%의 위험은
+            것이며, 나머지 {formatWithUnit(coverage.totalWeight - coverage.weight, 1, "%")}의 위험은
             반영되지 않았습니다.
           </div>
           {coverage.uncovered.length > 0 && (
@@ -388,7 +388,7 @@ function RiskCard() {
               <ul className="mt-1 space-y-0.5 text-[11px]">
                 {coverage.uncovered.map((row) => (
                   <li key={row.name}>
-                    {row.name} — {formatNumber(row.weight, 2)}%
+                    {row.name} — {formatWithUnit(row.weight, 2, "%")}
                   </li>
                 ))}
               </ul>
@@ -402,7 +402,7 @@ function RiskCard() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric
               label="연율 변동성"
-              value={`${formatNumber(metrics.volatility, 2)}%`}
+              value={formatWithUnit(metrics.volatility, 2, "%")}
               caption={`표본 ${metrics.samples}일 · ${metrics.from} ~ ${metrics.to}`}
             />
             <Metric
@@ -412,21 +412,21 @@ function RiskCard() {
             />
             <Metric
               label="추적오차 (연율)"
-              value={`${formatNumber(metrics.trackingError, 2)}%`}
+              value={formatWithUnit(metrics.trackingError, 2, "%")}
               caption="벤치마크와 얼마나 달랐나 — 좋고 나쁨은 말하지 않습니다"
             />
             <Metric
               label="최대낙폭"
-              value={`${formatNumber(metrics.maxDrawdown, 2)}%`}
+              value={formatWithUnit(metrics.maxDrawdown, 2, "%")}
               caption="구간 내 고점 대비 최대 하락"
             />
           </div>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="VaR (95%)" value={`${formatNumber(metrics.var95, 2)}%`} caption="일일 최대 예상 손실" />
-            <Metric label="VaR (99%)" value={`${formatNumber(metrics.var99, 2)}%`} caption="극단 상황" />
-            <Metric label="ES (95%)" value={`${formatNumber(metrics.es95, 2)}%`} caption="VaR 초과 시 평균 손실" />
-            <Metric label="ES (99%)" value={`${formatNumber(metrics.es99, 2)}%`} caption="VaR 초과 시 평균 손실" />
+            <Metric label="VaR (95%)" value={formatWithUnit(metrics.var95, 2, "%")} caption="일일 최대 예상 손실" />
+            <Metric label="VaR (99%)" value={formatWithUnit(metrics.var99, 2, "%")} caption="극단 상황" />
+            <Metric label="ES (95%)" value={formatWithUnit(metrics.es95, 2, "%")} caption="VaR 초과 시 평균 손실" />
+            <Metric label="ES (99%)" value={formatWithUnit(metrics.es99, 2, "%")} caption="VaR 초과 시 평균 손실" />
           </div>
         </>
       )}
@@ -471,13 +471,13 @@ function RiskCard() {
                 key: "weight",
                 header: "비중",
                 align: "right",
-                render: (row) => `${formatNumber(row.weight, 2)}%`,
+                render: (row) => formatWithUnit(row.weight, 2, "%"),
               },
               {
                 key: "volatility",
                 header: "개별 변동성",
                 align: "right",
-                render: (row) => `${formatNumber(row.volatility, 1)}%`,
+                render: (row) => formatWithUnit(row.volatility, 1, "%"),
               },
               {
                 key: "contribution",
@@ -485,7 +485,7 @@ function RiskCard() {
                 align: "right",
                 render: (row) => (
                   <span className={`font-semibold ${deltaColor(row.contribution, 2)}`}>
-                    {formatNumber(row.contribution, 2)}%p
+                    {formatWithUnit(row.contribution, 2, "%p")}
                   </span>
                 ),
               },
@@ -493,7 +493,7 @@ function RiskCard() {
                 key: "share",
                 header: "기여 비중",
                 align: "right",
-                render: (row) => `${formatNumber(row.share, 1)}%`,
+                render: (row) => formatWithUnit(row.share, 1, "%"),
               },
             ]}
           />

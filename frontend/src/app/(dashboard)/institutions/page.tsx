@@ -21,8 +21,7 @@ import {
   deltaColor,
   EMPTY,
   formatCurrency,
-  formatNumber,
-} from "@/lib/format";
+  formatNumber, formatWithUnit } from "@/lib/format";
 import type { PortfolioResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
@@ -197,7 +196,7 @@ export default function InstitutionsPage() {
                   key: "weight",
                   header: "비중",
                   align: "right",
-                  render: (row) => `${formatNumber(row.weight, 2)}%`,
+                  render: (row) => formatWithUnit(row.weight, 2, "%"),
                 },
                 {
                   key: "weightDiff",

@@ -10,6 +10,7 @@ import {
   deltaColor, withoutLeadingIcon, formatAge, formatBillionUsd, formatKrw, formatNumber, formatPercent, formatSampleWindow, formatShares,
   formatSigned, formatSignedKrw, formatTrillionDelta, formatTrillionUsd, formatUsd, formatUsdWithKrw,
   formatLatency,
+  formatWithUnit,
 } from "@/lib/format";
 
 describe("값이 없으면 —", () => {
@@ -121,5 +122,19 @@ describe("QA-048 AI 소요 시간의 경계", () => {
     expect(formatLatency(119_600)).toBe("2분 0초");
     expect(formatLatency(59_960)).toBe("1분 0초");
     expect(formatLatency(60_400)).toBe("1분 0초");
+  });
+});
+
+describe("QA-049 숫자 + 단위", () => {
+  it("모르는 값(null·NaN·Infinity)은 단위 없이 —", () => {
+    expect(formatWithUnit(null, 2, "%")).toBe("—");
+    expect(formatWithUnit(undefined, 1, "억 원")).toBe("—");
+    expect(formatWithUnit(Number.NaN, 0, "일 전 공시")).toBe("—");
+    expect(formatWithUnit(Number.POSITIVE_INFINITY, 2, "%p")).toBe("—");
+  });
+
+  it("값이 있으면 숫자 서식 그대로 단위를 붙인다", () => {
+    expect(formatWithUnit(12.345, 2, "%")).toBe(`${formatNumber(12.345, 2)}%`);
+    expect(formatWithUnit(0, 0, "일")).toBe("0일");
   });
 });

@@ -17,8 +17,7 @@ import {
   formatNumber,
   formatSampleWindow,
   formatSigned,
-  statusColor,
-} from "@/lib/format";
+  statusColor, formatWithUnit } from "@/lib/format";
 import type { AdvancedEntry, AdvancedIndicators } from "@/lib/types";
 import { endpoints } from "@/lib/endpoints";
 
@@ -69,7 +68,7 @@ export function AdvancedSection({
             label={entry.label}
             value={
               entry.available
-                ? `${formatNumber(entry.value ?? null, entry.digits)}${entry.unit}`
+                ? formatWithUnit(entry.value, entry.digits, entry.unit)
                 : "수집 실패"
             }
             delta={entry.delta}

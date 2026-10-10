@@ -19,7 +19,7 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { MarketFlowsPanel, StockFlowsPanel } from "./FlowPanels";
-import { deltaColor, EMPTY, formatKrw, formatNumber, formatPercent } from "@/lib/format";
+import { deltaColor, EMPTY, formatKrw, formatNumber, formatPercent, formatWithUnit } from "@/lib/format";
 import type {
   DiagnosticsResponse,
   KrFundamentalsResponse,
@@ -512,7 +512,7 @@ function ConsensusPanel({
             <Metric
               label="합산 금액 1위"
               value={rows[0]?.name ?? EMPTY}
-              caption={`${formatNumber(rows[0]?.totalEok, 1)}억 원`}
+              caption={formatWithUnit(rows[0]?.totalEok, 1, "억 원")}
             />
             <Metric
               label="집중도"

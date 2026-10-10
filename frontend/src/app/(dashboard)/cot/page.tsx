@@ -14,7 +14,7 @@ import {
   Table,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
-import { deltaColor, EMPTY, formatNumber, formatPercent, formatSigned } from "@/lib/format";
+import { deltaColor, EMPTY, formatNumber, formatPercent, formatSigned, formatWithUnit } from "@/lib/format";
 import type { CotAssetResponse, CotExtremesResponse, CotSummary } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
@@ -87,7 +87,7 @@ export default function CotPage() {
                   row.available ? (
                     <span className="flex flex-col">
                       <span>{row.date}</span>
-                      <span className="text-[11px] text-muted">{row.ageDays}일 전 공시</span>
+                      <span className="text-[11px] text-muted">{formatWithUnit(row.ageDays, 0, "일 전 공시")}</span>
                     </span>
                   ) : (
                     <span className="text-muted">{row.error ?? "데이터 없음"}</span>
@@ -377,7 +377,7 @@ function ExtremesPanel({ asset }: { asset: string }) {
                   key: "percentile",
                   header: "백분위",
                   align: "right",
-                  render: (row) => `${formatNumber(row.percentile, 1)}%`,
+                  render: (row) => formatWithUnit(row.percentile, 1, "%"),
                 },
                 {
                   key: "net",

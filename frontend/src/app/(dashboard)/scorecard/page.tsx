@@ -14,7 +14,7 @@ import {
   Table,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
-import { deltaColor, EMPTY, formatNumber } from "@/lib/format";
+import { deltaColor, EMPTY, formatNumber, formatWithUnit } from "@/lib/format";
 import type { ScorecardResponse, StockUniverseResponse } from "@/lib/types";
 import { SOURCES } from "@/lib/sources";
 import { endpoints } from "@/lib/endpoints";
@@ -206,9 +206,9 @@ export default function ScorecardPage() {
 
           <Card title="원자료" source={SOURCES.equityPrices} subtitle="점수로 바꾸기 전의 값입니다.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Metric label="1개월 수익률" value={`${formatNumber(data.raw?.momentum1m, 2)}%`} />
-              <Metric label="6개월 수익률" value={`${formatNumber(data.raw?.momentum6m, 2)}%`} />
-              <Metric label="표본" value={`${data.raw?.samples ?? 0}일`} caption="거래일 수" />
+              <Metric label="1개월 수익률" value={formatWithUnit(data.raw?.momentum1m, 2, "%")} />
+              <Metric label="6개월 수익률" value={formatWithUnit(data.raw?.momentum6m, 2, "%")} />
+              <Metric label="표본" value={formatWithUnit(data.raw?.samples, 0, "일")} caption="거래일 수" />
               <Metric label="측정 구간" value={`최근 ${data.years}년`} />
             </div>
           </Card>

@@ -19,7 +19,7 @@ afterEach(() => cleanup());
 
 describe("QA-049 모르는 값에 단위를 붙이지 않는다", () => {
   // 수정 전에는 수집은 됐지만 값이 비면 "—%p"로 찍혔다.
-  it.fails("심화 지표: 값이 없으면 '—%p'가 아니라 '—'", () => {
+  it("심화 지표: 값이 없으면 '—%p'가 아니라 '—'", () => {
     render(
       <AdvancedSection
         loading={false}
