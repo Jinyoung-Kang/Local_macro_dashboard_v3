@@ -93,6 +93,7 @@ export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: 
         </div>
         <Button
           className="lg:hidden"
+          expanded={menuOpen}
           onClick={() => setMenuOpen((open) => !open)}
         >
           {menuOpen ? "메뉴 닫기 ✕" : "메뉴 열기 ☰"}

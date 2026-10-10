@@ -229,6 +229,7 @@ export function Button({
   disabled,
   type = "button",
   className = "",
+  expanded,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -236,6 +237,8 @@ export function Button({
   disabled?: boolean;
   type?: "button" | "submit";
   className?: string;
+  /** 펼치고 접는 버튼이면 지금 펼쳐졌는지(aria-expanded). 아니면 넘기지 않습니다. */
+  expanded?: boolean;
 }) {
   const palette = {
     default: "border-border bg-surface-hover text-body hover:border-muted hover:text-bright",
@@ -245,6 +248,7 @@ export function Button({
 
   return (
     <button
+      aria-expanded={expanded}
       type={type}
       onClick={onClick}
       disabled={disabled}

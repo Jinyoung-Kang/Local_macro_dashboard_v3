@@ -77,6 +77,7 @@ export default function ConsensusPage() {
               <button
                 key={entry.cik}
                 type="button"
+                aria-pressed={active}
                 onClick={() => toggle(entry.cik)}
                 className={`rounded-md border px-3 py-1.5 text-xs transition ${
                   active

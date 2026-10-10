@@ -98,6 +98,7 @@ export function FxCompareSection() {
             <button
               key={entry.id}
               type="button"
+              aria-pressed={active}
               onClick={() => toggle(entry.id)}
               className={`rounded-md border px-3 py-1.5 text-xs transition ${
                 active

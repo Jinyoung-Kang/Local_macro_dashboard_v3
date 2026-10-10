@@ -36,18 +36,18 @@ afterEach(() => cleanup());
 
 describe("QA-052 상태를 aria로 알린다", () => {
   // 수정 전에는 선택 여부가 색으로만 전달됐다(RangeTabs만 aria-pressed가 있었음).
-  it.fails("환율 비교 계열 버튼은 aria-pressed로 켜짐을 알린다", async () => {
+  it("환율 비교 계열 버튼은 aria-pressed로 켜짐을 알린다", async () => {
     render(<FxCompareSection />);
     expect((await screen.findByRole("button", { name: "원/달러" })).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "엔/달러" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it.fails("13F 교집합의 기관 버튼은 aria-pressed로 포함 여부를 알린다", async () => {
+  it("13F 교집합의 기관 버튼은 aria-pressed로 포함 여부를 알린다", async () => {
     render(<ConsensusPage />);
     expect((await screen.findByRole("button", { name: "Berkshire" })).getAttribute("aria-pressed")).toBe("true");
   });
 
-  it.fails("모바일 메뉴 버튼은 aria-expanded로 열림을 알린다", () => {
+  it("모바일 메뉴 버튼은 aria-expanded로 열림을 알린다", () => {
     render(<Sidebar readMode="auto" user={{ email: "m@test.local", role: "MEMBER", tier: "PRO", demo: false }} unread={0} />);
     const toggle = screen.getByRole("button", { name: /메뉴 열기/ });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
