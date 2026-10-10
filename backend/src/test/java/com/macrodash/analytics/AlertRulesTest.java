@@ -62,13 +62,13 @@ class AlertRulesTest {
     @Test
     @DisplayName("연속 순매수가 정확히 N일이 된 날만 — N+1일째는 다시 알리지 않고, 끊긴 뒤 다시 N일이면 새로")
     void streakExactlyN() {
+        // 첫 기록(순매도)은 연속이 그 뒤에 시작했다는 것을 알려 줍니다(첫 기록부터 이어진 연속은 시작을 모름, QA-039).
         List<AlertRules.StreakHit> hits = AlertRules.streakReached(
-                nets(5L, 3L, 9L, 2L, -1L, 4L, 4L, 4L), 3);
-        assertThat(hits).extracting(AlertRules.StreakHit::date).containsExactly(D.plusDays(2), D.plusDays(7));
+                nets(-2L, 5L, 3L, 9L, 2L, -1L, 4L, 4L, 4L), 3);
+        assertThat(hits).extracting(AlertRules.StreakHit::date).containsExactly(D.plusDays(3), D.plusDays(8));
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-039 재현 — 수정 전에는 창의 첫 기록부터 0으로 세어 창이 밀릴 때마다 새 'N일 연속' 사건을 만든다")
     @DisplayName("QA-039 창이 하루씩 밀려도 같은 연속을 새 사건으로 만들지 않는다 — 첫 기록 앞을 모르면 연속의 시작이 아니다")
     void slidingWindowDoesNotRestartStreak() {
         // 실제 기록: D0 순매도, D1~D6 순매수. 3일 연속은 D3 한 번뿐입니다.
