@@ -111,6 +111,33 @@ class AlertEvaluatorDbTest {
         assertThat(alerts.markRead(userId, null)).as("이미 읽음").isZero();
     }
 
+    private void logWithInputDate(int day, String code, String label, int asOfDay) {
+        regimeLog.insertIfAbsent(new RegimeLogStore.Entry(DAY.plusDays(day), code, label,
+                MAPPER.valueToTree(Map.of("nfci", Map.of("value", -0.4, "asOf", DAY.plusDays(asOfDay).toString()))),
+                List.of(), "v1"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Disabled("QA-054 재현 — 수정 전에는 입력이 같은 주말 기록도 하루로 세어 새 데이터 하루로 3일 확정이 된다")
+    @DisplayName("QA-054 국면 3일 확정은 새 데이터인 기록만 센다 — 입력 기준일이 직전과 같은 기록(주말)은 세지도 끊지도 않는다")
+    void confirmationCountsOnlyNewData() {
+        new AlertService(alerts, MAPPER).create(new CurrentUser(userId, EMAIL, "MEMBER", "PRO", null),
+                "REGIME_CHANGE", MAPPER.createObjectNode());
+        for (int i = 0; i < 3; i++) {
+            logWithInputDate(i, "EXPANSION", "확장 (Expansion)", i);
+        }
+        logWithInputDate(3, "LATE", "후퇴 경계 (Late cycle)", 3);   // 새 데이터(금)
+        logWithInputDate(4, "LATE", "후퇴 경계 (Late cycle)", 3);   // 토 — 입력이 금요일과 같음
+        logWithInputDate(5, "LATE", "후퇴 경계 (Late cycle)", 3);   // 일 — 같음
+        logWithInputDate(6, "LATE", "후퇴 경계 (Late cycle)", 6);   // 새 데이터
+        logWithInputDate(7, "LATE", "후퇴 경계 (Late cycle)", 7);   // 새 데이터 — 여기서 3번째
+
+        evaluator().evaluate();
+
+        assertThat(alerts.inbox(userId, 10)).singleElement()
+                .satisfies(item -> assertThat(item.occurredOn()).isEqualTo(DAY.plusDays(7)));
+    }
+
     @Test
     @DisplayName("규칙을 끄면 그 뒤 사건은 알림함에 들어오지 않는다")
     void disabledRuleGetsNothing() {
