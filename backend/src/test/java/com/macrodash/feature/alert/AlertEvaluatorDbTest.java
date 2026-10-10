@@ -139,7 +139,6 @@ class AlertEvaluatorDbTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-040 재현 — 수정 전에는 날짜만 보고 어제 기록을 확정치로 쓴다(어제 장중에 받은 값이어도)")
     @DisplayName("QA-040 시장 수급은 그날이 지난 뒤 다시 받은 기록만 확정 — 장중에 마지막으로 받은 값으로 연속을 세지 않는다")
     @SuppressWarnings("unchecked")
     void marketFlowsCollectedIntradayAreNotFinal() throws Exception {

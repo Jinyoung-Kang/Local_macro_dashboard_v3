@@ -75,11 +75,13 @@ class AlertServiceTest {
                 Map.of("foreigner", plus, "individual", plus, "otherCorporation", plus),
                 Map.of("pensionFund", plus), 0.5);
 
-        assertThat(AlertEvaluator.finalizedForeignNet(List.of(todayPartial, yesterday), today, false))
+        assertThat(AlertEvaluator.finalizedForeignNet(List.of(todayPartial, yesterday), today, false, today))
                 .extracting(AlertRules.DayNet::date).containsExactly(LocalDate.of(2026, 10, 8));
-        assertThat(AlertEvaluator.finalizedForeignNet(List.of(todayPartial, yesterday), today, true))
+        assertThat(AlertEvaluator.finalizedForeignNet(List.of(todayPartial, yesterday), today, false,
+                LocalDate.of(2026, 10, 8))).as("시장 저장본을 어제(장중) 받았으면 어제 기록도 확정이 아님(QA-040)").isEmpty();
+        assertThat(AlertEvaluator.finalizedForeignNet(List.of(todayPartial, yesterday), today, true, null))
                 .as("종목도 잠정 칸이 비면 제외").hasSize(1);
-        assertThat(AlertEvaluator.finalizedForeignNet(List.of(todayComplete, yesterday), today, true)).hasSize(2);
+        assertThat(AlertEvaluator.finalizedForeignNet(List.of(todayComplete, yesterday), today, true, null)).hasSize(2);
     }
 
     @Test

@@ -188,7 +188,10 @@ public class AlertEvaluator {
                     : market.filter(s -> s.payload() != null)
                             .map(s -> FlowJson.records(Json.array(s.payload().path("markets").path(target), "records")))
                             .orElse(List.of());
-            List<AlertRules.DayNet> finalized = finalizedForeignNet(records, today, stock);
+            LocalDate collectedOn = stock ? null : market
+                    .map(Snapshot::collectedAt).filter(java.util.Objects::nonNull)
+                    .map(at -> at.atZone(Kst.ZONE).toLocalDate()).orElse(null);
+            List<AlertRules.DayNet> finalized = finalizedForeignNet(records, today, stock, collectedOn);
             for (AlertRules.StreakHit hit : AlertRules.streakReached(finalized, n)) {
                 Long sum = sumNet(finalized, hit);
                 String label = stock ? "종목 " + target.substring(6) : ("KOSPI".equals(target) ? "코스피" : "코스닥");
@@ -202,16 +205,23 @@ public class AlertEvaluator {
 
     /**
      * 확정 기록만 오름차순으로. 오늘(KST) 기록은 잠정치라 빼고, 종목 기록은 저녁 확정 칸(개인·기타법인·기관 세부·
-     * 외국인 보유율)이 모두 찬 경우만 오늘 기록도 씁니다. 시장 기록은 하루 늦게(다음 날부터) 확정으로 봅니다.
+     * 외국인 보유율)이 모두 찬 경우만 오늘 기록도 씁니다. 시장 기록은 하루 늦게(다음 날부터) 확정으로 보되, 그날이 지난
+     * 뒤에 다시 받은 저장본일 때만입니다 — 장중에 마지막으로 받고 그 뒤 수집이 모두 실패하면 장중 값이 그대로 남아,
+     * 다음 날 확정치로 연속을 셌습니다(QA-040).
+     *
+     * @param marketCollectedOn 시장 저장본을 받은 날(KST). 모르면 null(시장 기록은 확정으로 보지 않음)
      */
-    static List<AlertRules.DayNet> finalizedForeignNet(List<FlowRecord> records, LocalDate today, boolean stock) {
+    static List<AlertRules.DayNet> finalizedForeignNet(List<FlowRecord> records, LocalDate today, boolean stock,
+                                                       LocalDate marketCollectedOn) {
         List<AlertRules.DayNet> out = new ArrayList<>();
         for (FlowRecord record : records) {
             LocalDate date = Json.parseDate(record.date());
             if (date == null) {
                 continue;
             }
-            boolean finalized = date.isBefore(today) || (stock && complete(record));
+            boolean finalized = stock
+                    ? date.isBefore(today) || complete(record)
+                    : date.isBefore(today) && marketCollectedOn != null && date.isBefore(marketCollectedOn);
             if (!finalized) {
                 continue;
             }
