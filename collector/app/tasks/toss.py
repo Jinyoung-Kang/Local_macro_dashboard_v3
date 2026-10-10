@@ -14,7 +14,7 @@ from ..services import (
     toss as toss_service,
 )
 
-from .base import EmptyResult, KST, RADAR_COMBINATIONS, _reason_suffix
+from .base import EmptyResult, KST, RADAR_COMBINATIONS, _reason_suffix, carried_suffix, carry_over_missing, previous_payload
 
 logger = logging.getLogger(__name__)
 
@@ -181,11 +181,24 @@ def task_toss_radar_universe() -> str:
 
     if not stocks:
         raise EmptyResult(f"0/{len(leaders)} 종목 — 기존 저장본 유지" + _reason_suffix(reasons))
+    # 403 등으로 중간에 멈추면 받은 몇 종목만으로 덮지 않고, 빠진 종목은 직전 저장본의 기록으로 잇습니다(QA-032).
+    fresh_count = len(stocks)
+    by_code = {stock["code"]: stock for stock in stocks}
+    previous_by_code = {
+        stock.get("code"): stock
+        for stock in previous_payload(catalog.SNAP_TOSS_RADAR_UNIVERSE).get("stocks") or []
+        if isinstance(stock, dict)
+    }
+    codes = [leader["code"] for leader in leaders]
+    carried = carry_over_missing(
+        by_code, previous_by_code, codes, reasons[0] if reasons else None,
+        lambda stock: bool(stock.get("records")),
+    )
     store.put_snapshot(catalog.SNAP_TOSS_RADAR_UNIVERSE, {
         "source": "토스증권 Open API — 시장 거래대금 상위 랭킹 + 종목별 투자자 매매동향",
         "universe": len(leaders),
-        "stocks": stocks,
+        "stocks": [by_code[code] for code in codes if code in by_code],
     })
-    return f"{len(stocks)}/{len(leaders)} 종목" + _reason_suffix(reasons)
+    return f"{fresh_count}/{len(leaders)} 종목" + carried_suffix(carried) + _reason_suffix(reasons)
 
 

@@ -8,15 +8,12 @@ tests/test_partial_carry_over.py
 """
 from __future__ import annotations
 
-import pytest
-
 from app import catalog, equities, indicators, tasks
 from app.tasks import toss as toss_tasks
 
 _FRAME = {"dates": ["2026-09-10", "2026-09-11"], "close": [100.0, 101.0]}
 _OLD = {"dates": ["2026-09-09", "2026-09-10"], "close": [90.0, 91.0]}
 
-pytestmark = pytest.mark.xfail(strict=True, reason="QA-032: 일부 실패 때 직전 저장본의 정상 항목을 버림")
 
 
 def test_QA032_업종_ETF(store, monkeypatch):

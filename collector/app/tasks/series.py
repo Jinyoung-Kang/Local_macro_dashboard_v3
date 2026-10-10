@@ -17,7 +17,7 @@ from ..services import (
     sector as sector_service,
 )
 
-from .base import DAUM_TREND_LOOKBACK, EmptyResult, _reason_suffix
+from .base import DAUM_TREND_LOOKBACK, EmptyResult, _reason_suffix, carried_suffix, carry_over_missing, previous_payload
 
 logger = logging.getLogger(__name__)
 
@@ -169,9 +169,15 @@ def task_sector_history() -> str:
             + _reason_suffix([payload.get("error")] if payload.get("error") else [])
         )
 
+    fresh_count = len(collected)
+    carried = carry_over_missing(
+        collected, previous_payload(catalog.SNAP_SECTOR_HISTORY).get("tickers"), tickers,
+        payload.get("error"), lambda frame: bool(frame.get("close")),
+    )
+    payload["tickers"] = collected
     store.put_snapshot(catalog.SNAP_SECTOR_HISTORY, payload)
-    detail = f"{len(collected)}/{len(tickers)} 티커"
-    if len(collected) < len(tickers) and payload.get("error"):
+    detail = f"{fresh_count}/{len(tickers)} 티커" + carried_suffix(carried)
+    if fresh_count < len(tickers) and payload.get("error"):
         # 어느 티커가 왜 빠졌는지 상태 화면에 남깁니다. "136/137"만으로는 매시간 ERROR 로그를 내는
         # 폐지 티커(MMC)를 아무도 알아채지 못했습니다.
         detail += f" — 실패: {payload['error']}"
@@ -228,11 +234,16 @@ def task_fx_history() -> str:
             + _reason_suffix([raw.get("error")] if raw.get("error") else [])
         )
 
+    fresh_count = len(series)
+    carried = carry_over_missing(
+        series, previous_payload(catalog.SNAP_FX_HISTORY).get("series"), [spec["key"] for spec in specs],
+        raw.get("error"), lambda entry: bool(entry.get("close")),
+    )
     store.put_snapshot(
         catalog.SNAP_FX_HISTORY,
         {"period": indicators.FX_HISTORY_PERIOD, "series": series},
     )
-    return f"{len(series)}/{len(specs)} 계열"
+    return f"{fresh_count}/{len(specs)} 계열" + carried_suffix(carried)
 
 
 def task_equity_history() -> str:
@@ -257,6 +268,11 @@ def task_equity_history() -> str:
             + _reason_suffix([raw.get("error")] if raw.get("error") else [])
         )
 
+    fresh_count = len(frames)
+    carried = carry_over_missing(
+        frames, previous_payload(catalog.SNAP_EQUITY_HISTORY).get("tickers"), tickers,
+        raw.get("error"), lambda frame: bool(frame.get("close")),
+    )
     store.put_snapshot(catalog.SNAP_EQUITY_HISTORY, {
         "period": equities.PRICE_HISTORY_PERIOD,
         "tickers": frames,
@@ -265,7 +281,7 @@ def task_equity_history() -> str:
         "benchmarks": equities.BENCHMARKS,
         "trackRecordAssets": equities.TRACK_RECORD_TICKERS,
     })
-    return f"{len(frames)}/{len(tickers)} 티커"
+    return f"{fresh_count}/{len(tickers)} 티커" + carried_suffix(carried)
 
 
 def task_volatility_history() -> str:
@@ -313,6 +329,12 @@ def task_cot_history() -> str:
     if not usable:
         raise EmptyResult(f"0/{len(assets)} 자산 — 기존 저장본 유지")
 
+    failed = [entry.get("error") for entry in assets.values() if not entry.get("rows") and entry.get("error")]
+    carried = carry_over_missing(
+        assets, previous_payload(catalog.SNAP_COT_HISTORY).get("assets"), list(assets),
+        failed[0] if failed else None, lambda entry: bool(entry.get("rows")),
+    )
+    result["assets"] = assets
     store.put_snapshot(catalog.SNAP_COT_HISTORY, result)
 
     # 화면은 자산별로도 조회하므로 계약 코드별 스냅샷을 함께 적재합니다.
@@ -324,7 +346,7 @@ def task_cot_history() -> str:
         )
         per_contract += 1
 
-    return f"{len(usable)}/{len(assets)} 자산 (계약별 {per_contract}건)"
+    return f"{len(usable)}/{len(assets)} 자산 (계약별 {per_contract}건)" + carried_suffix(carried)
 
 
 def task_daum_futures_trend() -> str:

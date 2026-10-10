@@ -48,6 +48,48 @@ def _reason_suffix(reasons: list[str | None]) -> str:
     return " (사유: " + " / ".join(unique[:2]) + ")"
 
 
+def carry_over_missing(
+    fresh: dict,
+    previous: dict | None,
+    expected,
+    reason: str | None,
+    has_data: Callable[[dict], bool],
+) -> list[str]:
+    """
+    이번 수집에서 빠졌거나 빈 항목을 **직전 저장본의 같은 항목**으로 잇습니다(QA-032, fast 태스크의 QA-001과 같은 규칙).
+
+    일부만 실패한 수집이 받은 것만으로 저장본을 덮으면, 빠진 항목의 마지막 정상 값이 다음 실행까지 사라졌습니다.
+    이어받은 항목은 값을 그대로 두고 ``isStale``·``staleReason``만 더합니다. 직전 저장본에도 없으면 그대로 빠집니다.
+
+    :param fresh: 이번에 받은 항목(키 → 항목). 이 사전을 고칩니다
+    :param expected: 있어야 하는 키(태스크가 받으려던 목록) — 목록에서 뺀 키는 잇지 않습니다
+    :return: 이어받은 키
+    """
+    previous = previous or {}
+    carried: list[str] = []
+    for key in expected:
+        if key in fresh and isinstance(fresh[key], dict) and has_data(fresh[key]):
+            continue
+        before = previous.get(key)
+        if not isinstance(before, dict) or not has_data(before):
+            continue
+        fresh[key] = {**before, "isStale": True, "staleReason": reason or "수집 실패"}
+        carried.append(key)
+    return carried
+
+
+def previous_payload(name: str) -> dict:
+    """직전 저장본의 내용(없으면 빈 사전)."""
+    from .. import store
+
+    snapshot = store.read_snapshot(name)
+    return snapshot.payload if snapshot and isinstance(snapshot.payload, dict) else {}
+
+
+def carried_suffix(carried: list[str]) -> str:
+    return f" · 이전 값 {len(carried)}개({', '.join(carried[:5])}{'…' if len(carried) > 5 else ''})" if carried else ""
+
+
 @dataclass(frozen=True)
 class Task:
     name: str
