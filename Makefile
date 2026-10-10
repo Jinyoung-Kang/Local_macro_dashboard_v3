@@ -33,7 +33,7 @@ TOKEN_HEADER := $(if $(COLLECTOR_API_TOKEN),-H "X-Service-Token: $(COLLECTOR_API
 .DEFAULT_GOAL := help
 .PHONY: help setup update version up migrate down restart logs ps collect collect-all status verify \
         doctor test db-test test-collector test-backend test-frontend \
-        dev-collector dev-backend dev-frontend db infra backup restore reset
+        dev-collector dev-backend dev-frontend db infra backup restore reset constraints
 
 # 네이티브 개발용 파이썬. collector/.venv가 있으면 그것을 씁니다.
 # (conda base 같은 다른 파이썬이 PATH 앞에 있으면 pytest·uvicorn을
@@ -167,6 +167,9 @@ test-collector: db-test ## 수집기 린트(ruff) + 테스트 (PostgreSQL 필요
 	cd collector && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-postgresql://$${DATABASE_USER:-macro}:$${DATABASE_PASSWORD:-macro}@localhost:$(DATABASE_PORT)/$(TEST_DB_NAME)} \
 		$(if $(filter $(VENV_PY),$(PY)),.venv/bin/python,python3) -m pytest tests -q
 
+constraints: ## 수집기 간접 의존성 고정 파일(collector/constraints.txt)을 다시 만들기 — requirements.txt를 바꾼 뒤 함께 커밋
+	bash scripts/collector-constraints.sh
+
 test-backend: db-test ## 백엔드 테스트 (PostgreSQL 필요)
 	cd backend && TEST_DATABASE_URL=$${TEST_DATABASE_URL:-jdbc:postgresql://localhost:$(DATABASE_PORT)/$(TEST_DB_NAME)} \
 		mvn -B verify
@@ -177,7 +180,7 @@ test-frontend: ## 화면 자가검증 + 훅 테스트 + 린트 + 빌드(타입 �
 # ------------------------------------------------------------- 네이티브 개발
 dev-collector: ## 수집기 개발 서버 (자동 리로드 · collector/.venv 필요)
 	@test -x $(VENV_PY) || (echo "⚠️  collector/.venv가 없습니다. 먼저:" && \
-		echo "    python3 -m venv collector/.venv && collector/.venv/bin/pip install -r collector/requirements-dev.txt" && exit 1)
+		echo "    python3 -m venv collector/.venv && collector/.venv/bin/pip install -r collector/requirements-dev.txt -c collector/constraints.txt" && exit 1)
 	cd collector && DATABASE_URL=postgresql://macro:macro@localhost:5432/macrodash \
 		.venv/bin/python -m uvicorn app.main:app --reload --port $(COLLECTOR_PORT)
 

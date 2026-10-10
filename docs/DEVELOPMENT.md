@@ -22,7 +22,7 @@ make dev-frontend     # 터미널 3 — 핫 리로드
 ```bash
 cd collector
 python3.11 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt   # 운영 의존성 + 테스트·린트 도구
+.venv/bin/pip install -r requirements-dev.txt -c constraints.txt   # 운영 의존성 + 테스트·린트 도구
 ```
 
 `make`가 `collector/.venv`를 먼저 찾으므로, conda base 같은 다른 파이썬이 PATH
@@ -207,6 +207,12 @@ snapshot.get().putFreshness(out);   // collectedAtKst · ageSeconds · stale
 자세한 규칙은 [PRINCIPLES.md](PRINCIPLES.md)에 있습니다.
 
 ---
+
+## 4-1. 수집기 의존성 바꾸기
+
+`requirements.txt`는 직접 의존성만 고정하고, 간접 의존성(starlette·pydantic·urllib3 …)은 `constraints.txt`가
+고정합니다. 이미지·CI는 둘을 함께 써서(`-c constraints.txt`) 같은 커밋이면 언제 빌드해도 같은 판을 받습니다.
+`requirements.txt`를 바꾸면 `make constraints`로 다시 만들고 함께 커밋합니다 — 그대로 두면 판이 어긋나 설치가 실패합니다.
 
 ## 5. Git
 

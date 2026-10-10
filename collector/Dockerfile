@@ -9,8 +9,9 @@ RUN apt-get update \
 WORKDIR /app
 
 # 운영 의존성만 설치합니다. 테스트 도구(pytest 등)는 requirements-dev.txt에 있습니다.
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
+# 간접 의존성은 constraints.txt의 판으로 고정합니다 — 같은 커밋이면 언제 빌드해도 같은 이미지(make constraints로 갱신).
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt \
     && apt-get purge -y build-essential && apt-get autoremove -y
 
 # root로 돌지 않습니다. 앱이 쓰는 곳은 /tmp(yfinance 캐시)와 홈(라이브러리 설정 캐시)뿐이고,
