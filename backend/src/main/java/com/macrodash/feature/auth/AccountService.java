@@ -5,9 +5,12 @@ import com.macrodash.store.EmailTokenStore;
 import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.mail.MailException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
@@ -50,6 +53,10 @@ public class AccountService {
     static final String SIGNUP_SENT = "확인 메일을 보냈습니다. 메일의 링크를 열면 가입이 끝납니다(스팸함도 확인하세요).";
     static final String RESET_SENT = "가입된 주소라면 비밀번호 재설정 메일을 보냈습니다. 30분 안에 링크를 여세요.";
     static final String MAIL_OFF = "메일 발송이 설정되지 않아 이 기능을 쓸 수 없습니다. 운영자에게 문의하세요.";
+
+    private static final Logger log = LoggerFactory.getLogger(AccountService.class);
+    /** 만료 뒤 이만큼 지난 메일 링크 토큰은 지웁니다. */
+    static final Duration TOKEN_KEEP_AFTER_EXPIRY = Duration.ofDays(7);
 
     private final UserStore users;
     private final SessionStore sessions;
@@ -179,6 +186,23 @@ public class AccountService {
         int revoked = sessions.revokeAllForUser(user.id(), null);
         audit.append(user.id(), "password.reset", Map.of("sessionsRevoked", revoked));
         return Result.ok("비밀번호를 바꿨습니다. 모든 기기에서 로그아웃됐으니 새 비밀번호로 로그인하세요.");
+    }
+
+    /** 만료된 메일 링크 토큰 정리(QA-027). 실패하면(스키마 적용 전·DB 장애) 다음 주기에 다시 합니다. */
+    @Scheduled(initialDelayString = "${dashboard.scheduler.auth-purge-initial-delay-ms:300000}",
+            fixedDelayString = "${dashboard.scheduler.auth-purge-interval-ms:21600000}")
+    public void purgeExpiredTokens() {
+        if (!users.ready()) {
+            return;
+        }
+        try {
+            int removed = tokens.purgeExpiredOlderThan(TOKEN_KEEP_AFTER_EXPIRY);
+            if (removed > 0) {
+                log.info("만료된 메일 토큰 {}건 정리", removed);
+            }
+        } catch (RuntimeException e) {
+            log.warn("메일 토큰 정리 실패 — 다음 주기에 다시 시도합니다: {}", e.toString());
+        }
     }
 
     /** 계정 삭제 — 비밀번호를 다시 확인합니다. 운영자 계정은 지울 수 없습니다(운영자가 사라지면 아무도 관리 못 함). */

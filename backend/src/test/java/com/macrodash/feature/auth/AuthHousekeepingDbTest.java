@@ -3,7 +3,6 @@ package com.macrodash.feature.auth;
 import com.macrodash.config.AppProperties;
 import com.macrodash.store.EmailTokenStore;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -34,7 +33,6 @@ class AuthHousekeepingDbTest {
     }
 
     @Test
-    @Disabled("QA-027 재현 — 수정 전에는 정리 함수를 부르는 정기 작업이 없어 만료분이 끝없이 쌓인다")
     @DisplayName("QA-027 정기 작업이 오래 만료된 세션·메일 토큰을 지우고, 살아 있는 세션은 둔다")
     void scheduledJobsPurgeExpiredSessionsAndTokens() throws Exception {
         long userId = db.user("member", "member-password-1", "MEMBER", "FREE");

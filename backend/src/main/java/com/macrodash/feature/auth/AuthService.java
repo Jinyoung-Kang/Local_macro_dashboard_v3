@@ -114,6 +114,29 @@ public class AuthService {
         }
     }
 
+    /** 만료·해지 뒤 이만큼 지난 세션은 지웁니다(로그인 기기 목록에도 보이지 않는 행). */
+    static final Duration SESSION_KEEP_AFTER_END = Duration.ofDays(30);
+
+    /**
+     * 끝난 세션 정리(QA-027) — 예전에는 정리 함수만 있고 부르는 곳이 없어 로그인할 때마다 한 행씩 끝없이 쌓였습니다.
+     * 실패하면(스키마 적용 전·DB 장애) 다음 주기에 다시 합니다.
+     */
+    @Scheduled(initialDelayString = "${dashboard.scheduler.auth-purge-initial-delay-ms:300000}",
+            fixedDelayString = "${dashboard.scheduler.auth-purge-interval-ms:21600000}")
+    public void purgeEndedSessions() {
+        if (!users.ready()) {
+            return;
+        }
+        try {
+            int removed = sessions.purgeOlderThan(SESSION_KEEP_AFTER_END);
+            if (removed > 0) {
+                log.info("끝난 세션 {}건 정리", removed);
+            }
+        } catch (RuntimeException e) {
+            log.warn("세션 정리 실패 — 다음 주기에 다시 시도합니다: {}", e.toString());
+        }
+    }
+
     /**
      * 계정이 하나도 없으면 운영자 계정을 만듭니다. 테이블이 아직 없거나(수집기가 V4 적용 전) 설정이 모자라면
      * 만들지 않습니다.

@@ -40,4 +40,9 @@ public class EmailTokenStore {
         jdbc.update("UPDATE email_tokens SET used_at = now() WHERE user_id = ? AND purpose = ? AND used_at IS NULL",
                 userId, purpose);
     }
+
+    /** 만료된 지 {@code age}가 넘은 토큰을 지웁니다(쓴 것·안 쓴 것 모두 — 만료된 링크는 다시 쓸 수 없음). */
+    public int purgeExpiredOlderThan(java.time.Duration age) {
+        return jdbc.update("DELETE FROM email_tokens WHERE expires_at < now() - make_interval(secs => ?)", age.toSeconds());
+    }
 }
