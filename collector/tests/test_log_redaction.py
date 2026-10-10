@@ -105,3 +105,31 @@ def test_key로_끝나는_일반_파라미터는_가리지_않는다():
     """'key'를 추가했다고 sort_key 같은 평범한 값까지 지우면 진단이 어려워집니다."""
     text = "?sort_key=date&monkey=1"
     assert logredact.redact(text) == text
+
+
+class _UrlError(Exception):
+    """requests.ConnectionError처럼 메시지에 요청 URL을 담는 예외."""
+
+
+@pytest.mark.xfail(strict=True, reason="QA-018: 예외 객체 인자는 문자열이 아니라 가리지 않음")
+def test_QA018_예외_객체_인자에_담긴_키도_가린다(captured):
+    """FRED 실패 경로: ``logger.warning("FRED API 실패 (%s): %s", series_id, exc)`` — exc는 문자열이 아닙니다."""
+    exc = _UrlError(
+        "Max retries exceeded with url: /fred/series/observations"
+        "?series_id=WALCL&api_key=QA018SECRETKEY&file_type=json"
+    )
+    logging.getLogger("app.services.fred").warning("FRED API 실패 (%s): %s", "WALCL", exc)
+
+    assert "QA018SECRETKEY" not in captured.text
+    assert "series_id=WALCL" in captured.text
+
+
+@pytest.mark.xfail(strict=True, reason="QA-018: traceback(exc_info)은 필터를 거치지 않음")
+def test_QA018_traceback에_담긴_키도_가린다(captured):
+    try:
+        raise _UrlError("GET https://api.example/x?api_key=QA018TRACEBACKKEY")
+    except _UrlError:
+        logging.getLogger("t").exception("수집 실패")
+
+    assert "QA018TRACEBACKKEY" not in captured.text
+    assert "_UrlError" in captured.text
