@@ -303,7 +303,8 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 덧붙임 파일 [compose.aws.yml](compose.aws.yml) 하나에 있고, 이유는 [ADR 0012](docs/adr/0012-aws-demo-deployment.md)에 있습니다.
 
 ```bash
-docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d --build
+docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env build --pull   # 베이스 이미지 보안 패치까지
+docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d
 ```
 
 - DB는 postgres 컨테이너 대신 RDS(`RDS_HOST`, TLS)입니다. 화면·API는 `127.0.0.1`에만 열고, 앞단 프록시가 한 주소로 묶습니다.

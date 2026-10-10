@@ -1,7 +1,8 @@
 # =============================================================================
 # compose.aws.yml — AWS 배포용 덧붙임 (ADR 0012). 로컬 실행에는 쓰지 않습니다.
 #
-#   docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d --build
+#   docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env build --pull   # 베이스 이미지 보안 패치
+#   docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d
 #
 # 바뀌는 것
 #   · postgres 컨테이너 대신 RDS(PostgreSQL 18, TLS) — 접속 주소는 RDS_HOST

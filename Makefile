@@ -70,7 +70,10 @@ up: ## 전체 스택 기동 (최초 빌드는 5~10분)
 	@# 포트가 겹치면 compose는 나머지를 다 띄운 뒤 백엔드만 실패시켜, 화면이 백엔드
 	@# 없이 멈춥니다. 누가 포트를 잡았는지 먼저 확인하고 겹치면 시작하지 않습니다.
 	@bash scripts/ports.sh check
-	$(COMPOSE) up -d --build
+	@# 베이스 이미지(JRE·Node·Python·Alpine)의 보안 패치를 받으려면 빌드할 때 새로 받아야 합니다 — 받아 둔 이미지를
+	@# 계속 쓰면 패치가 들어가지 않습니다. 오프라인이면 받아 둔 이미지로 빌드합니다.
+	@$(COMPOSE) build --pull || { echo "ℹ️  베이스 이미지를 새로 받지 못해(오프라인?) 받아 둔 이미지로 빌드합니다."; $(COMPOSE) build; }
+	$(COMPOSE) up -d
 	@$(MAKE) --no-print-directory migrate
 	@echo ""
 	@bash scripts/ports.sh wait
