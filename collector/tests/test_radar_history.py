@@ -114,3 +114,50 @@ def test_소스가_밝힌_데이터_기준일이_있으면_그_날짜로_쌓는�
 
     assert _codes(store, {"investor": "외국인"}, obs_date="2026-09-10") == {"A"}
     assert _codes(store, {"investor": "외국인"}, obs_date="2026-09-11") == set()
+
+
+class _TossSnap:
+    """toss_radar_universe 저장본 흉내 — 거래대금 상위 종목의 투자자별 매매(주)."""
+    age_seconds = 60
+    collected_at = None
+    payload = {
+        "universe": 100,
+        "stocks": [{
+            "market": "KOSPI", "code": "000660", "name": "SK하이닉스", "lastPrice": 200000.0, "changePct": 1.0,
+            "records": [{"date": "2026-09-10", "investors": {"foreigner": {"net": 50000}}}],
+        }],
+    }
+
+
+@pytest.mark.xfail(strict=True, reason="QA-029: 토스 추정 순위가 기준일·추정 표시 없이 오늘 이력을 교체")
+def test_QA029_토스_추정_순위는_그날의_실제_이력을_지우지_않는다(store, session_20260911, monkeypatch):
+    """
+    토스 폴백은 '거래대금 상위 100종목 안'의 순위이고 금액은 주식 수 × 현재가 추정입니다. 기준일도 전 거래일일 수
+    있는데 기준일 없이 와서, 오늘 거래일 이름으로 그날 앞서 받은 실제 Daum 상위 30을 교체했습니다.
+    """
+    combo = {"market": "KOSPI", "investor": "외국인", "tradeType": "순매수", "intervalType": "TODAY"}
+    radar.accumulate_history(_rows(("A", 10.0), ("B", 9.0)), "KOSPI", "외국인", "순매수", "TODAY")
+
+    monkeypatch.setattr(radar.store, "read_snapshot", lambda name: _TossSnap())
+    toss_rows = radar.fetch_toss_ranking("KOSPI", "외국인", "순매수", 30)
+    assert toss_rows, "토스 폴백 행이 만들어져야 합니다"
+    radar.accumulate_history(toss_rows, "KOSPI", "외국인", "순매수", "TODAY")
+
+    assert _codes(store, combo) == {"A", "B"}
+    assert _codes(store, combo, "2026-09-10") == set(), "추정치는 어느 날짜에도 쌓지 않습니다"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-029: PyKrx 행에 기준일이 없어 거슬러 받은 날짜의 값이 오늘로 쌓임")
+def test_QA029_PyKrx_행은_조회한_날짜를_기준일로_밝힌다(monkeypatch):
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        {"종목명": ["삼성전자"], "순매수거래대금": [12_000_000_000]},
+        index=pd.Index(["005930"], name="티커"),
+    )
+    monkeypatch.setattr(radar, "PYKRX_AVAILABLE", True)
+    monkeypatch.setattr(radar, "_pykrx_call", lambda fn, *a, **k: frame if fn.__name__.startswith("get_market_net") else None)
+
+    rows = radar.fetch_pykrx_ranking("20260910", "KOSPI", "외국인", "순매수", 30)
+
+    assert rows and rows[0]["dataDate"] == "2026-09-10"
