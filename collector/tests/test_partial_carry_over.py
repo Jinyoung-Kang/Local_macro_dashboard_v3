@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 
 from app import catalog, equities, indicators, tasks
 from app.tasks import toss as toss_tasks
@@ -117,3 +119,19 @@ def test_QA056_오래_이어받은_항목은_더_잇지_않는다(store, monkeyp
     saved = store.read_snapshot(catalog.SNAP_EQUITY_HISTORY).payload["tickers"]
     assert b not in saved, "이어받은 지 오래된 항목은 빠집니다"
     assert saved[c]["isStale"] is True and saved[c]["staleSince"], "처음 이어받을 때 그 시각을 적습니다"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-057: 이어받은 환율 계열의 order가 새로 받은 계열과 겹침 — 수정 커밋에서 뺌")
+def test_QA057_이어받은_환율_계열도_정의_순서대로_번호를_받는다(store, monkeypatch):
+    """새로 받은 계열은 0부터 다시 번호를 매기는데 이어받은 계열은 옛 order를 그대로 가져, 화면 버튼 순서가 뒤바뀌었습니다."""
+    specs = indicators.fx_history_specs()
+    first, second = specs[0], specs[1]
+    old_first = {"key": first["key"], "order": 0, "dates": _OLD["dates"], "close": _OLD["close"]}
+    store.put_snapshot(catalog.SNAP_FX_HISTORY, {"period": "5y", "series": {first["key"]: old_first}})
+    monkeypatch.setattr(tasks.sector_service, "collect_daily_closes",
+                        lambda tickers, period="5y": {"tickers": {second["ticker"]: _FRAME}, "error": "429"})
+
+    tasks.task_fx_history()
+
+    saved = store.read_snapshot(catalog.SNAP_FX_HISTORY).payload["series"]
+    assert saved[first["key"]]["order"] < saved[second["key"]]["order"]
