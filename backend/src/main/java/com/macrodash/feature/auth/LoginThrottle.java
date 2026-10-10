@@ -151,6 +151,11 @@ public class LoginThrottle {
         return hint.compareTo(FORGET_AFTER) > 0 ? FORGET_AFTER : hint;
     }
 
+    /** 지금 기억하는 실패 기록 수(테스트용). */
+    int tracked() {
+        return records.size();
+    }
+
     private void pruneIfLarge() {
         if (records.size() < MAX_TRACKED) {
             return;

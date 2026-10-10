@@ -1,6 +1,7 @@
 package com.macrodash.feature.auth;
 
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,10 +13,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class PasswordHasher {
 
-    private final Argon2PasswordEncoder encoder = Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+    private final PasswordEncoder encoder;
 
     /** 없는 계정으로 로그인할 때도 같은 시간이 걸리게 비교할 가짜 해시(계정 존재 여부를 응답 시간으로 드러내지 않음). */
-    private final String dummyHash = encoder.encode("dummy-password-for-constant-time");
+    private final String dummyHash;
+
+    public PasswordHasher() {
+        this(Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8());
+    }
+
+    /** 테스트가 느린 가짜 인코더로 바꿔 끼울 수 있게 합니다. */
+    PasswordHasher(PasswordEncoder encoder) {
+        this.encoder = encoder;
+        this.dummyHash = encoder.encode("dummy-password-for-constant-time");
+    }
 
     public String hash(String password) {
         return encoder.encode(password);
