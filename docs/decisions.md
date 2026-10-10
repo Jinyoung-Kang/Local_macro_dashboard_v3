@@ -24,3 +24,10 @@
 - 선택: `tolerable_risk`로 직접 dismiss(댓글에 이 항목). 근거는 위 2026-10-08 항목 그대로 — 수정판 없음, 상류는 고칠 계획이 없다고 답함(micromatch/braces#70, 잠김).
 - 이유: dev 의존성(tailwindcss 3 → chokidar · micromatch)이고 `npm ls braces --omit=dev` 0건, 펼치는 패턴은 우리 설정의 glob뿐. 닫은 알림은 수정판이 나와도 다시 열리지 않을 수 있어 Tailwind 4 이전 때 함께 확인.
 
+
+## 2026-10-11 · Next 15 → 16 이전에서 React Compiler 린트 규칙 하나를 끔
+
+- 문제: Next 15.x 지원이 2026-10-21에 끝나(메이저는 출시 후 2년) 16.4.0으로 옮겼고, eslint-config-next 16이 함께 켜는 `react-hooks/set-state-in-effect`가 7곳을 오류로 막음.
+- 원인: React Compiler용 새 규칙. 걸린 곳은 마운트 뒤에 시계·세션·주소를 읽는 자리로, 서버 렌더와 첫 화면이 같아야 하는(하이드레이션) 의도된 패턴.
+- 선택: 이 규칙만 `off`(eslint.config.mjs에 이유). React는 19로 올려 테스트 런타임을 운영(Next 내장 React 19)과 맞춤.
+- 이유: React Compiler를 켜지 않으므로 규칙이 막는 위험(자동 메모이제이션과의 충돌)이 없음. 따를지는 React Compiler 도입과 함께 정함.
