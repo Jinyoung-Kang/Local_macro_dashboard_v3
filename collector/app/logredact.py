@@ -67,29 +67,49 @@ def _might_contain_secret(text: str) -> bool:
     return "=" in text or "earer" in text
 
 
+def _redact_value(value: object) -> object:
+    """
+    로그 인자 하나를 가립니다. 문자열이 아니면 문자열로 바꿔 보고, 가릴 것이 있을 때만 바꿉니다.
+
+    예외 객체가 가장 흔합니다 — ``logger.warning("실패: %s", exc)``의 exc는 requests가 만든
+    ConnectionError라 메시지에 요청 URL(키 포함)이 들어 있습니다(QA-018). 가릴 것이 없으면
+    원래 객체를 그대로 둬 ``%d``·``%.2f`` 같은 서식이 깨지지 않게 합니다.
+    """
+    text = value if isinstance(value, str) else str(value)
+    if not _might_contain_secret(text):
+        return value
+    redacted = redact(text)
+    return value if redacted == text else redacted
+
+
 class RedactingFilter(logging.Filter):
     """
     모든 로그 레코드를 지나가며 비밀값을 가립니다.
 
-    메시지와 인자를 각각 손봅니다. urllib3처럼 %s 인자에 URL을 담는 경우가
-    있어 둘 다 확인해야 합니다.
+    메시지, 인자, traceback을 각각 손봅니다. urllib3처럼 %s 인자에 URL을 담거나,
+    우리 코드가 예외 객체를 인자로 넘기거나, ``logger.exception``이 traceback에
+    예외 메시지를 싣는 경우가 모두 있습니다.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if isinstance(record.msg, str) and _might_contain_secret(record.msg):
-            record.msg = redact(record.msg)
+        record.msg = _redact_value(record.msg)
 
         if record.args:
             if isinstance(record.args, dict):
                 record.args = {
-                    key: redact(value) if isinstance(value, str) else value
-                    for key, value in record.args.items()
+                    key: _redact_value(value) for key, value in record.args.items()
                 }
             elif isinstance(record.args, tuple):
-                record.args = tuple(
-                    redact(value) if isinstance(value, str) else value
-                    for value in record.args
-                )
+                record.args = tuple(_redact_value(value) for value in record.args)
+
+        # traceback은 핸들러의 Formatter가 exc_text가 비어 있을 때만 새로 만듭니다.
+        # 여기서 미리 만들어 가려 두면 그 값이 그대로 쓰입니다.
+        if record.exc_info and not record.exc_text:
+            record.exc_text = redact(logging.Formatter().formatException(record.exc_info))
+        elif record.exc_text:
+            record.exc_text = redact(record.exc_text)
+        if record.stack_info:
+            record.stack_info = redact(record.stack_info)
         return True
 
 

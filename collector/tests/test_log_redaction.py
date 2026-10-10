@@ -111,7 +111,6 @@ class _UrlError(Exception):
     """requests.ConnectionError처럼 메시지에 요청 URL을 담는 예외."""
 
 
-@pytest.mark.xfail(strict=True, reason="QA-018: 예외 객체 인자는 문자열이 아니라 가리지 않음")
 def test_QA018_예외_객체_인자에_담긴_키도_가린다(captured):
     """FRED 실패 경로: ``logger.warning("FRED API 실패 (%s): %s", series_id, exc)`` — exc는 문자열이 아닙니다."""
     exc = _UrlError(
@@ -124,7 +123,6 @@ def test_QA018_예외_객체_인자에_담긴_키도_가린다(captured):
     assert "series_id=WALCL" in captured.text
 
 
-@pytest.mark.xfail(strict=True, reason="QA-018: traceback(exc_info)은 필터를 거치지 않음")
 def test_QA018_traceback에_담긴_키도_가린다(captured):
     try:
         raise _UrlError("GET https://api.example/x?api_key=QA018TRACEBACKKEY")
