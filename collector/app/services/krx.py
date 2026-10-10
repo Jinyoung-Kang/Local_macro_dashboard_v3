@@ -599,10 +599,13 @@ def collect_daum_intraday_acceleration(lookback_minutes: int = 30) -> dict:
     earlier = [item for item in same_day if item[0] <= target]
     reference_time, reference_row = earlier[-1] if earlier else same_day[0]
 
-    def delta(field: str) -> tuple[int, int]:
-        current = int(to_float(latest_row.get(field)) or 0)
-        before = int(to_float(reference_row.get(field)) or 0)
-        return current, current - before
+    def delta(field: str) -> tuple[int | None, int | None]:
+        # 빠진 값은 모르는 값입니다. 0으로 채우면 '30분 새 -1000계약' 같은 변화를 지어냅니다(QA-036).
+        current = to_float(latest_row.get(field))
+        before = to_float(reference_row.get(field))
+        current = None if current is None else int(current)
+        change = None if current is None or before is None else current - int(before)
+        return current, change
 
     foreign_current, foreign_change = delta("foreignSettlement")
     inst_current, inst_change = delta("institutionalSettlement")
@@ -610,7 +613,9 @@ def collect_daum_intraday_acceleration(lookback_minutes: int = 30) -> dict:
     fin_current, fin_change = delta("financialInvestment")
     pension_current, pension_change = delta("pensionFundInvestment")
 
-    if foreign_change > 0 and inst_change > 0:
+    if foreign_change is None or inst_change is None:
+        status, color = "수급 방향 판정 불가 (값 미제공)", "gray"
+    elif foreign_change > 0 and inst_change > 0:
         status, color = "외국인·기관 동반 매수", "green"
     elif foreign_change < 0 and inst_change < 0:
         status, color = "외국인·기관 동반 매도", "red"

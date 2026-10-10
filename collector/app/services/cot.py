@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 from ..http import get_session
+from ..numbers import to_float
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +56,14 @@ def collect_contract(contract_code: str, limit: int = 300) -> list[dict]:
         date_text = row.get("report_date_as_yyyy_mm_dd")
         if not date_text:
             continue
-        try:
-            nc_long = float(row.get("noncomm_positions_long_all", 0) or 0)
-            nc_short = float(row.get("noncomm_positions_short_all", 0) or 0)
-            comm_long = float(row.get("comm_positions_long_all", 0) or 0)
-            comm_short = float(row.get("comm_positions_short_all", 0) or 0)
-            nr_long = float(row.get("nonrept_positions_long_all", 0) or 0)
-            nr_short = float(row.get("nonrept_positions_short_all", 0) or 0)
-        except (TypeError, ValueError):
-            continue
+        # Socrata는 null 필드를 아예 빼고 보냅니다. 빠진 값은 모르는 값이고, 순포지션은 두 값을 다 알 때만 냅니다
+        # (QA-036 — 예전에는 0으로 채워 롱만 있는 '순포지션'을 만들었습니다).
+        nc_long = to_float(row.get("noncomm_positions_long_all"))
+        nc_short = to_float(row.get("noncomm_positions_short_all"))
+        comm_long = to_float(row.get("comm_positions_long_all"))
+        comm_short = to_float(row.get("comm_positions_short_all"))
+        nr_long = to_float(row.get("nonrept_positions_long_all"))
+        nr_short = to_float(row.get("nonrept_positions_short_all"))
 
         records.append({
             "date": str(date_text)[:10],
@@ -73,9 +73,9 @@ def collect_contract(contract_code: str, limit: int = 300) -> list[dict]:
             "commShort": comm_short,
             "nrLong": nr_long,
             "nrShort": nr_short,
-            "ncNet": nc_long - nc_short,
-            "commNet": comm_long - comm_short,
-            "nrNet": nr_long - nr_short,
+            "ncNet": _net(nc_long, nc_short),
+            "commNet": _net(comm_long, comm_short),
+            "nrNet": _net(nr_long, nr_short),
         })
 
     if not records:
@@ -83,6 +83,10 @@ def collect_contract(contract_code: str, limit: int = 300) -> list[dict]:
 
     records.sort(key=lambda r: r["date"])
     return records
+
+
+def _net(long: float | None, short: float | None) -> float | None:
+    return None if long is None or short is None else long - short
 
 
 def collect_multi_asset(assets: dict, weeks: int, max_workers: int = 4) -> dict:

@@ -11,7 +11,6 @@ import pytest
 
 from app.services import cot, kis, krx, ls
 
-pytestmark = pytest.mark.xfail(strict=True, reason="QA-036: 빠진 값을 0으로 채움")
 
 
 def test_QA036_KIS_가격_등락률이_없으면_모른다(monkeypatch):

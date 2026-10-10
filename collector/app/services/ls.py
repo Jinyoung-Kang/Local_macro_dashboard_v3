@@ -213,13 +213,14 @@ def fetch_deal_ranking(
         if not code or not name:
             continue
 
-        price = _to_float(row.get("price"))
-        change_pct = _to_float(row.get("diff"))
+        # 가격·등락률은 모르면 None입니다(QA-036). _to_float(순위 정렬용)는 비면 0이라 여기서는 쓰지 않습니다.
+        price = to_float(row.get("price")) or None
+        change_pct = to_float(row.get("diff"))
         value = _to_float(row.get("svalue")) or _to_float(row.get("forval")) or 0.0
         volume = _to_float(row.get("svolume")) or _to_float(row.get("volume")) or 0.0
 
-        if not value and not volume:
-            continue
+        if not value and not (volume and price):
+            continue    # 금액도, 수량×가격도 모르면 순위를 매길 수 없습니다
 
         net_eok = round(value / 100.0, 1) if value else round(volume * price / 1e8, 1)
         if trade_type == "순매도" and net_eok > 0:

@@ -289,15 +289,16 @@ def fetch_deal_ranking(
         if not code or not name:
             continue
 
-        price = _to_float(row.get("stck_prpr")) or 0.0
-        change_pct = _to_float(row.get("prdy_ctrt")) or 0.0
+        # 모르는 가격·등락률은 None입니다. 0.0이면 '0원·보합'으로 저장본과 이력에 남습니다(QA-036).
+        price = _to_float(row.get("stck_prpr"))
+        change_pct = _to_float(row.get("prdy_ctrt"))
         net_amount_raw = _to_float(row.get(field_map["amount"])) or 0.0
         net_quantity = _to_float(row.get(field_map["quantity"])) or 0.0
 
         if net_amount_raw:
             net_eok = net_amount_raw / 100.0
             basis = "KIS 원본 순매수 거래대금"
-        elif net_quantity and price > 0:
+        elif net_quantity and price and price > 0:
             net_eok = (net_quantity * price) / 100_000_000.0
             basis = "KIS 원본 순매수 수량×현재가 환산"
         else:
