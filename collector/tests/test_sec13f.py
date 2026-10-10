@@ -155,6 +155,26 @@ def test_QA031_받지_못한_공시는_직전_저장본의_같은_공시를_이�
     assert result["error"] is None
 
 
+
+@pytest.mark.xfail(strict=True, reason="QA-059: 영구히 쓸 수 없는 공시도 일시 실패처럼 다룸 — 수정 커밋에서 뺌")
+def test_QA059_정보표가_없는_공시는_건너뛰고_기관을_실패로_만들지_않는다(monkeypatch):
+    """
+    정보표 XML이 없거나 롱 보유가 0건(옵션 행뿐)인 공시는 다시 받아도 같습니다. QA-031 뒤로 이런 공시가 직전 저장본에
+    없으면 그 기관 전체가 실패로 끝나 새 분기 공시가 나와도 영영 갱신되지 않았습니다. 예전처럼 그 공시만 건너뜁니다.
+    """
+    real = sec13f._collect_one_filing
+    monkeypatch.setattr(sec13f, "get_sec_session", lambda: _FakeSession())
+    monkeypatch.setattr(sec13f, "sec_rate_limit", lambda: None)
+    monkeypatch.setattr(sec13f, "_parse_filing_links", lambda html, n: [("2026-08-14", "u2"), ("2026-05-15", "u1")])
+    fresh = _quarter("2026-08-14", "2026-06-30")
+    monkeypatch.setattr(sec13f, "_collect_one_filing", lambda session, filing_date, url:
+                        fresh if filing_date == "2026-08-14" else real(session, filing_date, url))
+
+    result = sec13f.collect_13f("0001067983", 2)
+
+    assert result["error"] is None
+    assert [q["reportDate"] for q in result["quarters"]] == ["2026-06-30"]
+
 _INFO_TABLE = b"""<?xml version="1.0" encoding="UTF-8"?>
 <informationTable xmlns="http://www.sec.gov/edgar/document/thirteenf/informationtable">
   <infoTable><nameOfIssuer>APPLE INC</nameOfIssuer><titleOfClass>COM</titleOfClass><cusip>037833100</cusip>
