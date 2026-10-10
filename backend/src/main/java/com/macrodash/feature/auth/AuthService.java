@@ -259,6 +259,13 @@ public class AuthService {
         return out;
     }
 
+    /** 이 사용자의 지금 비밀번호가 맞는가(재확인 — 비밀번호 변경·탈퇴 전에 지연을 거는 데 씀). */
+    public boolean passwordMatches(CurrentUser user, String password) {
+        return users.findById(user.id())
+                .map(stored -> hasher.matches(password, stored.passwordHash()))
+                .orElse(false);
+    }
+
     /**
      * 비밀번호 변경 — 지금 비밀번호를 확인하고, 다른 기기 세션은 모두 끊습니다.
      *

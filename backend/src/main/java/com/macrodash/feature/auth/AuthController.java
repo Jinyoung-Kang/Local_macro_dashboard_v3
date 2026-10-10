@@ -160,6 +160,12 @@ public class AuthController {
     @PostMapping("/password")
     public ResponseEntity<Map<String, Object>> changePassword(@RequestBody(required = false) PasswordRequest body,
                                                               HttpServletRequest request) {
+        if (body != null) {
+            ResponseEntity<Map<String, Object>> slowed = reauthenticate(CurrentUser.of(request), body.current());
+            if (slowed != null) {
+                return slowed;
+            }
+        }
         String problem = body == null ? "요청 본문이 없습니다."
                 : authService.changePassword(CurrentUser.of(request), body.current(), body.next());
         if (problem != null) {
@@ -201,12 +207,33 @@ public class AuthController {
     @PostMapping("/delete")
     public ResponseEntity<Map<String, Object>> deleteAccount(@RequestBody(required = false) DeleteRequest body,
                                                              HttpServletRequest http) {
+        ResponseEntity<Map<String, Object>> slowed = reauthenticate(CurrentUser.of(http), body == null ? null : body.password());
+        if (slowed != null) {
+            return slowed;
+        }
         AccountService.Result result = accounts.deleteAccount(CurrentUser.of(http), body == null ? null : body.password());
         ResponseEntity<Map<String, Object>> response = respond(result);
         if (result.status() != 200) {
             return response;
         }
         return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, sessionCookie("", 0).toString()).body(response.getBody());
+    }
+
+    /**
+     * 지금 비밀번호 재확인에도 로그인과 같은 지연을 겁니다(사용자 번호마다, QA-024). 세션을 훔친 사람이 비밀번호 변경·탈퇴로
+     * 지금 비밀번호를 제한 없이 대입하지 못하게 합니다. 지연에 걸리면 429 응답, 아니면 null(서비스가 다시 확인하고 처리).
+     */
+    private ResponseEntity<Map<String, Object>> reauthenticate(CurrentUser user, String password) {
+        LoginThrottle.Outcome outcome = throttle.attempt("reauth|" + user.id(),
+                () -> authService.passwordMatches(user, password));
+        if (outcome.busy()) {
+            return tooMany(outcome.retryAfter(), "다른 확인 요청을 처리하는 중입니다. 잠시 후 다시 시도하세요.");
+        }
+        if (!outcome.accepted() && !outcome.retryAfter().isZero()) {
+            return tooMany(outcome.retryAfter(),
+                    "비밀번호 확인 실패가 반복됐습니다. " + seconds(outcome.retryAfter()) + "초 뒤에 다시 시도하세요.");
+        }
+        return null;
     }
 
     private static ResponseEntity<Map<String, Object>> respond(AccountService.Result result) {

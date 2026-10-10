@@ -75,7 +75,6 @@ class AuthControllerTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-024 재현 — 수정 전에는 지금 비밀번호 재확인에 시도 제한이 없다")
     @DisplayName("QA-024 비밀번호 변경·탈퇴의 '지금 비밀번호' 확인도 연속 실패하면 느려지고 429 — 훔친 세션으로 대입하지 못하게")
     void reauthenticationIsThrottled() {
         long memberId = db.user("member", "member-password-1", "MEMBER", "FREE");
