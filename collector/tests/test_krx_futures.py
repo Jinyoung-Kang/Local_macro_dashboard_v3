@@ -166,3 +166,35 @@ def test_missing_volume_or_open_interest_is_unknown_not_zero():
     assert rows[1]["oiChange"] is None
     assert rows[1]["marketPhase"] == krx.PHASE_UNKNOWN
     assert rows[1]["cotOiIndex"] is None
+
+
+@pytest.mark.xfail(strict=True, reason="QA-035: 만기 롤오버 날 서로 다른 계약끼리 OI 변화를 계산")
+def test_QA035_근월물이_바뀐_날은_미결제약정_변화를_모른다():
+    """
+    근월물은 그날 거래량 1위로 고릅니다. 만기 무렵 거래가 다음 월물로 옮겨 가면 9월물 OI와 12월물 OI의 차를 '변화'로
+    계산해 수십만 계약이 청산된 것처럼 보이고, 국면이 거짓으로 판정됐습니다. 등락률은 KRX가 그 계약 기준으로 보고한 값을 씁니다.
+    """
+    rows = _rows(1112.00, 1120.00, open_interest=[300000.0, 150000.0])
+    rows[1]["contractName"] = "KOSPI 200 F 202612"
+    rows[1]["changePctReported"] = 0.35
+
+    krx._derive_series(rows)
+
+    assert rows[1]["oiChange"] is None
+    assert rows[1]["changePct"] == pytest.approx(0.35)
+    assert rows[1]["marketPhase"] == krx.PHASE_UNKNOWN
+
+
+@pytest.mark.xfail(strict=True, reason="QA-035: KRX 일시 실패 때 확정 저장본을 추정치로 덮음")
+def test_QA035_KRX가_잠깐_실패해도_하루_안의_확정치를_추정치로_덮지_않는다(store, monkeypatch):
+    from app import catalog, tasks
+
+    confirmed = {"isEstimated": False, "rows": _rows(1112.0, 1120.0)}
+    store.put_snapshot(catalog.SNAP_KRX_FUTURES, confirmed, status="ok")
+    monkeypatch.setattr(tasks.krx_service, "collect_futures_history",
+                        lambda days: {"isEstimated": True, "rows": _rows(1100.0)})
+
+    with pytest.raises(tasks.EmptyResult):
+        tasks.task_krx_futures()
+
+    assert store.read_snapshot(catalog.SNAP_KRX_FUTURES).payload["isEstimated"] is False
