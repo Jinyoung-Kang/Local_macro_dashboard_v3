@@ -124,7 +124,6 @@ class TrackRecordServiceTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-042 재현 — 수정 전에는 가격 이력이 늦게 시작해도 한계 문구가 '약 3년'(하이일드 기준)뿐이다")
     @DisplayName("QA-042 가격 이력이 국면 입력보다 늦게 시작하면 그 시작일을 한계에 적는다 — IEF·GLD는 2년치뿐")
     @SuppressWarnings("unchecked")
     void shortPriceHistoryIsStatedInLimits() {

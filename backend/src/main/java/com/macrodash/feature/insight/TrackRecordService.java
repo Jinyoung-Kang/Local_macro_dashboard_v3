@@ -103,8 +103,17 @@ public class TrackRecordService {
         }
 
         // 하이일드가 생긴 뒤부터만 판정할 수 있습니다. 가격도 있어야 수익률을 잽니다.
-        LocalDate from = latest(curve.firstKey(), nfci.firstKey(), hy.firstKey(), liquidity.firstKey(), prices.firstKey());
+        LocalDate inputsFrom = latest(curve.firstKey(), nfci.firstKey(), hy.firstKey(), liquidity.firstKey());
+        LocalDate from = latest(inputsFrom, prices.firstKey());
         LocalDate to = earliest(curve.lastKey(), nfci.lastKey(), hy.lastKey(), liquidity.lastKey());
+        if (prices.firstKey().isAfter(inputsFrom)) {
+            // 위 고정 문구의 '약 3년'은 하이일드 기준입니다. IEF·GLD처럼 가격 이력(2년)이 더 짧으면 그만큼 짧아집니다(QA-042).
+            List<String> limits = new ArrayList<>(LIMITS);
+            limits.add("%s 가격 이력이 %s부터라 이 자산의 재현 기간은 약 %.1f년입니다."
+                    .formatted(asset.label(), prices.firstKey(),
+                            java.time.temporal.ChronoUnit.DAYS.between(prices.firstKey(), to) / 365.25));
+            out.put("limits", limits);
+        }
         List<RegimeBacktest.Point> timeline = RegimeBacktest.timeline(curve, nfci, hy, liquidity, from, to);
         RegimeBacktest.Result result = RegimeBacktest.trackRecord(timeline, prices, HORIZONS);
 
