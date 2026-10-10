@@ -243,3 +243,35 @@ def test_history_fallback_receives_the_requested_interval(monkeypatch):
     monkeypatch.setattr(radar, "read_from_history", history)
     radar.collect_radar_ranking(date(2026, 9, 11), interval_type="DAYS_5")
     assert seen["interval"] == "DAYS_5"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-028: 결과가 실제로 쓴 기간을 밝히지 않음")
+def test_QA028_기관_기간_요청은_당일로_받았다고_밝힌다(monkeypatch):
+    """Daum은 기관합계의 5일·20일을 지원하지 않아 당일로 받습니다. 결과가 그 사실을 밝혀야 저장하는 쪽이 거를 수 있습니다."""
+    monkeypatch.setattr(radar, "fetch_daum_ranking", lambda *a, **k: _rows("Daum API (기관, 당일, 20260911)"))
+
+    result = radar.collect_radar_ranking(date(2026, 9, 11), investor="기관", interval_type="DAYS_5")
+
+    assert result["rows"]
+    assert result["intervalType"] == "TODAY"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-028: 결과가 실제로 쓴 기간을 밝히지 않음")
+def test_QA028_기간_조회가_실패해_당일로_바뀌면_밝힌다(monkeypatch):
+    monkeypatch.setattr(radar, "is_regular_session", lambda now=None: False)
+
+    def daum(target, market, investor, trade_type, top_n, interval_type="TODAY"):
+        return [] if interval_type != "TODAY" else _rows("Daum API (외국인, 당일)")
+
+    monkeypatch.setattr(radar, "fetch_daum_ranking", daum)
+    monkeypatch.setattr(radar, "latest_completed_session", lambda now=None: "20260911")
+    result = radar.collect_radar_ranking(date(2026, 9, 11), investor="외국인", interval_type="DAYS_5")
+
+    assert result["rows"]
+    assert result["intervalType"] == "TODAY"
+
+
+def test_QA028_기간_조회가_되면_그_기간이다(monkeypatch):
+    monkeypatch.setattr(radar, "fetch_daum_ranking", lambda *a, **k: _rows("Daum API (외국인, 5일)"))
+    result = radar.collect_radar_ranking(date(2026, 9, 11), investor="외국인", interval_type="DAYS_5")
+    assert result.get("intervalType", "DAYS_5") == "DAYS_5"
