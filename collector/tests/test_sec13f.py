@@ -7,6 +7,8 @@ SEC EDGAR 13F 목록·문서 파싱.
 """
 from __future__ import annotations
 
+import pytest
+
 from app.services import sec13f
 
 
@@ -100,3 +102,56 @@ def test_QA014_추정은_제출일_전에_끝난_가장_최근_분기말이다()
     assert sec13f._estimate_report_date("2026-12-02") == "2026-09-30"
     assert sec13f._estimate_report_date("2026-03-20") == "2025-12-31"
     assert sec13f._estimate_report_date("2026-08-14") == "2026-06-30"
+
+
+class _FakeResponse:
+    text = "<html></html>"
+
+    def raise_for_status(self):
+        return None
+
+
+class _FakeSession:
+    def get(self, *_a, **_k):
+        return _FakeResponse()
+
+
+def _quarter(filing_date: str, report_date: str) -> dict:
+    return {"filingDate": filing_date, "reportDate": report_date, "totalValue": 100.0,
+            "holdings": [{"name": "APPLE INC", "cusip": "037833100", "class": "COM",
+                          "value": 100.0, "shares": 1.0, "weight": 100.0}]}
+
+
+@pytest.fixture()
+def three_filings_middle_fails(monkeypatch):
+    monkeypatch.setattr(sec13f, "get_sec_session", lambda: _FakeSession())
+    monkeypatch.setattr(sec13f, "sec_rate_limit", lambda: None)
+    monkeypatch.setattr(sec13f, "_parse_filing_links", lambda html, n: [
+        ("2026-08-14", "u3"), ("2026-05-15", "u2"), ("2026-02-14", "u1")])
+    done = {"2026-08-14": _quarter("2026-08-14", "2026-06-30"),
+            "2026-05-15": None,                                   # 이 공시만 받지 못함
+            "2026-02-14": _quarter("2026-02-14", "2025-12-31")}
+    monkeypatch.setattr(sec13f, "_collect_one_filing", lambda session, filing_date, url: done[filing_date])
+
+
+@pytest.mark.xfail(strict=True, reason="QA-031: 받지 못한 공시를 건너뛰고 분기가 밀린 결과를 성공으로 돌려줌")
+def test_QA031_공시_하나를_받지_못하면_분기가_밀린_결과를_내지_않는다(three_filings_middle_fails):
+    """
+    가운데 분기를 건너뛰면 0번(2026Q2)과 1번(2025Q4)이 '최신 대 직전'으로 비교됩니다. 직전 저장본에도 그 공시가 없으면
+    실패로 보고(저장본 유지), 분기가 밀린 결과로 덮지 않습니다.
+    """
+    result = sec13f.collect_13f("0001067983", 3)
+
+    assert result["quarters"] == []
+    assert "받지 못" in result["error"]
+
+
+@pytest.mark.xfail(strict=True, reason="QA-031: 직전 저장본의 같은 공시를 이어받지 않음")
+def test_QA031_받지_못한_공시는_직전_저장본의_같은_공시를_이어받는다(three_filings_middle_fails):
+    previous = [_quarter("2026-05-15", "2026-03-31")]
+
+    result = sec13f.collect_13f("0001067983", 3, previous_quarters=previous)
+
+    assert [q["reportDate"] for q in result["quarters"]] == ["2026-06-30", "2026-03-31", "2025-12-31"]
+    assert result["quarters"][1]["isStale"] is True
+    assert result["error"] is None
