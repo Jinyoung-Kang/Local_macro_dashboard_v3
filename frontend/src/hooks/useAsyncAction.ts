@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { UnauthorizedError } from "@/lib/api";
+import { useRefreshSignal } from "@/hooks/useRefreshSignal";
 
 /** 오류를 화면 문구로. Error가 아니면(드묾) 기본 문구를 씁니다. */
 export function errorMessage(error: unknown, fallback: string): string {
@@ -38,6 +40,7 @@ export function useAsyncAction<Args extends unknown[], T>(
   const [result, setResult] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useMountedRef();
+  const { notifyUnauthorized } = useRefreshSignal();
 
   const run = useCallback(
     async (...args: Args) => {
@@ -47,12 +50,14 @@ export function useAsyncAction<Args extends unknown[], T>(
         const value = await action(...args);
         if (mounted.current) setResult(value);
       } catch (err) {
+        // 세션이 끝났으면 화면 읽기(useApi)와 같이 로그인 화면으로 보냅니다 — 예전에는 배너만 떴습니다(QA-044).
+        if (err instanceof UnauthorizedError) notifyUnauthorized();
         if (mounted.current) setError(errorMessage(err, failureMessage));
       } finally {
         if (mounted.current) setBusy(false);
       }
     },
-    [action, failureMessage, mounted],
+    [action, failureMessage, mounted, notifyUnauthorized],
   );
 
   return { run, busy, result, error };

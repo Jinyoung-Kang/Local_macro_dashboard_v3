@@ -20,7 +20,7 @@ afterEach(() => {
 
 describe("useAsyncAction", () => {
   // QA-044 재현 — 수정 전에는 쓰기 요청이 401을 받아도 배너만 띄우고 세션 만료로 처리하지 않았다(useApi만 처리).
-  it.fails("QA-044 401이면 세션 만료로 알린다 — 로그인 화면으로 보내게", async () => {
+  it("QA-044 401이면 세션 만료로 알린다 — 로그인 화면으로 보내게", async () => {
     const wrapper = ({ children }: { children: ReactNode }) => createElement(RefreshProvider, null, children);
     const { result } = renderHook(() => ({
       action: useAsyncAction(() => Promise.reject(new UnauthorizedError()), "기본 문구"),

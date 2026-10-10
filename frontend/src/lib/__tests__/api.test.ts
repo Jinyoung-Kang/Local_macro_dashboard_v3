@@ -74,7 +74,7 @@ describe("401 응답", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   // QA-044 재현 — 수정 전에는 401이면 본문을 읽지 않고 고정 문구("로그인이 필요합니다.")를 썼다.
-  it.fails("QA-044 401이어도 서버가 준 문구를 쓴다 — 비밀번호가 틀렸는데 '로그인이 필요합니다'가 뜨지 않게", async () => {
+  it("QA-044 401이어도 서버가 준 문구를 쓴다 — 비밀번호가 틀렸는데 '로그인이 필요합니다'가 뜨지 않게", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ ok: false, message: "이메일 또는 비밀번호가 올바르지 않습니다." }),
       { status: 401, headers: { "Content-Type": "application/json" } },

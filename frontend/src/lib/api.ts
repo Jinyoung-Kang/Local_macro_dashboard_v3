@@ -51,8 +51,9 @@ export class ApiError extends Error {
 }
 
 export class UnauthorizedError extends ApiError {
-  constructor() {
-    super("로그인이 필요합니다.", 401);
+  /** @param message 서버가 준 문구(로그인 실패 사유 등). 없으면 세션 만료 문구 */
+  constructor(message = "로그인이 필요합니다.") {
+    super(message, 401);
     this.name = "UnauthorizedError";
   }
 }
@@ -124,26 +125,28 @@ async function request<T>(
   }
 
   if (response.status === 401) {
-    throw new UnauthorizedError();
+    // 401도 서버 문구를 씁니다 — 로그인 실패("이메일 또는 비밀번호가 올바르지 않습니다")와 세션 만료가 같은 401입니다(QA-044).
+    throw new UnauthorizedError((await messageOf(response)) ?? undefined);
   }
 
   if (!response.ok) {
-    let message = `요청 실패 (HTTP ${response.status})`;
-    try {
-      const body = await response.json();
-      if (body?.message) {
-        message = body.message;
-      }
-    } catch {
-      // 본문이 JSON이 아니면 기본 메시지를 씁니다.
-    }
-    throw new ApiError(message, response.status);
+    throw new ApiError((await messageOf(response)) ?? `요청 실패 (HTTP ${response.status})`, response.status);
   }
 
   if (response.status === 204) {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+/** 오류 응답 본문의 message. 본문이 JSON이 아니거나 없으면 null. */
+async function messageOf(response: Response): Promise<string | null> {
+  try {
+    const body = await response.json();
+    return typeof body?.message === "string" && body.message ? body.message : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
