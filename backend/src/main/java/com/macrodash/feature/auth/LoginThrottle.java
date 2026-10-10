@@ -51,8 +51,9 @@ public class LoginThrottle {
 
     /**
      * 기억하는 기록의 상한(주소·이메일을 바꿔 가며 메모리를 채우는 공격 대비, QA-019). 차 있으면 오래된 것을 정리하고,
-     * 그래도 차 있으면 <b>새 키는 기록하지 않습니다</b> — 이미 느린 차선에 든 키는 그대로 느립니다. 키를 바꿔 가는
-     * 공격자는 어차피 무료 시도 안에 머무르므로 새 키를 잊어도 잃는 방어가 없고, 해시 자체의 동시 실행 상한은
+     * 그래도 차 있으면 새 키는 기록하지 않는 대신 <b>처음 보는 키도 느린 차선으로 보냅니다</b>(QA-055). 기록하지 않기만
+     * 하면 맵을 쓰레기 키로 채운 뒤 노리는 키의 실패가 세어지지 않아 지연이 꺼집니다. 꽉 찬 동안은 주인의 첫 로그인도
+     * 느린 차선(1초, 겹치면 429)을 지나지만 맞는 비밀번호는 통과합니다. 해시 자체의 동시 실행 상한은
      * {@link PasswordHasher}가 맡습니다.
      */
     static final int MAX_TRACKED = 10_000;
@@ -123,11 +124,11 @@ public class LoginThrottle {
         }
     }
 
-    /** 이 주소의 다음 시도가 느린 차선으로 가는가(무료 시도를 넘겼고 아직 잊히지 않음). */
+    /** 이 주소의 다음 시도가 느린 차선으로 가는가(무료 시도를 넘겼고 아직 잊히지 않음, 또는 기록이 꽉 찬 동안 처음 보는 키). */
     boolean isSlowed(String client) {
         Record record = records.get(client);
         if (record == null) {
-            return false;
+            return records.size() >= MAX_TRACKED;
         }
         if (record.lastFailure().plus(FORGET_AFTER).isBefore(clock.instant())) {
             records.remove(client, record);
