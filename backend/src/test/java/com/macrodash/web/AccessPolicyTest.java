@@ -1,6 +1,7 @@
 package com.macrodash.web;
 
 import com.macrodash.feature.auth.AccessPolicy;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +42,20 @@ class AccessPolicyTest {
         assertThat(AccessPolicy.allows(AccessPolicy.Access.PRO, "MEMBER", "FREE")).isFalse();
         assertThat(AccessPolicy.allows(AccessPolicy.Access.PRO, "MEMBER", "PRO")).isTrue();
         assertThat(AccessPolicy.allows(AccessPolicy.Access.PRO, "OWNER", "FREE")).isTrue();
+    }
+
+    @Test
+    @Disabled("QA-017 재현 — 수정 전에는 실패합니다(HEAD 가 접근 정책 표를 건너뜀)")
+    @DisplayName("HEAD는 같은 경로의 GET과 같은 접근을 요구한다 — 스프링이 HEAD를 GET 처리기로 돌린다(QA-017)")
+    void headFollowsGetPolicy() {
+        AccessPolicy.routes().keySet().stream().filter(route -> route.startsWith("GET ")).forEach(route -> {
+            String path = route.substring(4).replaceAll("\\{[^}]+}", "x");
+            assertThat(AccessPolicy.required("HEAD", path)).as("HEAD " + path)
+                    .isEqualTo(AccessPolicy.required("GET", path));
+        });
+        assertThat(AccessPolicy.required("HEAD", "/api/status")).isEqualTo(AccessPolicy.Access.OWNER);
+        assertThat(AccessPolicy.required("HEAD", "/api/admin/users")).isEqualTo(AccessPolicy.Access.OWNER);
+        assertThat(AccessPolicy.required("HEAD", "/api/kr/stock-flows")).isEqualTo(AccessPolicy.Access.PRO);
     }
 
     @Test

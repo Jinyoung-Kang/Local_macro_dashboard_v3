@@ -2,6 +2,7 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -165,6 +166,22 @@ class ApiIntegrationTest {
         JsonNode session = rest.exchange(url("/api/auth/session"), HttpMethod.GET,
                 new HttpEntity<>(null, headers), JsonNode.class).getBody();
         assertThat(session.path("user").path("role").asText()).isEqualTo("MEMBER");
+    }
+
+    @Test
+    @Disabled("QA-017 재현 — 수정 전에는 실패합니다(HEAD 가 접근 정책 표를 건너뜀)")
+    @DisplayName("HEAD도 GET과 같은 접근 검사 — 무료 회원은 운영·유료 경로가 403, 회원 경로는 200(QA-017)")
+    void headRequestsFollowGetAccessPolicy() {
+        long memberId = users.findByEmail(MEMBER).orElseThrow().id();
+        users.updateRoleAndTier(memberId, "MEMBER", "FREE");
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, login(MEMBER, "test-password"));
+        for (String path : List.of("/api/status", "/api/admin/users", "/api/kr/stock-flows?codes=005930")) {
+            assertThat(rest.exchange(url(path), HttpMethod.HEAD, new HttpEntity<>(null, headers), String.class)
+                    .getStatusCode()).as("HEAD " + path).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+        assertThat(rest.exchange(url("/api/analytics/regime/log"), HttpMethod.HEAD,
+                new HttpEntity<>(null, headers), String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
