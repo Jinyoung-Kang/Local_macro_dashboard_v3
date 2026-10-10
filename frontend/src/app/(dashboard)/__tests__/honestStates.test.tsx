@@ -14,6 +14,8 @@ vi.mock("@/lib/api", () => api);
 const signal = vi.hoisted(() => ({ token: 0, reloadAll: () => {}, notifyUnauthorized: () => {} }));
 vi.mock("@/hooks/useRefreshSignal", () => ({ useRefreshSignal: () => signal }));
 
+import AlertsPage from "../alerts/page";
+import CotPage from "../cot/page";
 import RadarPage from "../radar/page";
 import StatusPage from "../status/page";
 
@@ -53,5 +55,26 @@ describe("QA-046 수급 레이더 — 이력 조회가 실패하면 '이력 없�
 
     expect(await screen.findByText(/요청 실패 \(HTTP 500\)/)).toBeTruthy();
     expect(screen.queryByText(/아직 누적된 이력이 없습니다/)).toBeNull();
+  });
+});
+
+describe("QA-050 실패·로딩을 '없음'으로 보이지 않는다", () => {
+  // 수정 전에는 COT 개요 조회의 오류를 받지 않아 카드가 빈 채로 남았다.
+  it.fails("COT 개요 조회가 실패하면 오류를 보인다", async () => {
+    reads["/api/cot/overview"] = () => Promise.reject(new Error("요청 실패 (HTTP 503)"));
+
+    render(<CotPage />);
+
+    expect(await screen.findByText(/요청 실패 \(HTTP 503\)/)).toBeTruthy();
+  });
+
+  // 수정 전에는 알림함을 읽는 동안(그리고 오류에도) '아직 알림이 없습니다'와 '읽지 않은 알림 0건'이 보였다.
+  it.fails("알림함을 읽는 동안에는 '아직 알림이 없습니다'·'0건'이 아니다", async () => {
+    reads["/api/alerts/rules"] = () => Promise.resolve({ available: true, rules: [] });   // 알림함만 읽는 중
+    render(<AlertsPage />);
+    await screen.findByText("알림함");
+
+    expect(screen.queryByText(/아직 알림이 없습니다/)).toBeNull();
+    expect(screen.queryByText(/읽지 않은 알림 0건/)).toBeNull();
   });
 });
