@@ -61,6 +61,8 @@ public class AuthService {
     private final AuditLogStore audit;
     private final PasswordHasher hasher;
     private final SecureRandom random = new SecureRandom();
+    /** 데모 열람(ADR 0013). 토큰이 짧으면 여기서 예외 → 기동이 멈춥니다. */
+    private final DemoViewer demo;
 
     public AuthService(AppProperties properties, UserStore users, SessionStore sessions, AuditLogStore audit,
                        PasswordHasher hasher) {
@@ -69,6 +71,11 @@ public class AuthService {
         this.sessions = sessions;
         this.audit = audit;
         this.hasher = hasher;
+        this.demo = DemoViewer.from(properties.getDemoViewerToken());
+        if (demo.enabled()) {
+            log.info("데모 열람이 켜져 있습니다(DASHBOARD_DEMO_VIEWER_TOKEN) — 앞단 프록시가 붙인 {} 헤더의 요청은 "
+                    + "로그인 없이 읽기 전용으로 엽니다(ADR 0013).", DemoViewer.HEADER);
+        }
     }
 
     /** 로그인 성공 — 쿠키에 넣을 토큰과 사용자. */
@@ -206,6 +213,24 @@ public class AuthService {
             }
             return new CurrentUser(active.userId(), active.email(), active.role(), active.tier(), active.sessionId());
         });
+    }
+
+    /**
+     * 요청의 사용자 — 세션 쿠키가 먼저입니다. 유효한 세션이 없고 데모 열람 헤더가 맞을 때만 데모 열람 사용자(ADR 0013).
+     *
+     * @param demoHeader {@link DemoViewer#HEADER} 값(없으면 null). 기능이 꺼져 있으면 보지 않습니다.
+     */
+    public Optional<CurrentUser> resolve(String token, String demoHeader) {
+        Optional<CurrentUser> session = authenticate(token);
+        if (session.isPresent() || !demo.matches(demoHeader)) {
+            return session;
+        }
+        return Optional.of(DemoViewer.user());
+    }
+
+    /** 이 헤더 값이 데모 열람 토큰인가(기능이 꺼져 있으면 늘 false). 세션은 보지 않습니다. */
+    public boolean isDemoViewer(String demoHeader) {
+        return demo.matches(demoHeader);
     }
 
     public void logout(String token) {

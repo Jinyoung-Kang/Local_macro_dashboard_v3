@@ -19,12 +19,13 @@ class AuthControllerTest {
     private final AuthTestDatabase db = new AuthTestDatabase("authctl");
     private final AppProperties properties = new AppProperties();
     private final AuthController controller;
+    private final AccountService accounts;
 
     AuthControllerTest() {
         db.user("owner", "right-password-1", "OWNER", "PRO");
         // 느린 차선의 대기를 실제로 기다리지 않습니다(동작은 LoginThrottleTest가 고정).
         AccountMail mail = org.mockito.Mockito.mock(AccountMail.class);
-        AccountService accounts = new AccountService(db.users, db.sessions,
+        accounts = new AccountService(db.users, db.sessions,
                 new com.macrodash.store.EmailTokenStore(db.jdbc), db.audit, db.hasher, mail);
         controller = new AuthController(db.service(properties), accounts,
                 new LoginThrottle(java.time.Clock.systemUTC(), millis -> { }), properties);
@@ -87,6 +88,44 @@ class AuthControllerTest {
         Map<String, Object> session = controller.session(signedIn);
         assertThat(session).containsEntry("authenticated", true).containsEntry("readMode", "store_only");
         assertThat(String.valueOf(((Map<?, ?>) session.get("user")).get("email"))).isEqualTo(db.email("owner"));
+    }
+
+    @Test
+    @DisplayName("데모 열람(ADR 0013): 세션 없이 맞는 헤더면 authenticated + user.demo(일반 회원·유료, 이메일 없음), 세션이 있으면 세션")
+    void sessionReportsDemoViewer() {
+        AppProperties demoProperties = new AppProperties();
+        demoProperties.setReadMode("store_only");
+        demoProperties.setDemoViewerToken(DemoViewerTest.TOKEN);
+        AuthController demo = new AuthController(db.service(demoProperties), accounts,
+                new LoginThrottle(java.time.Clock.systemUTC(), millis -> { }), demoProperties);
+
+        MockHttpServletRequest visitor = new MockHttpServletRequest();
+        visitor.addHeader(DemoViewer.HEADER, DemoViewerTest.TOKEN);
+        Map<String, Object> session = demo.session(visitor);
+        assertThat(session).containsEntry("authenticated", true).containsEntry("readMode", "store_only");
+        Map<?, ?> user = (Map<?, ?>) session.get("user");
+        assertThat(user.get("demo")).isEqualTo(true);
+        assertThat(user.get("role")).isEqualTo("MEMBER");
+        assertThat(user.get("tier")).isEqualTo("PRO");
+        assertThat(user.containsKey("email")).as("이메일 칸은 있되 값이 없음(자리표시 이메일을 만들지 않음)").isTrue();
+        assertThat(user.get("email")).isNull();
+
+        MockHttpServletRequest wrong = new MockHttpServletRequest();
+        wrong.addHeader(DemoViewer.HEADER, "not-the-token");
+        assertThat(demo.session(wrong)).containsEntry("authenticated", false).doesNotContainKey("user");
+        MockHttpServletRequest offHeader = new MockHttpServletRequest();
+        offHeader.addHeader(DemoViewer.HEADER, DemoViewerTest.TOKEN);
+        assertThat(controller.session(offHeader)).as("기능이 꺼진 컨트롤러는 헤더를 보지 않음")
+                .containsEntry("authenticated", false);
+
+        MockHttpServletRequest owner = new MockHttpServletRequest();
+        owner.addHeader(DemoViewer.HEADER, DemoViewerTest.TOKEN);
+        owner.setCookies(new jakarta.servlet.http.Cookie(AuthService.COOKIE_NAME,
+                token(login(db.email("owner"), "right-password-1", "10.0.0.10"))));
+        Map<?, ?> ownerUser = (Map<?, ?>) demo.session(owner).get("user");
+        assertThat(ownerUser.get("demo")).as("세션이 이김").isEqualTo(false);
+        assertThat(ownerUser.get("role")).isEqualTo("OWNER");
+        assertThat(ownerUser.get("email")).isEqualTo(db.email("owner"));
     }
 
     @Test

@@ -61,6 +61,13 @@ public class AppProperties {
     /** 화면 포트. 어느 호스트에서 열든 이 포트의 origin은 허용합니다(휴대폰에서 LAN IP로 접속). */
     private int frontendPort = 3000;
 
+    /**
+     * 데모 열람 토큰(DASHBOARD_DEMO_VIEWER_TOKEN, ADR 0013). 비면 기능이 꺼집니다(기본·로컬).
+     * 앞단 프록시가 접근 코드를 확인한 요청에 {@code X-Demo-Viewer} 헤더로 이 값을 실어 보냅니다.
+     * 32자보다 짧으면 기동하지 않습니다({@code feature.auth.DemoViewer}).
+     */
+    private String demoViewerToken = "";
+
     public ReadMode resolvedReadMode() {
         return ReadMode.from(readMode);
     }
@@ -181,5 +188,13 @@ public class AppProperties {
 
     public void setFrontendOrigin(String frontendOrigin) {
         this.frontendOrigin = frontendOrigin;
+    }
+
+    public String getDemoViewerToken() {
+        return demoViewerToken;
+    }
+
+    public void setDemoViewerToken(String demoViewerToken) {
+        this.demoViewerToken = demoViewerToken;
     }
 }

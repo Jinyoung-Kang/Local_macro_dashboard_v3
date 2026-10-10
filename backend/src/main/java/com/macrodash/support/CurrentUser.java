@@ -12,10 +12,17 @@ import java.util.UUID;
  *
  * @param role {@code OWNER} 또는 {@code MEMBER}
  * @param tier {@code FREE} 또는 {@code PRO}
+ * @param demo 데모 열람(ADR 0013) — 계정·세션이 없는 읽기 전용 방문자. {@code id}는 실제 계정과 겹치지 않는 음수,
+ *             {@code email}·{@code sessionId}는 null입니다. 이 사용자로 DB에 쓰면 안 됩니다(사용자 FK가 막음).
  */
-public record CurrentUser(long id, String email, String role, String tier, UUID sessionId) {
+public record CurrentUser(long id, String email, String role, String tier, UUID sessionId, boolean demo) {
 
     public static final String ATTRIBUTE = CurrentUser.class.getName();
+
+    /** 계정으로 로그인한 사용자(데모 열람이 아님). */
+    public CurrentUser(long id, String email, String role, String tier, UUID sessionId) {
+        this(id, email, role, tier, sessionId, false);
+    }
 
     public boolean isOwner() {
         return "OWNER".equals(role);

@@ -2,6 +2,7 @@ package com.macrodash.config;
 
 import com.macrodash.feature.auth.AccessPolicy;
 import com.macrodash.feature.auth.AuthService;
+import com.macrodash.feature.auth.DemoViewer;
 import com.macrodash.support.CurrentUser;
 import com.macrodash.feature.auth.AuthController;
 import jakarta.servlet.FilterChain;
@@ -34,6 +35,7 @@ import java.util.Set;
  *
  * <p>인증은 단순합니다 — 로그인·헬스체크를 제외한 모든 {@code /api/**} 요청에
  * 유효한 세션 쿠키가 있어야 하고, 경로마다 필요한 역할·등급을 {@link AccessPolicy}가 정합니다(ADR 0010).
+ * 예외는 AWS 공개 데모의 데모 열람 하나입니다(기본은 꺼짐, ADR 0013) — {@link DemoViewer}.
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -130,6 +132,26 @@ public class WebConfig implements WebMvcConfigurer {
             return origin != null && origins.checkOrigin(origin) == null;
         }
 
+        /**
+         * 데모 열람이 할 수 없는 요청인가(ADR 0013) — 데모 열람은 읽기 전용이라 GET·OPTIONS(CORS 사전 요청) 밖은 경로와
+         * 상관없이(로그인·가입 같은 공개 경로 포함) 403입니다. 유효한 세션 쿠키가 함께 오면 세션이 이기므로 막지 않습니다.
+         * 헤더가 없거나 틀리면(기능이 꺼져 있으면 늘) 아무것도 하지 않습니다 — 평소처럼 401·정책 검사로 갑니다.
+         *
+         * <p>HEAD도 막습니다. 스프링은 HEAD를 GET 처리기로 돌리는데 접근 정책 표에는 HEAD 줄이 없어(표에 없으면 MEMBER)
+         * 운영자·유료 GET 처리기가 실행됩니다. 화면은 HEAD를 쓰지 않습니다.
+         */
+        boolean demoForbidden(HttpServletRequest request) {
+            String method = request.getMethod();
+            if ("GET".equalsIgnoreCase(method) || "OPTIONS".equalsIgnoreCase(method)) {
+                return false;
+            }
+            String header = request.getHeader(DemoViewer.HEADER);
+            if (header == null || !authService.isDemoViewer(header)) {
+                return false;
+            }
+            return authService.authenticate(AuthController.readToken(request)).isEmpty();
+        }
+
         @Override
         protected void doFilterInternal(HttpServletRequest request,
                                         HttpServletResponse response,
@@ -141,6 +163,14 @@ public class WebConfig implements WebMvcConfigurer {
                 response.setContentType("application/json;charset=UTF-8");
                 response.getWriter().write(
                         "{\"error\":\"bad_origin\",\"message\":\"다른 출처에서 온 요청은 받지 않습니다.\"}");
+                return;
+            }
+
+            if (demoForbidden(request)) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write(
+                        "{\"error\":\"demo_read_only\",\"message\":\"데모에서는 조회만 가능합니다.\"}");
                 return;
             }
 
@@ -165,7 +195,9 @@ public class WebConfig implements WebMvcConfigurer {
                 return;
             }
 
-            Optional<CurrentUser> user = authService.authenticate(AuthController.readToken(request));
+            // 세션이 먼저, 없으면 데모 열람 헤더(ADR 0013 — 기능이 꺼져 있거나 값이 틀리면 헤더는 없는 것과 같음).
+            Optional<CurrentUser> user = authService.resolve(AuthController.readToken(request),
+                    request.getHeader(DemoViewer.HEADER));
             if (user.isEmpty()) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json;charset=UTF-8");

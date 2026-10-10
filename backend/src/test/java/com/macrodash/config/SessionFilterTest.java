@@ -1,11 +1,31 @@
 package com.macrodash.config;
 
+import com.macrodash.feature.auth.AuthService;
+import com.macrodash.feature.auth.DemoViewer;
+import com.macrodash.feature.auth.PasswordHasher;
+import com.macrodash.store.AuditLogStore;
+import com.macrodash.store.SessionStore;
+import com.macrodash.store.UserStore;
+import com.macrodash.support.CurrentUser;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class SessionFilterTest {
 
@@ -93,5 +113,179 @@ class SessionFilterTest {
             }
         });
         assertThat(new java.util.TreeSet<>(WebConfig.SessionFilter.PUBLIC_PATHS)).isEqualTo(fromPolicy);
+    }
+
+    /**
+     * 데모 열람(ADR 0013) — 앞단 프록시가 접근 코드를 확인한 요청에 붙이는 {@code X-Demo-Viewer} 헤더.
+     * 세션 저장소는 흉내(쿠키 {@code owner-cookie}·{@code member-cookie}만 유효)이고, 필터·AuthService는 실제 코드입니다.
+     */
+    @Nested
+    @DisplayName("데모 열람")
+    class DemoViewerMode {
+
+        static final String TOKEN = "test-demo-viewer-token-0123456789abcdef";
+        static final UUID OWNER_SESSION = UUID.randomUUID();
+        static final UUID MEMBER_SESSION = UUID.randomUUID();
+
+        /** 필터를 거친 결과 — 상태·본문, 컨트롤러까지 갔는지, 그때의 사용자. */
+        record Outcome(int status, String body, boolean reached, CurrentUser user) {
+        }
+
+        private WebConfig.SessionFilter filter(String configuredToken) {
+            AppProperties properties = new AppProperties();
+            properties.setDemoViewerToken(configuredToken);
+            UserStore users = mock(UserStore.class);
+            when(users.ready()).thenReturn(true);
+            SessionStore sessions = mock(SessionStore.class);
+            when(sessions.findActive(any())).thenAnswer(invocation -> {
+                byte[] hash = invocation.getArgument(0);
+                Instant later = Instant.now().plusSeconds(3600);
+                if (Arrays.equals(hash, sha256("owner-cookie"))) {
+                    return Optional.of(new SessionStore.Active(OWNER_SESSION, 1, "owner@test.local", "OWNER", "PRO",
+                            Instant.now(), later));
+                }
+                if (Arrays.equals(hash, sha256("member-cookie"))) {
+                    return Optional.of(new SessionStore.Active(MEMBER_SESSION, 2, "member@test.local", "MEMBER", "FREE",
+                            Instant.now(), later));
+                }
+                return Optional.empty();
+            });
+            AuthService auth = new AuthService(properties, users, sessions, mock(AuditLogStore.class), new PasswordHasher());
+            return new WebConfig.SessionFilter(auth, List.of("http://*:3000"));
+        }
+
+        private Outcome send(WebConfig.SessionFilter filter, String method, String path, String header, String cookie)
+                throws Exception {
+            MockHttpServletRequest request = new MockHttpServletRequest(method, path);
+            request.setServletPath(path);
+            if (header != null) {
+                request.addHeader(DemoViewer.HEADER, header);
+            }
+            if (cookie != null) {
+                request.setCookies(new Cookie(AuthService.COOKIE_NAME, cookie));
+            }
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            CurrentUser[] seen = {null};
+            boolean[] reached = {false};
+            filter.doFilter(request, response, (req, res) -> {
+                reached[0] = true;
+                seen[0] = CurrentUser.of((jakarta.servlet.http.HttpServletRequest) req);
+            });
+            return new Outcome(response.getStatus(), response.getContentAsString(StandardCharsets.UTF_8), reached[0],
+                    seen[0]);
+        }
+
+        @Test
+        @DisplayName("기능이 꺼져 있으면(기본) 헤더를 보지 않는다 — 같은 값을 보내도 401")
+        void headerIgnoredWhenOff() throws Exception {
+            WebConfig.SessionFilter off = filter("");
+            Outcome outcome = send(off, "GET", "/api/macro/overview", TOKEN, null);
+            assertThat(outcome.status()).isEqualTo(401);
+            assertThat(outcome.reached()).isFalse();
+            assertThat(send(off, "POST", "/api/alerts/rules", TOKEN, null).status())
+                    .as("쓰기도 데모 403이 아니라 평소의 401").isEqualTo(401);
+        }
+
+        @Test
+        @DisplayName("틀린 값·빈 값이면 헤더가 없는 것과 같다 — 401")
+        void wrongTokenIsUnauthorized() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            for (String wrong : new String[]{"wrong-token", "", TOKEN.substring(0, 32), TOKEN + " x"}) {
+                Outcome outcome = send(on, "GET", "/api/macro/overview", wrong, null);
+                assertThat(outcome.status()).as(wrong).isEqualTo(401);
+                assertThat(outcome.reached()).isFalse();
+            }
+            assertThat(send(on, "GET", "/api/macro/overview", null, null).status()).as("헤더 없음").isEqualTo(401);
+        }
+
+        @Test
+        @DisplayName("맞는 값이면 일반 회원·유료 등급의 데모 사용자로 GET을 통과한다(회원 경로·유료 경로)")
+        void rightTokenReadsMemberAndProRoutes() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            for (String path : new String[]{"/api/macro/overview", "/api/alerts/inbox", "/api/kr/stock-flows",
+                    "/api/guru/risk", "/api/sec13f/new-buys"}) {
+                Outcome outcome = send(on, "GET", path, TOKEN, null);
+                assertThat(outcome.reached()).as(path).isTrue();
+                assertThat(outcome.user().demo()).isTrue();
+                assertThat(outcome.user().id()).isEqualTo(DemoViewer.USER_ID);
+                assertThat(outcome.user().role()).isEqualTo("MEMBER");
+                assertThat(outcome.user().tier()).isEqualTo("PRO");
+            }
+        }
+
+        @Test
+        @DisplayName("운영자 경로는 데모 사용자에게 403 required=OWNER — 접근 정책 표 그대로")
+        void ownerRoutesStayForbidden() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            for (String path : new String[]{"/api/status", "/api/admin/users", "/api/radar/diagnostics"}) {
+                Outcome outcome = send(on, "GET", path, TOKEN, null);
+                assertThat(outcome.status()).as(path).isEqualTo(403);
+                assertThat(outcome.body()).contains("\"required\":\"OWNER\"");
+                assertThat(outcome.reached()).isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("데모 사용자는 GET·OPTIONS 밖(쓰기·HEAD)이 경로와 상관없이 403 demo_read_only")
+        void writesAreReadOnly() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            String[][] writes = {{"POST", "/api/alerts/rules"}, {"POST", "/api/alerts/rules/1"},
+                    {"DELETE", "/api/alerts/rules/1"}, {"POST", "/api/alerts/inbox/read"}, {"POST", "/api/ai/report"},
+                    {"POST", "/api/auth/logout"}, {"POST", "/api/auth/login"}, {"POST", "/api/auth/signup"},
+                    {"PUT", "/api/alerts/rules/1"}, {"PATCH", "/api/alerts/rules/1"}, {"POST", "/api/status/refresh"}};
+            for (String[] write : writes) {
+                Outcome outcome = send(on, write[0], write[1], TOKEN, null);
+                assertThat(outcome.status()).as(write[0] + " " + write[1]).isEqualTo(403);
+                assertThat(outcome.body()).contains("demo_read_only").contains("데모에서는 조회만 가능합니다");
+                assertThat(outcome.reached()).isFalse();
+            }
+            assertThat(send(on, "OPTIONS", "/api/alerts/rules", TOKEN, null).reached())
+                    .as("CORS 사전 요청은 통과").isTrue();
+            // HEAD는 스프링이 GET 처리기로 돌리는데 정책 표에 HEAD 줄이 없어 운영자 경로가 열립니다 — 데모는 막습니다.
+            Outcome head = send(on, "HEAD", "/api/status", TOKEN, null);
+            assertThat(head.status()).as("HEAD").isEqualTo(403);
+            assertThat(head.reached()).isFalse();
+        }
+
+        @Test
+        @DisplayName("공개 GET(세션 확인·헬스)은 헤더가 있어도 그대로 통과한다")
+        void publicReadsPassThrough() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            assertThat(send(on, "GET", "/api/auth/session", TOKEN, null).reached()).isTrue();
+            assertThat(send(on, "GET", "/api/health", TOKEN, null).reached()).isTrue();
+        }
+
+        @Test
+        @DisplayName("유효한 세션 쿠키가 있으면 세션이 이긴다 — 데모로 낮추지도, 쓰기를 막지도 않는다")
+        void sessionTakesPrecedence() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+
+            Outcome owner = send(on, "GET", "/api/status", TOKEN, "owner-cookie");
+            assertThat(owner.reached()).as("운영자 세션 + 헤더 → 운영 경로 통과").isTrue();
+            assertThat(owner.user().demo()).isFalse();
+            assertThat(owner.user().sessionId()).isEqualTo(OWNER_SESSION);
+
+            Outcome member = send(on, "GET", "/api/kr/stock-flows", TOKEN, "member-cookie");
+            assertThat(member.status()).as("무료 회원 세션이면 헤더가 있어도 무료 회원 — 유료 경로 403").isEqualTo(403);
+            assertThat(member.body()).contains("\"required\":\"PRO\"");
+
+            Outcome write = send(on, "POST", "/api/alerts/rules", TOKEN, "member-cookie");
+            assertThat(write.reached()).as("세션이 있으면 쓰기도 평소대로").isTrue();
+            assertThat(write.user().demo()).isFalse();
+
+            Outcome expired = send(on, "POST", "/api/alerts/rules", TOKEN, "expired-cookie");
+            assertThat(expired.status()).as("만료·해지된 쿠키는 세션이 아님 → 데모 쓰기 403").isEqualTo(403);
+            assertThat(expired.body()).contains("demo_read_only");
+            assertThat(send(on, "GET", "/api/macro/overview", TOKEN, "expired-cookie").user().demo())
+                    .as("만료된 쿠키 + 헤더 GET → 데모 열람").isTrue();
+        }
+    }
+
+    private static byte[] sha256(String value) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

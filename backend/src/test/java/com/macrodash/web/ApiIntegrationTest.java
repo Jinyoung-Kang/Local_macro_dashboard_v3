@@ -47,7 +47,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         "dashboard.read-mode=store_only",
         "dashboard.collector-url=http://localhost:1",    // 수집기가 없어도 화면은 떠야 합니다
         "dashboard.ai.timeout-seconds=333",              // 설정 주입이 실제로 먹는지 확인용
-        "dashboard.scheduler.enabled=false"              // 정기 작업이 테스트 DB에 쓰면 결과가 실행 시각에 따라 달라짐
+        "dashboard.scheduler.enabled=false",             // 정기 작업이 테스트 DB에 쓰면 결과가 실행 시각에 따라 달라짐
+        // 데모 열람(ADR 0013)을 켜 둡니다 — 헤더를 보내지 않는 다른 테스트는 평소와 같습니다(그것도 함께 확인됨).
+        "dashboard.demo-viewer-token=" + ApiIntegrationTest.DEMO_TOKEN
 })
 class ApiIntegrationTest {
 
@@ -74,6 +76,8 @@ class ApiIntegrationTest {
 
     static final String OWNER = "owner@test.local";
     static final String MEMBER = "member@test.local";
+    /** 테스트용 데모 열람 토큰(32자 이상). 실제 배포 토큰은 서버의 .env에만 있습니다. */
+    static final String DEMO_TOKEN = "test-demo-viewer-token-0123456789abcdef";
 
     private String sessionCookie;
 
@@ -355,6 +359,73 @@ class ApiIntegrationTest {
                 new HttpEntity<>(null, headers), String.class);
 
         assertThat(after.getBody()).contains("authenticated");
+    }
+
+    /** 사용자 번호를 키로 쓰는 테이블(모두 users FK) — 데모 열람이 여기에 한 줄이라도 쓰면 안 됩니다. */
+    private static final List<String> USER_KEYED_TABLES = List.of(
+            "user_sessions", "audit_log", "usage_counters", "alert_rules", "alert_deliveries", "email_tokens");
+
+    private Map<String, Long> userKeyedRowCounts() {
+        Map<String, Long> counts = new java.util.TreeMap<>();
+        for (String table : USER_KEYED_TABLES) {
+            counts.put(table, jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class));
+        }
+        return counts;
+    }
+
+    @Test
+    @DisplayName("데모 열람(ADR 0013): 로그인 없이 화면 GET이 200(사용자별 테이블을 읽는 경로 포함)이고 DB에 아무것도 쓰지 않는다")
+    void demoViewerReadsWithoutWriting() {
+        HttpHeaders demo = new HttpHeaders();
+        demo.add("X-Demo-Viewer", DEMO_TOKEN);
+        Map<String, Long> before = userKeyedRowCounts();
+
+        JsonNode session = rest.exchange(url("/api/auth/session"), HttpMethod.GET, new HttpEntity<>(null, demo),
+                JsonNode.class).getBody();
+        assertThat(session.path("authenticated").asBoolean()).isTrue();
+        assertThat(session.path("user").path("demo").asBoolean()).isTrue();
+        assertThat(session.path("user").path("email").isNull()).isTrue();
+
+        for (String path : List.of("/api/auth/sessions", "/api/alerts/rules", "/api/alerts/inbox", "/api/alerts/unread-count",
+                "/api/analytics/regime/log", "/api/analytics/regime/track-record", "/api/kr/stock-flows?codes=005930",
+                "/api/macro/overview", "/api/ai/engines", "/api/ai/report-types")) {
+            ResponseEntity<String> response = rest.exchange(url(path), HttpMethod.GET, new HttpEntity<>(null, demo),
+                    String.class);
+            assertThat(response.getStatusCode()).as(path).isEqualTo(HttpStatus.OK);
+        }
+        JsonNode inbox = rest.exchange(url("/api/alerts/inbox"), HttpMethod.GET, new HttpEntity<>(null, demo),
+                JsonNode.class).getBody();
+        assertThat(inbox.path("items").size()).as("데모의 알림함은 비어 있음").isZero();
+
+        assertThat(rest.exchange(url("/api/status"), HttpMethod.GET, new HttpEntity<>(null, demo), String.class)
+                .getStatusCode()).as("운영 경로").isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(rest.exchange(url("/api/status"), HttpMethod.HEAD, new HttpEntity<>(null, demo), String.class)
+                .getStatusCode()).as("HEAD로 운영 경로를 돌리지 못함").isEqualTo(HttpStatus.FORBIDDEN);
+
+        HttpHeaders demoJson = new HttpHeaders();
+        demoJson.addAll(demo);
+        demoJson.setContentType(MediaType.APPLICATION_JSON);
+        for (String path : List.of("/api/alerts/rules", "/api/alerts/inbox/read", "/api/ai/report", "/api/auth/logout")) {
+            ResponseEntity<JsonNode> write = rest.exchange(url(path), HttpMethod.POST,
+                    new HttpEntity<>(Map.of("kind", "REGIME_CHANGE"), demoJson), JsonNode.class);
+            assertThat(write.getStatusCode()).as(path).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(write.getBody().path("error").asString()).isEqualTo("demo_read_only");
+        }
+
+        assertThat(userKeyedRowCounts()).as("사용자별 테이블의 행 수가 그대로").isEqualTo(before);
+        for (String table : USER_KEYED_TABLES) {
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE user_id < 1", Long.class))
+                    .as(table).isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("데모 열람 헤더가 틀리면 401 — 헤더만으로는 열리지 않는다")
+    void wrongDemoHeaderIsUnauthorized() {
+        HttpHeaders wrong = new HttpHeaders();
+        wrong.add("X-Demo-Viewer", "not-the-token");
+        assertThat(rest.exchange(url("/api/macro/overview"), HttpMethod.GET, new HttpEntity<>(null, wrong), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     // ------------------------------------------------------------------ helpers

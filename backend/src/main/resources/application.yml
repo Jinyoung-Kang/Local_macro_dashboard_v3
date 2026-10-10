@@ -54,6 +54,9 @@ dashboard:
   session-minutes: ${SESSION_MINUTES:720}
   # HTTPS로만 접속할 때 true (세션 쿠키에 Secure). http://에서 켜면 로그인이 안 됩니다.
   cookie-secure: ${COOKIE_SECURE:false}
+  # 데모 열람(ADR 0013) — 비면 꺼짐(기본·로컬). AWS 배포에서만 앞단 프록시가 접근 코드를 확인한 요청에
+  # X-Demo-Viewer 헤더로 이 값을 실어 보내면 로그인 없이 읽기 전용으로 엽니다. 쓰면 32자 이상이어야 기동합니다.
+  demo-viewer-token: ${DASHBOARD_DEMO_VIEWER_TOKEN:}
 
   # auto | store_only | live_only
   #   auto       저장본이 신선하면 사용, 오래되면 수집기에 수집 요청

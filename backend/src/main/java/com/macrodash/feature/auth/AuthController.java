@@ -116,10 +116,13 @@ public class AuthController {
     /**
      * 세션 확인 — 로그인돼 있으면 사용자(이메일·역할·등급)와 읽기 모드를 줍니다. 화면은 이 값으로 메뉴를 고릅니다.
      * 막는 것은 백엔드(경로별 접근 정책)이고, 화면은 보여 줄지만 정합니다.
+     *
+     * <p>세션이 없어도 데모 열람 헤더가 맞으면(ADR 0013) {@code authenticated: true}와 {@code user.demo: true}
+     * (일반 회원·유료 등급, 이메일 없음)를 줍니다. 화면은 이 값으로 로그아웃·계정 메뉴와 쓰기 버튼을 숨깁니다.
      */
     @GetMapping("/session")
     public Map<String, Object> session(HttpServletRequest request) {
-        Optional<CurrentUser> user = authService.authenticate(readToken(request));
+        Optional<CurrentUser> user = authService.resolve(readToken(request), request.getHeader(DemoViewer.HEADER));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("authenticated", user.isPresent());
         // 로그인 화면이 가입·재설정 링크를 보여 줄지 정합니다(메일 발송이 설정됐을 때만).
@@ -216,6 +219,7 @@ public class AuthController {
         out.put("email", user.email());
         out.put("role", user.role());
         out.put("tier", user.tier());
+        out.put("demo", user.demo());
         return out;
     }
 
