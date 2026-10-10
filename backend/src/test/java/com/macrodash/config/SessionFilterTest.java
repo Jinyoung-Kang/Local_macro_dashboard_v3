@@ -203,7 +203,6 @@ class SessionFilterTest {
         }
 
         @Test
-        @org.junit.jupiter.api.Disabled("QA-023 재현 — 수정 전에는 정책을 정규화된 경로로 찾고 처리기는 날것 경로로 찾는다")
         @DisplayName("QA-023 정규화 전후가 다른 경로(끝의 ..·인코딩된 점·//·;)는 정책 검사 전에 400 — 무료 회원이 운영자 처리기에 닿지 못하게")
         void nonNormalizedPathIsRejected() throws Exception {
             WebConfig.SessionFilter on = filter(TOKEN);

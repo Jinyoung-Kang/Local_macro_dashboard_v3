@@ -27,6 +27,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -175,6 +176,14 @@ public class WebConfig implements WebMvcConfigurer {
                                         FilterChain chain) throws ServletException, IOException {
             addSecurityHeaders(response);
 
+            if (nonNormalized(request)) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write(
+                        "{\"error\":\"bad_request\",\"message\":\"요청 경로가 올바르지 않습니다.\"}");
+                return;
+            }
+
             if (foreignOrigin(request)) {
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.setContentType("application/json;charset=UTF-8");
@@ -276,6 +285,31 @@ public class WebConfig implements WebMvcConfigurer {
             response.setHeader("X-Frame-Options", "DENY");
             response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
             response.setHeader("Referrer-Policy", "no-referrer");
+        }
+
+        /**
+         * 날것 URI가 정규화한 경로와 모양이 다른가(QA-023). 접근 정책은 컨테이너가 정규화한 경로({@code getServletPath})로
+         * 찾는데, 스프링은 날것 URI로 처리기를 찾습니다. 그래서 {@code POST /api/status/run/..}은 정책상 표에 없는
+         * {@code /api/status/}(로그인만)로 통과하고, 처리기는 운영자용 {@code /api/status/run/{task}}가 됐습니다.
+         * 둘이 같은 경로를 보게 하려고 정규화가 필요한 요청은 받지 않습니다 — {@code .}·{@code ..} 조각, 인코딩된
+         * 점·슬래시·역슬래시·세미콜론·NUL, 날것 역슬래시·세미콜론, 빈 조각({@code //}). 화면이 만드는 경로에는 없습니다.
+         */
+        static boolean nonNormalized(HttpServletRequest request) {
+            String uri = request.getRequestURI();
+            if (uri == null) {
+                return false;
+            }
+            String lower = uri.toLowerCase(Locale.ROOT);
+            if (lower.contains("%2e") || lower.contains("%2f") || lower.contains("%5c") || lower.contains("%3b")
+                    || lower.contains("%00") || uri.indexOf('\\') >= 0 || uri.indexOf(';') >= 0 || uri.contains("//")) {
+                return true;
+            }
+            for (String segment : uri.split("/", -1)) {
+                if (segment.equals(".") || segment.equals("..")) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         static boolean isPublic(HttpServletRequest request) {
