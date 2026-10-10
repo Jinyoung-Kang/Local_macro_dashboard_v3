@@ -68,6 +68,28 @@ class AlertRulesTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("QA-039 재현 — 수정 전에는 창의 첫 기록부터 0으로 세어 창이 밀릴 때마다 새 'N일 연속' 사건을 만든다")
+    @DisplayName("QA-039 창이 하루씩 밀려도 같은 연속을 새 사건으로 만들지 않는다 — 첫 기록 앞을 모르면 연속의 시작이 아니다")
+    void slidingWindowDoesNotRestartStreak() {
+        // 실제 기록: D0 순매도, D1~D6 순매수. 3일 연속은 D3 한 번뿐입니다.
+        Long[] full = {-1L, 5L, 5L, 5L, 5L, 5L, 5L};
+        assertThat(AlertRules.streakReached(window(full, 0), 3)).extracting(AlertRules.StreakHit::date)
+                .containsExactly(D.plusDays(3));
+        // 시장 수급은 최근 30거래일만 남아 창의 첫날이 D2·D3·D4로 밀립니다. 그때마다 D4·D5·D6에 '3일 연속'이 새로 생겼습니다.
+        for (int start = 2; start <= 4; start++) {
+            assertThat(AlertRules.streakReached(window(full, start), 3)).as("창 시작 D%d", start).isEmpty();
+        }
+    }
+
+    private static List<AlertRules.DayNet> window(Long[] values, int start) {
+        List<AlertRules.DayNet> out = new ArrayList<>();
+        for (int i = start; i < values.length; i++) {
+            out.add(new AlertRules.DayNet(D.plusDays(i), values[i]));
+        }
+        return out;
+    }
+
+    @Test
     @DisplayName("값을 모르는 날(null)과 0인 날은 연속을 끊는다")
     void unknownBreaksStreak() {
         assertThat(AlertRules.streakReached(nets(5L, null, 3L, 2L), 3)).isEmpty();
