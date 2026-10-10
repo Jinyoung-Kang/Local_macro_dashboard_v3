@@ -1,5 +1,7 @@
 package com.macrodash.feature.positioning;
 
+import com.macrodash.support.Params;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -93,6 +95,10 @@ public class PositioningController {
             @RequestParam(defaultValue = "30") int topN,
             @RequestParam(defaultValue = "TODAY") String intervalType,
             @RequestParam(required = false) String targetDate) {
+        // 모르는 값을 넘기면 수집기가 임의 이름의 저장본·이력을 만들었습니다(QA-037).
+        Params.oneOf("investor", investor, RadarService.INVESTORS);
+        Params.oneOf("tradeType", tradeType, RadarService.TRADE_TYPES);
+        Params.oneOf("intervalType", intervalType, RadarService.INTERVALS);
         return radar.ranking(market, investor, tradeType, topN, intervalType, targetDate);
     }
 

@@ -65,6 +65,11 @@ PYKRX_INVESTORS = {
 
 INTERVAL_LABELS = {"TODAY": "당일", "DAYS_5": "5거래일", "DAYS_20": "20거래일"}
 
+# 받는 조건(백엔드 RadarService.INVESTORS·TRADE_TYPES·INTERVALS와 같음). 모르는 값을 받으면 PyKrx가 외국인·순매도로
+# 바꿔 받아 그 결과를 임의 이름의 저장본·이력에 썼습니다(QA-037).
+RADAR_INVESTORS = tuple(NAVER_INVESTOR_CODES)
+RADAR_TRADE_TYPES = ("순매수", "순매도")
+
 # pykrx는 선택 의존성입니다 (KRX가 차단하면 어차피 동작하지 않습니다).
 #
 # pykrx 1.2.x는 import 시점에 `print()`로 로그인 상태를 뱉습니다.

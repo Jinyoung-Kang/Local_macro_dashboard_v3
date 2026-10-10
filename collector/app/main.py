@@ -368,6 +368,9 @@ def live_radar(
     """
     _check_token(x_service_token)
     market = _normalize_market(market)
+    _require_one_of("investor", investor, radar_service.RADAR_INVESTORS)
+    _require_one_of("tradeType", tradeType, radar_service.RADAR_TRADE_TYPES)
+    _require_one_of("intervalType", intervalType, tuple(radar_service.INTERVAL_LABELS))
     requested = _parse_date(targetDate)
     day = requested or datetime.now(KST).date()
     result = radar_service.collect_radar_ranking(
@@ -394,6 +397,11 @@ def live_radar(
 
 RADAR_DEFAULT_TOP_N = 30
 RADAR_MARKETS = ("KOSPI", "KOSDAQ")
+
+
+def _require_one_of(name: str, value: str, allowed: tuple[str, ...]) -> None:
+    if value not in allowed:
+        raise HTTPException(status_code=400, detail=f"{name}은(는) {' · '.join(allowed)} 가운데 하나여야 합니다: {value!r}")
 
 
 def _normalize_market(market: str) -> str:

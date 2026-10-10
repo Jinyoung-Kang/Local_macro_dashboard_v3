@@ -75,14 +75,14 @@ def test_QA028_다른_기간으로_받은_결과는_요청한_이름으로_저�
     assert spies["history"] == []
 
 
-@pytest.mark.xfail(strict=True, reason="QA-037: 투자자·매매 방향·기간을 검증하지 않아 임의 이름의 저장본·이력을 만듦")
 @pytest.mark.parametrize("query", [
     "investor=아무나&tradeType=순매수",
     "investor=외국인&tradeType=매수매도",
     "investor=외국인&tradeType=순매수&intervalType=WEEK",
 ])
-def test_QA037_모르는_투자자_매매_방향_기간은_400이다(client, spies, query):
+def test_QA037_모르는_투자자_매매_방향_기간은_거절한다(client, spies, query):
     """PyKrx는 모르는 투자자를 외국인으로, '순매수'가 아닌 값은 순매도로 처리해 그 결과를 임의 이름에 저장했습니다."""
-    assert client.get(f"/live/radar?market=KOSPI&{query}").status_code == 400
+    # 기간은 FastAPI 형식 검사(422)가 원래 막고 있었습니다. 어느 쪽이든 거절하고 아무것도 쓰지 않아야 합니다.
+    assert client.get(f"/live/radar?market=KOSPI&{query}").status_code in (400, 422)
     assert spies["snapshots"] == []
     assert spies["history"] == []

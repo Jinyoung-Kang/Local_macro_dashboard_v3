@@ -38,6 +38,19 @@ public final class Params {
         }
     }
 
+    /**
+     * 정해진 값 가운데 하나여야 하는 파라미터.
+     *
+     * @throws InvalidRequestException 목록에 없는 값
+     */
+    public static String oneOf(String name, String value, java.util.Collection<String> allowed) {
+        if (value == null || !allowed.contains(value)) {
+            throw new InvalidRequestException(
+                    name + "는 " + String.join(" · ", allowed) + " 가운데 하나여야 합니다: " + echo(value));
+        }
+        return value;
+    }
+
     /** {@code value}를 [min, max] 안으로 접습니다. */
     public static int clamp(int value, int min, int max) {
         return Math.min(Math.max(value, min), max);
