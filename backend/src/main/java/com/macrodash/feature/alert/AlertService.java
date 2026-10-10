@@ -94,12 +94,9 @@ public class AlertService {
                     if (code == null || !STOCK_CODE.matcher(code).matches()) {
                         return new Result(400, "종목코드는 6자리 숫자입니다(예: 005930).");
                     }
-                    if (alerts.countStockCodes(user.id()) >= STOCKS_PER_USER) {
-                        return new Result(400, "관심 종목 알림은 %d종목까지입니다.".formatted(STOCKS_PER_USER));
-                    }
-                    if (!alerts.hasStockCode(code) && alerts.countStockCodes(null) >= STOCKS_TOTAL) {
-                        return new Result(400, "종목별 수급 수집 범위(전체 %d종목)를 넘습니다 — 수집 범위 초과. 다른 종목 규칙을 지운 뒤 다시 만드세요."
-                                .formatted(STOCKS_TOTAL));
+                    Result capped = stockCapProblem(user, code);
+                    if (capped != null) {
+                        return capped;
                     }
                     clean.put("code", code);
                 } else if (target == null || !MARKETS.contains(target)) {
@@ -124,9 +121,34 @@ public class AlertService {
     }
 
     public Result setEnabled(CurrentUser user, long ruleId, boolean enabled) {
+        if (enabled) {
+            // 켤 때도 관심 종목 상한을 봅니다. 상한은 켜진 규칙만 세므로, 껐다 켜면 넘을 수 있었고 수집기는 앞쪽
+            // 60종목만 받아 넘친 종목 규칙은 조용히 울리지 않았습니다(QA-041).
+            AlertStore.Rule rule = alerts.rules(user.id()).stream()
+                    .filter(candidate -> candidate.id() == ruleId).findFirst().orElse(null);
+            if (rule != null && !rule.enabled() && "FOREIGN_STREAK".equals(rule.kind())
+                    && "STOCK".equals(rule.params().path("target").asText())) {
+                Result capped = stockCapProblem(user, rule.params().path("code").asText());
+                if (capped != null) {
+                    return capped;
+                }
+            }
+        }
         return alerts.setEnabled(ruleId, user.id(), enabled) == 1
                 ? new Result(200, enabled ? "켰습니다." : "껐습니다. 지금부터 생기는 사건은 들어오지 않습니다.")
                 : new Result(404, "없는 규칙입니다.");
+    }
+
+    /** 관심 종목 상한(사용자 20·전체 60 — 종목별 수급 수집 범위). 넘으면 400, 아니면 null. */
+    private Result stockCapProblem(CurrentUser user, String code) {
+        if (alerts.countStockCodes(user.id()) >= STOCKS_PER_USER) {
+            return new Result(400, "관심 종목 알림은 %d종목까지입니다.".formatted(STOCKS_PER_USER));
+        }
+        if (!alerts.hasStockCode(code) && alerts.countStockCodes(null) >= STOCKS_TOTAL) {
+            return new Result(400, "종목별 수급 수집 범위(전체 %d종목)를 넘습니다 — 수집 범위 초과. 다른 종목 규칙을 지운 뒤 다시 만드세요."
+                    .formatted(STOCKS_TOTAL));
+        }
+        return null;
     }
 
     public Result delete(CurrentUser user, long ruleId) {

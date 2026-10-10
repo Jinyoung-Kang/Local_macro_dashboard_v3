@@ -65,7 +65,6 @@ class AlertServiceTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-041 재현 — 수정 전에는 껐던 종목 규칙을 켤 때 관심 종목 상한을 다시 보지 않는다")
     @DisplayName("QA-041 꺼 둔 종목 규칙을 다시 켤 때도 관심 종목 상한(사용자 20·전체 60)을 본다 — 넘친 종목이 조용히 수집에서 빠지지 않게")
     void reEnablingStockRuleChecksCaps() {
         AlertStore store = mock(AlertStore.class);
