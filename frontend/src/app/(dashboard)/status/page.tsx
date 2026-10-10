@@ -234,7 +234,10 @@ export default function StatusPage() {
         title="있어야 하는데 없는 데이터셋" source={SOURCES.snapshots}
         subtitle="기대 목록과 대조해 누락을 찾습니다. 존재하는 것만 나열하면 누락을 알아챌 수 없습니다."
       >
-        {(data?.missingDatasets ?? []).length === 0 ? (
+        {/* 목록이 없으면(수집기에 닿지 못함 등) 누락이 없는 것이 아니라 모르는 것입니다(QA-045). */}
+        {data && !data.missingDatasets ? (
+          <p className="text-sm text-muted">누락 여부를 확인하지 못했습니다 — 수집기에 연결되지 않아 기대 목록을 받지 못했습니다.</p>
+        ) : (data?.missingDatasets ?? []).length === 0 ? (
           <p className="text-sm text-ok">누락된 데이터셋이 없습니다.</p>
         ) : (
           <div className="flex flex-wrap gap-2">

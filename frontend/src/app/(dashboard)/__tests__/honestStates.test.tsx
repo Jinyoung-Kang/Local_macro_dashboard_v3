@@ -33,7 +33,7 @@ afterEach(() => cleanup());
 
 describe("QA-045 상태 화면 — 수집기에 닿지 못하면 누락 여부를 모른다", () => {
   // 수정 전에는 missingDatasets가 없으면(수집기 불통) '누락된 데이터셋이 없습니다'를 초록으로 보였다.
-  it.fails("누락 목록을 받지 못했으면 '없습니다'가 아니라 '확인하지 못했습니다'", async () => {
+  it("누락 목록을 받지 못했으면 '없습니다'가 아니라 '확인하지 못했습니다'", async () => {
     reads["/api/status/issues"] = () => new Promise(() => {});
     reads["/api/status"] = () => Promise.resolve({ readMode: "auto", collectorReachable: false, taskSummary: [] });
 
