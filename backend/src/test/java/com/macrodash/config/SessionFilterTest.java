@@ -176,6 +176,34 @@ class SessionFilterTest {
         }
 
         @Test
+        @org.junit.jupiter.api.Disabled("QA-020 재현 — 수정 전에는 로그인한 쓰기 요청의 본문을 크기와 상관없이 컨트롤러로 넘긴다")
+        @DisplayName("QA-020 로그인했거나 데모인 쓰기 요청도 본문이 64KB를 넘으면 파싱 전에 413")
+        void oversizedAuthenticatedWriteIsRejected() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            byte[] huge = new byte[128 * 1024];
+            Arrays.fill(huge, (byte) 'A');
+
+            MockHttpServletRequest demo = new MockHttpServletRequest("POST", "/api/ai/report");
+            demo.setServletPath("/api/ai/report");
+            demo.addHeader(DemoViewer.HEADER, TOKEN);
+            demo.setContent(huge);
+            MockHttpServletResponse demoResponse = new MockHttpServletResponse();
+            boolean[] reached = {false};
+            on.doFilter(demo, demoResponse, (req, res) -> reached[0] = true);
+            assertThat(demoResponse.getStatus()).isEqualTo(413);
+            assertThat(reached[0]).as("데모 방문자의 큰 본문이 컨트롤러까지 가지 않음").isFalse();
+
+            MockHttpServletRequest member = new MockHttpServletRequest("POST", "/api/alerts/rules");
+            member.setServletPath("/api/alerts/rules");
+            member.setCookies(new Cookie(AuthService.COOKIE_NAME, "member-cookie"));
+            member.setContent(huge);
+            MockHttpServletResponse memberResponse = new MockHttpServletResponse();
+            on.doFilter(member, memberResponse, (req, res) -> reached[0] = true);
+            assertThat(memberResponse.getStatus()).isEqualTo(413);
+            assertThat(reached[0]).isFalse();
+        }
+
+        @Test
         @DisplayName("기능이 꺼져 있으면(기본) 헤더를 보지 않는다 — 같은 값을 보내도 401")
         void headerIgnoredWhenOff() throws Exception {
             WebConfig.SessionFilter off = filter("");
