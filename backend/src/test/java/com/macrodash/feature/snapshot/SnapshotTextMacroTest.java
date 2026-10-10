@@ -112,7 +112,6 @@ class SnapshotTextMacroTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-030 재현 — 수정 전에는 이어받은 이전 값을 AI 텍스트에 현재 값처럼 적는다")
     @DisplayName("QA-030 수집 실패로 이어받은 이전 값은 AI 텍스트에도 '이전 값'과 사유·시각을 붙인다")
     void staleCardIsMarkedInAiText() throws Exception {
         MacroService macro = mock(MacroService.class);

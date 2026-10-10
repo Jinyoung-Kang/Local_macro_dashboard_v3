@@ -161,13 +161,14 @@ public class SnapshotTextService {
                     String status = Json.asText(item, "status");
                     String name = Json.asText(item, "name");
                     if ("ok".equals(status) || "single".equals(status)) {
-                        lines.add("- %s: %s | %s | 전일: %s%s".formatted(
+                        lines.add("- %s: %s | %s | 전일: %s%s%s".formatted(
                                 name,
                                 orNa(Json.asText(item, "priceStr")),
                                 orNa(Json.asText(item, "deltaStr")),
                                 orNa(Json.asText(item, "prevStr")),
                                 Json.asText(item, "prevSource") == null
-                                        ? "" : " (" + Json.asText(item, "prevSource") + ")"));
+                                        ? "" : " (" + Json.asText(item, "prevSource") + ")",
+                                staleNote(item)));
                     } else {
                         lines.add("- " + name + ": 데이터 수집 실패");
                     }
@@ -664,6 +665,20 @@ public class SnapshotTextService {
             return "%,.0f만 %s".formatted(amount / 1e4, suffix);
         }
         return "%,.0f %s".formatted(amount, suffix);
+    }
+
+    /**
+     * 수집 실패로 직전 값을 이어받은 카드(isStale)면 그 사실과 사유·시각을 붙입니다(QA-030). 붙이지 않으면 AI가 몇 시간
+     * 지난 값을 지금 값으로 읽습니다.
+     */
+    private static String staleNote(JsonNode item) {
+        if (!Json.asBoolean(item, "isStale")) {
+            return "";
+        }
+        String reason = Json.asText(item, "staleReason");
+        String taken = Json.asText(item, "lastTs");
+        return " ⚠️ 이전 값(이번 수집 실패" + (reason == null ? "" : ": " + reason) + ")"
+                + (taken == null ? "" : " · " + taken);
     }
 
     private String orNa(String value) {
