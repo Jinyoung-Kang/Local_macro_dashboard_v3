@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { correlationStrength } from "@/lib/correlation";
 import { streakText } from "@/lib/flows";
 import { liquidityChartSeries } from "@/lib/liquidity";
-import { sortBySourceOrder, sourceLabel, splitFundamentals } from "@/lib/radar";
+import { sortBySourceOrder, sourceLabel, splitFundamentals, historySelection } from "@/lib/radar";
 import { spreadSummary } from "@/lib/spread";
 import type { KrFundamentalsCompany, LiquidityRow } from "@/lib/types";
 
@@ -67,5 +67,31 @@ describe("flows", () => {
     expect(streakText(0, 20)).toBe("—");
     expect(streakText(3, 20)).toBe("3일 순매수");
     expect(streakText(-20, 20)).toBe("20일+ 순매도");
+  });
+});
+
+describe("레이더 누적 이력 — 고른 날·선택지·행 (화면에서 옮김, 동작 동일)", () => {
+  const row = (obsDate: string, code: string) => ({ obsDate, code });
+  const data = { dates: ["2026-10-08", "2026-10-07"], obsDate: "2026-10-08",
+    rows: [row("2026-10-08", "A"), row("2026-10-07", "B")] };
+
+  it("고른 날이 없으면 응답이 알려 준 날, 행은 그날 것만", () => {
+    expect(historySelection("", data)).toEqual({
+      dates: ["2026-10-08", "2026-10-07"], selectedDate: "2026-10-08",
+      dateOptions: ["2026-10-08", "2026-10-07"], rows: [row("2026-10-08", "A")],
+    });
+  });
+
+  it("고른 날이 새 조건의 선택지에 없으면 앞에 붙인다(선택 상자와 표가 같은 날을 가리키게)", () => {
+    const picked = historySelection("2026-10-01", data);
+    expect(picked.selectedDate).toBe("2026-10-01");
+    expect(picked.dateOptions).toEqual(["2026-10-01", "2026-10-08", "2026-10-07"]);
+    expect(picked.rows).toEqual([]);
+  });
+
+  it("응답이 없으면 빈 목록, 행은 30개까지", () => {
+    expect(historySelection("", null)).toEqual({ dates: [], selectedDate: "", dateOptions: [], rows: [] });
+    const many = { dates: ["d"], obsDate: "d", rows: Array.from({ length: 40 }, (_, i) => row("d", String(i))) };
+    expect(historySelection("", many).rows).toHaveLength(30);
   });
 });

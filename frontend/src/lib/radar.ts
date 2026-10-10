@@ -51,3 +51,22 @@ export function splitFundamentals(codes: readonly string[], companies: readonly 
     covered: all.filter((row) => row.available).length,
   };
 }
+
+/**
+ * 누적 이력에서 보여 줄 거래일과 행(하루치를 받는 화면, latest=true).
+ *
+ * - 고른 날이 없으면 응답이 알려 준 날(그 조건의 가장 최근 거래일)
+ * - 조건을 바꿔도 고른 날은 그대로 둡니다. 새 조건에 그날 기록이 없으면 선택지(기록이 있는 날만)에 없으므로 앞에
+ *   붙입니다 — 안 붙이면 선택 상자는 다른 날을 보이는데 표는 고른 날 기준이라, 둘이 서로 다른 날을 가리켰습니다.
+ * - 행은 그날 것만, 최대 30행
+ */
+export function historySelection<Row extends { obsDate: string }>(
+  chosen: string,
+  data: { dates: string[]; obsDate?: string | null; rows: Row[] } | null | undefined,
+): { dates: string[]; selectedDate: string; dateOptions: string[]; rows: Row[] } {
+  const dates = data?.dates ?? [];
+  const selectedDate = chosen || data?.obsDate || "";
+  const dateOptions = selectedDate && !dates.includes(selectedDate) ? [selectedDate, ...dates] : dates;
+  const rows = (data?.rows ?? []).filter((row) => row.obsDate === selectedDate).slice(0, 30);
+  return { dates, selectedDate, dateOptions, rows };
+}
