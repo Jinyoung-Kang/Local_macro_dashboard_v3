@@ -11,8 +11,8 @@
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| POST | `/api/auth/login` | `{"email": "...", "password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict, DB 세션 — ADR 0010)와 `{ok, user:{email, role, tier}}`. 없는 이메일과 틀린 비밀번호는 같은 401. (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 느리게(전역 1초에 1건) 처리하며 틀리면 **429 + `Retry-After`**(안내값 30초부터 2배씩, 최대 15분) — 맞는 비밀번호는 그래도 통과. 다른 느린 시도가 진행 중이면 즉시 429(1초). 본문은 4KB까지(초과 413). 다른 출처(Origin)에서 온 POST는 403 |
-| GET | `/api/auth/session` | `{"authenticated": bool, "mailAvailable": bool, "readMode": …, "user": {email, role(OWNER·MEMBER), tier(FREE·PRO)}}`. `mailAvailable`은 가입·재설정을 쓸 수 있는지(메일 발송 설정). `readMode`·`user`는 로그인한 경우에만 옵니다. 화면은 이 값으로 메뉴를 고르고, 막는 것은 백엔드의 경로별 접근 정책입니다 |
+| POST | `/api/auth/login` | `{"email": "...", "password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict, DB 세션 — ADR 0010)와 `{ok, user:{email, role, tier, demo:false}}`. 없는 이메일과 틀린 비밀번호는 같은 401. (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 느리게(전역 1초에 1건) 처리하며 틀리면 **429 + `Retry-After`**(안내값 30초부터 2배씩, 최대 15분) — 맞는 비밀번호는 그래도 통과. 다른 느린 시도가 진행 중이면 즉시 429(1초). 본문은 4KB까지(초과 413). 다른 출처(Origin)에서 온 POST는 403 |
+| GET | `/api/auth/session` | `{"authenticated": bool, "mailAvailable": bool, "readMode": …, "user": {email, role(OWNER·MEMBER), tier(FREE·PRO), demo(bool)}}`. `mailAvailable`은 가입·재설정을 쓸 수 있는지(메일 발송 설정). `readMode`·`user`는 로그인한 경우에만 옵니다. 데모 열람(ADR 0013)이면 세션 없이도 `authenticated: true`, `user`는 `{email: null, role: "MEMBER", tier: "PRO", demo: true}`입니다. 화면은 이 값으로 메뉴를 고르고, 막는 것은 백엔드의 경로별 접근 정책입니다 |
 | POST | `/api/auth/logout` | 쿠키 만료 + 그 세션을 DB에서 끊음(재시작 후에도 유지) |
 | POST | `/api/auth/logout-all` | 다른 기기의 내 세션을 모두 끊음(지금 기기는 남김) → `{ok, revoked}` |
 | GET | `/api/auth/sessions` | 내 로그인 세션 목록 `{sessions:[{id, current, createdAt, lastSeenAt, expiresAt, userAgent}]}` |
@@ -41,6 +41,11 @@
 (없으면 401). 경로마다 필요한 역할·등급은 접근 정책 표(`AccessPolicy`, ADR 0010)가 정하며, 모자라면
 403 `{"error":"forbidden","required":"OWNER"|"PRO"}`입니다. 운영 경로(수집 실행·새로고침·`/api/status*`·
 공공 API 진단·레이더 진단·토스 진단·AI 연결 시험·교차 검증)는 운영자만 부릅니다.
+
+**데모 열람**(ADR 0013, AWS 공개 데모에서만 — 기본은 꺼짐): 백엔드에 `DASHBOARD_DEMO_VIEWER_TOKEN`이 있고 요청 헤더
+`X-Demo-Viewer`가 그 값과 같으면, 세션 쿠키 없이 일반 회원·유료 등급의 데모 사용자로 GET을 받습니다(운영 경로는 그대로 403).
+GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_read_only","message":"데모에서는 조회만 가능합니다."}`입니다.
+유효한 세션 쿠키가 있으면 세션이 먼저이고, 기능이 꺼져 있거나 값이 틀리면 헤더는 없는 것과 같습니다(401).
 
 ### 모든 응답에 공통인 것
 
@@ -90,6 +95,7 @@
 |---|---|
 | 400 | 형식이 틀린 파라미터(`obsDate=abc`), 추적하지 않는 식별자(13F `cik`, FRED `seriesId`) — 없는 이름으로 수집을 기다리지 않고 바로 답합니다 |
 | 401 | 세션 쿠키가 없거나 만료됨 |
+| 403 | 역할·등급이 모자람(`forbidden`, `required`), 다른 출처의 쓰기(`bad_origin`), 데모 열람의 쓰기(`demo_read_only`) |
 | 404 · 405 | 없는 경로 · 허용되지 않는 메서드 |
 | 502 | 수집기에 닿지 못함 (태스크 수동 실행) |
 | 500 | 예상하지 못한 오류. 원인은 백엔드 로그에만 남습니다 |

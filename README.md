@@ -308,6 +308,8 @@ docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d --
 - DB는 postgres 컨테이너 대신 RDS(`RDS_HOST`, TLS)입니다. 화면·API는 `127.0.0.1`에만 열고, 앞단 프록시가 한 주소로 묶습니다.
 - 추가로 필요한 값은 [.env.aws.example](.env.aws.example)에 이름만 있습니다(`RDS_HOST`·`PUBLIC_ORIGIN` 등).
 - 공개 데모에서는 메일 가입·유료 AI·화면 조회가 일으키는 수집을 끕니다. 운영자 경로와 계정 변경은 앞단에서 막습니다.
+- 방문자는 앞단의 접근 코드만 통과하면 로그인 없이 읽기 전용으로 봅니다(데모 열람, `DEMO_VIEWER_TOKEN` 32자 이상,
+  [ADR 0013](docs/adr/0013-demo-viewer-mode.md)). 값을 비우면 꺼지고, 로컬 실행은 지금처럼 로그인이 필요합니다.
 
 ---
 
