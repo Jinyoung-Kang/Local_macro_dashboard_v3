@@ -3,7 +3,6 @@ package com.macrodash.feature.macro;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.config.AppProperties;
 import com.macrodash.read.StoreReader;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +20,6 @@ import static org.mockito.Mockito.when;
 class MacroStoreOnlyTest {
 
     @Test
-    @Disabled("QA-022 재현 — 수정 전에는 store_only에서도 개별 지표 차트가 수집기 → yfinance를 매번 부른다")
     @DisplayName("QA-022 store_only면 개별 지표 차트가 수집기를 부르지 않고 '저장본 없음'으로 답한다")
     void tickerSeriesDoesNotCallCollectorInStoreOnly() {
         StoreReader store = mock(StoreReader.class);

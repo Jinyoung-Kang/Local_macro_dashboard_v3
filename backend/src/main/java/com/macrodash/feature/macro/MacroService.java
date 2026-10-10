@@ -4,6 +4,7 @@ import com.macrodash.Kst;
 import com.macrodash.analytics.AdvancedIndicators;
 import com.macrodash.analytics.SeriesMath;
 import com.macrodash.collector.CollectorClient;
+import com.macrodash.config.AppProperties;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
@@ -601,8 +602,16 @@ public class MacroService {
             }
         }
 
-        Optional<JsonNode> live = collector.liveTicker(symbol, period);
         Map<String, Object> out = new LinkedHashMap<>();
+        if (store.readMode() == AppProperties.ReadMode.STORE_ONLY) {
+            // 화면 조회가 외부 호출(yfinance)을 일으키지 않는다는 약속이 우선입니다 — 공개 데모(ADR 0012, QA-022).
+            out.put("available", false);
+            out.put("symbol", symbol);
+            out.put("points", List.of());
+            out.put("message", "store_only 모드에서는 저장하지 않는 지표의 차트를 조회하지 않습니다.");
+            return out;
+        }
+        Optional<JsonNode> live = collector.liveTicker(symbol, period);
         if (live.isEmpty()) {
             out.put("available", false);
             out.put("symbol", symbol);

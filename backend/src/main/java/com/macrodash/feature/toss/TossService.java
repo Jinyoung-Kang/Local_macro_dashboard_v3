@@ -1,6 +1,7 @@
 package com.macrodash.feature.toss;
 
 import com.macrodash.collector.CollectorClient;
+import com.macrodash.config.AppProperties;
 import com.macrodash.read.StoreReader;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -32,12 +33,29 @@ public class TossService {
     }
 
     public Map<String, Object> exchangeRate(String base, String quote) {
+        if (storeOnly()) {
+            return STORE_ONLY_ANSWER;
+        }
         return unwrap(collector.tossExchangeRate(base, quote), "수집기에 연결하지 못했습니다.");
     }
 
     public Map<String, Object> indices(String symbols) {
+        if (storeOnly()) {
+            return STORE_ONLY_ANSWER;
+        }
         return unwrap(collector.tossIndices(symbols), "수집기에 연결하지 못했습니다.");
     }
+
+    /**
+     * 읽기 모드 store_only(공개 데모)면 화면 조회로 토스를 부르지 않습니다 — 운영자의 토스 키로 외부를 부르게 되기 때문입니다
+     * (ADR 0012, QA-022). 진단은 운영자만 부르는 명시적 동작이라 그대로 둡니다.
+     */
+    private boolean storeOnly() {
+        return store.readMode() == AppProperties.ReadMode.STORE_ONLY;
+    }
+
+    private static final Map<String, Object> STORE_ONLY_ANSWER = Map.of("ok", false, "skipped", true,
+            "message", "store_only 모드에서는 토스 실시간 조회를 하지 않습니다.");
 
     private static Map<String, Object> unwrap(Optional<JsonNode> payload, String failureMessage) {
         if (payload.isEmpty()) {
