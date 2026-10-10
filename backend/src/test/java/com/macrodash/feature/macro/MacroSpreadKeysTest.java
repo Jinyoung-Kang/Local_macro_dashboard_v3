@@ -5,6 +5,7 @@ import com.macrodash.config.AppProperties;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -50,7 +51,11 @@ class MacroSpreadKeysTest {
             """;
 
     private Map<String, Object> overview() throws Exception {
-        JsonNode payload = MAPPER.readTree(PAYLOAD);
+        return overview(PAYLOAD);
+    }
+
+    private Map<String, Object> overview(String json) throws Exception {
+        JsonNode payload = MAPPER.readTree(json);
         StoreReader store = mock(StoreReader.class);
         when(store.readMode()).thenReturn(AppProperties.ReadMode.STORE_ONLY);
         when(store.read(anyString(), anyLong(), anyString()))
@@ -97,5 +102,25 @@ class MacroSpreadKeysTest {
                     .as("%s: 만기는 longKey/shortKey로만 알려야 합니다", block)
                     .doesNotContainKeys("us02y", "us10y", "us30y");
         }
+    }
+
+    @Test
+    @Disabled("QA-060: 이전 금리로 계산한 스프레드에 표시가 없음 — 수정 커밋에서 켬")
+    @DisplayName("QA-060: 이어받은(이전) 금리로 계산한 실시간 스프레드는 isStale을 단다")
+    void spreadFromCarriedRateIsMarkedStale() throws Exception {
+        Map<String, Object> spreads = child(overview("""
+                {
+                  "categories": [],
+                  "rates": {
+                    "us02y": {"current": 3.60, "previous": 3.55, "isStale": false},
+                    "us10y": {"current": 4.10, "previous": 4.00, "isStale": true},
+                    "us30y": {"current": 4.70, "previous": 4.65, "isStale": false}
+                  }
+                }
+                """), "spreads");
+
+        assertThat(child(spreads, "realtime").get("isStale")).isEqualTo(true);
+        assertThat(child(child(spreads, "official10y2y"), "scraped").get("isStale")).isEqualTo(true);
+        assertThat(child(child(spreads, "official30y2y"), "scraped").get("isStale")).isEqualTo(false);
     }
 }

@@ -372,6 +372,27 @@ def test_QA001_partial_failure_keeps_previous_card_values(store, monkeypatch):
     assert "이전 값" in detail
 
 
+@pytest.mark.xfail(strict=True, reason="QA-060: 이어받은 금리에 isStale이 없음 — 수정 커밋에서 뺌")
+def test_QA060_이어받은_카드의_스프레드용_금리도_이전_값으로_표시한다(store, monkeypatch):
+    """카드는 '이전 값'인데 스프레드용 금리는 표시 없이 이어받아, 백엔드가 이전 금리로 '실시간' 스프레드를 냈습니다."""
+    store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, {
+        "categories": [{"id": "ust", "items": [_card("us10y", 4.12), _card("us02y", 3.60)]}],
+        "rates": {"us10y": {"current": 4.12, "previous": 4.10, "isStale": False}},
+    })
+    monkeypatch.setattr(tasks.market_service, "collect_macro_cards", lambda categories: {
+        "categories": [{"id": "ust", "items": [_card("us10y", None, status="fail"), _card("us02y", 3.62)]}],
+        "rates": {"us02y": {"current": 3.62, "previous": 3.60, "isStale": False}},
+    })
+    monkeypatch.setattr(tasks.market_service, "now_kst_text", lambda: "now")
+    monkeypatch.setattr(tasks.macro_cards, "apply_bond_override", lambda payload: payload)
+    monkeypatch.setattr(tasks.macro_cards, "inject_scraped_indices", lambda payload: payload)
+
+    tasks.task_macro_collected()
+
+    rates = store.read_snapshot(catalog.SNAP_MACRO_COLLECTED).payload["rates"]
+    assert rates["us10y"]["current"] == 4.12 and rates["us10y"]["isStale"] is True
+    assert rates["us02y"]["isStale"] is False
+
 def test_QA001_failed_card_without_previous_value_stays_failed(store, monkeypatch):
     """직전 저장본에도 없던 카드는 그대로 실패입니다 — 없는 숫자를 만들지 않습니다."""
     store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, {"categories": [{"id": "fx", "items": [_card("dxy", 98.1)]}], "rates": {}})
