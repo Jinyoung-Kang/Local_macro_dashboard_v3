@@ -285,7 +285,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 > 막습니다 — SEC는 연락이 닿지 않는 요청을 차단합니다.
 >
 > ```ini
-> SEC_USER_AGENT=hong@naver.com          # ✅
+> SEC_USER_AGENT=gildong.hong@<본인 도메인>   # ✅ 본인이 실제로 받는 영문 주소
 > SEC_USER_AGENT=이메일@이메일.com        # ❌ 한글 불가
 > SEC_USER_AGENT=your-name@example.com   # ❌ 예시 값
 > ```

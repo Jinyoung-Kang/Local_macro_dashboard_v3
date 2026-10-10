@@ -255,11 +255,11 @@ def test_이메일이_아니면_막는다(monkeypatch):
 
 def test_통과한_값은_헤더로_인코딩된다(monkeypatch):
     """검증을 통과했다면 requests가 실제로 보낼 수 있어야 합니다."""
-    monkeypatch.setenv("SEC_USER_AGENT", "hong@naver.com")
+    monkeypatch.setenv("SEC_USER_AGENT", "hong@example.com")
 
     ua = http.sec_user_agent()
     ua.encode("latin-1")          # 여기서 터지면 검증이 헛돈 것입니다
-    assert "hong@naver.com" in ua
+    assert "hong@example.com" in ua
 
 
 def test_미설정_오류도_같은_계열로_잡힌다(monkeypatch):
