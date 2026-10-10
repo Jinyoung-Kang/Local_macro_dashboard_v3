@@ -139,6 +139,36 @@ class AiReportFlowTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("QA-021 재현 — 수정 전에는 과금된 실패(거절 유도)도 되돌려 데모 상한 없이 반복 과금")
+    @DisplayName("QA-021 모델이 응답한 뒤의 실패(과금됨)는 한도를 되돌리지 않는다 — 거절을 유도해 상한 없이 부르지 못하게")
+    void chargedFailureIsNotRefunded() {
+        com.macrodash.store.UsageStore store = mock(com.macrodash.store.UsageStore.class);
+        when(ai.generate(anyString(), anyString(), anyString()))
+                .thenReturn(Map.of("status", false, "error", "Claude가 이 요청을 거절했습니다(refusal)", "charged", true));
+        AiController controller = controllerWithDemoLimit(store, 2);
+
+        Map<String, Object> out = controller.report(new AiController.ReportRequest("anthropic_haiku", null, null), demoRequest());
+
+        assertThat(out).containsEntry("status", false)
+                .containsEntry("quota", Map.of("used", 1, "limit", 2, "shared", true));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Disabled("QA-021 재현 — 수정 전에는 차감 뒤 예외가 나면 되돌리지 않는다")
+    @DisplayName("QA-021 한도를 쓴 뒤 원본 텍스트를 만들다 예외가 나면 엔진을 부르지 않았으므로 되돌린다")
+    void exceptionBeforeCallingEngineIsRefunded() {
+        com.macrodash.store.UsageStore store = mock(com.macrodash.store.UsageStore.class);
+        when(snapshotText.fullText()).thenThrow(new IllegalStateException("DB 일시 장애"));
+        com.macrodash.feature.auth.UsageService usage = new com.macrodash.feature.auth.UsageService(store, 20, 1);
+        AiController controller = new AiController(ai, new AiReportService(ai, snapshotText, usage));
+
+        assertThatThrownBy(() -> controller.report(new AiController.ReportRequest("anthropic_haiku", null, null),
+                demoRequest())).isInstanceOf(IllegalStateException.class);
+        assertThat(usage.demoQuota().used()).as("되돌림").isZero();
+        verify(ai, never()).generate(anyString(), anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("엔진 목록: 데모 열람에게만 공용 한도의 오늘 사용량(quota)을 함께 준다")
     void enginesCarryDemoQuotaOnlyForDemo() {
         when(ai.engines()).thenAnswer(invocation -> new LinkedHashMap<>(Map.of("enabled", true)));

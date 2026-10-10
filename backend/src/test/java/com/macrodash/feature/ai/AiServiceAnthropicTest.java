@@ -116,6 +116,24 @@ class AiServiceAnthropicTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("QA-021 재현 — 수정 전에는 결과에 과금 여부가 없어 모든 실패를 되돌린다")
+    @DisplayName("QA-021 모델이 응답한 뒤의 실패(거절)는 과금된 것으로, 거절된 요청(429)·키 없음은 과금되지 않은 것으로 표시한다")
+    void marksWhetherTheFailedCallWasCharged() throws Exception {
+        String refused = startServer(200, message("[]", "refusal", ""));
+        assertThat(service(refused, "test-key").generate("anthropic_haiku", "질문", null))
+                .containsEntry("status", false).containsEntry("charged", true);
+        stop();
+
+        String limited = startServer(429,
+                "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}");
+        assertThat(service(limited, "test-key").generate("anthropic_haiku", "질문", null))
+                .containsEntry("status", false).containsEntry("charged", false);
+
+        assertThat(service(limited, "").callAnthropic("Claude", MODEL, "질문", null, 30))
+                .containsEntry("status", false).containsEntry("charged", false);
+    }
+
+    @Test
     @DisplayName("사고만 하다 출력 한도에 걸려 텍스트가 없으면 그 이유를 말한다")
     void explainsMaxTokensWithoutText() throws Exception {
         String base = startServer(200, message("[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"sig\"}]",
