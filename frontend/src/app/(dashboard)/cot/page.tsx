@@ -56,6 +56,7 @@ export default function CotPage() {
         <Freshness
           collectedAt={overview.data?.collectedAtKst}
           ageSeconds={overview.data?.ageSeconds}
+          refreshError={overview.refreshError}
         />
       </header>
 
@@ -65,6 +66,7 @@ export default function CotPage() {
 
       <Card title="자산별 요약" source={SOURCES.cftc} subtitle="스마트머니(비상업) 순포지션과 최근 변화">
         {overview.loading && !overview.data && <Loading />}
+        {overview.error && <ErrorState message={overview.error} onRetry={overview.reload} />}
         {overview.data && (
           <Table
             rows={overview.data.assets ?? []}

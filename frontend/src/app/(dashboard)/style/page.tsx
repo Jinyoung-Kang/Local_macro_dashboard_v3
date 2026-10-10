@@ -315,7 +315,7 @@ function RiskCard() {
   const [benchmark, setBenchmark] = useState("SPY");
   const [years, setYears] = useState("1");
 
-  const { data, loading, error, reload } = useApi<GuruRiskResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<GuruRiskResponse>(
     endpoints.institution.guruRisk(cik, benchmark, years),
   );
 
@@ -331,6 +331,7 @@ function RiskCard() {
           collectedAt={data?.collectedAtKst}
           ageSeconds={data?.ageSeconds}
           stale={data?.stale}
+          refreshError={refreshError}
         />
       }
     >
@@ -514,7 +515,7 @@ function RiskCard() {
 function HoldersCard() {
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
-  const { data, loading } = useApi<GuruHoldersResponse>(
+  const { data, loading, error, reload } = useApi<GuruHoldersResponse>(
     query ? endpoints.institution.guruHolders(query) : null,
   );
 
@@ -543,6 +544,7 @@ function HoldersCard() {
       </form>
 
       {loading && query && <Loading />}
+      {error && <ErrorState message={error} onRetry={reload} />}
       {data && !data.available && <EmptyState message={data.message ?? "결과가 없습니다."} />}
 
       {(data?.rows?.length ?? 0) > 0 && (

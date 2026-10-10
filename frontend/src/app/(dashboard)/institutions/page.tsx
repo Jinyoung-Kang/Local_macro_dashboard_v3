@@ -45,7 +45,7 @@ export default function InstitutionsPage() {
   const [quarters, setQuarters] = useState("8");
   const [topN, setTopN] = useState("30");
 
-  const { data, loading, error, reload } = useApi<PortfolioResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<PortfolioResponse>(
     endpoints.institution.portfolio(cik, quarters, topN),
   );
   // 매크로 화면이 이미 수집하는 원/달러를 그대로 씁니다. 여기서 따로 받아 오면
@@ -74,7 +74,7 @@ export default function InstitutionsPage() {
             SEC EDGAR 공식 공시 · 분기 공시, 공시 마감 45일 지연
           </p>
         </div>
-        <Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} />
+        <Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} refreshError={refreshError} />
       </header>
 
       <Card>

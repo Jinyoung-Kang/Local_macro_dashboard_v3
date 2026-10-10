@@ -30,7 +30,7 @@ export default function SectorPage() {
   const [period, setPeriod] = useState("1M");
   const [mode, setMode] = useState<"return" | "alpha">("return");
 
-  const { data, loading, error, reload } = useApi<SectorResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<SectorResponse>(
     endpoints.macro.sectorRotation(period),
     300_000,
   );
@@ -58,6 +58,7 @@ export default function SectorPage() {
           collectedAt={data?.collectedAtKst}
           ageSeconds={data?.ageSeconds}
           stale={data?.stale}
+          refreshError={refreshError}
         />
       </header>
 

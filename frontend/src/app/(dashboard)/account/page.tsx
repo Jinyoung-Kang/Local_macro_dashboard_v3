@@ -142,17 +142,21 @@ export default function AccountPage() {
         {others.result && <Banner tone="info">다른 기기 {others.result.revoked}곳의 로그인을 끊었습니다.</Banner>}
         {others.error && <Banner tone="warn">{others.error}</Banner>}
         {sessions.error && <ErrorState message={sessions.error} onRetry={sessions.reload} />}
-        <Table<LoginSession>
-          rows={sessions.data?.sessions ?? []}
-          rowKey={(row) => row.id}
-          emptyMessage="로그인한 기기가 없습니다."
-          columns={[
-            { key: "device", header: "기기", render: (row) => (row.current ? "🟢 지금 이 기기" : row.userAgent ?? "알 수 없음") },
-            { key: "lastSeen", header: "마지막 사용", render: (row) => formatKst(row.lastSeenAt) },
-            { key: "created", header: "로그인", render: (row) => formatKst(row.createdAt) },
-            { key: "expires", header: "만료", render: (row) => formatKst(row.expiresAt) },
-          ]}
-        />
+        {sessions.loading && !sessions.data && <Loading />}
+        {/* 목록을 받기 전에는 '로그인한 기기가 없습니다'가 아닙니다(QA-050). */}
+        {sessions.data && (
+          <Table<LoginSession>
+            rows={sessions.data?.sessions ?? []}
+            rowKey={(row) => row.id}
+            emptyMessage="로그인한 기기가 없습니다."
+            columns={[
+              { key: "device", header: "기기", render: (row) => (row.current ? "🟢 지금 이 기기" : row.userAgent ?? "알 수 없음") },
+              { key: "lastSeen", header: "마지막 사용", render: (row) => formatKst(row.lastSeenAt) },
+              { key: "created", header: "로그인", render: (row) => formatKst(row.createdAt) },
+              { key: "expires", header: "만료", render: (row) => formatKst(row.expiresAt) },
+            ]}
+          />
+        )}
       </Card>
     </div>
   );

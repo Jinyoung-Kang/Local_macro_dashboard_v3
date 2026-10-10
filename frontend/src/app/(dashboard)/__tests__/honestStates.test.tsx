@@ -60,7 +60,7 @@ describe("QA-046 수급 레이더 — 이력 조회가 실패하면 '이력 없�
 
 describe("QA-050 실패·로딩을 '없음'으로 보이지 않는다", () => {
   // 수정 전에는 COT 개요 조회의 오류를 받지 않아 카드가 빈 채로 남았다.
-  it.fails("COT 개요 조회가 실패하면 오류를 보인다", async () => {
+  it("COT 개요 조회가 실패하면 오류를 보인다", async () => {
     reads["/api/cot/overview"] = () => Promise.reject(new Error("요청 실패 (HTTP 503)"));
 
     render(<CotPage />);
@@ -69,12 +69,23 @@ describe("QA-050 실패·로딩을 '없음'으로 보이지 않는다", () => {
   });
 
   // 수정 전에는 알림함을 읽는 동안(그리고 오류에도) '아직 알림이 없습니다'와 '읽지 않은 알림 0건'이 보였다.
-  it.fails("알림함을 읽는 동안에는 '아직 알림이 없습니다'·'0건'이 아니다", async () => {
+  it("알림함을 읽는 동안에는 '아직 알림이 없습니다'·'0건'이 아니다", async () => {
     reads["/api/alerts/rules"] = () => Promise.resolve({ available: true, rules: [] });   // 알림함만 읽는 중
     render(<AlertsPage />);
     await screen.findByText("알림함");
 
     expect(screen.queryByText(/아직 알림이 없습니다/)).toBeNull();
     expect(screen.queryByText(/읽지 않은 알림 0건/)).toBeNull();
+  });
+});
+
+describe("QA-050 자동 갱신이 실패하면 수집 시각 배지 옆에 알린다", () => {
+  it("refreshError가 있으면 '새로 읽지 못함'(이유는 title), 없으면 보이지 않는다", async () => {
+    const { Freshness } = await import("@/components/ui");
+    const { rerender } = render(<Freshness collectedAt="2026-10-11 09:00 KST" refreshError="백엔드 API에 연결하지 못했습니다" />);
+    expect(screen.getByText("⚠️ 새로 읽지 못함").getAttribute("title")).toContain("백엔드 API에 연결하지 못했습니다");
+
+    rerender(<Freshness collectedAt="2026-10-11 09:00 KST" />);
+    expect(screen.queryByText("⚠️ 새로 읽지 못함")).toBeNull();
   });
 });

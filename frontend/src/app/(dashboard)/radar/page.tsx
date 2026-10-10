@@ -58,7 +58,7 @@ export default function RadarPage() {
 
   const query = endpoints.positioning.radarRanking({ market, investor, tradeType, intervalType: interval, topN });
 
-  const { data, loading, error, reload } = useApi<RadarResponse>(query, 60_000);
+  const { data, loading, error, reload, refreshError } = useApi<RadarResponse>(query, 60_000);
 
   const unsupportedInvestors = (options.data?.investors ?? []).filter(
     (value) => options.data?.supportedInvestors && !options.data.supportedInvestors.includes(value),
@@ -87,6 +87,7 @@ export default function RadarPage() {
             collectedAt={data?.collectedAtKst}
             ageSeconds={data?.ageSeconds}
             stale={data?.stale}
+            refreshError={refreshError}
           />
           <Button onClick={reload}>새로고침</Button>
           <Button onClick={() => setShowDiagnostics((value) => !value)}>

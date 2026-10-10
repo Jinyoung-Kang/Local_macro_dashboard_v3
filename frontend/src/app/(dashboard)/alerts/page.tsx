@@ -9,7 +9,7 @@ import { DEMO_READ_ONLY, isDemo } from "@/lib/access";
 import { ALERT_KINDS } from "@/lib/alerts";
 import { apiDelete, apiPost } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
-import { formatKst } from "@/lib/format";
+import { EMPTY, formatKst } from "@/lib/format";
 import type { AlertKind, AlertRule, AlertRulesResponse, InboxItem, InboxResponse } from "@/lib/types";
 
 type Result = { ok: boolean; message: string };
@@ -73,7 +73,7 @@ export default function AlertsPage() {
 
       <Card
         title="알림함"
-        subtitle={`읽지 않은 알림 ${inbox.data?.unread ?? 0}건 · 90일 보관`}
+        subtitle={`읽지 않은 알림 ${inbox.data ? `${inbox.data.unread}건` : EMPTY} · 90일 보관`}
         actions={
           <Button onClick={async () => { await read.run(null); void inbox.reload(); }} disabled={demo || read.busy || !inbox.data?.unread}>
             모두 읽음
@@ -81,7 +81,10 @@ export default function AlertsPage() {
         }
       >
         {inbox.error && <ErrorState message={inbox.error} onRetry={inbox.reload} />}
-        {items.length === 0 ? (
+        {/* 읽는 중·실패에는 '아직 알림이 없습니다'가 아닙니다(QA-050). */}
+        {!inbox.data ? (
+          inbox.loading ? <Loading /> : null
+        ) : items.length === 0 ? (
           <p className="text-xs text-muted">
             {demo ? `아직 알림이 없습니다. ${DEMO_READ_ONLY}(알림 규칙은 계정으로 로그인해야 만들 수 있습니다).`
               : "아직 알림이 없습니다. 아래에서 알림 규칙을 만드세요."}

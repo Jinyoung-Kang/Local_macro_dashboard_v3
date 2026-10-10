@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
-import { Banner, Button, Card, Loading, Select, SourceBadge } from "@/components/ui";
+import { Banner, Button, Card, ErrorState, Loading, Select, SourceBadge } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useElapsedSeconds } from "@/hooks/useElapsedSeconds";
@@ -65,6 +65,8 @@ export default function AiReportPage() {
         </p>
       </header>
 
+      {/* 엔진 목록을 받지 못하면 생성 버튼이 이유 없이 꺼져 있었습니다(QA-050). */}
+      {engines.error && <ErrorState message={engines.error} onRetry={engines.reload} />}
       {engines.data && !engines.data.enabled && (
         <Banner tone="warn">
           AI 키가 하나도 설정되지 않았습니다. Anthropic(Claude) / NVIDIA / Cerebras / Cloudflare 중 하나 이상을

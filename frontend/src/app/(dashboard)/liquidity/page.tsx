@@ -40,7 +40,7 @@ const PERIODS = [
  */
 export default function LiquidityPage() {
   const [years, setYears] = useState("3");
-  const { data, loading, error, reload } = useApi<LiquidityResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<LiquidityResponse>(
     endpoints.macro.liquidity(years),
     300_000,
   );
@@ -73,6 +73,7 @@ export default function LiquidityPage() {
             collectedAt={data?.collectedAtKst}
             ageSeconds={data?.ageSeconds}
             stale={data?.stale}
+            refreshError={refreshError}
           />
         </div>
       </header>

@@ -74,6 +74,7 @@ export default function KrxPage() {
           collectedAt={data?.collectedAtKst}
           ageSeconds={data?.ageSeconds}
           stale={data?.stale}
+          refreshError={futures.refreshError}
         />
       </header>
 
@@ -209,6 +210,7 @@ export default function KrxPage() {
         }
       >
         {trend.loading && !trend.data && <Loading />}
+        {trend.error && <ErrorState message={trend.error} onRetry={trend.reload} />}
         {trend.data && !trend.data.available && (
           <Banner tone="warn">{trend.data.message ?? "투자주체별 수급 데이터가 없습니다."}</Banner>
         )}
@@ -270,6 +272,7 @@ export default function KrxPage() {
         subtitle="장중에만 값이 있습니다."
         source="Daum 금융 시간별 선물 수급 (비공식)"
       >
+        {intraday.error && <ErrorState message={intraday.error} onRetry={intraday.reload} />}
         {intraday.data?.skipped && (
           <Banner tone="info">{intraday.data.message}</Banner>
         )}

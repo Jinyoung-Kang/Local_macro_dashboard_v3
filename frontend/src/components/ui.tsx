@@ -113,17 +113,42 @@ export function Freshness({
   collectedAt,
   ageSeconds,
   stale,
+  refreshError,
 }: {
   /** 백엔드가 KST로 찍어 준 수집 시각 문자열 (collectedAtKst). */
   collectedAt?: string | null;
   ageSeconds?: number | null;
   stale?: boolean;
+  /**
+   * 자동 갱신·다시 읽기가 실패했으면 그 문구(useApi의 refreshError). 화면은 앞서 받은 값을 그대로 보이므로, 그것이
+   * 지금 값이 아니라는 것을 알려야 합니다 — 예전에는 아무 표시가 없었습니다(QA-050).
+   */
+  refreshError?: string | null;
 }) {
-  if (!collectedAt && ageSeconds === undefined) {
+  if (!collectedAt && ageSeconds === undefined && !refreshError) {
     return null;
   }
   const age = formatAge(ageSeconds);
 
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {refreshError && (
+        <span
+          className="inline-flex items-center rounded border border-warn/40 bg-warn/10 px-2 py-0.5 text-[11px] text-warn"
+          title={`${refreshError} — 앞서 받은 값을 보여 줍니다`}
+          role="status"
+        >
+          ⚠️ 새로 읽지 못함
+        </span>
+      )}
+      {(collectedAt || ageSeconds !== undefined) && (
+        <FreshnessBadge collectedAt={collectedAt} age={age} stale={stale} />
+      )}
+    </span>
+  );
+}
+
+function FreshnessBadge({ collectedAt, age, stale }: { collectedAt?: string | null; age: string; stale?: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] ${

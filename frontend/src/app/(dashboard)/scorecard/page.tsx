@@ -32,7 +32,7 @@ export default function ScorecardPage() {
   const [benchmark, setBenchmark] = useState("SPY");
   const [years, setYears] = useState("1");
 
-  const { data, loading, error, reload } = useApi<ScorecardResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<ScorecardResponse>(
     endpoints.insight.scorecard(symbol, benchmark, years),
   );
 
@@ -49,6 +49,7 @@ export default function ScorecardPage() {
           collectedAt={data?.collectedAtKst}
           ageSeconds={data?.ageSeconds}
           stale={data?.stale}
+          refreshError={refreshError}
         />
       </header>
 

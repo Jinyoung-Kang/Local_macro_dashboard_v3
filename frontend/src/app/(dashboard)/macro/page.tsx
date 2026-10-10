@@ -113,6 +113,7 @@ export default function MacroPage() {
             collectedAt={data?.collectedAtKst}
             ageSeconds={data?.ageSeconds}
             stale={data?.stale}
+            refreshError={overview.refreshError}
           />
         </div>
       </header>
