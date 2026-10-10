@@ -203,6 +203,33 @@ class SessionFilterTest {
         }
 
         @Test
+        @org.junit.jupiter.api.Disabled("QA-023 재현 — 수정 전에는 정책을 정규화된 경로로 찾고 처리기는 날것 경로로 찾는다")
+        @DisplayName("QA-023 정규화 전후가 다른 경로(끝의 ..·인코딩된 점·//·;)는 정책 검사 전에 400 — 무료 회원이 운영자 처리기에 닿지 못하게")
+        void nonNormalizedPathIsRejected() throws Exception {
+            WebConfig.SessionFilter on = filter(TOKEN);
+            String[][] cases = {
+                    // {날것 URI, Tomcat이 정규화한 서블릿 경로}
+                    {"/api/status/run/..", "/api/status/"},
+                    {"/api/status/run/%2e%2e", "/api/status/"},
+                    {"/api/admin//users", "/api/admin/users"},
+                    {"/api/admin/users;x=1", "/api/admin/users"},
+                    {"/api/status/./run/x", "/api/status/run/x"},
+            };
+            for (String[] c : cases) {
+                MockHttpServletRequest request = new MockHttpServletRequest("POST", c[0]);
+                request.setServletPath(c[1]);
+                request.setCookies(new Cookie(AuthService.COOKIE_NAME, "member-cookie"));
+                MockHttpServletResponse response = new MockHttpServletResponse();
+                boolean[] reached = {false};
+                on.doFilter(request, response, (req, res) -> reached[0] = true);
+                assertThat(response.getStatus()).as(c[0]).isEqualTo(400);
+                assertThat(reached[0]).as(c[0]).isFalse();
+            }
+            Outcome normal = send(on, "GET", "/api/macro/overview", null, "member-cookie");
+            assertThat(normal.reached()).as("정상 경로는 그대로").isTrue();
+        }
+
+        @Test
         @DisplayName("기능이 꺼져 있으면(기본) 헤더를 보지 않는다 — 같은 값을 보내도 401")
         void headerIgnoredWhenOff() throws Exception {
             WebConfig.SessionFilter off = filter("");
