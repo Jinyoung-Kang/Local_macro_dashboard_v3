@@ -93,6 +93,9 @@ def collect_13f(cik: str, max_quarters: int = 8, previous_quarters: list[dict] |
     missing: list[str] = []
     for filing_date, doc_url in links:
         holdings = _collect_one_filing(session, filing_date, doc_url)
+        if holdings is UNUSABLE_FILING:
+            logger.info("13F 공시에 쓸 보유가 없어 건너뜀 (%s %s)", cik, filing_date)
+            continue
         if holdings is None:
             kept = previous_by_filing.get(filing_date)
             if kept is None:
@@ -153,7 +156,15 @@ def _parse_filing_links(html: str, max_quarters: int) -> list[tuple[str, str]]:
     return links
 
 
+# 다시 받아도 쓸 수 없는 공시(정보표 XML이 없거나 롱 보유가 0건 — 옵션 행뿐). 일시 실패(None)와 구분합니다(QA-059).
+UNUSABLE_FILING: dict = {"unusable": True}
+
+
 def _collect_one_filing(session, filing_date: str, doc_url: str) -> dict | None:
+    """
+    공시 하나의 보유 목록. 네트워크 실패는 None(일시 실패 — 이어받거나 기관을 실패로),
+    공시 자체에 쓸 것이 없으면 ``UNUSABLE_FILING``(건너뜀)입니다.
+    """
     try:
         sec_rate_limit()
         res = session.get(doc_url, timeout=30)
@@ -164,7 +175,7 @@ def _collect_one_filing(session, filing_date: str, doc_url: str) -> dict | None:
 
     xml_url = _find_information_table_url(res.text)
     if not xml_url:
-        return None
+        return UNUSABLE_FILING
     # 보고 분기는 공시 색인의 'Period of Report'가 정답입니다. 없을 때만 제출일로 추정합니다.
     report_date = _parse_period_of_report(res.text) or _estimate_report_date(filing_date)
 
@@ -178,7 +189,7 @@ def _collect_one_filing(session, filing_date: str, doc_url: str) -> dict | None:
 
     holdings = _parse_information_table(xml_res.content, filing_date)
     if not holdings:
-        return None
+        return UNUSABLE_FILING
 
     total = sum(h["value"] for h in holdings)
 
