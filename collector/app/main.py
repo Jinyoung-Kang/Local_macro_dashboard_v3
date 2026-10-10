@@ -378,7 +378,9 @@ def live_radar(
     # 과거 날짜 요청이면 저장본을 건너뛰지만, 그 결과를 기본 이름에 저장하면 다음
     # 15분 동안 5행짜리나 과거 랭킹이 '현재 랭킹'으로 나가고 이력에도 쌓입니다.
     is_default_query = requested is None and topN == RADAR_DEFAULT_TOP_N
-    if result.get("rows") and is_default_query:
+    # 요청한 기간과 실제로 받은 기간이 다르면(기관 5일 → Daum 당일) 요청한 이름에 쓰지 않습니다(QA-028).
+    same_interval = result.get("intervalType", intervalType) == intervalType
+    if result.get("rows") and is_default_query and same_interval:
         store.put_snapshot(
             catalog.snap_radar_scanner(market, investor, tradeType, intervalType),
             result,

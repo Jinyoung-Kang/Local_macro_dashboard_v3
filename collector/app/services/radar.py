@@ -137,7 +137,8 @@ def collect_radar_ranking(
             top_n, interval_type,
         )
         if rows:
-            return _result(rows, "daum")
+            # 기관은 Daum이 당일만 주므로 실제로 받은 기간을 밝힙니다(QA-028).
+            return _result(rows, "daum", daum_interval(investor, interval_type))
         logger.warning(
             "Daum 기간별(%s) 조회 실패. 당일 데이터로 자동 전환합니다.", interval_type
         )
@@ -198,7 +199,7 @@ def collect_radar_ranking(
             "수급 레이더: 외부 소스가 모두 실패해 누적 이력으로 대체합니다 (%s행)",
             len(history["rows"]),
         )
-        return history
+        return {**history, "intervalType": interval_type}
 
     reasons = diagnose_sources(investor)
     logger.error(
@@ -211,6 +212,7 @@ def collect_radar_ranking(
         "source": None,
         "sourceKind": "none",
         "isHistorical": False,
+        "intervalType": interval_type,
         "rows": [],
         # 왜 실패했는지 화면까지 전달합니다.
         #
@@ -281,13 +283,27 @@ def diagnose_sources(investor: str) -> list[str]:
     return reasons
 
 
-def _result(rows: list[dict], kind: str) -> dict:
+def _result(rows: list[dict], kind: str, interval_type: str = "TODAY") -> dict:
+    """
+    ``intervalType``은 **실제로 받은** 기간입니다. 기간(5일·20일) 요청이 당일 데이터로 바뀌었으면 TODAY —
+    저장하는 쪽이 요청한 기간 이름에 당일 금액을 쌓지 않게 합니다(QA-028).
+    """
     return {
         "source": rows[0].get("source") if rows else None,
         "sourceKind": kind,
         "isHistorical": False,
+        "intervalType": interval_type,
         "rows": rows,
     }
+
+
+def daum_interval(investor: str, interval_type: str) -> str:
+    """Daum이 실제로 주는 기간. 모르는 기간과 기관합계의 기간 누적(검증되지 않은 응답)은 당일입니다."""
+    if interval_type not in INTERVAL_LABELS:
+        return "TODAY"
+    if investor == "기관" and interval_type != "TODAY":
+        return "TODAY"
+    return interval_type
 
 
 # ==============================================================================
@@ -312,11 +328,10 @@ def fetch_daum_ranking(
         logger.warning("Daum 미지원 투자주체: %s (지원: 외국인, 기관)", investor)
         return []
 
-    if interval_type not in INTERVAL_LABELS:
-        interval_type = "TODAY"
-    if investor == "기관" and interval_type != "TODAY":
+    effective = daum_interval(investor, interval_type)
+    if investor == "기관" and effective != interval_type:
         logger.warning("Daum 기관합계는 당일만 지원합니다. TODAY로 전환합니다.")
-        interval_type = "TODAY"
+    interval_type = effective
 
     market_param = "KOSPI" if ("KOSPI" in market.upper() or "코스피" in market) else "KOSDAQ"
 

@@ -245,7 +245,6 @@ def test_history_fallback_receives_the_requested_interval(monkeypatch):
     assert seen["interval"] == "DAYS_5"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-028: 결과가 실제로 쓴 기간을 밝히지 않음")
 def test_QA028_기관_기간_요청은_당일로_받았다고_밝힌다(monkeypatch):
     """Daum은 기관합계의 5일·20일을 지원하지 않아 당일로 받습니다. 결과가 그 사실을 밝혀야 저장하는 쪽이 거를 수 있습니다."""
     monkeypatch.setattr(radar, "fetch_daum_ranking", lambda *a, **k: _rows("Daum API (기관, 당일, 20260911)"))
@@ -256,7 +255,6 @@ def test_QA028_기관_기간_요청은_당일로_받았다고_밝힌다(monkeypa
     assert result["intervalType"] == "TODAY"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-028: 결과가 실제로 쓴 기간을 밝히지 않음")
 def test_QA028_기간_조회가_실패해_당일로_바뀌면_밝힌다(monkeypatch):
     monkeypatch.setattr(radar, "is_regular_session", lambda now=None: False)
 

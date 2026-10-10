@@ -59,7 +59,6 @@ def test_시장_이름은_대문자로_정규화하고_모르면_400이다(clien
     assert client.get("/live/radar?market=NYSE").status_code == 400
 
 
-@pytest.mark.xfail(strict=True, reason="QA-028: 실제로 쓴 기간이 요청과 달라도 요청한 이름으로 저장")
 def test_QA028_다른_기간으로_받은_결과는_요청한_이름으로_저장하지_않는다(client, monkeypatch, spies):
     """기관 5일 요청을 Daum이 당일로 받으면, 하루치 금액이 '5거래일 누적' 저장본·이력에 쌓였습니다."""
     rows = [{"rank": 1, "code": "005930", "name": "삼성전자", "netAmountEok": 300.0, "source": "Daum"}]
