@@ -12,12 +12,24 @@ export interface AiEngine {
   description: string;
   /** 예상 응답 속도 — 추론형 모델이 왜 느린지 고르기 전에 알려 줍니다. */
   speedHint?: string;
+  /** 이 배포에서 허용됐고 키도 있는가(ADR 0014). */
   available: boolean;
+  /** 못 쓰는 이유 — 허용 목록 밖(`not_allowed`)·키 없음(`no_key`). 쓸 수 있으면 null. */
+  unavailableReason?: "not_allowed" | "no_key" | null;
+}
+
+/** 오늘(KST) AI 리포트 사용량. limit이 null이면 한도 없음(운영자), shared면 데모 방문자 전체가 함께 쓰는 한도. */
+export interface AiQuota {
+  used: number;
+  limit: number | null;
+  shared?: boolean;
 }
 
 export interface AiEngines {
   engines: AiEngine[];
   enabled: boolean;
+  /** 데모 열람에게만 — 방문자 전체가 함께 쓰는 하루 한도의 오늘 사용량(ADR 0014). */
+  quota?: AiQuota;
   /** 엔진을 직접 골랐을 때의 대기 한도(초). */
   timeoutSeconds?: number;
   /** 자동 탐색에서 엔진 하나를 기다리는 한도(초). */
@@ -49,6 +61,6 @@ export interface AiResponse {
   reportType?: string;
   /** 사용 토큰 수 — 지금은 Claude 엔진만 내려보냅니다. */
   usage?: { inputTokens: number; outputTokens: number };
-  /** 오늘(KST) AI 리포트 사용량. limit이 null이면 한도 없음(운영자). */
-  quota?: { used: number; limit: number | null };
+  /** 오늘(KST) AI 리포트 사용량. limit이 null이면 한도 없음(운영자), shared면 데모 공용 한도. */
+  quota?: AiQuota;
 }

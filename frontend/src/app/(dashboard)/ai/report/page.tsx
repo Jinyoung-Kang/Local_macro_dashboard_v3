@@ -7,7 +7,8 @@ import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useElapsedSeconds } from "@/hooks/useElapsedSeconds";
 import { useSessionUser } from "@/hooks/useSessionUser";
-import { DEMO_READ_ONLY, isDemo } from "@/lib/access";
+import { isDemo } from "@/lib/access";
+import { defaultEngineId, demoQuotaNote, engineOptions, quotaLabel } from "@/lib/aiEngines";
 import { apiPost } from "@/lib/api";
 import { formatKst } from "@/lib/format";
 import type { AiEngines, AiResponse, SnapshotText } from "@/lib/types";
@@ -22,7 +23,8 @@ import { ReportView } from "./ReportView";
  * 추정치·대용 지표에는 경고 문구가 함께 들어가므로, AI가 실제 지표의 임계치를
  * 추정치에 적용하는 것을 막습니다.
  *
- * 데모 열람(ADR 0013)은 읽기 전용이라 리포트 생성(POST)을 막습니다 — 원본 데이터 보기·복사는 그대로 씁니다.
+ * 데모 열람(ADR 0013)도 리포트를 만들 수 있습니다 — 방문자 전체가 하루 한도를 함께 씁니다(ADR 0014). 다른 쓰기는
+ * 그대로 막혀 있습니다. 배포가 엔진을 좁혔으면(AI_ENGINES) 못 쓰는 엔진은 이유를 붙여 막고, 쓸 수 있는 첫 엔진을 고릅니다.
  */
 export default function AiReportPage() {
   const demo = isDemo(useSessionUser());
@@ -30,7 +32,9 @@ export default function AiReportPage() {
   const reportTypes = useApi<{ types: string[] }>(endpoints.ai.reportTypes);
   const snapshot = useApi<SnapshotText>(endpoints.snapshot.text);
 
-  const [engineId, setEngineId] = useState("auto");
+  // 고르기 전에는 목록이 정한 기본값(자동 탐색, 못 쓰면 쓸 수 있는 첫 엔진)을 씁니다.
+  const [pickedEngine, setPickedEngine] = useState<string | null>(null);
+  const engineId = pickedEngine ?? defaultEngineId(engines.data?.engines);
   const [reportType, setReportType] = useState("");
   const [extra, setExtra] = useState("");
   const [showData, setShowData] = useState(false);
@@ -73,15 +77,10 @@ export default function AiReportPage() {
           <Select
             label="AI 엔진"
             value={engineId}
-            onChange={setEngineId}
-            options={(engines.data?.engines ?? []).map((engine) => ({
-              value: engine.id,
-              // 고르기 전에 속도를 보여 줍니다. 추론형 모델이 느린 것은 고장이
-              // 아니라 그 모델의 성질인데, 목록만 보면 알 수 없었습니다.
-              label: `${engine.label}${engine.speedHint ? ` · ${engine.speedHint}` : ""}${
-                engine.available ? "" : " (키 없음)"
-              }`,
-            }))}
+            onChange={setPickedEngine}
+            // 고르기 전에 속도를 보여 줍니다. 추론형 모델이 느린 것은 고장이
+            // 아니라 그 모델의 성질인데, 목록만 보면 알 수 없었습니다.
+            options={engineOptions(engines.data?.engines ?? [])}
           />
           <Select
             label="리포트 종류"
@@ -120,11 +119,13 @@ export default function AiReportPage() {
           <Button
             variant="primary"
             onClick={generate}
-            disabled={demo || busy || !engines.data?.enabled}
+            disabled={busy || !engines.data?.enabled}
           >
             {busy ? `생성 중… ${elapsed}초 경과` : "🚀 리포트 생성"}
           </Button>
-          {demo && <span className="text-xs text-muted">{DEMO_READ_ONLY}</span>}
+          {demo && (
+            <span className="text-xs text-muted">{demoQuotaNote(result?.quota ?? engines.data?.quota)}</span>
+          )}
           {!demo && engines.data && !engines.data.enabled && (
             <span className="text-xs text-muted">
               사용할 수 있는 AI 엔진이 없습니다 — .env에 ANTHROPIC·NVIDIA·Cloudflare·Cerebras 키 중 하나를 넣고 make up 하세요.
@@ -175,9 +176,7 @@ export default function AiReportPage() {
                     ? `토큰 입력 ${result.usage.inputTokens.toLocaleString("ko-KR")} · 출력 ${result.usage.outputTokens.toLocaleString("ko-KR")}`
                     : null,
                   result.translationInfo ?? null,
-                  result.quota
-                    ? `오늘 ${result.quota.used}/${result.quota.limit ?? "무제한"}건`
-                    : null,
+                  result.quota ? quotaLabel(result.quota) : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")

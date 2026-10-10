@@ -53,9 +53,10 @@ export function AiEngineSection() {
               {
                 key: "available",
                 header: "키",
+                // available은 "허용됐고 키도 있음"입니다(ADR 0014). 허용 목록 밖이면 키가 있어도 쓰지 않으므로 따로 적습니다.
                 render: (row) => (
                   <span className={row.available ? "text-ok" : "text-muted"}>
-                    {row.available ? "설정됨" : "없음"}
+                    {row.available ? "설정됨" : row.unavailableReason === "not_allowed" ? "이 배포에서 사용 안 함" : "없음"}
                   </span>
                 ),
               },

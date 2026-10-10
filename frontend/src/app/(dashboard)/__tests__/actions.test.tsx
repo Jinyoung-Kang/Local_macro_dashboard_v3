@@ -33,7 +33,9 @@ import StatusPage from "../status/page";
 
 const ENGINES = {
   enabled: true,
-  engines: [{ id: "auto", label: "자동", provider: "auto", model: null, description: "", available: true }],
+  engines: [
+    { id: "auto", label: "자동", provider: "auto", model: null, description: "", available: true, unavailableReason: null },
+  ],
 };
 
 /** useApi가 읽는 저장본(경로별). */
@@ -132,6 +134,43 @@ describe("🔌 토스 연결 테스트", () => {
 });
 
 describe("🤖 AI 리포트", () => {
+  it("배포가 엔진을 좁혔으면(AI_ENGINES) 못 쓰는 엔진은 이유를 붙여 막고, 쓸 수 있는 첫 엔진으로 부른다", async () => {
+    api.apiGetShared.mockImplementation((path: string) =>
+      path === "/api/ai/engines"
+        ? Promise.resolve({
+            enabled: true,
+            engines: [
+              { id: "auto", label: "자동", provider: "auto", model: null, description: "", available: false,
+                unavailableReason: "not_allowed" },
+              { id: "anthropic_haiku", label: "Claude", provider: "anthropic", model: "claude-haiku-5-5", description: "",
+                available: true, unavailableReason: null },
+              { id: "nvidia_nemotron", label: "Nemotron", provider: "nvidia", model: null, description: "", available: false,
+                unavailableReason: "not_allowed" },
+              { id: "cerebras_llama", label: "Cerebras", provider: "cerebras", model: null, description: "", available: false,
+                unavailableReason: "no_key" },
+            ],
+          })
+        : path in READS ? Promise.resolve(READS[path]) : new Promise(() => {}),
+    );
+    api.apiPost.mockResolvedValue({ status: true, response: "리포트 본문", reportType: "종합 매크로 브리핑" });
+    render(<AiReportPage />);
+
+    const select = (await screen.findByLabelText("AI 엔진")) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe("anthropic_haiku"));
+    const options = Array.from(select.options).map((option) => [option.value, option.textContent, option.disabled]);
+    expect(options).toEqual([
+      ["auto", "자동 (이 배포에서 사용 안 함)", true],
+      ["anthropic_haiku", "Claude", false],
+      ["nvidia_nemotron", "Nemotron (이 배포에서 사용 안 함)", true],
+      ["cerebras_llama", "Cerebras (키 없음)", true],
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "🚀 리포트 생성" }));
+    expect(api.apiPost).toHaveBeenCalledWith("/api/ai/report", {
+      engineId: "anthropic_haiku", reportType: "종합 매크로 브리핑", extraInstruction: "",
+    });
+  });
+
   it("첫 번째 리포트 종류로 부르고, 생성 중에는 경과 초를 센다", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const reply = deferred<unknown>();
