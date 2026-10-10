@@ -16,3 +16,11 @@
 - 원인: tailwindcss 3(chokidar·micromatch)과 eslint-config-next(`@next/eslint-plugin-next` → fast-glob 3.3.1 → micromatch)가 끌어옴. eslint-config-next는 15.5.27·16.4.0 모두 fast-glob 3.3.1 고정이라 Tailwind 4로 가도 남음.
 - 선택: 손대지 않음. Dependabot 알림 #1은 GitHub가 이미 `auto_dismissed`. CI의 `npm audit --omit=dev --audit-level=high`는 운영 의존성만 봐서 통과.
 - 이유: 운영 이미지(`npm ci --omit=dev`)에 없고, braces가 펼치는 패턴은 우리 설정의 glob(`./src/**/*.{ts,tsx}` 등)뿐이라 외부 입력이 닿지 않음. braces 수정판이 나오면 lockfile만 갱신(micromatch `^3.0.3`·chokidar `~3.0.2` 범위 안이면).
+
+## 2026-10-10 · braces 알림(GHSA-vfj7-8cjw-p6xm)이 다시 열려 직접 닫음
+
+- 문제: 2026-10-08에 GitHub가 자동으로 닫았던(`auto_dismissed`) Dependabot 알림 #1이 2026-10-09 15:36 UTC에 다시 열림.
+- 원인: 같은 시각 세 저장소가 함께 다시 열림 — 저장소를 비공개로 돌리면서 자동 분류 규칙이 더는 닫아 두지 않는 것으로 봄(시각으로 한 추정, 문서로는 확인 못함).
+- 선택: `tolerable_risk`로 직접 dismiss(댓글에 이 항목). 근거는 위 2026-10-08 항목 그대로 — 수정판 없음, 상류는 고칠 계획이 없다고 답함(micromatch/braces#70, 잠김).
+- 이유: dev 의존성(tailwindcss 3 → chokidar · micromatch)이고 `npm ls braces --omit=dev` 0건, 펼치는 패턴은 우리 설정의 glob뿐. 닫은 알림은 수정판이 나와도 다시 열리지 않을 수 있어 Tailwind 4 이전 때 함께 확인.
+
