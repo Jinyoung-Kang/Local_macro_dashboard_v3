@@ -114,4 +114,14 @@ class LoginThrottleTest {
         assertThat(first.get().accepted()).isFalse();
         assertThat(first.get().busy()).isFalse();
     }
+
+    @Test
+    @org.junit.jupiter.api.Disabled("QA-019 재현 — 수정 전에는 15분 안의 실패 기록이 끝없이 쌓인다")
+    @DisplayName("QA-019 이메일을 바꿔 가며 실패해도 기억하는 기록 수에 상한이 있다")
+    void trackedFailuresAreBounded() {
+        for (int i = 0; i < 25_000; i++) {
+            wrong("10.0.0.1|victim" + i + "@example.com");
+        }
+        assertThat(throttle.tracked()).isLessThanOrEqualTo(10_000);
+    }
 }
