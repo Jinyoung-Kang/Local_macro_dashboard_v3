@@ -139,9 +139,16 @@ public class AlertService {
                 : new Result(404, "없는 규칙입니다.");
     }
 
-    /** 관심 종목 상한(사용자 20·전체 60 — 종목별 수급 수집 범위). 넘으면 400, 아니면 null. */
+    /**
+     * 관심 종목 상한(사용자 20·전체 60 — 종목별 수급 수집 범위). 넘으면 400, 아니면 null.
+     * 이미 켜 둔 종목의 규칙을 하나 더 만들거나 켜는 것은 종목 수를 늘리지 않으므로 상한에 걸리지 않습니다(QA-062).
+     */
     private Result stockCapProblem(CurrentUser user, String code) {
-        if (alerts.countStockCodes(user.id()) >= STOCKS_PER_USER) {
+        boolean alreadyWatching = alerts.rules(user.id()).stream().anyMatch(rule -> rule.enabled()
+                && "FOREIGN_STREAK".equals(rule.kind())
+                && "STOCK".equals(rule.params().path("target").asText())
+                && code.equals(rule.params().path("code").asText()));
+        if (!alreadyWatching && alerts.countStockCodes(user.id()) >= STOCKS_PER_USER) {
             return new Result(400, "관심 종목 알림은 %d종목까지입니다.".formatted(STOCKS_PER_USER));
         }
         if (!alerts.hasStockCode(code) && alerts.countStockCodes(null) >= STOCKS_TOTAL) {

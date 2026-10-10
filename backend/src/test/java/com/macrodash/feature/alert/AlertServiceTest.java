@@ -5,7 +5,6 @@ import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Holding;
 import com.macrodash.store.AlertStore;
 import com.macrodash.support.CurrentUser;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -85,7 +84,6 @@ class AlertServiceTest {
     }
 
     @Test
-    @Disabled("QA-062: 이미 켜 둔 종목도 사용자 상한에 걸림 — 수정 커밋에서 켬")
     @DisplayName("QA-062 이미 켜 둔 종목의 다른 규칙은 사용자 상한(20종목)을 채운 상태에서도 켤 수 있다 — 종목 수가 늘지 않으므로")
     void reEnablingRuleForAlreadyWatchedCodeIsAllowedAtUserCap() {
         AlertStore store = mock(AlertStore.class);
