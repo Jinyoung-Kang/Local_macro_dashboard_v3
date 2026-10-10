@@ -44,6 +44,11 @@ class TrackRecordServiceTest {
     }
 
     private static TrackRecordService service() {
+        return service(0);
+    }
+
+    /** @param priceOffsetDays 가격 이력이 국면 입력보다 며칠 늦게 시작하는가 */
+    private static TrackRecordService service(int priceOffsetDays) {
         StoreRepository repository = mock(StoreRepository.class);
         when(repository.readTimeseries(eq(Datasets.TS_FRED), eq("T10Y3M"), any())).thenReturn(daily(400, 0.5));
         when(repository.readTimeseries(eq(Datasets.TS_FRED), eq("NFCI"), any())).thenReturn(daily(400, -0.4));
@@ -57,7 +62,7 @@ class TrackRecordServiceTest {
         ObjectNode spy = payload.putObject("tickers").putObject("SPY");
         ArrayNode dates = spy.putArray("dates");
         ArrayNode closes = spy.putArray("close");
-        for (int i = 0; i < 420; i++) {
+        for (int i = priceOffsetDays; i < 420; i++) {
             dates.add(START.plusDays(i).toString());
             closes.add(100.0 + i * 0.1);
         }
@@ -116,5 +121,16 @@ class TrackRecordServiceTest {
         assertThat(locked.get("available")).isEqualTo(false);
         assertThat(locked.get("locked")).isEqualTo(true);
         assertThat(service().trackRecord("SPY", false).get("available")).isEqualTo(true);
+    }
+
+    @Test
+    @org.junit.jupiter.api.Disabled("QA-042 재현 — 수정 전에는 가격 이력이 늦게 시작해도 한계 문구가 '약 3년'(하이일드 기준)뿐이다")
+    @DisplayName("QA-042 가격 이력이 국면 입력보다 늦게 시작하면 그 시작일을 한계에 적는다 — IEF·GLD는 2년치뿐")
+    @SuppressWarnings("unchecked")
+    void shortPriceHistoryIsStatedInLimits() {
+        Map<String, Object> out = service(200).trackRecord("SPY", true);
+
+        String priceFrom = START.plusDays(200).toString();
+        assertThat((List<String>) out.get("limits")).anySatisfy(line -> assertThat(line).contains(priceFrom));
     }
 }
