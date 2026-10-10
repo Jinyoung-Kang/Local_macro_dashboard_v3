@@ -53,7 +53,13 @@ public class AuthService {
     /** 마지막 사용 시각 갱신 간격 — 요청마다 쓰지 않습니다. */
     static final Duration TOUCH_GAP = Duration.ofMinutes(5);
     static final int MAX_USER_AGENT = 120;
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]{1,64}@[^@\\s]{1,255}$");
+    /**
+     * 주소 한 개만(로컬 64자 · 도메인 255자). 메일 문법에서 따옴표 없이는 못 쓰는 문자(꺾쇠·괄호·대괄호·쉼표·세미콜론·콜론·
+     * 따옴표·역슬래시)를 받지 않습니다 — {@code x<a@b.com>}을 받으면 메일 라이브러리가 표시 이름 + 꺾쇠 안 주소로 읽어
+     * 다른 주소로 보냈습니다(QA-026, 한 메일함으로 계정을 여럿 만들 수 있었음).
+     */
+    private static final Pattern EMAIL = Pattern.compile(
+            "^[^@\\s<>()\\[\\]\\\\,;:\"]{1,64}@[^@\\s<>()\\[\\]\\\\,;:\"]{1,255}$");
 
     private final AppProperties properties;
     private final UserStore users;

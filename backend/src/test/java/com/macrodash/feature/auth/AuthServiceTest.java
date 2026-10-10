@@ -140,7 +140,6 @@ class AuthServiceTest {
     }
 
     @org.junit.jupiter.api.Test
-    @org.junit.jupiter.api.Disabled("QA-026 재현 — 수정 전에는 꺾쇠·표시 이름 표기를 이메일로 받는다")
     @org.junit.jupiter.api.DisplayName("QA-026 꺾쇠·표시 이름·여러 주소 표기는 이메일로 받지 않는다 — 메일이 다른 주소로 가지 않게")
     void rejectsAddressListAndDisplayNameForms() {
         for (String bad : new String[]{"x<attacker@evil.com>", "Name <a@b.com>", "a@b.com,c@d.com", "\"q\"@b.com",
