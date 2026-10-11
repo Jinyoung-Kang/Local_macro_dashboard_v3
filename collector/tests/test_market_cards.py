@@ -224,8 +224,30 @@ def test_QA058_선물의_전일은_직전_세션의_일봉_종가다(monkeypatch
         {"date": "2026-10-06T00:00:00-04:00", "close": 89.44},  # 10-06 세션 정산가
     ]
     monkeypatch.setattr(market, "collect_ticker", lambda symbol, period: {"points": daily})
+    monkeypatch.setattr(market, "_SESSION_CLOSE_CACHE", {})
 
     card = market._build_card(spec, _payload(intraday))
 
     assert card["prevValue"] == pytest.approx(89.44)
     assert card["prevSource"] == "일봉 직전 거래일 종가"
+
+
+def test_세션형_상품의_직전_세션_종가는_세션마다_한_번만_일봉을_읽는다(monkeypatch):
+    """선물 카드는 5분마다 다시 만들어집니다. 직전 세션 종가는 세션이 바뀔 때만 달라지므로 그때만 일봉을 읽습니다."""
+    monkeypatch.setattr(market, "_SESSION_CLOSE_CACHE", {})
+    calls: list[str] = []
+    daily = [{"date": "2026-10-05T00:00:00-04:00", "close": 88.0},
+             {"date": "2026-10-06T00:00:00-04:00", "close": 89.44},
+             {"date": "2026-10-07T00:00:00-04:00", "close": 90.1}]
+    monkeypatch.setattr(market, "collect_ticker", lambda symbol, period: calls.append(symbol) or {"points": daily})
+
+    same_session = ["2026-10-06T20:00:00-04:00", "2026-10-06T20:05:00-04:00", "2026-10-07T09:30:00-04:00"]
+    assert [market.previous_close_from_daily("CL=F", at) for at in same_session] == [89.44, 89.44, 89.44]
+    assert calls == ["CL=F"]
+
+    assert market.previous_close_from_daily("CL=F", "2026-10-07T19:00:00-04:00") == 90.1   # 다음 세션
+    assert calls == ["CL=F", "CL=F"]
+
+    market.previous_close_from_daily("^KS11", "2026-10-07T10:00:00+09:00")                  # 세션형이 아니면 기억하지 않음
+    market.previous_close_from_daily("^KS11", "2026-10-07T10:05:00+09:00")
+    assert calls.count("^KS11") == 2

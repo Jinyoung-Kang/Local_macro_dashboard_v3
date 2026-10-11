@@ -48,6 +48,11 @@ NEW_YORK = ZoneInfo("America/New_York")
 _FUTURES_SESSION_START = time(18, 0)
 _DXY_SESSION_START = time(19, 0)
 
+# 세션형 상품의 직전 세션 종가 — (티커, 세션 거래일) → 원본 스케일 종가. 하루에 한 번만 바뀌는 값이라 기억해 두면
+# 5분마다 카드마다 하던 일봉 조회가 세션이 바뀔 때 한 번으로 줄어듭니다. 프로세스 메모리에만 두고, 커지면 비웁니다.
+_SESSION_CLOSE_CACHE: dict[tuple[str, date], float] = {}
+_SESSION_CLOSE_CACHE_LIMIT = 64
+
 MOVE_SYMBOLS = {"^MOVE", "MOVE", "MOVE:INDEX"}
 
 _PERIOD_DAYS = {
@@ -497,22 +502,31 @@ def previous_close_from_daily(symbol: str, current_iso: str | None = None) -> fl
     반환값은 yfinance 원본 스케일입니다. 표시 배율(엔/원 ×100 등)은 호출자가
     현재가와 동일하게 적용해야 합니다.
     """
+    current_day = session_day(symbol, current_iso) if current_iso else None
+    cache_key = (symbol, current_day) if current_day is not None and _session_start(symbol) else None
+    if cache_key in _SESSION_CLOSE_CACHE:
+        return _SESSION_CLOSE_CACHE[cache_key]
+
     payload = collect_ticker(symbol, "1mo")
     points = payload.get("points") or []
     closes = [p for p in points if p.get("close")]
     if not closes:
         return None
 
-    if current_iso:
+    if current_day is not None:
         try:
             # 세션형 상품은 세션 거래일로 비교합니다 — 저녁에 시작한 세션의 '전일'은 그날 정산가입니다(QA-058).
-            current_day = session_day(symbol, current_iso)
             earlier = [
                 p for p in closes
                 if pd.Timestamp(p["date"]).date() < current_day
             ]
             if earlier:
-                return float(earlier[-1]["close"])
+                value = float(earlier[-1]["close"])
+                if cache_key is not None:
+                    if len(_SESSION_CLOSE_CACHE) >= _SESSION_CLOSE_CACHE_LIMIT:
+                        _SESSION_CLOSE_CACHE.clear()
+                    _SESSION_CLOSE_CACHE[cache_key] = value
+                return value
         except Exception as exc:  # noqa: BLE001
             logger.debug("일봉 거래일 비교 실패 (%s): %s", symbol, exc)
 
