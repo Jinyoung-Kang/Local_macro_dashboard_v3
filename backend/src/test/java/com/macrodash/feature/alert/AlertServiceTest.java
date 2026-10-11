@@ -5,6 +5,7 @@ import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Holding;
 import com.macrodash.store.AlertStore;
 import com.macrodash.support.CurrentUser;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -101,6 +102,32 @@ class AlertServiceTest {
         AlertService service = new AlertService(store, MAPPER);
 
         assertThat(service.setEnabled(PRO, 9, true).status()).isEqualTo(200);
+    }
+
+    @Test
+    @Disabled("QA-064: 확정 칸이 빈 지난 종목 기록을 확정으로 셈 — 수정 커밋에서 켬")
+    @DisplayName("QA-064 종목의 지난 기록도 저녁 확정 칸이 비면 확정이 아니다 — 그날은 '모름'으로 연속을 끊는다")
+    void incompletePastStockRecordBreaksStreak() {
+        LocalDate today = LocalDate.of(2026, 10, 9);
+        FlowRecord.Amounts plus = new FlowRecord.Amounts(10L, 5L, 5L);
+        // 장중에 한 번 받고 레이더 대상에서 빠져 다시 받지 않은 기록(개인 칸이 빔) — 실제 저장본에 62개 있었다
+        FlowRecord intradayOnly = new FlowRecord("2026-10-07", null,
+                Map.of("foreigner", plus, "institution", plus), Map.of("pensionFund", plus), 0.5);
+        FlowRecord complete6 = complete("2026-10-06", plus);
+        FlowRecord complete8 = complete("2026-10-08", plus);
+
+        List<AlertRules.DayNet> days = AlertEvaluator.finalizedForeignNet(
+                List.of(complete8, intradayOnly, complete6), today, true, null);
+
+        assertThat(days).extracting(AlertRules.DayNet::date).containsExactly(
+                LocalDate.of(2026, 10, 6), LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 8));
+        assertThat(days.get(1).net()).as("장중 잠정치는 확정치가 아니다").isNull();
+    }
+
+    private static FlowRecord complete(String date, FlowRecord.Amounts amounts) {
+        return new FlowRecord(date, null,
+                Map.of("foreigner", amounts, "individual", amounts, "otherCorporation", amounts),
+                Map.of("pensionFund", amounts), 0.5);
     }
 
     @Test
