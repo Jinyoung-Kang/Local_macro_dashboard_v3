@@ -19,13 +19,13 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
 - 백업·복원: `make backup` · `make restore F=backups/….sql` (ADR 0003)
 - 코드 받기는 `make update`. `git pull`은 쓰지 않는다(다른 브랜치의 작업을 조용히 놓침).
 - QA·실험용 별도 스택: `bash scripts/qa/qa-stack.sh up|restore F=…|down` (compose 프로젝트 `macrodash_qa`,
-  포트 13000/18080/18000/15432, 새 비밀값 `.env.qa`, 외부 호출은 차단 프록시). 성능 측정: `scripts/bench-api.sh`, `scripts/qa/k6/`.
+  포트 13000/18080/18000/15432, 새 비밀값 `.env.qa`, 외부 호출은 차단 프록시). 성능 측정: `ENV_FILE=.env.qa bash scripts/bench-api.sh`(QA 스택), `scripts/qa/k6/`.
 
 ## 절대 규칙
 - **운영 DB(`macrodash`)로 테스트하지 않는다.** 테스트는 `macrodash_test`만 쓴다
   (`make test-*`가 맞춰 줌). 백엔드 통합 테스트는 시작할 때 `snapshots`를 비운다.
   부하·장애·브라우저 시험도 운영 스택(3000/8080/8000/5432)이 아니라 QA 스택에서 한다.
-- **비밀값은 `.env`에만.** 저장소는 Public이다. 키·토큰·비밀번호를 코드·문서·로그·커밋에
+- **비밀값은 `.env`에만.** 저장소는 지금 Private이지만 공개될 수 있다고 보고, 키·토큰·비밀번호를 코드·문서·로그·커밋에
   넣지 않는다. 예시 이메일 같은 자리표시 값도 코드 기본값으로 두지 않는다.
 - **없는 숫자를 만들지 않는다.** 표본 부족·수집 실패는 `null`→화면 `—`. 0으로 채우지 않는다.
   추정치는 `isEstimated`/`isProxy`를 함께 내려보낸다.
