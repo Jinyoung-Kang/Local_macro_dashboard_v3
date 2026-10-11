@@ -30,6 +30,12 @@ x-logging: &logging
     max-size: "10m"
     max-file: "3"
 
+# 앱 컨테이너(수집기·백엔드·화면)는 root가 아닌 사용자로 돌고 커널 권한이 필요 없습니다. 모두 버리고 권한 상승도
+# 막아, 컨테이너 안의 코드가 뚫려도 할 수 있는 일을 줄입니다. postgres는 기동할 때 사용자 전환이 필요해 빼둡니다.
+x-hardening: &hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
 services:
   postgres:
     restart: unless-stopped
@@ -61,6 +67,7 @@ services:
       retries: 10
 
   collector:
+    <<: *hardening
     restart: unless-stopped
     logging: *logging
     # pandas·pykrx·yfinance·lxml을 올린 상주 메모리가 637MiB(기동 25분 뒤 실측)입니다. 768m에서는
@@ -114,6 +121,7 @@ services:
       retries: 5
 
   backend:
+    <<: *hardening
     restart: unless-stopped
     logging: *logging
     mem_limit: 1g
@@ -164,6 +172,7 @@ services:
       retries: 5
 
   frontend:
+    <<: *hardening
     restart: unless-stopped
     logging: *logging
     mem_limit: 256m
