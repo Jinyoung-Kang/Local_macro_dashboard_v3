@@ -3,7 +3,6 @@ package com.macrodash.feature.auth;
 import com.macrodash.config.AppProperties;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -102,7 +101,6 @@ class AuthControllerTest {
     }
 
     @Test
-    @Disabled("QA-068: 재확인이 로그인과 느린 차선을 함께 씀 — 수정 커밋에서 켬")
     @DisplayName("QA-068 비밀번호 재확인은 로그인과 느린 차선을 나눠 쓴다 — 로그인 대입 중에도 재확인이 '처리 중' 429를 받지 않는다")
     void reauthenticationHasItsOwnSlowLane() throws Exception {
         long memberId = db.user("member", "member-password-1", "MEMBER", "FREE");
@@ -143,7 +141,6 @@ class AuthControllerTest {
     }
 
     @Test
-    @Disabled("QA-068: 재확인 한 번에 지금 비밀번호를 두 번 해시 — 수정 커밋에서 켬")
     @DisplayName("QA-068 비밀번호 변경·탈퇴는 지금 비밀번호를 한 번만 확인한다(Argon2 16MB를 요청마다 한 번 더 돌리지 않게)")
     void currentPasswordIsVerifiedOnce() {
         long memberId = db.user("member", "member-password-1", "MEMBER", "FREE");

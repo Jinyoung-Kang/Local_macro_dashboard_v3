@@ -206,10 +206,13 @@ public class AccountService {
     }
 
     /** 계정 삭제 — 비밀번호를 다시 확인합니다. 운영자 계정은 지울 수 없습니다(운영자가 사라지면 아무도 관리 못 함). */
+    /** 탈퇴 재확인에서 비밀번호가 틀렸을 때의 문구 — 컨트롤러가 재확인 실패(지연 기록)를 가르는 데 씀. */
+    static final String WRONG_PASSWORD = "비밀번호가 올바르지 않습니다.";
+
     public Result deleteAccount(CurrentUser user, String password) {
         UserStore.User stored = users.findById(user.id()).orElse(null);
         if (stored == null || !hasher.matches(password, stored.passwordHash())) {
-            return Result.bad("비밀번호가 올바르지 않습니다.");
+            return Result.bad(WRONG_PASSWORD);
         }
         if ("OWNER".equals(stored.role())) {
             return Result.bad("운영자 계정은 지울 수 없습니다.");

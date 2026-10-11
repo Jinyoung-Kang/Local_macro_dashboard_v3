@@ -124,6 +124,14 @@ public class LoginThrottle {
         }
     }
 
+    /**
+     * 기록과 느린 차선을 따로 쓰는 같은 규칙의 지연. 비밀번호 재확인이 로그인과 느린 차선(한 번에 하나)을 함께 쓰면,
+     * 한쪽 대입이 진행되는 동안 다른 쪽이 '처리 중' 429를 받았습니다(QA-068).
+     */
+    LoginThrottle separateLane() {
+        return new LoginThrottle(clock, sleeper);
+    }
+
     /** 이 주소의 다음 시도가 느린 차선으로 가는가(무료 시도를 넘겼고 아직 잊히지 않음, 또는 기록이 꽉 찬 동안 처음 보는 키). */
     boolean isSlowed(String client) {
         Record record = records.get(client);

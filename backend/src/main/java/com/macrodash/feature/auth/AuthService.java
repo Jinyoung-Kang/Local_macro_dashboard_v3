@@ -288,12 +288,8 @@ public class AuthService {
         return out;
     }
 
-    /** 이 사용자의 지금 비밀번호가 맞는가(재확인 — 비밀번호 변경·탈퇴 전에 지연을 거는 데 씀). */
-    public boolean passwordMatches(CurrentUser user, String password) {
-        return users.findById(user.id())
-                .map(stored -> hasher.matches(password, stored.passwordHash()))
-                .orElse(false);
-    }
+    /** 지금 비밀번호가 틀렸을 때의 문구 — 컨트롤러가 재확인 실패(지연 기록)와 다른 거절(규칙 위반)을 가르는 데 씀. */
+    public static final String WRONG_CURRENT = "지금 비밀번호가 올바르지 않습니다.";
 
     /**
      * 비밀번호 변경 — 지금 비밀번호를 확인하고, 다른 기기 세션은 모두 끊습니다.
@@ -303,7 +299,7 @@ public class AuthService {
     public String changePassword(CurrentUser user, String current, String next) {
         UserStore.User stored = users.findById(user.id()).orElse(null);
         if (stored == null || !hasher.matches(current, stored.passwordHash())) {
-            return "지금 비밀번호가 올바르지 않습니다.";
+            return WRONG_CURRENT;
         }
         String problem = PasswordPolicy.problem(next, stored.email());
         if (problem != null) {
