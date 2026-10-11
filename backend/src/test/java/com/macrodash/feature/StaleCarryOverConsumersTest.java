@@ -7,7 +7,6 @@ import com.macrodash.feature.macro.SectorService;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -67,7 +66,6 @@ class StaleCarryOverConsumersTest {
     }
 
     @Test
-    @Disabled("QA-065: 업종 행에 이전 값 표시가 없음 — 수정 커밋에서 켬")
     @DisplayName("QA-065 업종 순위: 이어받은(이전 값) ETF 행에 isStale을 싣는다")
     void sectorRowsCarryStaleFlag() {
         ObjectNode payload = MAPPER.createObjectNode();
@@ -88,7 +86,6 @@ class StaleCarryOverConsumersTest {
     }
 
     @Test
-    @Disabled("QA-065: 이전 값 종목이 위험 분석의 날짜 교집합을 묶음 — 수정 커밋에서 켬")
     @DisplayName("QA-065 기관 위험 분석: 이전 값 종목은 계산에서 빼고 '가격 수집 실패'로 커버리지에 적는다")
     void staleHoldingIsExcludedFromRisk() {
         String cik = Institutions.ciks().get(0);

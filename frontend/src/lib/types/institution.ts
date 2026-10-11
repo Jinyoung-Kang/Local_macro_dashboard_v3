@@ -127,7 +127,7 @@ export interface GuruRiskResponse {
     totalHoldings: number;
     weight: number;
     totalWeight: number;
-    uncovered: { name: string; weight: number }[];
+    uncovered: { name: string; weight: number; reason?: string }[];
     uncoveredCount: number;
   };
   metrics?: {

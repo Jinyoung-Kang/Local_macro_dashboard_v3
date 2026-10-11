@@ -160,6 +160,11 @@ function ReturnsTable({
             <span className="flex flex-col">
               <span className="text-body">{row.name}</span>
               <span className="text-[11px] text-muted">{row.ticker}</span>
+              {row.isStale && (
+                <span className="text-[11px] text-warn" title={row.staleReason ?? undefined}>
+                  ⚠️ 이전 값(수집 실패)
+                </span>
+              )}
             </span>
           ),
         },

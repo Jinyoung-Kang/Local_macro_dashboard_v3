@@ -390,6 +390,7 @@ function RiskCard() {
                 {coverage.uncovered.map((row) => (
                   <li key={row.name}>
                     {row.name} — {formatWithUnit(row.weight, 2, "%")}
+                    {row.reason && <span className="text-muted"> · {row.reason}</span>}
                   </li>
                 ))}
               </ul>

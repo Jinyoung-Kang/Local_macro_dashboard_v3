@@ -283,10 +283,14 @@ public class GuruService {
 
             JsonNode mapped = nameMap == null ? null : nameMap.get(name);
             String ticker = mapped == null ? null : Json.asText(mapped, "ticker");
-            if (ticker == null || tickers == null || tickers.get(ticker) == null) {
+            // 수집 실패로 이어받은 가격(isStale)은 마지막 날 뒤로 값이 없어, 넣으면 모든 보유 종목 날짜의 교집합이
+            // 그날에 묶입니다. 빼고 이유를 적습니다(QA-065).
+            boolean stale = ticker != null && tickers != null && Json.asBoolean(tickers.get(ticker), "isStale");
+            if (ticker == null || tickers == null || tickers.get(ticker) == null || stale) {
                 Map<String, Object> miss = new LinkedHashMap<>();
                 miss.put("name", name);
                 miss.put("weight", weight);
+                miss.put("reason", stale ? "가격 수집 실패(이전 값이라 제외)" : "매핑표에 없음");
                 uncovered.add(miss);
                 continue;
             }

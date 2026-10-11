@@ -172,6 +172,9 @@ export interface SectorRow {
   returns: Record<string, number | null>;
   alpha?: Record<string, number | null>;
   ranks?: Record<string, number>;
+  /** 수집 실패로 직전 저장본에서 이어받은 행(수익률이 그만큼 멈춰 있음). */
+  isStale?: boolean;
+  staleReason?: string | null;
 }
 
 export interface SectorResponse {

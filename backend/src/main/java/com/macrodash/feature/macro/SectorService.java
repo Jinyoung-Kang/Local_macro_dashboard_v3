@@ -150,6 +150,10 @@ public class SectorService {
             row.put("kind", entry.getValue().get(kindField));
             row.put("price", SeriesMath.last(closes));
             row.put("returns", returnsFrom(series));
+            // 수집 실패로 직전 저장본에서 이어받은 계열(최대 3일, QA-056)은 수익률이 그만큼 멈춰 있습니다 — 순위표에
+            // 표시 없이 섞지 않게 알립니다(QA-065).
+            row.put("isStale", Json.asBoolean(series, "isStale"));
+            row.put("staleReason", Json.asText(series, "staleReason"));
             rows.add(row);
         }
         return rows;
