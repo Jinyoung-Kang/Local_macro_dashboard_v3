@@ -82,7 +82,7 @@ describe("QA-067 자동 갱신 실패를 패널에 표시한다", () => {
   ];
 
   for (const { name, make, bodies, card } of panels) {
-    it.fails(`${name}: 새로 읽기에 실패하면 '새로 읽지 못함'`, async () => {
+    it(`${name}: 새로 읽기에 실패하면 '새로 읽지 못함'`, async () => {
       firstThenFail(bodies);
       const { rerender } = render(make());
       const section = await cardTitled(card);
@@ -94,7 +94,7 @@ describe("QA-067 자동 갱신 실패를 패널에 표시한다", () => {
     });
   }
 
-  it.fails("상태 화면: 개요를 새로 읽지 못하면 머리말에 '새로 읽지 못함'", async () => {
+  it("상태 화면: 개요를 새로 읽지 못하면 머리말에 '새로 읽지 못함'", async () => {
     firstThenFail({ "/api/status": { readMode: "auto", collectorReachable: true } });
     const { rerender } = render(<StatusPage />);
     const header = (await screen.findByRole("heading", { name: "데이터 저장소 상태" })).closest("header") as HTMLElement;

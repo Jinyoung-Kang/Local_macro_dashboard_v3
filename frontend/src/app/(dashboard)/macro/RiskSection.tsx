@@ -3,6 +3,7 @@
 import {
   Card,
   EmptyState,
+  Freshness,
   Loading,
   Metric,
   Table,
@@ -43,7 +44,16 @@ const RISK_TABLE = [
   },
 ];
 
-export function RiskSection({ risk, loading }: { risk: RiskIndicators | null; loading: boolean }) {
+export function RiskSection({
+  risk,
+  loading,
+  refreshError,
+}: {
+  risk: RiskIndicators | null;
+  loading: boolean;
+  /** 새로 읽기가 실패했으면 그 문구 — 앞서 받은 값을 보이는 중이라고 알립니다(QA-067). */
+  refreshError?: string | null;
+}) {
   if (loading && !risk) {
     return (
       <Card title="신용 리스크, 은행권 및 시장 변동성">
@@ -72,6 +82,7 @@ export function RiskSection({ risk, loading }: { risk: RiskIndicators | null; lo
       title="신용 리스크, 은행권 및 시장 변동성"
       subtitle="주식·채권 변동성, 기업 부도 위험, 단기 자금경색, 종합 금융스트레스"
       source="FRED (공식) — 하이일드·CP·STLFSI4 · Yahoo Finance — ^VIX · MOVE는 ^TNX 변동성 기반 추정"
+      actions={<Freshness refreshError={refreshError} />}
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {entries.map((entry) => {

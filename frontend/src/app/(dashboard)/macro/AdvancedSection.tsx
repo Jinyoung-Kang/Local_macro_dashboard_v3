@@ -6,6 +6,7 @@ import { RangeTabs, sliceByRange, type RangeValue } from "@/components/RangeTabs
 import {
   Banner,
   Card,
+  Freshness,
   Loading,
   Metric,
   Select,
@@ -24,9 +25,12 @@ import { endpoints } from "@/lib/endpoints";
 export function AdvancedSection({
   data,
   loading,
+  refreshError,
 }: {
   data: AdvancedIndicators | null;
   loading: boolean;
+  /** 새로 읽기가 실패했으면 그 문구 — 앞서 받은 값을 보이는 중이라고 알립니다(QA-067). */
+  refreshError?: string | null;
 }) {
   const [selected, setSelected] = useState("T10Y3M");
   const [range, setRange] = useState<RangeValue>("10y");
@@ -59,7 +63,12 @@ export function AdvancedSection({
       title="심화 매크로 지표"
       source={SOURCES.fred}
       subtitle="명목금리·하이일드만으로는 보이지 않는 구조를 메우는 6종 (30Y-3M은 DGS30−DGS3MO로 계산, 나머지는 FRED 공식 시계열)"
-      actions={<RangeTabs value={range} onChange={setRange} />}
+      actions={
+        <span className="flex items-center gap-2">
+          <Freshness refreshError={refreshError} />
+          <RangeTabs value={range} onChange={setRange} />
+        </span>
+      }
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {entries.map((entry) => (

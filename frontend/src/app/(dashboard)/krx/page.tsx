@@ -203,10 +203,13 @@ export default function KrxPage() {
             : undefined
         }
         actions={
-          trend.data?.measure ? (
-            // measure는 소스의 코드값(CONTRACT·AMOUNT)입니다. 화면에는 뜻을 적습니다(QA-005).
-            <SourceBadge>{MEASURE_LABELS[trend.data.measure] ?? trend.data.measure}</SourceBadge>
-          ) : undefined
+          <span className="flex items-center gap-2">
+            <Freshness refreshError={trend.refreshError} />
+            {trend.data?.measure && (
+              // measure는 소스의 코드값(CONTRACT·AMOUNT)입니다. 화면에는 뜻을 적습니다(QA-005).
+              <SourceBadge>{MEASURE_LABELS[trend.data.measure] ?? trend.data.measure}</SourceBadge>
+            )}
+          </span>
         }
       >
         {trend.loading && !trend.data && <Loading />}

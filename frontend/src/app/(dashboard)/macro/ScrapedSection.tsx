@@ -2,6 +2,7 @@
 
 import {
   Card,
+  Freshness,
   Loading,
   SourceBadge,
   Table,
@@ -17,7 +18,7 @@ import {
 import { endpoints } from "@/lib/endpoints";
 
 export function ScrapedSection() {
-  const { data, loading } = useApi<{
+  const { data, loading, refreshError } = useApi<{
     available: boolean;
     updatedAt?: string;
     items: {
@@ -41,7 +42,12 @@ export function ScrapedSection() {
       title="비공식 스크래핑 시세 비교"
       source="TradingView Scanner · Yahoo Finance 공개 엔드포인트 (비공식)"
       subtitle="TradingView·Yahoo 공개 엔드포인트에서 받은 참고 시세입니다. 공식 확정치가 아닙니다."
-      actions={data?.updatedAt ? <SourceBadge>{formatKst(data.updatedAt)}</SourceBadge> : undefined}
+      actions={
+        <span className="flex items-center gap-2">
+          <Freshness refreshError={refreshError} />
+          {data?.updatedAt && <SourceBadge>{formatKst(data.updatedAt)}</SourceBadge>}
+        </span>
+      }
     >
       {loading && !data && <Loading />}
       {data && (

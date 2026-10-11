@@ -24,7 +24,7 @@ function verdictClass(verdict: string): string {
 }
 
 export function SpotFuturesCard() {
-  const { data, loading, error } = useApi<SpotFuturesResponse>(endpoints.positioning.krxSpotFutures, 300_000);
+  const { data, loading, error, refreshError } = useApi<SpotFuturesResponse>(endpoints.positioning.krxSpotFutures, 300_000);
 
   return (
     <Card
@@ -35,7 +35,7 @@ export function SpotFuturesCard() {
           : undefined
       }
       source="현물: 토스증권 Open API (공식, 원) · 선물: Daum 투자주체별 매매동향 (비공식, 계약)"
-      actions={<Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} />}
+      actions={<Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} refreshError={refreshError} />}
     >
       {loading && !data && <Loading />}
       {error && <Banner tone="warn">{error}</Banner>}

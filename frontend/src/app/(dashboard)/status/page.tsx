@@ -8,6 +8,7 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  Freshness,
   Loading,
   Metric,
   SourceBadge,
@@ -45,7 +46,7 @@ const RUN_STATUS_LABEL: Record<string, string> = {
  * 핵심은 "무엇이 왜 실패했는지"와 "있어야 하는데 없는 데이터셋"입니다.
  */
 export default function StatusPage() {
-  const { data, loading, error, reload } = useApi<StatusResponse>(endpoints.status.overview, 60_000);
+  const { data, loading, error, reload, refreshError } = useApi<StatusResponse>(endpoints.status.overview, 60_000);
   const { reloadAll } = useRefreshSignal();
   // 개별 태스크 실행도 화면 전체를 갱신합니다(useTaskRunner 설명 참고).
   const { running, message, runTask } = useTaskRunner(reloadAll);
@@ -64,8 +65,9 @@ export default function StatusPage() {
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-xl font-bold text-bright">데이터 저장소 상태</h1>
-        <p className="mt-1 text-xs text-muted">
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
           수집 현황·신선도·실패 원인·누적 이력 · 읽기 모드 {data?.readMode}
+          <Freshness refreshError={refreshError} />
         </p>
       </header>
 
@@ -406,7 +408,7 @@ function VerificationPanel() {
  * 보여 주고 한 번에 복사합니다(비밀값은 백엔드에서 가려져 옵니다).
  */
 function IssuesPanel() {
-  const { data, loading, error, reload } = useApi<StatusIssuesResponse>(endpoints.status.issues, 60_000);
+  const { data, loading, error, reload, refreshError } = useApi<StatusIssuesResponse>(endpoints.status.issues, 60_000);
   const counts = data?.counts;
   const hasIssues =
     !!counts && counts.errors + counts.warnings + counts.recentGroups + counts.missingDatasets > 0;
@@ -416,7 +418,8 @@ function IssuesPanel() {
       title="수집 오류·경고 로그" source={SOURCES.collectorRuns}
       subtitle={`지금 실패 중인 태스크 · 최근 ${data?.lookbackHours ?? 24}시간 실패 이력(같은 사유는 묶음) · 누락 데이터셋`}
       actions={
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Freshness refreshError={refreshError} />
           <Button onClick={reload} disabled={loading}>
             새로고침
           </Button>

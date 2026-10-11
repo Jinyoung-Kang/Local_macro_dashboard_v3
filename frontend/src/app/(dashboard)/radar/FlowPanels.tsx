@@ -34,7 +34,7 @@ function WindowCell({ value, format }: { value: FlowWindow; format: (n: number |
 
 // ------------------------------------------------------------------ 시장 전체
 export function MarketFlowsPanel({ market }: { market: string }) {
-  const { data, loading, error } = useApi<MarketFlowsResponse>(endpoints.positioning.investorFlows, 300_000);
+  const { data, loading, error, refreshError } = useApi<MarketFlowsResponse>(endpoints.positioning.investorFlows, 300_000);
   const symbol = market === "KOSDAQ" ? "KOSDAQ" : "KOSPI";
   const summary = data?.markets?.[symbol];
 
@@ -50,7 +50,7 @@ export function MarketFlowsPanel({ market }: { market: string }) {
       actions={
         <span className="flex items-center gap-2">
           {summary?.provisional && <SourceBadge>장중 잠정치</SourceBadge>}
-          <Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} />
+          <Freshness collectedAt={data?.collectedAtKst} ageSeconds={data?.ageSeconds} refreshError={refreshError} />
         </span>
       }
     >
