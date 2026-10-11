@@ -5,7 +5,9 @@
 #   docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d
 #
 # 바뀌는 것
-#   · postgres 컨테이너 대신 RDS(PostgreSQL 18, TLS) — 접속 주소는 RDS_HOST
+#   · postgres 컨테이너 대신 RDS(PostgreSQL 18, TLS) — 접속 주소는 RDS_HOST. 서버 인증서와 호스트 이름까지 검증(verify-full):
+#     CA는 AWS 공개 신뢰 저장소의 서울 리전 묶음(certs/rds-ap-northeast-2-bundle.pem, truststore.pki.rds.amazonaws.com).
+#     RDS_HOST는 RDS 기본 엔드포인트(*.rds.amazonaws.com)여야 함 — IP·별칭이면 호스트 이름 검증에 실패
 #   · 화면·API는 127.0.0.1에만 열고, 앞단(Caddy)이 둘을 한 주소(같은 출처)로 묶음 → 프론트는 NEXT_PUBLIC_API_BASE=/
 #   · 앞단이 넘긴 X-Forwarded-For를 Tomcat이 믿음(내부 대역에서 온 것만) → 로그인 제한이 방문자 IP별로 동작
 #   · 공개 데모라 끄는 것: 메일(가입·재설정), 화면 조회가 수집을 일으키는 것(store_only),
@@ -26,12 +28,14 @@ services:
   collector:
     depends_on: !reset {}
     environment:
-      DATABASE_URL: postgresql://${DATABASE_USER:?}:${DATABASE_PASSWORD:?}@${RDS_HOST:?RDS_HOST 필요}:${RDS_PORT:-5432}/${DATABASE_NAME:-macrodash}?sslmode=require
+      DATABASE_URL: postgresql://${DATABASE_USER:?}:${DATABASE_PASSWORD:?}@${RDS_HOST:?RDS_HOST 필요}:${RDS_PORT:-5432}/${DATABASE_NAME:-macrodash}?sslmode=verify-full&sslrootcert=/etc/rds-ca.pem
+    volumes:
+      - ./certs/rds-ap-northeast-2-bundle.pem:/etc/rds-ca.pem:ro
 
   backend:
     depends_on: !reset {}
     environment:
-      DATABASE_URL: jdbc:postgresql://${RDS_HOST:?RDS_HOST 필요}:${RDS_PORT:-5432}/${DATABASE_NAME:-macrodash}?sslmode=require
+      DATABASE_URL: jdbc:postgresql://${RDS_HOST:?RDS_HOST 필요}:${RDS_PORT:-5432}/${DATABASE_NAME:-macrodash}?sslmode=verify-full&sslrootcert=/etc/rds-ca.pem
       SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "4"
       FRONTEND_ORIGIN: ${PUBLIC_ORIGIN:?PUBLIC_ORIGIN 필요 (예 https://dxxxx.cloudfront.net)}
       PUBLIC_URL: ${PUBLIC_ORIGIN}
@@ -52,6 +56,8 @@ services:
       NVIDIA_API_KEY: ""
       CEREBRAS_API_KEY: ""
       CLOUDFLARE_API_TOKEN: ""
+    volumes:
+      - ./certs/rds-ap-northeast-2-bundle.pem:/etc/rds-ca.pem:ro
     ports: !override
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
 

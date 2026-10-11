@@ -22,7 +22,7 @@
 ## 결정
 
 1. 배포 설정은 **덧붙임 파일 `compose.aws.yml`** 하나에 모은다. `docker-compose.yml`(로컬)은 바꾸지 않는다.
-   - postgres 컨테이너는 profile로 빼고 `depends_on`을 비운다. collector와 backend는 `RDS_HOST`에 `sslmode=require`로 붙는다.
+   - postgres 컨테이너는 profile로 빼고 `depends_on`을 비운다. collector와 backend는 `RDS_HOST`에 `sslmode=verify-full`로 붙는다(2026-10-11 `require`에서 올림 — 서버 인증서·호스트 이름까지 검증. CA는 저장소의 `certs/rds-ap-northeast-2-bundle.pem`, AWS 공개 신뢰 저장소의 서울 리전 묶음).
    - Hikari 풀은 4로 줄인다. RDS 한 대를 세 프로젝트가 나눠 쓰기 때문이다.
 2. **`NEXT_PUBLIC_API_BASE=/`를 "같은 출처"로 정의한다.** `apiBase()`가 빈 문자열을 돌려줘 `/api/...` 상대 경로가 된다.
    - 앞단 Caddy가 `/api/*`는 backend로, 나머지는 frontend로 보낸다.
