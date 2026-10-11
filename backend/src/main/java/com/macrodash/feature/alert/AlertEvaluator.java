@@ -209,6 +209,9 @@ public class AlertEvaluator {
      * 뒤에 다시 받은 저장본일 때만입니다 — 장중에 마지막으로 받고 그 뒤 수집이 모두 실패하면 장중 값이 그대로 남아,
      * 다음 날 확정치로 연속을 셌습니다(QA-040).
      *
+     * <p>종목의 지난 기록도 확정 칸이 비었으면 장중 잠정치입니다 — 장중에 레이더 대상이었다가 빠져 다시 받지 않은 종목.
+     * 그날은 빼지 않고 '모름'(null)으로 둬 연속을 끊습니다. 빼면 앞뒤 날이 이어져 연속이 하루 길게 잡힙니다(QA-064).
+     *
      * @param marketCollectedOn 시장 저장본을 받은 날(KST). 모르면 null(시장 기록은 확정으로 보지 않음)
      */
     static List<AlertRules.DayNet> finalizedForeignNet(List<FlowRecord> records, LocalDate today, boolean stock,
@@ -226,7 +229,8 @@ public class AlertEvaluator {
                 continue;
             }
             FlowRecord.Amounts foreigner = record.investors().get("foreigner");
-            out.add(new AlertRules.DayNet(date, foreigner == null ? null : foreigner.net()));
+            boolean provisional = stock && !complete(record);
+            out.add(new AlertRules.DayNet(date, foreigner == null || provisional ? null : foreigner.net()));
         }
         out.sort((a, b) -> a.date().compareTo(b.date()));
         return out;

@@ -5,7 +5,6 @@ import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Holding;
 import com.macrodash.store.AlertStore;
 import com.macrodash.support.CurrentUser;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -105,7 +104,6 @@ class AlertServiceTest {
     }
 
     @Test
-    @Disabled("QA-064: 확정 칸이 빈 지난 종목 기록을 확정으로 셈 — 수정 커밋에서 켬")
     @DisplayName("QA-064 종목의 지난 기록도 저녁 확정 칸이 비면 확정이 아니다 — 그날은 '모름'으로 연속을 끊는다")
     void incompletePastStockRecordBreaksStreak() {
         LocalDate today = LocalDate.of(2026, 10, 9);
