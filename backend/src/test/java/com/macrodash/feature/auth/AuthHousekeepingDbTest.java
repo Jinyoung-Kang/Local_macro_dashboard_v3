@@ -58,4 +58,17 @@ class AuthHousekeepingDbTest {
         assertThat(db.jdbc.queryForObject("SELECT count(*) FROM email_tokens WHERE user_id = ?", Integer.class, userId))
                 .as("10일 전에 만료된 메일 토큰").isZero();
     }
+
+    @Test
+    @DisplayName("감사 기록은 1년 보존 — 정기 작업이 1년 지난 기록만 지운다(사용자 결정 2026-10-11)")
+    void scheduledJobPurgesAuditLogOlderThanOneYear() throws Exception {
+        long userId = db.user("member", "member-password-1", "MEMBER", "FREE");
+        db.jdbc.update("INSERT INTO audit_log (user_id, action, at) VALUES (?, 'test.old', now() - interval '400 days')", userId);
+        db.jdbc.update("INSERT INTO audit_log (user_id, action, at) VALUES (?, 'test.recent', now() - interval '300 days')", userId);
+
+        runScheduled(db.service(new AppProperties()));
+
+        assertThat(db.jdbc.queryForList("SELECT action FROM audit_log WHERE user_id = ? AND action LIKE 'test.%'",
+                String.class, userId)).containsExactly("test.recent");
+    }
 }

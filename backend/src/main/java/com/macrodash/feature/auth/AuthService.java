@@ -114,6 +114,26 @@ public class AuthService {
         }
     }
 
+    /** 감사 기록 보존 기한(사용자 결정 2026-10-11) — 계정 사고를 되짚기에 충분하고, 데모 규모에서 용량 부담이 없습니다. */
+    static final Duration AUDIT_KEEP = Duration.ofDays(365);
+
+    /** 1년 지난 감사 기록 정리. 세션 정리와 같은 주기, 실패하면 다음 주기에 다시 합니다. */
+    @Scheduled(initialDelayString = "${dashboard.scheduler.auth-purge-initial-delay-ms:300000}",
+            fixedDelayString = "${dashboard.scheduler.auth-purge-interval-ms:21600000}")
+    public void purgeOldAuditLog() {
+        if (!users.ready()) {
+            return;
+        }
+        try {
+            int removed = audit.purgeOlderThan(Instant.now().minus(AUDIT_KEEP));
+            if (removed > 0) {
+                log.info("1년 지난 감사 기록 {}건 정리", removed);
+            }
+        } catch (RuntimeException e) {
+            log.warn("감사 기록 정리 실패 — 다음 주기에 다시 시도합니다: {}", e.toString());
+        }
+    }
+
     /** 만료·해지 뒤 이만큼 지난 세션은 지웁니다(로그인 기기 목록에도 보이지 않는 행). */
     static final Duration SESSION_KEEP_AFTER_END = Duration.ofDays(30);
 

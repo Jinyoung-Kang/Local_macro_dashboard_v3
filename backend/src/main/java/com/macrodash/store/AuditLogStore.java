@@ -30,6 +30,11 @@ public class AuditLogStore {
                 userId, action, mapper.writeValueAsString(detail == null ? Map.of() : detail));
     }
 
+    /** 이보다 오래된 기록을 지우고 지운 수를 돌려줍니다. */
+    public int purgeOlderThan(Instant cutoff) {
+        return jdbc.update("DELETE FROM audit_log WHERE at < ?", java.sql.Timestamp.from(cutoff));
+    }
+
     public List<Entry> recent(int limit) {
         return jdbc.query("SELECT id, user_id, action, at, detail::text AS detail FROM audit_log ORDER BY at DESC, id DESC LIMIT ?",
                 (rs, rowNum) -> new Entry(rs.getLong("id"), (Long) rs.getObject("user_id", Long.class),
