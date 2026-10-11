@@ -3,14 +3,20 @@ package com.macrodash.feature.auth;
 import com.macrodash.config.AppProperties;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -93,6 +99,86 @@ class AuthControllerTest {
                 .as("탈퇴도 같은 사용자 기록").isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(controller.changePassword(new AuthController.PasswordRequest("member-password-1", "new-password-12345"),
                 request).getStatusCode()).as("맞는 비밀번호는 그래도 통과").isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @Disabled("QA-068: 재확인이 로그인과 느린 차선을 함께 씀 — 수정 커밋에서 켬")
+    @DisplayName("QA-068 비밀번호 재확인은 로그인과 느린 차선을 나눠 쓴다 — 로그인 대입 중에도 재확인이 '처리 중' 429를 받지 않는다")
+    void reauthenticationHasItsOwnSlowLane() throws Exception {
+        long memberId = db.user("member", "member-password-1", "MEMBER", "FREE");
+        CountDownLatch inSlowLane = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread[] loginThread = new Thread[1];
+        LoginThrottle throttle = new LoginThrottle(java.time.Clock.systemUTC(), millis -> {
+            if (Thread.currentThread() == loginThread[0]) {   // 로그인 쪽 느린 시도만 차선을 붙잡고 기다린다
+                inSlowLane.countDown();
+                release.await(5, TimeUnit.SECONDS);
+            }
+        });
+        AuthController separate = new AuthController(db.service(properties), accounts, throttle, properties);
+        MockHttpServletRequest loginRequest = new MockHttpServletRequest();
+        loginRequest.setRemoteAddr("10.0.0.7");
+        for (int i = 0; i < 5; i++) {
+            separate.login(new AuthController.LoginRequest(db.email("owner"), "wrong"), loginRequest);
+        }
+        loginThread[0] = new Thread(() ->
+                separate.login(new AuthController.LoginRequest(db.email("owner"), "wrong"), loginRequest));
+        loginThread[0].start();
+        assertThat(inSlowLane.await(5, TimeUnit.SECONDS)).isTrue();
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.setAttribute(CurrentUser.ATTRIBUTE,
+                    new CurrentUser(memberId, db.email("member"), "MEMBER", "FREE", null, false));
+            for (int i = 0; i < 5; i++) {
+                separate.changePassword(new AuthController.PasswordRequest("wrong", "new-password-12345"), request);
+            }
+            ResponseEntity<Map<String, Object>> slowed =
+                    separate.changePassword(new AuthController.PasswordRequest("wrong", "new-password-12345"), request);
+
+            assertThat(String.valueOf(slowed.getBody().get("message"))).doesNotContain("다른 확인 요청");
+        } finally {
+            release.countDown();
+            loginThread[0].join(5000);
+        }
+    }
+
+    @Test
+    @Disabled("QA-068: 재확인 한 번에 지금 비밀번호를 두 번 해시 — 수정 커밋에서 켬")
+    @DisplayName("QA-068 비밀번호 변경·탈퇴는 지금 비밀번호를 한 번만 확인한다(Argon2 16MB를 요청마다 한 번 더 돌리지 않게)")
+    void currentPasswordIsVerifiedOnce() {
+        long memberId = db.user("member", "member-password-1", "MEMBER", "FREE");
+        AtomicInteger checks = new AtomicInteger();
+        PasswordEncoder argon = Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+        PasswordHasher counting = new PasswordHasher(new PasswordEncoder() {
+            @Override
+            public String encode(CharSequence raw) {
+                return argon.encode(raw);
+            }
+
+            @Override
+            public boolean matches(CharSequence raw, String encoded) {
+                checks.incrementAndGet();
+                return argon.matches(raw, encoded);
+            }
+        });
+        AccountMail mail = org.mockito.Mockito.mock(AccountMail.class);
+        AuthController counted = new AuthController(
+                new AuthService(properties, db.users, db.sessions, db.audit, counting),
+                new AccountService(db.users, db.sessions, new com.macrodash.store.EmailTokenStore(db.jdbc), db.audit,
+                        counting, mail),
+                new LoginThrottle(java.time.Clock.systemUTC(), millis -> { }), properties);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(CurrentUser.ATTRIBUTE,
+                new CurrentUser(memberId, db.email("member"), "MEMBER", "FREE", null, false));
+
+        assertThat(counted.deleteAccount(new AuthController.DeleteRequest("wrong"), request).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(checks.get()).as("탈퇴: 지금 비밀번호 확인 한 번").isEqualTo(1);
+
+        checks.set(0);
+        assertThat(counted.changePassword(new AuthController.PasswordRequest("member-password-1", "new-password-12345"),
+                request).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(checks.get()).as("변경: 지금 비밀번호 한 번 + 새 비밀번호가 같은지 한 번").isEqualTo(2);
     }
 
     @Test
