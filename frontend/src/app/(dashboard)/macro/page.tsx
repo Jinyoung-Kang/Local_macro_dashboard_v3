@@ -120,15 +120,14 @@ export default function MacroPage() {
 
       {/* 자동 갱신 간격(머리말)은 늘 그리고 본문만 로딩·오류로 바꿉니다 — 1분 경계를 넘으면 경로(live)가 바뀌어
           페이지 전체가 로딩으로 바뀌고 방금 조작한 선택 상자가 사라졌습니다(QA-047). */}
+      {/* 상단에 둡니다 — 화면을 스크롤하며 눈으로 옮겨 적지 않아도 되도록,
+          "지금 이 대시보드가 들고 있는 값 전부"를 먼저 꺼낼 수 있게 합니다. */}
+      <RawSnapshotCard />
+
       {overview.loading && !data && <Loading label="매크로 지표를 불러오는 중…" />}
       {overview.error && <ErrorState message={overview.error} onRetry={overview.reload} />}
       {data && (
         <>
-
-        {/* 상단에 둡니다 — 화면을 스크롤하며 눈으로 옮겨 적지 않아도 되도록,
-            "지금 이 대시보드가 들고 있는 값 전부"를 먼저 꺼낼 수 있게 합니다. */}
-        <RawSnapshotCard />
-
         {!data?.available && (
           <Banner tone="warn">
             {data?.message ?? "매크로 데이터가 없습니다. 수집기를 실행하세요."}
@@ -181,46 +180,47 @@ export default function MacroPage() {
             </div>
           </Card>
         ))}
-
-        {/* 환율 카드 바로 아래에 둡니다 — 위에서 "지금 얼마인지"를 보고,
-            여기서 "어디서 왔는지"를 봅니다. */}
-        <FxCompareSection />
-
-        {data?.spreads && (
-          <>
-            <SpreadSection
-              title="10Y−2Y 장단기 금리차"
-              block={data.spreads.official10y2y}
-            />
-            <SpreadSection
-              title="30Y−2Y 장단기 금리차"
-              block={data.spreads.official30y2y}
-            />
-            <Card
-              title="장단기 금리차 해석 기준"
-              subtitle="역사적 분포에 근거한 참고치이며 투자 판단의 근거가 아닙니다."
-              source={SOURCES.internalRules}
-            >
-              <Table
-                rows={SPREAD_TABLE}
-                rowKey={(row) => row.state}
-                columns={[
-                  { key: "state", header: "시장 상태", render: (row) => row.state },
-                  { key: "value", header: "스프레드", render: (row) => row.value },
-                  { key: "reading", header: "시장의 심리 및 해석", render: (row) => row.reading },
-                  { key: "outcome", header: "경제적 귀결", render: (row) => row.outcome },
-                ]}
-              />
-            </Card>
-          </>
-        )}
-
-        <RiskSection risk={risk.data} loading={risk.loading} />
-        <AdvancedSection data={advanced.data} loading={advanced.loading} />
-        <SingleChartSection />
-        <ScrapedSection />
         </>
       )}
+
+      {/* 스스로 데이터를 읽는 섹션은 개요(overview)를 다시 읽는 동안에도 그대로 둡니다 — `data &&` 안에 두면
+          간격이 1분 경계를 넘을 때 함께 내려가 고른 계열·지표가 처음으로 돌아갔습니다(QA-066).
+          환율 카드 바로 아래에 둡니다 — 위에서 "지금 얼마인지"를 보고, 여기서 "어디서 왔는지"를 봅니다. */}
+      <FxCompareSection />
+
+      {data?.spreads && (
+        <>
+          <SpreadSection
+            title="10Y−2Y 장단기 금리차"
+            block={data.spreads.official10y2y}
+          />
+          <SpreadSection
+            title="30Y−2Y 장단기 금리차"
+            block={data.spreads.official30y2y}
+          />
+          <Card
+            title="장단기 금리차 해석 기준"
+            subtitle="역사적 분포에 근거한 참고치이며 투자 판단의 근거가 아닙니다."
+            source={SOURCES.internalRules}
+          >
+            <Table
+              rows={SPREAD_TABLE}
+              rowKey={(row) => row.state}
+              columns={[
+                { key: "state", header: "시장 상태", render: (row) => row.state },
+                { key: "value", header: "스프레드", render: (row) => row.value },
+                { key: "reading", header: "시장의 심리 및 해석", render: (row) => row.reading },
+                { key: "outcome", header: "경제적 귀결", render: (row) => row.outcome },
+              ]}
+            />
+          </Card>
+        </>
+      )}
+
+      <RiskSection risk={risk.data} loading={risk.loading} />
+      <AdvancedSection data={advanced.data} loading={advanced.loading} />
+      <SingleChartSection />
+      <ScrapedSection />
     </div>
   );
 }

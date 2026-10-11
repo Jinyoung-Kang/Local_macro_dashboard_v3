@@ -108,8 +108,8 @@ describe("QA-047 조건을 바꿔도 컨트롤이 남는다", () => {
 });
 
 describe("QA-066 페이지 조건을 바꿔도 스스로 읽는 하위 섹션의 선택이 남는다", () => {
-  // 수정 전에는 페이지 데이터가 비는 동안 `{data && …}`가 하위 섹션까지 내려 선택이 처음으로 돌아갔다.
-  it.fails("국면: 이력 기간을 바꿔도 판정 성과의 '관점' 선택이 그대로", async () => {
+  // 수정 전에는 페이지 데이터가 비는 동안 `{data && …}`가 하위 섹션까지 내려 선택이 처음으로 돌아갔다(it.fails).
+  it("국면: 이력 기간을 바꿔도 판정 성과의 '관점' 선택이 그대로", async () => {
     answerOnly("/api/analytics/regime?years=5", { available: true, timeline: [] });
     render(<RegimePage />);
     const view = (await screen.findByLabelText("관점")) as HTMLSelectElement;
@@ -121,7 +121,7 @@ describe("QA-066 페이지 조건을 바꿔도 스스로 읽는 하위 섹션의
     expect((screen.getByLabelText("관점") as HTMLSelectElement).value).toBe("all");
   });
 
-  it.fails("매크로: 자동 갱신 간격이 1분 경계를 넘어도 환율 비교에서 켠 계열이 그대로", async () => {
+  it("매크로: 자동 갱신 간격이 1분 경계를 넘어도 환율 비교에서 켠 계열이 그대로", async () => {
     api.apiGetShared.mockImplementation((path: string) => {
       if (path === "/api/macro/overview?live=true") return Promise.resolve({ available: true, categories: [] });
       if (path.startsWith("/api/macro/fx")) {

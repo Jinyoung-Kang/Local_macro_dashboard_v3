@@ -168,10 +168,17 @@ export default function RegimePage() {
           )}
         </Card>
 
-        <TrackRecordSection tone={TIMELINE_COLOR} />
+        </>
+      )}
 
-        <RegimeLogSection tone={TIMELINE_COLOR} />
+      {/* 스스로 데이터를 읽는 섹션은 이력 기간을 바꿔 판정을 다시 읽는 동안에도 그대로 둡니다 — `data &&` 안에
+          두면 함께 내려가 판정 성과에서 고른 자산·관점이 처음으로 돌아갔습니다(QA-066). */}
+      <TrackRecordSection tone={TIMELINE_COLOR} />
 
+      <RegimeLogSection tone={TIMELINE_COLOR} />
+
+      {data && (
+        <>
         <Card
           title="국면 이력" source={SOURCES.regime}
           subtitle="같은 규칙을 과거 날짜에 그대로 적용한 재현입니다(매주 목요일). 회색은 판정 불가 — 하이일드 스프레드 이력이 2023-09부터라 그 이전은 판정할 수 없습니다."
