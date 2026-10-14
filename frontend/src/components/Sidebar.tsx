@@ -19,8 +19,7 @@ import type { SessionUser } from "@/lib/types";
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
 
 /**
- * 좌측 메뉴 — 구버전 사이드바의 12개 메뉴를 그대로 옮겼습니다.
- * 순서도 같습니다: 분석 메뉴 → 데이터 상태 → AI → 연결 진단.
+ * 좌측 메뉴 — 분석 메뉴 → AI → 알림 → 데이터 상태 → 연결 진단 → 운영 순서입니다.
  */
 export const MENUS = [
   { href: "/macro", label: "거시경제 매크로 지표" },
@@ -32,12 +31,12 @@ export const MENUS = [
   { href: "/scorecard", label: "종목 스코어카드" },
   { href: "/cot", label: "글로벌 투기세력 (COT)" },
   { href: "/krx", label: "국내 파생 & 투기세력 (KRX)" },
-  { href: "/radar", label: "외국인/기관 수급 레이더" },
+  { href: "/radar", label: "외국인/기관 수급 레이더 (KRX)" },
   { href: "/regime", label: "시장 국면 판정" },
+  { href: "/ai/report", label: "AI 종합 데이터 분석" },
   { href: "/alerts", label: "알림" },
   { href: "/correlation", label: "지표 상관관계" },
   { href: "/status", label: "데이터 저장소 상태" },
-  { href: "/ai/report", label: "AI 종합 데이터 분석" },
   { href: "/connections", label: "외부 API 연결 테스트" },
   { href: "/admin/users", label: "사용자 관리" },
 ];
