@@ -125,7 +125,7 @@ public class AiService {
      */
     private static final Map<String, String> SPEED_HINTS = Map.of(
             "auto", "빠름 — 빠른 엔진부터 시도합니다",
-            "anthropic_haiku", "빠름 (약 1분 내외)",
+            "anthropic_haiku", "보통 (약 1분 내외)",
             "cerebras_llama", "매우 빠름 (수 초)",
             "cloudflare_llama", "빠름 (수 초)",
             "nvidia_llama_33_70b", "보통 (십수 초)",
