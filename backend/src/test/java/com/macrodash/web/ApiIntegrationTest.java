@@ -2,6 +2,7 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -578,6 +579,28 @@ class ApiIntegrationTest {
 
         assertThat(text).contains("- 수집 시각: ");
         assertThat(text).contains("원/달러 (USD/KRW): 1,389.50");
+    }
+
+    @Test
+    @Disabled("QA-097: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-097: /api/ai/snapshot-text도 /api/snapshot/text와 같은 응답 캐시를 거친다 — 같은 저장본이면 다시 만들지 않음")
+    void aiSnapshotTextSharesTheSnapshotTextCache() {
+        insertSnapshot(Datasets.SNAP_MACRO_COLLECTED, """
+                {"categories": [{"id": "fx", "title": "💵 통화 및 환율", "items": [{
+                  "key": "usdkrw", "name": "원/달러 (USD/KRW)", "status": "ok", "price": 1389.5, "priceStr": "1,389.50",
+                  "deltaStr": "-3.20 (-0.23%)", "prevStr": "1,392.70", "lastTs": "15:30:00 KST"}]}]}
+                """);
+        String cached = authorizedGet("/api/snapshot/text").path("text").asString();
+        assertThat(cached).contains("1,389.50");
+        // 수집 시각(= 캐시의 저장본 버전)은 그대로 두고 값만 바꿉니다. 같은 캐시를 거치면 다시 만들지 않으므로 앞의 텍스트가
+        // 그대로 나오고, 캐시 없이 매번 만들면 바뀐 값이 나옵니다.
+        jdbc.update("UPDATE snapshots SET payload = replace(payload::text, '1,389.50', '1,400.00')::jsonb WHERE name = ?",
+                Datasets.SNAP_MACRO_COLLECTED);
+
+        JsonNode body = authorizedGet("/api/ai/snapshot-text");
+
+        assertThat(body.path("text").asString()).isEqualTo(cached);
+        assertThat(body.size()).as("응답 모양은 지금과 같은 {text}").isEqualTo(1);
     }
 
     @Test
