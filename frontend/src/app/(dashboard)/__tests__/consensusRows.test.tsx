@@ -1,8 +1,8 @@
 /**
  * 교집합·공통 신규 매수가 CUSIP으로 갈라진 같은 이름의 행을 서로 구분해 보인다(QA-114).
  *
- * 백엔드는 공시 이름이 아니라 증권(CUSIP)으로 묶고(QA-083), 표시 이름은 겹칠 수 있습니다 — 한 기관이 클래스를
- * 'CAPSTKCLA'처럼 적어 ALPHABET A·C주가 두 행으로 남은 분기, 'ISHARES TR' 한 이름 아래 서로 다른 ETF. 화면이
+ * 백엔드는 공시 이름이 아니라 증권(CUSIP)으로 묶고(QA-083), 표시 이름은 겹칠 수 있습니다 — 클래스를 보통주 계열로 적은
+ * 기관이 하나도 없어('CAPSTKCLA'만) ALPHABET A·C주가 두 행으로 남은 경우(QA-121), 'ISHARES TR' 한 이름 아래 서로 다른 ETF. 화면이
  * 이름만 그리면 같은 이름표에 다른 숫자가 붙어 어느 증권의 값인지 읽을 수 없습니다.
  */
 import { cleanup, render, screen, within } from "@testing-library/react";

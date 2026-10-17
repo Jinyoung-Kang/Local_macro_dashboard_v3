@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -135,7 +134,6 @@ class Sec13FPortfolioTest {
 
     // ------------------------------------------------------------ QA-121 8분기에 쌓인 클래스 표기 중 하나가 자유 문구여도 A·C주는 한 줄
     @Test
-    @Disabled("QA-121: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-121 한 분기는 클래스를 'ALPHABET INC'(회사 이름), 다른 분기는 'CAPSTKCLA'(공백 없음)로 적어도 8분기 비중 추이의 A·C주는 한 줄")
     void shareClassesStayOneLineWhenSomeQuarterLabelsAreFreeText() {
         // 국민연금 저장본(백업 2026-10-12)의 모양: 2025-12-31은 A·C 모두 class 'ALPHABET INC', 2024-09-30은 'CAPSTKCLA'/'CAPSTKCLC',

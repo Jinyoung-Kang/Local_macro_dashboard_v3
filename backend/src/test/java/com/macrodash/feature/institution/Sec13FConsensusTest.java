@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -270,7 +269,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-121: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-121 한 기관이 클래스를 회사 이름('ALPHABET INC')으로 적어도, 다른 기관이 보통주 계열로 적은 A·C주는 한 행이다")
     void freeTextClassLabelDoesNotSplitShareClasses() {
         // 국민연금은 2025-12-31 분기에 A·C주의 class를 둘 다 'ALPHABET INC'로 공시했습니다(백업 2026-10-12).

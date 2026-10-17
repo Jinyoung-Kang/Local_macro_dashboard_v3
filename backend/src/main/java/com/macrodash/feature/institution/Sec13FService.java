@@ -541,11 +541,18 @@ public class Sec13FService {
      * 증권 키 위에서 지킵니다. 한 기관이 두 클래스를 들어도 보유 기관 1곳이고, 그 기관의 비중은 두 항목의 합입니다.
      *
      * <p>합치는 조건은 셋 다입니다. ① CUSIP 앞 6자리(발행사)가 같고 ② CUSIP 7~8번째 글자(발행 번호)가 숫자인 지분 증권이며
-     * ③ 그 증권에 붙은 클래스 표기가 모두 보통주 계열이고 펀드·ETF 이름이 아닐 것. 앞 6자리만 보면 iShares Trust(464287)처럼
-     * 한 발행사 아래 서로 다른 ETF 수백 개가 한 행이 되고, 같은 회사의 보통주와 우선주·전환사채도 합쳐집니다. 클래스 표기만
-     * 믿으면 안 되는 이유는 ②입니다 — 피셔는 전환사채를 'COM'으로 공시해(90353TAJ9 UBER — 발행 번호 'AJ'는 채권), 사채를
-     * 정리한 행이 보통주 행에 합쳐져 보통주를 그대로 든 기관이 '동시 매도'로 세어졌습니다(QA-113). 조건을 못 맞추면 합치지
-     * 않습니다 — 한 회사가 두 행으로 보이는 쪽이 다른 증권을 섞는 쪽보다 덜 틀립니다.
+     * ③ 그 증권에 붙은 클래스 표기 중 보통주가 아닌 표기(우선주·예탁증서·채권·워런트·펀드 — {@link #NOT_COMMON_CLASS})가
+     * <b>하나도 없고</b>, 보통주 계열 표기({@link #COMMON_CLASS})가 <b>하나 이상</b> 있으며, 이름이 펀드·ETF가 아닐 것.
+     * 앞 6자리만 보면 iShares Trust(464287)처럼 한 발행사 아래 서로 다른 ETF 수백 개가 한 행이 되고, 같은 회사의 보통주와
+     * 우선주·전환사채도 합쳐집니다. 클래스 표기만 믿으면 안 되는 이유는 ②입니다 — 피셔는 전환사채를 'COM'으로 공시해
+     * (90353TAJ9 UBER — 발행 번호 'AJ'는 채권), 사채를 정리한 행이 보통주 행에 합쳐져 보통주를 그대로 든 기관이 '동시 매도'로
+     * 세어졌습니다(QA-113). 조건을 못 맞추면 합치지 않습니다 — 한 회사가 두 행으로 보이는 쪽이 다른 증권을 섞는 쪽보다 덜 틀립니다.
+     *
+     * <p>③에서 '모든 표기가 보통주 계열'을 요구하지 않는 이유: 표기는 기관·분기마다 자유 문구라 회사 이름('ALPHABET INC')이나
+     * 공백 없는 줄임('CAPSTKCLA')도 옵니다. 비중 추이는 8분기 표기를 한 집계에 쌓으므로, '모두'를 요구하면 그런 분기가 하나만
+     * 있어도 그 회사의 A·C주가 조회한 모든 분기에서 두 줄로 갈리고(국민연금 ALPHABET), 조회 분기 수에 따라 줄 구성이
+     * 달라졌습니다(QA-121). 같은 CUSIP을 다른 기관·분기가 보통주 계열로 적었고 반대 표기가 없으면 그 증권은 보통주로 봅니다.
+     * 교집합과 비중 추이가 같은 규칙({@link Tally#commonStockIssuer})을 씁니다.
      *
      * <p>알려진 한계: 한 발행사 아래 서로 다른 사업을 따르는 트래킹 주식(Liberty Media 531229 아래 Formula One·Liberty Live·
      * SiriusXM 계열 'COM LBTY … C' 등)도 보통주 클래스로 보여 한 행으로 합쳐집니다. 이름 키를 쓰던 예전에도 같았고, 클래스
@@ -659,8 +666,9 @@ public class Sec13FService {
         }
 
         /**
-         * 지분 증권이고 보통주 계열이며 펀드가 아니면 발행사(CUSIP 앞 6자리), 아니면 null(합치지 않음).
-         * 기관마다 표기가 달라도 <b>모든</b> 표기가 조건을 맞춰야 합니다.
+         * 지분 증권이고 보통주이며 펀드가 아니면 발행사(CUSIP 앞 6자리), 아니면 null(합치지 않음).
+         * 기관·분기마다 표기가 달라도 보통주가 아닌 표기가 <b>하나도 없고</b> 보통주 계열 표기가 <b>하나 이상</b> 있어야 합니다 —
+         * 회사 이름·공백 없는 줄임 같은 자유 문구 표기는 어느 쪽으로도 세지 않습니다(QA-121).
          */
         String commonStockIssuer() {
             String text = cusip == null ? "" : String.valueOf(cusip).trim();
@@ -671,10 +679,15 @@ public class Sec13FService {
             if (!Character.isDigit(text.charAt(6)) || !Character.isDigit(text.charAt(7))) {
                 return null;
             }
+            boolean common = false;
             for (String cls : classes) {
-                if (!COMMON_CLASS.matcher(cls).find() || NOT_COMMON_CLASS.matcher(cls).find()) {
-                    return null;
+                if (NOT_COMMON_CLASS.matcher(cls).find()) {
+                    return null;   // 우선주·채권·펀드 표기가 한 번이라도 있으면 합치지 않습니다
                 }
+                common |= COMMON_CLASS.matcher(cls).find();
+            }
+            if (!common) {
+                return null;
             }
             for (String name : nameUsers.keySet()) {
                 if (FUND_NAME.matcher(name.toUpperCase(Locale.ROOT)).find()) {
