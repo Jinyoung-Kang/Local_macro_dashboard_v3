@@ -1,8 +1,10 @@
 package com.macrodash.feature.institution;
 
+import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -14,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -84,5 +87,30 @@ class Sec13FPortfolioTest {
 
         assertThat(series.get("MYSTERY CO")).as("2026-03-31 미보유 → 0, 2026-06-30 보유·비중 모름 → null")
                 .isEqualTo(Arrays.asList(0.0, null));
+    }
+
+    // ------------------------------------------------------------ QA-086 분기 수는 이력 범위일 뿐
+    @Test
+    @Disabled("QA-086: 수정 전 재현 — fix 커밋에서 켬")
+    @SuppressWarnings("unchecked")
+    @DisplayName("QA-086 '최근 1개 분기'를 골라도 저장된 직전 분기와 비교한다 — 분기 수는 목록·히트맵 범위에만")
+    void oneQuarterViewStillComparesWithStoredPreviousQuarter() {
+        Sec13FService service = service(NPS, """
+                [{"reportDate":"2026-06-30","holdings":[
+                    {"name":"APPLE INC","cusip":"037833100","class":"COM","value":1100,"shares":1100,"weight":60.0}]},
+                 {"reportDate":"2026-03-31","holdings":[
+                    {"name":"APPLE INC","cusip":"037833100","class":"COM","value":1000,"shares":1000,"weight":55.6},
+                    {"name":"COCA COLA CO","cusip":"191216100","class":"COM","value":800,"shares":500,"weight":44.4}]}]
+                """);
+
+        Map<String, Object> portfolio = service.portfolio(NPS, 1, 10);
+        List<Map<String, Object>> holdings = (List<Map<String, Object>>) portfolio.get("holdings");
+
+        Map<String, Object> apple = holdings.stream().filter(row -> "APPLE INC".equals(row.get("name"))).findFirst().orElseThrow();
+        assertThat(apple.get("action")).isEqualTo(HoldingsDiff.ADDED);
+        assertThat((Double) apple.get("weightDiff")).isCloseTo(4.4, within(1e-9));
+        assertThat(holdings).extracting(row -> row.get("action")).contains(HoldingsDiff.CLOSED);
+        assertThat((List<Object>) portfolio.get("quarters")).as("분기 목록은 고른 1개").hasSize(1);
+        assertThat((List<Object>) ((Map<String, Object>) portfolio.get("weightHistory")).get("dates")).hasSize(1);
     }
 }
