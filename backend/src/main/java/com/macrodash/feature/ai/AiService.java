@@ -858,21 +858,24 @@ public class AiService {
         return text.toString();
     }
 
-    /**
-     * 대기 한도별 Claude 클라이언트. 키는 생성자에 명시해 넘깁니다 — 넘기지 않으면 SDK가 환경 변수·
-     * 로컬 프로필에서 자격 증명을 찾아, 설정하지 않은 키로 조용히 호출할 수 있습니다.
-     */
+    /** 대기 한도별 Claude 클라이언트. */
     private AnthropicClient anthropicClient(int seconds) {
-        return anthropicClients.computeIfAbsent(seconds, limit -> {
-            AnthropicOkHttpClient.Builder builder = AnthropicOkHttpClient.builder()
-                    .apiKey(anthropicKey)
-                    .timeout(Duration.ofSeconds(limit))
-                    .maxRetries(0);
-            if (anthropicBaseUrl != null) {
-                builder.baseUrl(anthropicBaseUrl);
-            }
-            return builder.build();
-        });
+        return anthropicClients.computeIfAbsent(seconds, this::newAnthropicClient);
+    }
+
+    /**
+     * Claude 클라이언트를 새로 만듭니다. 키는 생성자에 명시해 넘깁니다 — 넘기지 않으면 SDK가 환경 변수·
+     * 로컬 프로필에서 자격 증명을 찾아, 설정하지 않은 키로 조용히 호출할 수 있습니다. 테스트가 만든 수를 셀 때 바꿔 끼웁니다.
+     */
+    AnthropicClient newAnthropicClient(int seconds) {
+        AnthropicOkHttpClient.Builder builder = AnthropicOkHttpClient.builder()
+                .apiKey(anthropicKey)
+                .timeout(Duration.ofSeconds(seconds))
+                .maxRetries(0);
+        if (anthropicBaseUrl != null) {
+            builder.baseUrl(anthropicBaseUrl);
+        }
+        return builder.build();
     }
 
     private Map<String, Object> callCloudflare(String label, String model,
