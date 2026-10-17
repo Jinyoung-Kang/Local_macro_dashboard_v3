@@ -187,10 +187,11 @@ public class Sec13FService {
     /**
      * 상위 종목의 분기별 비중 추이 (차트용).
      *
-     * <p>줄 하나는 <b>회사(이름) 하나</b>이고, 값은 그 분기에 같은 이름으로 든 항목들의 비중 합입니다 — 교집합이 한 기관의
-     * A·C주를 합치는 것과 같은 규칙입니다(QA-084). 예전에는 이름을 항목마다 목록에 넣고 분기마다 첫 항목만 읽어,
-     * ALPHABET A·C주가 상위에 함께 있으면 줄 하나가 덮여 사라지고 값은 A주 비중뿐이었습니다. 상위는 최신 분기의
-     * 합친 비중 순으로 고릅니다.
+     * <p>줄 하나는 <b>증권 하나</b>이고, 한 회사의 보통주 클래스(A·C주)만 한 줄로 합칩니다 — 교집합과 같은 집계
+     * ({@link Tally})·같은 규칙({@link #securityKey}, {@link #mergeShareClasses})을 기관 대신 <b>분기</b>를 단위로 씁니다
+     * (QA-084, QA-112). 값은 그 분기에 그 줄로 든 항목들의 비중 합입니다. 예전에는 공시 이름으로 묶어, 'ISHARES TR' 한
+     * 이름 아래 서로 다른 ETF(브리지워터: IVV 9.22% + MBS ETF 0.54% + …)가 한 줄 10.23%로 더해져 같은 화면 보유 표의
+     * 어느 행과도 맞지 않았고, 같은 이름의 보통주·우선주도 한 줄이 됐습니다. 상위는 최신 분기의 비중 순으로 고릅니다.
      */
     private Map<String, Object> weightHistory(List<JsonNode> quarters, int topN) {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -203,24 +204,47 @@ public class Sec13FService {
         List<JsonNode> ordered = new ArrayList<>(quarters);
         java.util.Collections.reverse(ordered);
         ordered.forEach(q -> dates.add(Json.asText(q, "reportDate")));
+        String latestDate = dates.get(dates.size() - 1);
 
-        List<Map<String, Double>> weightsByQuarter = ordered.stream().map(Sec13FService::weightByName).toList();
-        Map<String, Double> latest = weightsByQuarter.get(weightsByQuarter.size() - 1);
-        // 비중을 모르는 회사는 맨 뒤로. 같은 비중이면 저장본 순서(평가액 순)를 지킵니다(정렬은 안정적).
-        List<String> names = latest.keySet().stream()
-                .sorted(Comparator.comparingDouble((String name) ->
-                        latest.get(name) == null ? Double.NEGATIVE_INFINITY : latest.get(name)).reversed())
+        // 최신 분기부터 읽어, 같은 비중이면 최신 분기 저장본 순서(평가액 순)를 지킵니다(정렬은 안정적).
+        Map<String, Tally> bySecurity = new LinkedHashMap<>();
+        for (JsonNode quarter : quarters) {
+            String date = Json.asText(quarter, "reportDate");
+            for (Holding holding : HoldingsJson.holdings(quarter)) {
+                if (holding.name() == null && (holding.cusip() == null || holding.cusip().isBlank())) {
+                    continue;   // 어떤 증권인지 알 수 없습니다
+                }
+                Map<String, Object> row = new LinkedHashMap<>();   // Map.of는 null(모르는 비중)을 거부합니다
+                row.put("name", holding.name());
+                row.put("cusip", holding.cusip());
+                row.put("class", holding.cls());
+                row.put("weight", holding.weight());
+                // '기관' 자리에 분기를 넣습니다 — 한 분기에 같은 줄로 든 항목(A·C주)의 비중은 합입니다.
+                bySecurity.computeIfAbsent(securityKey(row), key -> new Tally(key, row.get("cusip"), null))
+                        .add(date, row);
+            }
+        }
+
+        // 비중을 모르는 줄은 맨 뒤로.
+        List<Tally> top = mergeShareClasses(bySecurity.values()).stream()
+                .filter(line -> line.holders.contains(latestDate))
+                .sorted(Comparator.comparingDouble((Tally line) -> {
+                    Double weight = line.weightByHolder.get(latestDate);
+                    return weight == null ? Double.NEGATIVE_INFINITY : weight;
+                }).reversed())
                 .limit(Math.max(1, Math.min(topN, 15)))
                 .toList();
 
+        List<String> labels = lineLabels(top, latestDate);
         Map<String, List<Double>> series = new LinkedHashMap<>();
-        for (String name : names) {
+        for (int i = 0; i < top.size(); i++) {
+            Tally line = top.get(i);
             List<Double> values = new ArrayList<>();
-            for (Map<String, Double> weights : weightsByQuarter) {
+            for (String date : dates) {
                 // 들고 있지 않은 분기는 0%가 맞습니다(데이터 없음이 아니라 미보유). 들고 있는데 비중을 모르면 null입니다.
-                values.add(weights.containsKey(name) ? weights.get(name) : Double.valueOf(0.0));
+                values.add(line.holders.contains(date) ? line.weightByHolder.get(date) : Double.valueOf(0.0));
             }
-            series.put(name, values);
+            series.put(labels.get(i), values);
         }
 
         out.put("dates", dates);
@@ -229,26 +253,50 @@ public class Sec13FService {
     }
 
     /**
-     * 한 분기의 이름 → 비중 합(저장본 순서 유지). 같은 이름의 항목(A·C주)은 아는 비중끼리 더하고,
-     * 그 이름의 비중을 하나도 모르면 null입니다 — 0으로 두면 '들고 있지 않음'과 구별되지 않습니다.
+     * 비중 추이의 줄 이름(series 키 — 화면의 이름표이자 차트 키).
+     *
+     * <p>최신 분기에 쓴 공시 이름입니다(아래 보유 표와 같은 이름). 고른 줄끼리 이름이 겹칠 때만 구분자를 덧붙입니다 —
+     * 먼저 클래스 표기('ISHARES TR · CORE S&P500 ETF'), 그것으로도 갈리지 않으면 CUSIP(합친 행은 발행사 6자리)입니다.
+     * 키가 겹치면 뒤의 줄이 앞의 줄을 덮어 화면에서 사라집니다.
      */
-    private static Map<String, Double> weightByName(JsonNode quarter) {
-        Map<String, Double> out = new LinkedHashMap<>();
-        for (JsonNode holding : Json.array(quarter, "holdings")) {
-            String name = Json.asText(holding, "name");
-            if (name == null) {
+    private static List<String> lineLabels(List<Tally> lines, String latestDate) {
+        List<String> names = lines.stream()
+                .map(line -> line.nameUsers.entrySet().stream()
+                        .filter(entry -> entry.getValue().contains(latestDate))
+                        .map(Map.Entry::getKey)
+                        .findFirst()
+                        .orElseGet(line::displayName))
+                .toList();
+        List<String> labels = new ArrayList<>(names);
+        for (String name : new LinkedHashSet<>(names)) {
+            List<Integer> same = new ArrayList<>();
+            for (int i = 0; i < names.size(); i++) {
+                if (names.get(i).equals(name)) {
+                    same.add(i);
+                }
+            }
+            if (same.size() < 2) {
                 continue;
             }
-            Double weight = Json.asDouble(holding, "weight");
-            Double sum = out.get(name);
-            // 삼항식으로 쓰면 Double과 double이 섞여 null이 언박싱됩니다(NPE). 나눠서 씁니다.
-            if (sum == null) {
-                out.put(name, weight);
-            } else if (weight != null) {
-                out.put(name, sum + weight);
+            List<String> byClass = same.stream()
+                    .map(i -> name + " · " + String.join("/", lines.get(i).classes))
+                    .toList();
+            boolean classesTell = same.stream().noneMatch(i -> lines.get(i).classes.contains(""))
+                    && new LinkedHashSet<>(byClass).size() == same.size();
+            for (int k = 0; k < same.size(); k++) {
+                int i = same.get(k);
+                labels.set(i, classesTell ? byClass.get(k) : name + " · " + lines.get(i).identifier());
             }
         }
-        return out;
+        // 그래도 겹치면(CUSIP이 없는 같은 이름 두 줄 등) 고유 키를 붙입니다 — 줄이 사라지는 것보다 낫습니다.
+        Set<String> used = new LinkedHashSet<>();
+        for (int i = 0; i < labels.size(); i++) {
+            if (!used.add(labels.get(i))) {
+                labels.set(i, labels.get(i) + " · " + lines.get(i).key);
+                used.add(labels.get(i));
+            }
+        }
+        return labels;
     }
 
     /**
@@ -529,6 +577,9 @@ public class Sec13FService {
      * 보유 기관·평가액·비중에는 들어가지 않습니다. 예전에는 평가액·비중 0인 전량 매도 행을 그대로 더해, 지금 들고
      * 있지 않은 기관이 '보유 기관'으로 세어지고 평균 비중이 그만큼 낮아졌습니다. 한 기관이 A주는 들고 C주만 전량
      * 매도했다면 A주 행으로 보유 기관에 남습니다 — 보유 기관은 '전량 매도가 아닌 행이 하나라도 있는 기관'입니다.
+     *
+     * <p>기관 1곳의 비중 추이({@link #weightHistory})도 이 집계를 씁니다. 그때는 기관 자리에 <b>분기(reportDate)</b>가
+     * 들어가, holders는 그 줄을 든 분기, weightByHolder는 분기마다의 비중 합입니다 — 묶는 규칙이 교집합과 하나입니다(QA-112).
      */
     private static final class Tally {
         /**
@@ -631,6 +682,14 @@ public class Sec13FService {
                             .thenComparing(Map.Entry::getKey))
                     .map(Map.Entry::getKey)
                     .orElseGet(() -> cusip == null ? "(이름 없음)" : String.valueOf(cusip));
+        }
+
+        /** 이름이 겹치는 행을 가르는 식별자 — 보통주 클래스를 합친 행은 발행사(CUSIP 앞 6자리), 아니면 CUSIP. */
+        String identifier() {
+            if (key.startsWith("issuer:")) {
+                return "발행사 " + key.substring("issuer:".length());
+            }
+            return cusip == null ? "CUSIP 없음" : "CUSIP " + cusip;
         }
 
         /** 비중을 아는 기관들의 평균. 하나도 모르면 null. */

@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -91,7 +90,6 @@ class Sec13FPortfolioTest {
 
     // ------------------------------------------------------------ QA-112 비중 추이도 교집합과 같은 증권 단위
     @Test
-    @Disabled("QA-112: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-112 이름이 같은 서로 다른 ETF(ISHARES TR 아래 두 CUSIP)는 두 줄로 남고 각자의 비중을 가진다 — 보유 표와 같은 숫자")
     void differentEtfsUnderOneNameStayTwoLines() {
         // 브리지워터 저장본의 모양: iShares Trust(464287·464288) 아래 서로 다른 ETF가 'ISHARES TR' 한 이름으로 공시됩니다.
@@ -115,7 +113,6 @@ class Sec13FPortfolioTest {
     }
 
     @Test
-    @Disabled("QA-112: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-112 같은 이름의 보통주와 우선주는 합치지 않고, 클래스 표기로도 갈리지 않으면 CUSIP을 붙여 줄 이름을 가른다")
     void commonAndPreferredStaySeparateAndLabelsStayUnique() {
         Sec13FService service = service(NPS, """

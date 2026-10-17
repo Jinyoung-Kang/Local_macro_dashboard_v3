@@ -27,7 +27,10 @@ export interface PortfolioResponse {
   quarters: { filingDate: string; reportDate: string; totalValue: number; holdingCount: number }[];
   latest?: { reportDate: string; filingDate: string; totalValue: number | null };
   holdings: Holding[];
-  /** 줄 하나 = 회사(이름) 하나, 값 = 그 분기 같은 이름 항목들의 비중 합. 미보유 분기는 0, 들고 있는데 비중을 모르면 null */
+  /**
+   * 줄 하나 = 증권 하나(한 회사의 보통주 클래스만 합침 — 교집합과 같은 규칙), 값 = 그 분기 그 줄 항목들의 비중 합.
+   * 키는 최신 분기의 공시 이름이고, 이름이 겹치는 줄에만 클래스 표기나 CUSIP이 붙습니다. 미보유 분기는 0, 들고 있는데 비중을 모르면 null
+   */
   weightHistory?: { dates: string[]; series: Record<string, (number | null)[]> };
 }
 
