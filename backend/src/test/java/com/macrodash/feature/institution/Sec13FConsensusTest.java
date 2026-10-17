@@ -3,6 +3,7 @@ package com.macrodash.feature.institution;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -212,5 +213,110 @@ class Sec13FConsensusTest {
         Map<String, Object> x = rowNamed(rows(service.consensus(List.of(NPS, VANGUARD), null, 1, 200)), "X CORP");
         assertThat(x.get("holderCount")).isEqualTo(1);
         assertThat(x.get("sellCount")).as("뱅가드의 전량 매도도 '동시 매도'").isEqualTo(1L);
+    }
+
+    // ------------------------------------------------------------ QA-083 공시 이름이 아니라 증권(CUSIP)으로 묶는다
+    private static final String FISHER = "0000850529";
+
+    /** 두 분기에 같은 항목을 든 저장본(직전 분기는 평가액·비중만 조금 작게). */
+    private static String steady(String holdingsJson) {
+        return """
+            [{"reportDate":"2026-06-30","holdings":[%s]},
+             {"reportDate":"2026-03-31","holdings":[%s]}]
+            """.formatted(holdingsJson, holdingsJson);
+    }
+
+    @Test
+    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-083 같은 CUSIP을 기관마다 다른 이름으로 공시해도 한 종목이다 — 표시 이름은 가장 많이 쓰인 이름")
+    void sameCusipUnderDifferentNamesIsOneRow() {
+        Sec13FService service = service(Map.of(
+                NPS, steady("""
+                    {"name":"NVIDIA CORPORATION","cusip":"67066G104","class":"COM","value":1000,"shares":10,"weight":10.0}"""),
+                NORGES, steady("""
+                    {"name":"NVIDIA CORPORATION","cusip":"67066G104","class":"COM","value":3000,"shares":30,"weight":3.0}"""),
+                FISHER, steady("""
+                    {"name":"NVIDIA CORP COM","cusip":"67066G104","class":"COM","value":2000,"shares":20,"weight":5.0}""")));
+
+        List<Map<String, Object>> rows = rows(service.consensus(List.of(NPS, NORGES, FISHER), null, 2, 10));
+
+        assertThat(rows).as("피셔의 'NVIDIA CORP COM'이 따로 갈라지면 안 됨").hasSize(1);
+        Map<String, Object> nvidia = rows.get(0);
+        assertThat(nvidia.get("name")).isEqualTo("NVIDIA CORPORATION");
+        assertThat(nvidia.get("holderCount")).isEqualTo(3);
+        assertThat(nvidia.get("totalValue")).isEqualTo(6000.0);
+        assertThat(nvidia.get("cusip")).isEqualTo("67066G104");
+    }
+
+    @Test
+    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-083 한 회사의 A·C주는 기관마다 클래스 표기가 달라도 한 행이다(B-2 유지)")
+    void shareClassesOfOneIssuerStayOneRowAcrossLabels() {
+        Sec13FService service = service(Map.of(
+                NPS, steady("""
+                    {"name":"ALPHABET INC","cusip":"02079K305","class":"CAP STK CL A","value":600,"shares":10,"weight":6.0},
+                    {"name":"ALPHABET INC","cusip":"02079K107","class":"CAP STK CL C","value":400,"shares":10,"weight":4.0}"""),
+                FISHER, steady("""
+                    {"name":"ALPHABET INC CLASS A","cusip":"02079K305","class":"COM","value":1000,"shares":20,"weight":2.0}""")));
+
+        List<Map<String, Object>> rows = rows(service.consensus(List.of(NPS, FISHER), null, 2, 10));
+
+        assertThat(rows).hasSize(1);
+        Map<String, Object> alphabet = rows.get(0);
+        assertThat(alphabet.get("name")).as("같은 표 수면 짧은 이름").isEqualTo("ALPHABET INC");
+        assertThat(alphabet.get("holderCount")).isEqualTo(2);
+        assertThat(alphabet.get("totalValue")).isEqualTo(2000.0);
+        assertThat(alphabet.get("maxWeight")).as("국민연금의 ALPHABET 비중 = 6 + 4").isEqualTo(10.0);
+        assertThat(alphabet.get("avgWeight")).isEqualTo(6.0);
+    }
+
+    @Test
+    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-083 이름이 같아도 다른 증권(서로 다른 ETF, 보통주와 우선주)은 한 행으로 합치지 않는다 — 행마다 고유 key")
+    void differentSecuritiesUnderOneNameStaySeparate() {
+        // iShares Trust 아래 서로 다른 ETF 둘(발행사 6자리 464287은 같음)과, 웰스파고 보통주·우선주.
+        Sec13FService service = service(Map.of(
+                NPS, steady("""
+                    {"name":"ISHARES TR","cusip":"464287200","class":"COM","value":900,"shares":9,"weight":9.0},
+                    {"name":"WELLS FARGO & CO","cusip":"949746101","class":"COM","value":500,"shares":5,"weight":5.0}"""),
+                FISHER, steady("""
+                    {"name":"ISHARES TR","cusip":"464287655","class":"COM","value":800,"shares":8,"weight":8.0},
+                    {"name":"WELLS FARGO & CO","cusip":"949746804","class":"PERP PFD CNV A","value":400,"shares":4,"weight":4.0}""")));
+
+        assertThat(rows(service.consensus(List.of(NPS, FISHER), null, 2, 10)))
+                .as("두 기관이 공통으로 든 증권은 없음")
+                .isEmpty();
+
+        List<Map<String, Object>> rows = rows(service.consensus(List.of(NPS, FISHER), null, 1, 10));
+        assertThat(rows).hasSize(4);
+        assertThat(rows).allSatisfy(row -> assertThat(row.get("holderCount")).isEqualTo(1));
+        assertThat(rows.stream().map(row -> row.get("key")).distinct().count())
+                .as("이름이 겹쳐도 화면이 행을 구분할 고유 key")
+                .isEqualTo(4L);
+    }
+
+    @Test
+    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-083 공통 신규 매수도 증권으로 센다 — 같은 CUSIP을 다른 이름으로 새로 담은 두 기관은 2곳")
+    void newBuysCountSameCusipUnderDifferentNames() {
+        Sec13FService service = service(Map.of(
+                NPS, """
+                    [{"reportDate":"2026-06-30","holdings":[
+                        {"name":"NVIDIA CORPORATION","cusip":"67066G104","class":"COM","value":1000,"shares":10,"weight":10.0}]},
+                     {"reportDate":"2026-03-31","holdings":[
+                        {"name":"APPLE INC","cusip":"037833100","class":"COM","value":900,"shares":10,"weight":9.0}]}]
+                    """,
+                FISHER, """
+                    [{"reportDate":"2026-06-30","holdings":[
+                        {"name":"NVIDIA CORP COM","cusip":"67066G104","class":"COM","value":2000,"shares":20,"weight":5.0}]},
+                     {"reportDate":"2026-03-31","holdings":[
+                        {"name":"APPLE INC","cusip":"037833100","class":"COM","value":900,"shares":10,"weight":9.0}]}]
+                    """));
+
+        List<Map<String, Object>> rows = rows(service.newBuys(List.of(NPS, FISHER), null, 2));
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("buyerCount")).isEqualTo(2);
+        assertThat(rows.get(0).get("totalValue")).isEqualTo(3000.0);
     }
 }
