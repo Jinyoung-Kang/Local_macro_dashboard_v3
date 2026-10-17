@@ -215,6 +215,42 @@ def test_상한을_넘긴_작업이_끝나기_전에는_같은_태스크를_다�
     assert len(runs) == 2 and peak[0] == 1
 
 
+@pytest.mark.xfail(strict=True, reason="QA-117: 수정 전 재현 — fix 커밋에서 켬")
+def test_QA117_좀비가_도는_동안의_호출도_실행_기록을_한_줄_남긴다(monkeypatch):
+    """
+    상태 화면의 '다시 실행'은 시작만 요청하고(백그라운드), 실행 기록에 기준 시각보다 새 행이 생길 때까지 최대 15분
+    기다립니다. 좀비가 도는 동안의 호출은 '이전 수집이 아직 진행 중'을 돌려주기만 하고 기록을 남기지 않아, 화면이
+    15분을 기다린 뒤 '아직 진행 중… 끝나면 아래 표에 결과가 나타납니다'라고 틀리게 안내했습니다(좀비의 늦은 결과는
+    기록되지 않으므로 표에 새 행이 생기지 않음). 그 15분 동안 다른 태스크의 '다시 실행'도 막혔습니다.
+    곧바로 ⚠️(기존 저장본 유지) 한 줄을 남겨 화면 폴링이 바로 끝나고 사실대로 안내되게 합니다.
+    """
+    monkeypatch.setitem(tasks.TASK_DEADLINE_SECONDS, "fast", 0.2)
+    recorded: list[dict] = []
+    monkeypatch.setattr(tasks.store, "record_task_run",
+                        lambda run_id, task, **kw: recorded.append({"run_id": run_id, "task": task, **kw}))
+    release = threading.Event()
+    task = tasks.Task("zombie_task", "fast", lambda: release.wait(5) and "늦은 결과", "")
+    try:
+        tasks.run_task(task, 1)                       # 시간 초과 — 기록 1건('error'), 작업 스레드는 계속 돕니다
+        assert [row["status"] for row in recorded] == ["error"]
+
+        ok, detail = tasks.run_task(task, 2)          # 좀비가 아직 도는 중(수동 '다시 실행'과 같은 호출)
+    finally:
+        release.set()
+        deadline = time.time() + 3
+        while task.name in tasks._inflight and time.time() < deadline:
+            time.sleep(0.01)
+
+    assert ok is True and "아직 진행 중" in detail
+    assert len(recorded) == 2, f"좀비가 도는 동안의 호출이 실행 기록을 {len(recorded) - 1}건 남겼습니다(1건이어야 함)"
+    row = recorded[-1]
+    assert row["run_id"] == 2 and row["task"] == "zombie_task" and row["speed"] == "fast"
+    assert row["status"] == "empty", "✅로 적으면 아무것도 받지 않았는데 정상으로 보입니다"
+    assert row["duration_ms"] == 0
+    assert row["detail"] == detail
+    assert row["started_at"] is not None
+
+
 def test_워커를_얻지_못한_작업은_취소하고_외부_장애와_다른_사유로_남긴다(monkeypatch):
     """
     태스크는 워커 8개짜리 풀 하나를 함께 씁니다. 좀비가 워커를 모두 잡고 있으면 소스가 멀쩡한 태스크도 상한 안에
