@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from .. import catalog, http, indicators, store
+from .. import catalog, equities, http, indicators, store
 from ..services import (
     sec13f as sec_service,
 )
@@ -29,6 +29,9 @@ def task_sec_13f() -> str:
        q8만 수집하고 q1은 잘라서 저장합니다 (수집 24건 → 12건).
     2) SEC 한도는 토큰 버킷이 전역으로 지키므로 기관을 병렬 처리해도
        합계 한도를 넘지 않습니다.
+
+    저장할 때 보유마다 티커(``ticker``, 모르면 None)를 붙입니다 — 매핑표(equities)의 두 단계 매칭.
+    이어받은(isStale) 분기도 함께 붙이므로 매핑표에 이름을 더하면 다음 실행부터 모든 분기에 반영됩니다(QA-087).
     """
     # 설정이 없으면 기관 12곳에 같은 실패를 12번 만들지 않고 여기서 한 번 말합니다.
     try:
@@ -57,6 +60,7 @@ def task_sec_13f() -> str:
                 errors.append(f"{name}: {payload.get('error') or '빈 결과'}")
                 continue
 
+            equities.attach_tickers(payload["quarters"])
             store.put_snapshot(catalog.snap_sec_13f(cik, quarters), payload)
             saved += 1
 

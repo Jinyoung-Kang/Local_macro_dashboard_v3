@@ -230,6 +230,18 @@ _SUFFIXES = {
 }
 
 
+# 펀드·ETF·신탁을 뜻하는 토큰(이름·클래스). 2단계(법인격 제거) 매칭에서 이런 보유가 운영회사에 붙지 않게 합니다.
+# 'ETF'·'TR'은 위 접미사에도 있어, 'GOLDMAN SACHS ETF TR'(운용사의 ETF 신탁)의 핵심 이름이 'GOLDMAN SACHS'가 되어
+# 골드만삭스 주식(GS)에 붙었습니다(QA-087). 매핑표에 ETF로 적어 둔 이름(SPY·QQQ)은 정확히 일치로 찾습니다.
+_FUND_TOKENS = {
+    "ETF", "ETFS", "ETN", "ETNS", "TR", "TRUST", "FUND", "FUNDS", "FD", "FDS",
+    "PORTFOLIO", "INDEX", "UNIT", "UNITS", "BEN",
+}
+# 주식이 아닌 증권(노트·전환사채·채권)을 뜻하는 클래스(titleOfClass) 토큰. 회사 이름이 같아도 주가로 덮지 않습니다.
+_DEBT_TOKENS = {"NOTE", "NOTES", "DEBT", "DEB", "DBCV", "SDCV", "BOND", "BONDS"}
+FUND_SECTOR = "ETF·펀드"
+
+
 def normalize(name: str) -> str:
     """대문자·영숫자만 남기고 공백을 하나로. '&'는 남깁니다(JOHNSON & JOHNSON)."""
     if not name:
@@ -252,20 +264,62 @@ for _key, _value in EQUITY_MAP.items():
     _BY_CORE.setdefault(core(_key), _value)
 
 
-def lookup(name: str) -> tuple[str, str] | None:
+def _tokens(text: str | None) -> set[str]:
+    return set(normalize(text or "").split(" ")) - {""}
+
+
+def lookup(name: str, title_class: str = "") -> tuple[str, str] | None:
     """
     13F 종목명 → (티커, 섹터). 모르면 None.
 
     <b>추측하지 않습니다.</b> 이름이 비슷하다고 아무 티커나 붙이면 엉뚱한 회사의
     가격으로 위험을 계산하게 됩니다. 두 단계(정확히 일치 → 법인격 제거 후 일치)
-    모두 실패하면 "모른다"로 둡니다.
+    모두 실패하면 "모른다"로 둡니다. 이름이나 클래스가 펀드·ETF·신탁을 뜻하면 2단계로
+    운영회사에 붙이지 않습니다('GOLDMAN SACHS ETF TR' ≠ GS).
     """
     if not name:
         return None
     hit = _BY_NORMALIZED.get(normalize(name))
     if hit:
         return hit
-    return _BY_CORE.get(core(name))
+    hit = _BY_CORE.get(core(name))
+    if hit and hit[1] != FUND_SECTOR and (_tokens(name) | _tokens(title_class)) & _FUND_TOKENS:
+        return None
+    return hit
+
+
+def lookup_holding(holding: dict) -> tuple[str, str] | None:
+    """
+    13F 보유 한 줄(sec13f 저장 형태) → (티커, 섹터). 모르면 None.
+
+    lookup()에 클래스(titleOfClass)를 함께 넘기고, 주식이 아닌 행은 처음부터 덮지 않습니다 —
+    채권 원금(PRN, 저장본의 shares가 None)·노트·전환사채는 회사 이름이 같아도 주가와 다른 증권입니다.
+    """
+    if "shares" in holding and holding["shares"] is None:
+        return None
+    if _tokens(holding.get("class")) & _DEBT_TOKENS:
+        return None
+    return lookup(holding.get("name") or "", holding.get("class") or "")
+
+
+def attach_tickers(quarters: list[dict]) -> int:
+    """
+    13F 분기 목록의 보유마다 ``ticker``(모르면 None)를 붙입니다. 붙인(찾은) 수를 돌려줍니다.
+
+    백엔드 위험 분석은 이 값을 먼저 씁니다. 예전에는 백엔드가 이름을 매핑표 키와 정확히 비교만 해서
+    'NVIDIA CORPORATION'처럼 표기가 다른 최대 보유 종목이 '매핑표에 없음'으로 빠졌습니다(QA-087).
+    매칭 규칙을 수집기 한 곳(이 모듈)에만 두려고 저장할 때 붙입니다. None도 적어 두는 이유: 백엔드가 '수집기가
+    모른다고 정한 것'(펀드·채권)과 '티커를 붙이기 전 옛 저장본'을 구분해, 옛 저장본만 이름으로 다시 찾습니다.
+    """
+    found = 0
+    for quarter in quarters:
+        for holding in quarter.get("holdings") or []:
+            if not isinstance(holding, dict):
+                continue
+            hit = lookup_holding(holding)
+            holding["ticker"] = hit[0] if hit else None
+            found += hit is not None
+    return found
 
 
 def all_tickers() -> tuple[str, ...]:

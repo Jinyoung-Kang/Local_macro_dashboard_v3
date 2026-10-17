@@ -4,7 +4,6 @@ import com.macrodash.Kst;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -63,7 +62,6 @@ class GuruServiceRiskMatchingTest {
     }
 
     @Test
-    @Disabled("QA-087: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-087 보유에 붙은 티커를 먼저 쓴다 — 'NVIDIA CORPORATION'도 NVDA로 덮고, 수집기가 모른다고 정한 채권은 이름으로 덮지 않는다")
     void holdingTickerComesFirst() {
         String cik = Institutions.ciks().get(0);

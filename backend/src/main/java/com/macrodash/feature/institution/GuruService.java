@@ -260,6 +260,7 @@ public class GuruService {
         JsonNode payload = priceSnapshot.get().payload();
         JsonNode nameMap = Json.child(payload, "nameMap");
         JsonNode tickers = Json.child(payload, "tickers");
+        Map<String, JsonNode> mappedByTicker = byTicker(nameMap);
 
         JsonNode latest = quarters.get(0);
         out.put("reportDate", Json.asText(latest, "reportDate"));
@@ -283,8 +284,19 @@ public class GuruService {
             totalCount++;
             totalWeight += weight;
 
-            JsonNode mapped = nameMap == null ? null : nameMap.get(name);
-            String ticker = mapped == null ? null : Json.asText(mapped, "ticker");
+            // 수집기가 13F를 저장할 때 두 단계 매칭(펀드·채권 제외)으로 붙인 티커를 먼저 씁니다(QA-087). 예전처럼 이름을
+            // 매핑표 키와 정확히 비교만 하면 'NVIDIA CORPORATION' 같은 최대 보유 종목이 '매핑표에 없음'으로 빠졌습니다.
+            // ticker 필드가 없는 옛 저장본만 이름으로 찾습니다. null이면 수집기가 모른다고 정한 것(펀드·채권 등)이라
+            // 이름으로 다시 찾지 않습니다.
+            JsonNode mapped;
+            String ticker;
+            if (holding.has("ticker")) {
+                ticker = Json.asText(holding, "ticker");
+                mapped = ticker == null ? null : mappedByTicker.get(ticker);
+            } else {
+                mapped = nameMap == null ? null : nameMap.get(name);
+                ticker = mapped == null ? null : Json.asText(mapped, "ticker");
+            }
             // 수집 실패로 이어받은 가격(isStale)은 마지막 날 뒤로 값이 없어, 넣으면 모든 보유 종목 날짜의 교집합이
             // 그날에 묶입니다. 빼고 이유를 적습니다(QA-065).
             boolean stale = ticker != null && tickers != null && Json.asBoolean(tickers.get(ticker), "isStale");
@@ -439,6 +451,20 @@ public class GuruService {
     }
 
     /** 매핑표의 섹터. 없으면 "미분류" — String.valueOf(null)은 문자열 "null"을 만들어 화면에 그대로 나갔습니다. */
+    /** 매핑표를 티커로 다시 묶습니다(섹터를 찾는 데 씁니다). 같은 티커의 이름이 여럿이면 처음 것. */
+    private static Map<String, JsonNode> byTicker(JsonNode nameMap) {
+        Map<String, JsonNode> out = new LinkedHashMap<>();
+        if (nameMap != null && nameMap.isObject()) {
+            for (Map.Entry<String, JsonNode> entry : nameMap.properties()) {
+                String ticker = Json.asText(entry.getValue(), "ticker");
+                if (ticker != null) {
+                    out.putIfAbsent(ticker, entry.getValue());
+                }
+            }
+        }
+        return out;
+    }
+
     static String sectorLabel(JsonNode mapped) {
         String sector = Json.asText(mapped, "sector");
         return sector == null || sector.isBlank() ? "미분류" : sector;

@@ -94,7 +94,6 @@ def test_equity_task_keeps_previous_snapshot_when_everything_fails(store, monkey
 
 
 # ---- QA-087: 13F 이름 변형(NVIDIA CORPORATION 등)이 위험 분석에서 '매핑표에 없음'으로 빠지던 문제 ---------------
-@pytest.mark.xfail(strict=True, reason="QA-087: 수정 전 재현 — 2단계 매칭이 펀드·ETF·신탁을 운영회사에 붙임")
 def test_QA087_펀드_ETF_신탁은_법인격을_떼도_운영회사에_붙지_않는다():
     """
     'ETF'·'TR'은 법인격 표기와 함께 떼어 내는 토큰이라, 'GOLDMAN SACHS ETF TR'(골드만삭스 운용 ETF 신탁)이
@@ -114,7 +113,6 @@ def _holding(name, cls="COM", shares=10.0, weight=10.0):
     return {"name": name, "class": cls, "cusip": "000000000", "value": weight, "shares": shares, "weight": weight}
 
 
-@pytest.mark.xfail(strict=True, reason="QA-087: 수정 전 재현 — 13F 저장본 보유 항목에 티커가 없음")
 def test_QA087_13F를_저장할_때_보유마다_두_단계_매칭으로_티커를_붙인다(store, monkeypatch):
     """
     백엔드 위험 분석은 이름을 매핑표 키와 정확히 비교만 해, 'NVIDIA CORPORATION'(국민연금 등 최대 보유)이 '매핑표에 없음'으로
