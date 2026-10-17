@@ -285,3 +285,68 @@ def test_QA034_보충_중_실패한_날에서_멈춰_다음_실행이_그날부�
 
     assert fake.observations == [], "실패한 날 뒤의 날짜를 먼저 저장하면 그날은 다시 받지 않습니다"
     assert "2페이지 응답 오류" in str(caught.value), "실패 사유가 상태 화면에 남습니다"
+
+
+# ---- QA-078: 끝까지 받지 못한 하루치를 완전한 날로 저장하던 문제 ------------------------------------------
+def _xml_without_total(items: list[dict]) -> SimpleNamespace:
+    """totalCount 태그가 없는 응답(게이트웨이 이상 등)."""
+    response = _xml(items, 0)
+    return SimpleNamespace(text=response.text.replace("<totalCount>0</totalCount>", ""), status_code=200)
+
+
+def _paged(monkeypatch, pages: dict[int, SimpleNamespace]) -> list[int]:
+    monkeypatch.setattr(fsc.settings, "data_go_kr_key", lambda: "k" * 20)
+    seen: list[int] = []
+
+    def fake_get(url, params, **kwargs):
+        seen.append(params["pageNo"])
+        return pages[params["pageNo"]]
+
+    monkeypatch.setattr(fsc.publicapi, "get", fake_get)
+    return seen
+
+
+@pytest.mark.xfail(strict=True, reason="QA-078: 수정 전 재현 — totalCount보다 적게 받아도 그대로 돌려줌")
+def test_QA078_totalCount보다_적게_받고_페이지가_비면_실패한다(monkeypatch):
+    """
+    2페이지가 resultCode 00에 0건으로 오면 예전에는 1페이지 행만 '그날 전체'로 돌려줘, 시장 합계가 실제의 일부로
+    저장되고 저장된 마지막 기준일이 그날로 올라가 다시 받지 않았습니다. 실패로 올려야 QA-034의 '실패한 날에서 멈춤'을 탑니다.
+    """
+    _paged(monkeypatch, {1: _xml([dict(SAMSUNG, srtnCd="000001")], 2), 2: _xml([], 2)})
+    with pytest.raises(publicapi.PublicApiError, match="totalCount"):
+        fsc.fetch_day("20260923", publicapi.CallBudget(10))
+
+
+@pytest.mark.xfail(strict=True, reason="QA-078: 수정 전 재현 — totalCount가 없으면 1페이지만 받고 멈춤")
+def test_QA078_totalCount가_없으면_실패한다(monkeypatch):
+    """전체 종목 수를 모르면 끝까지 받았는지 알 수 없습니다. 1페이지만 받고 '완전한 날'로 저장하지 않습니다."""
+    pages = _paged(monkeypatch, {1: _xml_without_total([SAMSUNG])})
+    with pytest.raises(publicapi.PublicApiError, match="totalCount"):
+        fsc.fetch_day("20260923", publicapi.CallBudget(10))
+    assert pages == [1]
+
+
+def test_QA078_1페이지가_비고_totalCount도_없으면_발표_전이다(monkeypatch):
+    """1페이지가 비고 전체 수도 없거나 0이면 아직 발표 전(또는 휴장일)입니다 — 실패가 아니라 빈 날입니다."""
+    _paged(monkeypatch, {1: _xml_without_total([])})
+    assert fsc.fetch_day("20260923", publicapi.CallBudget(10))[0] == []
+    _paged(monkeypatch, {1: _xml([], 0)})
+    assert fsc.fetch_day("20260923", publicapi.CallBudget(10))[0] == []
+
+
+@pytest.mark.xfail(strict=True, reason="QA-078: 수정 전 재현 — 잘린 하루치가 저장됨")
+def test_QA078_잘린_하루치는_저장하지_않고_그날에서_멈춘다(monkeypatch):
+    """태스크 경로: 잘린 응답이 저장되지 않고, 저장본이 있는 보충이므로 그날에서 멈춰 다음 실행이 다시 받습니다."""
+    from datetime import datetime
+
+    from app import tasks
+
+    today = datetime.now(tasks.KST).date()
+    candidates = tasks._fsc_candidate_dates(today)
+    fake = _FakeStore(latest=candidates[1].isoformat())   # 하루 보충
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
+    _paged(monkeypatch, {1: _xml([dict(SAMSUNG, srtnCd="000001")], 2), 2: _xml([], 2)})
+
+    with pytest.raises(tasks.EmptyResult):
+        tasks.task_fsc_prices()
+    assert fake.observations == [] and fake.timeseries == []
