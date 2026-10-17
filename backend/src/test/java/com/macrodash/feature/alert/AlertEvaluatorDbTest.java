@@ -9,6 +9,7 @@ import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,6 +38,8 @@ class AlertEvaluatorDbTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final LocalDate DAY = LocalDate.of(2099, 3, 2);
     private static final String EMAIL = "alerteval-user@test.local";
+    private static final String FREE_EMAIL = "alerteval-free@test.local";
+    private static final String OWNER_EMAIL = "alerteval-owner@test.local";
 
     private JdbcTemplate jdbc;
     private AlertStore alerts;
@@ -62,7 +65,7 @@ class AlertEvaluatorDbTest {
         jdbc.update("DELETE FROM alert_events WHERE event_key LIKE 'regime:2099-%'");
         jdbc.update("DELETE FROM alert_events WHERE event_key LIKE 'streak:%:2099-%'");
         jdbc.update("DELETE FROM regime_log WHERE verdict_date >= '2099-01-01'");
-        jdbc.update("DELETE FROM users WHERE email = ?", EMAIL);
+        jdbc.update("DELETE FROM users WHERE email IN (?, ?, ?)", EMAIL, FREE_EMAIL, OWNER_EMAIL);
     }
 
     @SuppressWarnings("unchecked")
@@ -201,6 +204,54 @@ class AlertEvaluatorDbTest {
         evaluator.evaluate();
 
         assertThat(alerts.inbox(userId, 10)).as("KOSDAQ 03-11은 장중에 받은 값이라 확정이 아님 — 연속은 2일").isEmpty();
+    }
+
+    @Test
+    @Disabled("QA-115: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-115 이미 무료인 회원에게 켜진 채 남은 유료 규칙은 배달하지 않는다 — 국면 전환은 그대로, 운영자는 등급과 무관")
+    @SuppressWarnings("unchecked")
+    void unpaidUsersGetNoPaidAlertsEvenIfRuleIsEnabled() throws Exception {
+        UserStore userStore = new UserStore(jdbc, new SchemaCheck(jdbc));
+        long freeId = userStore.insert(FREE_EMAIL, "x", "MEMBER", "FREE", true);
+        long ownerId = userStore.insert(OWNER_EMAIL, "x", "OWNER", "FREE", true);
+        tools.jackson.databind.JsonNode kospi3 = MAPPER.readTree("{\"target\":\"KOSPI\",\"n\":3}");
+        new AlertService(alerts, MAPPER).create(new CurrentUser(userId, EMAIL, "MEMBER", "PRO", null),
+                "FOREIGN_STREAK", kospi3);
+        // 이 배포 전에 PRO → FREE로 내렸거나, 내리는 순간과 겹친 켜기 요청으로 켜진 채 남은 규칙(화면으로는 못 만듦).
+        alerts.insertRule(freeId, "FOREIGN_STREAK", kospi3);
+        alerts.insertRule(freeId, "REGIME_CHANGE", MAPPER.createObjectNode());
+        alerts.insertRule(ownerId, "FOREIGN_STREAK", kospi3);
+        for (int i = 0; i < 3; i++) {
+            log(i, "EXPANSION", "확장 (Expansion)");
+        }
+        for (int i = 3; i < 6; i++) {
+            log(i, "LATE", "후퇴 경계 (Late cycle)");
+        }
+        // 코스피 03-09~03-11 외국인 순매수 3일 — 자정을 넘겨(03-12 00:30 KST) 받아 모두 확정.
+        tools.jackson.databind.JsonNode payload = MAPPER.readTree("""
+                {"markets":{"KOSPI":{"fetchedAt":"2099-03-11T15:30:00+00:00","records":[
+                  {"date":"2099-03-11","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-10","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-09","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-06","investors":{"foreigner":{"net":-100}}}]}}}
+                """);
+        com.macrodash.store.Snapshot snapshot = new com.macrodash.store.Snapshot(
+                com.macrodash.store.Datasets.SNAP_TOSS_MARKET_FLOWS, payload, "json", "ok", null,
+                Instant.parse("2099-03-11T15:30:00Z"));
+        StoreReader store = mock(StoreReader.class);
+        when(store.quietly(any())).thenAnswer(call -> ((Supplier<Object>) call.getArgument(0)).get());
+        when(store.read(org.mockito.ArgumentMatchers.eq(com.macrodash.store.Datasets.SNAP_TOSS_MARKET_FLOWS),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(java.util.Optional.of(snapshot));
+        Clock clock = Clock.fixed(Instant.parse("2099-03-12T03:00:00Z"), ZoneOffset.UTC);   // 03-12 12시 KST
+        new AlertEvaluator(alerts, regimeLog, store, mock(StoreRepository.class), MAPPER, clock).evaluate();
+
+        assertThat(alerts.inbox(userId, 10)).as("유료 회원은 받음(같은 사건)").extracting(AlertStore.InboxItem::kind)
+                .containsExactly("FOREIGN_STREAK");
+        assertThat(alerts.inbox(ownerId, 10)).as("운영자는 등급이 FREE여도 유료 기능을 씀(CurrentUser.isPro와 같음)")
+                .extracting(AlertStore.InboxItem::kind).containsExactly("FOREIGN_STREAK");
+        assertThat(alerts.inbox(freeId, 10)).as("무료 회원은 국면 전환만 — 켜져 있어도 유료 종류는 배달하지 않음")
+                .extracting(AlertStore.InboxItem::kind).containsExactly("REGIME_CHANGE");
     }
 
     @Test

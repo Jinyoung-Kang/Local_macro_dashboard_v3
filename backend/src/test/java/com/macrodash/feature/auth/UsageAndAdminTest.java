@@ -3,6 +3,7 @@ package com.macrodash.feature.auth;
 import com.macrodash.store.UsageStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -76,5 +77,32 @@ class UsageAndAdminTest {
         assertThat(admin.update(owner, ownerId, "MEMBER", "PRO")).contains("자기 자신");
         assertThat(admin.update(owner, memberId, "GOD", "PRO")).contains("역할");
         assertThat(admin.audit(50)).anySatisfy(row -> assertThat(row.get("action")).isEqualTo("user.updated"));
+    }
+
+    @Test
+    @Disabled("QA-115: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-115 이미 무료인 회원을 무료로 다시 저장해도 켜진 유료 알림 규칙을 끈다 — 여러 번 저장해도 같음")
+    void savingUnpaidUserDisablesPaidRulesEvenIfAlreadyUnpaid() {
+        long ownerId = db.user("admin", "owner passphrase", "OWNER", "PRO");
+        CurrentUser owner = new CurrentUser(ownerId, db.email("admin"), "OWNER", "PRO", null);
+        AdminService admin = new AdminService(db.users, db.audit, db.hasher, new com.macrodash.store.AlertStore(
+                db.jdbc, new tools.jackson.databind.ObjectMapper(), new com.macrodash.store.SchemaCheck(db.jdbc)));
+        // 이 배포 전에 PRO → FREE로 내려(그때는 규칙을 끄지 않았음) 유료 규칙이 켜진 채 남은 회원.
+        long memberId = db.user("m2", "member passphrase", "MEMBER", "FREE");
+        db.jdbc.update("INSERT INTO alert_rules (user_id, kind, params) VALUES (?, 'REGIME_CHANGE', '{}'::jsonb), "
+                + "(?, 'INSTITUTION_NEW', '{\"cik\":\"0001067983\"}'::jsonb)", memberId, memberId);
+        String lastDisabled = "SELECT detail->>'disabledAlertRules' FROM audit_log WHERE action = 'user.updated' "
+                + "AND detail->>'target' = ? ORDER BY id DESC LIMIT 1";
+
+        assertThat(admin.update(owner, memberId, "MEMBER", "FREE")).isNull();
+        assertThat(db.jdbc.queryForList("SELECT kind, enabled FROM alert_rules WHERE user_id = ? ORDER BY id", memberId))
+                .extracting(row -> row.get("kind") + ":" + row.get("enabled"))
+                .containsExactly("REGIME_CHANGE:true", "INSTITUTION_NEW:false");
+        assertThat(db.jdbc.queryForObject(lastDisabled, String.class, String.valueOf(memberId)))
+                .as("감사 기록에 끈 규칙 수").isEqualTo("1");
+
+        assertThat(admin.update(owner, memberId, "MEMBER", "FREE")).isNull();
+        assertThat(db.jdbc.queryForObject(lastDisabled, String.class, String.valueOf(memberId)))
+                .as("다시 저장하면 이미 꺼져 있어 0").isEqualTo("0");
     }
 }
