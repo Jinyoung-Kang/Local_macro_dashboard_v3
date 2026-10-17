@@ -245,7 +245,7 @@ EQUITY_MAP = {
 | 서비스 | 주의 |
 |---|---|
 | 특일정보 | 아직 발표 전인 해는 resultCode 00 + 0건이 정상. 같은 날 공휴일 두 개(2025-05-05)는 한 건으로 합칩니다 |
-| 주식시세 | 기준일 다음 영업일 13시 이후 갱신 — "오늘"은 없습니다. 주소는 활용가이드의 `GetStockSecuritiesInfoService_V2/getStockPriceInfo_V2`. 처음엔 `_V2` 없는 이름으로 불러 `NO_OPENAPI_SERVICE_ERROR`(코드 12)가 났고, 활용가이드로 바로잡았습니다. `numOfRows` 최대 10,000 |
+| 주식시세 | 기준일 다음 영업일 13시 이후 갱신 — "오늘"은 없습니다. 주소는 활용가이드의 `GetStockSecuritiesInfoService_V2/getStockPriceInfo_V2`. 처음엔 `_V2` 없는 이름으로 불러 `NO_OPENAPI_SERVICE_ERROR`(코드 12)가 났고, 활용가이드로 바로잡았습니다. `numOfRows` 최대 10,000. `totalCount`가 없거나 그만큼 받기 전에 페이지가 비면 그날은 실패로 두고 다음 실행이 다시 받습니다(1페이지가 비고 `totalCount`도 없거나 0이면 발표 전) |
 | DART | 사업보고서는 3월 말까지 제출되므로 4월 전에는 재작년 기준. 연결(CFS)을 우선합니다. ETF·ETN은 DART 재무 대상이 아닙니다 |
 
 ### 응답 형식은 어떻게 확인했나

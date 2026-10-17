@@ -58,7 +58,16 @@ def fetch_day(bas_dt: str, budget: publicapi.CallBudget) -> tuple[list[dict], st
 
 
 def _fetch_pages(url: str, bas_dt: str, key: str, budget: publicapi.CallBudget) -> list[dict]:
+    """
+    그날 전 종목을 끝까지 받습니다. 끝까지 받았는지 확인할 수 없으면 실패입니다(QA-078).
+
+    - 1페이지가 비고 totalCount가 없거나 0이면 아직 발표 전(또는 휴장일) — 빈 목록.
+    - totalCount를 모르거나, totalCount에 못 미친 채 페이지가 비면 PublicApiError. 예전에는 잘린 행을 그날 전체로
+      돌려줘 시장 합계가 실제의 일부로 저장되고, 저장된 마지막 기준일이 그날로 올라가 다시 받지 않았습니다.
+      실패로 올리면 태스크가 그날에서 멈추고 다음 실행이 그날부터 다시 받습니다(QA-034).
+    """
     rows: list[dict] = []
+    total: int | None = None
     for page in range(1, MAX_PAGES + 1):
         if not budget.take():
             raise publicapi.PublicApiError("호출 예산 소진")
@@ -67,10 +76,21 @@ def _fetch_pages(url: str, bas_dt: str, key: str, budget: publicapi.CallBudget) 
         )
         root = publicapi.parse_xml(response, key=key)
         items = publicapi.xml_items(root)
+        if page == 1:
+            total = publicapi.total_count(root)
+            if not items and not total:
+                return []
+            if total is None:
+                raise publicapi.PublicApiError(
+                    "응답에 totalCount가 없습니다 — 그날 전 종목을 다 받았는지 알 수 없어 저장하지 않습니다"
+                )
         rows.extend(normalize(item) for item in items)
-        total = publicapi.total_count(root) or 0
-        if not items or len(rows) >= total:
+        if len(rows) >= total:
             break
+        if not items:
+            raise publicapi.PublicApiError(
+                f"{page}페이지가 비었습니다 — totalCount {total}건 중 {len(rows)}건만 받아 저장하지 않습니다"
+            )
     else:
         raise publicapi.PublicApiError(f"{MAX_PAGES}페이지를 넘었습니다 — 행 수가 예상보다 많습니다")
     return [row for row in rows if row["code"]]

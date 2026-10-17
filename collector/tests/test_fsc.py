@@ -306,7 +306,6 @@ def _paged(monkeypatch, pages: dict[int, SimpleNamespace]) -> list[int]:
     return seen
 
 
-@pytest.mark.xfail(strict=True, reason="QA-078: 수정 전 재현 — totalCount보다 적게 받아도 그대로 돌려줌")
 def test_QA078_totalCount보다_적게_받고_페이지가_비면_실패한다(monkeypatch):
     """
     2페이지가 resultCode 00에 0건으로 오면 예전에는 1페이지 행만 '그날 전체'로 돌려줘, 시장 합계가 실제의 일부로
@@ -317,7 +316,6 @@ def test_QA078_totalCount보다_적게_받고_페이지가_비면_실패한다(m
         fsc.fetch_day("20260923", publicapi.CallBudget(10))
 
 
-@pytest.mark.xfail(strict=True, reason="QA-078: 수정 전 재현 — totalCount가 없으면 1페이지만 받고 멈춤")
 def test_QA078_totalCount가_없으면_실패한다(monkeypatch):
     """전체 종목 수를 모르면 끝까지 받았는지 알 수 없습니다. 1페이지만 받고 '완전한 날'로 저장하지 않습니다."""
     pages = _paged(monkeypatch, {1: _xml_without_total([SAMSUNG])})
@@ -334,7 +332,6 @@ def test_QA078_1페이지가_비고_totalCount도_없으면_발표_전이다(mon
     assert fsc.fetch_day("20260923", publicapi.CallBudget(10))[0] == []
 
 
-@pytest.mark.xfail(strict=True, reason="QA-078: 수정 전 재현 — 잘린 하루치가 저장됨")
 def test_QA078_잘린_하루치는_저장하지_않고_그날에서_멈춘다(monkeypatch):
     """태스크 경로: 잘린 응답이 저장되지 않고, 저장본이 있는 보충이므로 그날에서 멈춰 다음 실행이 다시 받습니다."""
     from datetime import datetime
