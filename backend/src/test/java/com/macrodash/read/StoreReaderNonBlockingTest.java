@@ -152,6 +152,26 @@ class StoreReaderNonBlockingTest {
         assertThat(collector.waits).isEmpty();
     }
 
+    @Test
+    @DisplayName("live_only는 신선해도 수집을 비동기로 요청하고 기존 저장본을 바로 준다 — '수집한 뒤 읽기'가 아님")
+    void liveOnlyRequestsWithoutWaitingEvenWhenFresh() {
+        // 설정 주석이 '저장 계층을 건너뛰고/수집한 뒤 읽는다'고 적어 실제와 반대였습니다. 실제 동작을 고정합니다.
+        StoreRepository repository = mock(StoreRepository.class);
+        Snapshot fresh = new Snapshot("test.dataset", null, "json", "ok", null, Instant.now());
+        when(repository.readSnapshot(anyString())).thenReturn(Optional.of(fresh));
+        AppProperties props = properties();
+        props.setReadMode("live_only");
+        RecordingCollector collector = new RecordingCollector();
+        StoreReader reader = new StoreReader(repository, collector, props);
+
+        for (int i = 0; i < 3; i++) {
+            assertThat(reader.read("test.dataset", 3600, "some_task")).containsSame(fresh);
+        }
+        assertThat(reader.read("test.dataset", 3600, null)).as("태스크가 없는 읽기는 요청하지 않음").containsSame(fresh);
+
+        assertThat(collector.waits).as("기다리지 않는 요청 한 번(같은 태스크 30초 쿨다운)").containsExactly(false);
+    }
+
     // =========================================================================
     // 수동 새로고침이 분기 공시까지 다시 받던 문제
     // =========================================================================
