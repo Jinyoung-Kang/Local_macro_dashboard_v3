@@ -90,3 +90,28 @@ describe("QA-114 같은 이름의 다른 증권", () => {
     expect(labels[2]).toBe("BERKSHIRE HATHAW…");   // 겹치지 않는 이름은 예전처럼 16자에서 자른다
   });
 });
+
+describe("QA-122 합친 클래스가 없는 보통주 행", () => {
+  // 백엔드가 실제로 클래스를 합친 행에만 issuer: 키를 줄 때, 화면은 그 행에만 '보통주 합산'을 적고 나머지는 CUSIP을 적는다.
+  it("클래스가 하나뿐인 APPLE은 'CUSIP 037833100', A·C를 합친 ALPHABET만 '발행사 … · 보통주 합산'", async () => {
+    api.apiGetShared.mockImplementation((path: string) => {
+      if (path.startsWith("/api/sec13f/consensus")) {
+        return Promise.resolve({
+          available: true, participants: ["국민연금"], participantCount: 1, availableDates: ["2026-06-30"],
+          reportDate: null, minHolders: 2,
+          rows: [
+            row("cusip:037833100", "APPLE INC", "037833100", 7),
+            row("issuer:02079K", "ALPHABET INC", "02079K305", 6),
+          ],
+        });
+      }
+      return new Promise(() => {});
+    });
+    render(<ConsensusPage />);
+    await screen.findAllByText("APPLE INC");
+
+    expect(screen.getByText("CUSIP 037833100")).toBeTruthy();
+    expect(screen.queryByText("발행사 037833 · 보통주 합산")).toBeNull();
+    expect(screen.getByText("발행사 02079K · 보통주 합산")).toBeTruthy();
+  });
+});

@@ -4,6 +4,7 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -199,6 +200,24 @@ class Sec13FPortfolioTest {
         assertThat(series).as("같은 발행사(464287) 아래 서로 다른 ETF").hasSize(2);
         assertThat(series.get("ISHARES TR · CUSIP 464287200")).containsExactly(2.5, 3.0);
         assertThat(series.get("ISHARES TR · CUSIP 464287655")).containsExactly(1.5, 2.0);
+    }
+
+    // ------------------------------------------------------------ QA-122 합친 클래스가 없는 줄은 발행사가 아니라 CUSIP으로 가른다
+    @Test
+    @Disabled("QA-122: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-122 이름·클래스 표기가 같은 두 보통주 줄(합친 클래스 없음)은 '발행사 …'가 아니라 'CUSIP …'으로 가른다")
+    void sameNameSingleClassLinesAreLabelledByCusip() {
+        // 발행사 6자리가 다른 두 증권이 같은 공시 이름·같은 클래스 표기로 들어온 경우(재상장 등). 둘 다 합칠 클래스가 없습니다.
+        Sec13FService service = service(NPS, """
+                [{"reportDate":"2026-06-30","holdings":[
+                    {"name":"UNITED CO","cusip":"111111101","class":"COM","value":300,"shares":3,"weight":3.0},
+                    {"name":"UNITED CO","cusip":"222222101","class":"COM","value":200,"shares":2,"weight":2.0}]}]
+                """);
+
+        Map<String, List<Double>> series = weightSeries(service.portfolio(NPS, 8, 15));
+
+        assertThat(series.keySet()).as("줄 하나가 증권 하나 — 합친 행이 아니므로 그 증권의 CUSIP")
+                .containsExactly("UNITED CO · CUSIP 111111101", "UNITED CO · CUSIP 222222101");
     }
 
     // ------------------------------------------------------------ QA-086 분기 수는 이력 범위일 뿐

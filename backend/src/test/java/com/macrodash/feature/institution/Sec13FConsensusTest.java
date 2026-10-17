@@ -4,6 +4,7 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -363,5 +364,45 @@ class Sec13FConsensusTest {
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).get("buyerCount")).isEqualTo(2);
         assertThat(rows.get(0).get("totalValue")).isEqualTo(3000.0);
+    }
+
+    // ------------------------------------------------------------ QA-122 합친 클래스가 없으면 issuer: 키가 아니다
+    @Test
+    @Disabled("QA-122: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-122 클래스가 하나뿐인 보통주(APPLE)의 행 key는 issuer:가 아니라 cusip: — 실제로 A·C를 합친 행만 issuer:")
+    void singleClassCommonStockKeepsItsCusipKey() {
+        Sec13FService service = service(Map.of(
+                NPS, steady("""
+                    {"name":"APPLE INC","cusip":"037833100","class":"COM","value":1000,"shares":10,"weight":10.0},
+                    {"name":"ALPHABET INC","cusip":"02079K305","class":"CAP STK CL A","value":600,"shares":10,"weight":6.0},
+                    {"name":"ALPHABET INC","cusip":"02079K107","class":"CAP STK CL C","value":400,"shares":10,"weight":4.0}"""),
+                FISHER, steady("""
+                    {"name":"APPLE INC","cusip":"037833100","class":"COM","value":900,"shares":10,"weight":9.0}""")));
+
+        List<Map<String, Object>> rows = rows(service.consensus(List.of(NPS, FISHER), null, 1, 10));
+
+        Map<String, Object> apple = rowNamed(rows, "APPLE INC");
+        assertThat(apple.get("key")).as("화면은 issuer: 키에 '발행사 … · 보통주 합산'을 적는다 — 합친 클래스가 없으면 CUSIP이어야 함")
+                .isEqualTo("cusip:037833100");
+        assertThat(apple.get("cusip")).isEqualTo("037833100");
+        assertThat(rowNamed(rows, "ALPHABET INC").get("key")).isEqualTo("issuer:02079K");
+    }
+
+    @Test
+    @Disabled("QA-122: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-122 공통 신규 매수도 클래스가 하나뿐인 보통주의 key는 cusip:")
+    void singleClassNewBuyKeepsItsCusipKey() {
+        String bought = """
+            [{"reportDate":"2026-06-30","holdings":[
+                {"name":"NVIDIA CORPORATION","cusip":"67066G104","class":"COM","value":1000,"shares":10,"weight":10.0}]},
+             {"reportDate":"2026-03-31","holdings":[
+                {"name":"APPLE INC","cusip":"037833100","class":"COM","value":900,"shares":10,"weight":9.0}]}]
+            """;
+        Sec13FService service = service(Map.of(NPS, bought, FISHER, bought));
+
+        List<Map<String, Object>> rows = rows(service.newBuys(List.of(NPS, FISHER), null, 2));
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("key")).isEqualTo("cusip:67066G104");
     }
 }
