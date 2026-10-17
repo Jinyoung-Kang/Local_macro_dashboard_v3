@@ -8,7 +8,6 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -57,7 +56,6 @@ class SnapshotTextRadarTest {
     }
 
     @Test
-    @Disabled("QA-096: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-096: 조합마다 수집 시각을 적고, 오래된 저장본이면 경고한다 — 머리말은 '당일'로 단정하지 않는다")
     void radarCarriesCollectionTimeAndStaleWarning() throws Exception {
         // 수집기가 멈춰 같은 날 10:05 저장본이 14:00 리포트에 들어가는 경우. 출처의 기준일은 오늘이라 날짜만으로는 모릅니다.

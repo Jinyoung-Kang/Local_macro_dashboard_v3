@@ -488,8 +488,11 @@ public class SnapshotTextService {
     }
 
     private void appendRadar(List<String> lines) {
+        // 조합마다 저장본이 따로라 수집 시각은 머리말이 아니라 조합마다 적습니다(QA-096). 기준일은 출처 문구에 있고,
+        // 주말·장 전에는 전 거래일 값이므로 머리말에서 '당일'로 단정하지 않습니다.
         sectionHeader(lines, "국내 수급 레이더 (코스피)",
-                "[실시간 참고] 공개 수급 순위 스크래핑 — 당일 잠정치이며 마감 후 정정될 수 있습니다",
+                "[실시간 참고] 공개 수급 순위 스크래핑 — 잠정치이며 마감 후 정정될 수 있습니다. "
+                        + "기준일은 조합마다 출처에, 수집 시각은 그 옆에 적었습니다",
                 null);
 
         for (String[] combination : new String[][]{
@@ -502,7 +505,17 @@ public class SnapshotTextService {
                 lines.add("- 데이터 없음");
                 continue;
             }
-            lines.add("(출처: " + result.get("source") + ")");
+            Object collectedAt = result.get("collectedAtKst");
+            lines.add("(출처: " + result.get("source")
+                    + (collectedAt == null ? "" : " · 수집 시각 " + collectedAt) + ")");
+            if (Boolean.TRUE.equals(result.get("stale"))) {
+                // 화면 레이더의 '오래됨' 배지와 같은 판정(저장본이 15분 넘게 새로 받지 못함). 수집기가 멈추면 같은 날의
+                // 오전 순위가 오후 리포트에 들어가는데, 출처의 기준일은 오늘이라 날짜만으로는 알 수 없습니다.
+                lines.add("- ⚠️ 오래된 저장본 — "
+                        + (result.get("ageSeconds") instanceof Number age
+                                ? "수집한 지 %d분이 지났습니다. ".formatted(age.longValue() / 60) : "")
+                        + "지금의 수급이 아닐 수 있습니다");
+            }
             if (Boolean.TRUE.equals(result.get("isHistorical"))) {
                 lines.add("- ⚠️ 주의: " + result.get("warning"));
             }
