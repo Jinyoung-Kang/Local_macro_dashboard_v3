@@ -2,6 +2,8 @@
  * 화면 안에 있던 데이터 가공 규칙 — React 없이 테스트합니다(ADR 0004 규칙 3).
  */
 import { describe, expect, it } from "vitest";
+import { visualWidth } from "@/lib/chartAxis";
+import { consensusBars, securityNote } from "@/lib/consensus";
 import { correlationStrength } from "@/lib/correlation";
 import { streakText } from "@/lib/flows";
 import { liquidityChartSeries } from "@/lib/liquidity";
@@ -93,5 +95,40 @@ describe("레이더 누적 이력 — 고른 날·선택지·행 (화면에서 �
     expect(historySelection("", null)).toEqual({ dates: [], selectedDate: "", dateOptions: [], rows: [] });
     const many = { dates: ["d"], obsDate: "d", rows: Array.from({ length: 40 }, (_, i) => row("d", String(i))) };
     expect(historySelection("", many).rows).toHaveLength(30);
+  });
+});
+
+describe("consensus (QA-114)", () => {
+  const bar = (key: string, name: string, cusip: string) => ({ key, name, cusip, holderCount: 2 });
+
+  it("합친 행은 발행사, 증권 하나면 CUSIP, 모르면 빈 문자열", () => {
+    expect(securityNote({ key: "issuer:02079K", cusip: "02079K305" })).toBe("발행사 02079K · 보통주 합산");
+    expect(securityNote({ key: "cusip:464287200", cusip: "464287200" })).toBe("CUSIP 464287200");
+    expect(securityNote({ key: "name:X CORP|COM", cusip: null })).toBe("");
+  });
+
+  it("막대 이름표는 이름이 겹칠 때만 구분자를 붙이고, 구분자가 이름표 칸(24)에서 잘리지 않게 이름 쪽을 줄인다", () => {
+    const bars = consensusBars([
+      bar("cusip:464287200", "ISHARES TR", "464287200"),
+      bar("cusip:464287655", "ISHARES TR", "464287655"),
+      bar("issuer:084670", "BERKSHIRE HATHAWAY INC DEL", "084670702"),
+      bar("cusip:99999X109", "VERY LONG COMPANY NAME HOLDINGS", "99999X109"),
+      bar("issuer:99999X", "VERY LONG COMPANY NAME HOLDINGS", "99999X208"),
+    ]);
+
+    expect(bars.map((b) => b.name)).toEqual([
+      "ISHARES TR · 464287200",
+      "ISHARES TR · 464287655",
+      "BERKSHIRE HATHAW…",
+      "VERY LONG C… · 99999X109",
+      "VERY LO… · 발행사 99999X",
+    ]);
+    expect(bars.every((b) => visualWidth(b.name) <= 24)).toBe(true);
+    expect(bars.map((b) => b.value)).toEqual([2, 2, 2, 2, 2]);
+  });
+
+  it("막대는 상위 15개까지", () => {
+    const rows = Array.from({ length: 20 }, (_, i) => bar(`cusip:${i}`, `CO ${i}`, String(i)));
+    expect(consensusBars(rows)).toHaveLength(15);
   });
 });

@@ -16,6 +16,7 @@ import {
 import { useApi } from "@/hooks/useApi";
 import { useRemembered } from "@/hooks/useRemembered";
 import { useUsdKrw } from "@/hooks/useUsdKrw";
+import { consensusBars, securityNote } from "@/lib/consensus";
 import { EMPTY, formatCurrency, formatNumber } from "@/lib/format";
 import { isSelected, toggleSelection } from "@/lib/selection";
 import type { ConsensusResponse, NewBuysResponse } from "@/lib/types";
@@ -53,12 +54,8 @@ export default function ConsensusPage() {
   // 기준 분기 선택지는 응답에 딸려 옵니다. 고른 분기의 응답을 기다리는 동안 선택지가 '최신 분기' 하나로 줄면
   // 화면은 최신을 보이는데 요청은 고른 분기로 나갔습니다 — 마지막 목록을 씁니다(QA-047).
   const availableDates = useRemembered(data?.availableDates);
-  const chartData = (data?.rows ?? [])
-    .slice(0, 15)
-    .map((row) => ({
-      name: row.name.length > 16 ? `${row.name.slice(0, 16)}…` : row.name,
-      value: row.holderCount,
-    }));
+  // 이름이 겹치는 행(CUSIP으로 갈린 같은 이름)만 막대 이름표에 구분자를 붙입니다(QA-114).
+  const chartData = consensusBars(data?.rows ?? []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -142,7 +139,7 @@ export default function ConsensusPage() {
               rows={data.rows}
               rowKey={(row) => row.key}
               columns={[
-                { key: "name", header: "종목", render: (row) => row.name },
+                { key: "name", header: "종목", render: (row) => <SecurityName row={row} /> },
                 {
                   key: "holderCount",
                   header: "보유 기관",
@@ -223,6 +220,21 @@ export default function ConsensusPage() {
 }
 
 /**
+ * 종목 이름과 그 아래 작은 글씨의 증권 구분자(CUSIP, 합친 행은 발행사). 행은 증권으로 갈리고 표시 이름은 겹칠 수
+ * 있어(같은 이름의 다른 ETF, 클래스 표기가 갈려 두 행으로 남은 A·C주), 이름만 적으면 어느 행이 어느 증권인지 알 수
+ * 없습니다(QA-114). 기관 포트폴리오 화면의 '종목' 칸과 같은 모양입니다.
+ */
+function SecurityName({ row }: { row: { key: string; name: string; cusip?: string | null } }) {
+  const note = securityNote(row);
+  return (
+    <span className="flex flex-col">
+      <span className="text-body">{row.name}</span>
+      {note && <span className="text-[11px] text-muted">{note}</span>}
+    </span>
+  );
+}
+
+/**
  * 🆕 이번 분기에 여러 기관이 <b>함께 새로 담은</b> 종목.
  *
  * <p>교집합은 "지금 누가 무엇을 들고 있는가"를 보여 줍니다. 그런데 더 신호에
@@ -268,7 +280,7 @@ function NewBuysCard({ reportDate }: { reportDate: string }) {
             rows={data.rows}
             rowKey={(row) => row.key}
             columns={[
-              { key: "name", header: "종목", render: (row) => row.name },
+              { key: "name", header: "종목", render: (row) => <SecurityName row={row} /> },
               {
                 key: "buyerCount",
                 header: "새로 담은 기관",

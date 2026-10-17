@@ -64,7 +64,7 @@ function answer() {
 
 describe("QA-114 같은 이름의 다른 증권", () => {
   // 수정 전에는 '종목' 칸이 row.name만 그려 두 'ALPHABET INC' 행·두 'ISHARES TR' 행을 가를 수 없었다.
-  it.fails("교집합·공통 신규 매수 표가 이름 아래 CUSIP(합친 행은 발행사)을 함께 적는다", async () => {
+  it("교집합·공통 신규 매수 표가 이름 아래 CUSIP(합친 행은 발행사)을 함께 적는다", async () => {
     answer();
     render(<ConsensusPage />);
     await screen.findAllByText("ALPHABET INC");
@@ -78,7 +78,7 @@ describe("QA-114 같은 이름의 다른 증권", () => {
   });
 
   // 수정 전에는 막대 이름표도 row.name이라 같은 이름표 두 개가 서로 다른 막대에 붙었다.
-  it.fails("'공통 보유 상위 종목' 막대는 이름이 겹치는 행에만 구분자를 붙인다", async () => {
+  it("'공통 보유 상위 종목' 막대는 이름이 겹치는 행에만 구분자를 붙인다", async () => {
     answer();
     render(<ConsensusPage />);
     const bars = await screen.findByRole("list", { name: "막대 이름표" });
