@@ -450,7 +450,6 @@ public class GuruService {
         return out;
     }
 
-    /** 매핑표의 섹터. 없으면 "미분류" — String.valueOf(null)은 문자열 "null"을 만들어 화면에 그대로 나갔습니다. */
     /** 매핑표를 티커로 다시 묶습니다(섹터를 찾는 데 씁니다). 같은 티커의 이름이 여럿이면 처음 것. */
     private static Map<String, JsonNode> byTicker(JsonNode nameMap) {
         Map<String, JsonNode> out = new LinkedHashMap<>();
@@ -465,6 +464,7 @@ public class GuruService {
         return out;
     }
 
+    /** 매핑표의 섹터. 없으면 "미분류" — String.valueOf(null)은 문자열 "null"을 만들어 화면에 그대로 나갔습니다. */
     static String sectorLabel(JsonNode mapped) {
         String sector = Json.asText(mapped, "sector");
         return sector == null || sector.isBlank() ? "미분류" : sector;
