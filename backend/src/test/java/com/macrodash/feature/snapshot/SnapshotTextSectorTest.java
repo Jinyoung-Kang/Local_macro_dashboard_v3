@@ -8,7 +8,6 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +45,6 @@ class SnapshotTextSectorTest {
     }
 
     @Test
-    @Disabled("QA-095: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-095: 이어받은(이전 값) 섹터·자산군 행에는 매크로 카드와 같은 '⚠️ 이전 값' 꼬리를 붙인다")
     void staleRotationRowsAreMarked() {
         SectorService sector = mock(SectorService.class);

@@ -367,9 +367,23 @@ public class SnapshotTextService {
                 .sorted((a, b) -> Double.compare(
                         returnValue(b, "3M"), returnValue(a, "3M")))
                 .limit(6)
-                .forEach(row -> lines.add("- %s (%s): 1주 %s · 1개월 %s · 3개월 %s".formatted(
+                .forEach(row -> lines.add("- %s (%s): 1주 %s · 1개월 %s · 3개월 %s%s".formatted(
                         row.get("name"), row.get("ticker"),
-                        formatReturn(row, "1W"), formatReturn(row, "1M"), formatReturn(row, "3M"))));
+                        formatReturn(row, "1W"), formatReturn(row, "1M"), formatReturn(row, "3M"),
+                        staleNote(row))));
+    }
+
+    /**
+     * 수집 실패로 직전 계열을 이어받은 섹터·자산군 행(isStale, 최대 3일)이면 매크로 카드({@link #staleNote(JsonNode)})와
+     * 같은 꼬리를 붙입니다(QA-095). 붙이지 않으면 AI가 멈춘 수익률을 '직전 거래일 마감' 값으로 읽고 순위·흐름을 씁니다.
+     * 순위에서 빼지 않고 표시만 합니다 — 이전 값은 버리지 않고 표시한다는 원칙(QA-065 업종 화면과 같음).
+     */
+    private static String staleNote(Map<String, Object> row) {
+        if (!Boolean.TRUE.equals(row.get("isStale"))) {
+            return "";
+        }
+        Object reason = row.get("staleReason");
+        return " ⚠️ 이전 값(이번 수집 실패" + (reason == null ? "" : ": " + reason) + ")";
     }
 
     @SuppressWarnings("unchecked")
