@@ -1,6 +1,5 @@
 package com.macrodash.analytics;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +42,7 @@ class SeriesMathTest {
     }
 
     @Test
-    @DisplayName("YTD는 해당 연도 첫 표본 기준")
+    @DisplayName("YTD는 직전 연말 종가 기준(QA-089에서 '그해 첫 표본 기준'에서 바뀜)")
     void yearToDateReturn() {
         List<LocalDate> dates = List.of(
                 LocalDate.of(2025, 12, 30),
@@ -51,12 +50,12 @@ class SeriesMathTest {
                 LocalDate.of(2026, 9, 11));
         List<Double> closes = List.of(90.0, 100.0, 120.0);
 
-        assertThat(SeriesMath.yearToDateReturn(dates, closes, 2026)).isCloseTo(20.0, within(0.001));
+        // 120 / 90 − 1. 예전 정의(그해 첫 종가 100 기준)는 20.0이었습니다.
+        assertThat(SeriesMath.yearToDateReturn(dates, closes, 2026)).isCloseTo(33.333, within(0.001));
         assertThat(SeriesMath.yearToDateReturn(dates, closes, 2024)).isNull();
     }
 
     @Test
-    @Disabled("QA-089: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-089 YTD 기준은 직전 연말 종가 — 새해 첫 거래일에도 그날 등락이 나온다(0.00%가 아니다)")
     void yearToDateFromPreviousYearEndClose() {
         List<LocalDate> dates = List.of(LocalDate.of(2026, 12, 31), LocalDate.of(2027, 1, 4));
@@ -66,13 +65,21 @@ class SeriesMathTest {
     }
 
     @Test
-    @Disabled("QA-089: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-089 직전 연도 표본이 없으면(새로 상장) YTD는 모른다 — 그해 첫 종가로 대신하지 않는다")
     void yearToDateWithoutPreviousYearIsUnknown() {
         List<LocalDate> dates = List.of(LocalDate.of(2026, 1, 2), LocalDate.of(2026, 9, 11));
         List<Double> closes = List.of(100.0, 120.0);
 
         assertThat(SeriesMath.yearToDateReturn(dates, closes, 2026)).isNull();
+    }
+
+    @Test
+    @DisplayName("QA-089 그해 관측이 아직 없으면(1월 1일 오전, 마지막 봉이 전년도) YTD는 null — 모든 종목 0.0으로 임의 순위를 만들지 않는다")
+    void yearToDateBeforeFirstTradingDayIsUnknown() {
+        List<LocalDate> dates = List.of(LocalDate.of(2026, 12, 30), LocalDate.of(2026, 12, 31));
+        List<Double> closes = List.of(99.0, 100.0);
+
+        assertThat(SeriesMath.yearToDateReturn(dates, closes, 2027)).isNull();
     }
 
     @Test

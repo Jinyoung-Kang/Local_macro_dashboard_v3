@@ -47,28 +47,37 @@ public final class SeriesMath {
     }
 
     /**
-     * 연초 대비 수익률 — 해당 연도의 <b>첫 관측</b>과 마지막 값을 비교합니다.
+     * 연초 대비 수익률(YTD) — <b>직전 연말 종가</b>(그해 이전의 마지막 관측)와 마지막 값을 비교합니다.
+     *
+     * <p>예전에는 그해 <b>첫 관측</b>을 기준으로 삼아 표준 YTD와 첫 거래일 등락만큼 어긋났고(XLE 45.39% 대 48.45%),
+     * 새해 첫 거래일에는 기준과 마지막이 같아 모든 종목이 0.00%(보합)로 보였습니다(QA-089).
+     *
+     * <p>그해 관측이 아직 없으면(1월 1일~첫 거래일 마감 전) null입니다(예전과 같음). 0.0으로 내면 모든 종목이 같은 값이라
+     * 순위가 목록 순서대로 임의로 매겨집니다.
      *
      * @param dates  날짜 (오름차순)
      * @param closes 같은 길이의 종가
      * @param year   기준 연도 (한국 기준 연도를 넘기세요 — {@code Kst.today().getYear()})
-     * @return 수익률(%). 길이가 다르거나 그 해 표본이 없거나 첫 값이 0이면 null
+     * @return 수익률(%). 길이가 다르거나, 그해 표본이 아직 없거나, 그해 이전 표본이 없거나(새로 상장), 기준 값이 0이면 null
      */
     public static Double yearToDateReturn(List<LocalDate> dates, List<Double> closes, int year) {
         if (dates == null || closes == null || dates.size() != closes.size() || closes.isEmpty()) {
             return null;
         }
-        Double first = null;
+        Double base = null;
+        boolean reachedYear = false;
         for (int i = 0; i < dates.size(); i++) {
-            if (dates.get(i).getYear() == year) {
-                first = closes.get(i);
+            if (dates.get(i).getYear() < year) {
+                base = closes.get(i);
+            } else {
+                reachedYear = true;
                 break;
             }
         }
-        if (first == null || first == 0.0) {
+        if (!reachedYear || base == null || base == 0.0) {
             return null;
         }
-        return (closes.get(closes.size() - 1) / first - 1.0) * 100.0;
+        return (closes.get(closes.size() - 1) / base - 1.0) * 100.0;
     }
 
     /**
