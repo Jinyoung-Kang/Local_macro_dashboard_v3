@@ -306,12 +306,15 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 ```bash
 docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env build --pull   # 베이스 이미지 보안 패치까지
 docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d
-for i in 1 2 3 4 5 6 7 8 9 10; do docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env \
-  exec -T collector python -c "from app import store; store.init_schema()" && break; sleep 3; done   # 스키마 적용
+ok=; for i in 1 2 3 4 5 6 7 8 9 10; do docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env \
+  exec -T collector python -c "from app import store; store.init_schema()" && { ok=1; break; }; sleep 3; done; \
+  [ -n "$ok" ] || { echo "⚠️ 스키마를 적용하지 못했습니다 — 수집기 로그(logs collector)를 보세요" >&2; false; }   # 스키마 적용
 ```
 
 - 세 번째 명령은 `make migrate`와 같습니다. 스키마 파일(`db/migrations`)은 수집기가 기동할 때만 적용되는데, 스키마와 백엔드만
   바뀐 배포에서는 `up -d`가 수집기를 다시 만들지 않아 새 스키마가 빠집니다(QA-016). 이미 적용한 파일은 건너뛰어 여러 번 불러도 안전합니다.
+  10번 모두 실패하면 ⚠️를 찍고 0이 아닌 값으로 끝나 SSM·스크립트도 실패로 봅니다(QA-118). `exit 1` 대신 `false`를 쓴 것은 대화형
+  셸에 붙여 넣어도 창이 닫히지 않게 하려는 것입니다.
 - DB는 postgres 컨테이너 대신 RDS(`RDS_HOST`, TLS)입니다. 화면·API는 `127.0.0.1`에만 열고, 앞단 프록시가 한 주소로 묶습니다.
 - 추가로 필요한 값은 [.env.aws.example](.env.aws.example)에 이름만 있습니다(`RDS_HOST`·`PUBLIC_ORIGIN` 등).
 - 공개 데모에서는 메일 가입·무료 AI 엔진·화면 조회가 일으키는 수집을 끕니다. 운영자 경로와 계정 변경은 앞단에서 막습니다.

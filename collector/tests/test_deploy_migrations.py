@@ -101,7 +101,6 @@ def _run_schema(shell: str, where: str, docker_rc: int) -> subprocess.CompletedP
     return subprocess.run([shell, "-c", script], capture_output=True, text=True, timeout=30)
 
 
-@pytest.mark.xfail(strict=True, reason="QA-118: 수정 전 재현 — fix 커밋에서 켬")
 @pytest.mark.parametrize("shell", _SHELLS)
 @pytest.mark.parametrize("where", ["README", "compose.aws.yml"])
 def test_QA118_스키마_적용이_10번_모두_실패하면_알리고_0이_아닌_값으로_끝난다(where, shell):
