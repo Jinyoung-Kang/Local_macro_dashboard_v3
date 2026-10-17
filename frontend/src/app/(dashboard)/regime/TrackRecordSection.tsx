@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Banner, Card, ErrorState, Loading, Select, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { useRemembered } from "@/hooks/useRemembered";
 import { endpoints } from "@/lib/endpoints";
 import { EMPTY } from "@/lib/format";
 import { trackRecordRow } from "@/lib/regime";
@@ -13,6 +14,9 @@ const VIEWS = [
   { value: "start", label: "국면이 시작된 주에 들어갔다면" },
   { value: "all", label: "그 국면에 머문 모든 주" },
 ] as const;
+
+/** 첫 응답 전의 자산 선택지. */
+const DEFAULT_ASSETS = [{ ticker: "SPY", label: "S&P 500 (SPY)" }];
 
 /**
  * 📈 판정 성과 — 판정을 과거에 그대로 적용했을 때 그 뒤 수익률.
@@ -28,6 +32,9 @@ export function TrackRecordSection({ tone }: { tone: Record<string, string> }) {
     600_000,
   );
 
+  // 선택지는 마지막으로 받은 목록을 이어 씁니다. 자산을 바꾸면 useApi가 새 응답이 올 때까지 data를 비우는데, 그동안
+  // 선택지가 SPY 하나로 줄어 선택 상자가 고른 자산과 어긋났고, 그 읽기가 실패하면 SPY로 돌아갈 수 없었습니다(QA-101).
+  const assets = useRemembered(data?.assets) ?? DEFAULT_ASSETS;
   const regimes = (view === "start" ? data?.start : data?.all) ?? [];
   const baseline = data?.baseline ?? [];
 
@@ -46,7 +53,7 @@ export function TrackRecordSection({ tone }: { tone: Record<string, string> }) {
             label="자산"
             value={asset}
             onChange={setAsset}
-            options={(data?.assets ?? [{ ticker: "SPY", label: "S&P 500 (SPY)" }]).map((a) => ({
+            options={assets.map((a) => ({
               value: a.ticker,
               label: a.label,
             }))}

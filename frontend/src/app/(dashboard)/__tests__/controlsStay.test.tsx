@@ -160,7 +160,7 @@ describe("QA-101 판정 성과 — 자산을 바꿔도 선택지가 줄지 않�
   }
 
   // 수정 전에는 새 자산의 응답을 기다리는 동안 선택지가 SPY 하나로 줄어, 요청은 IEF인데 선택 상자는 SPY를 보였다.
-  it.fails("새 자산을 읽는 동안에도 선택 상자가 고른 자산을 보이고 선택지가 그대로", async () => {
+  it("새 자산을 읽는 동안에도 선택 상자가 고른 자산을 보이고 선택지가 그대로", async () => {
     answerOnly(SPY, body);
     await chooseIef();
 
@@ -170,7 +170,7 @@ describe("QA-101 판정 성과 — 자산을 바꿔도 선택지가 줄지 않�
   });
 
   // 수정 전에는 실패하면 선택지가 SPY 하나(이미 선택된 상태)로 남아, SPY를 다시 골라도 change가 나지 않았다.
-  it.fails("새 자산 읽기가 실패해도 선택지가 남아 SPY로 돌아갈 수 있다", async () => {
+  it("새 자산 읽기가 실패해도 선택지가 남아 SPY로 돌아갈 수 있다", async () => {
     api.apiGetShared.mockImplementation((path: string) =>
       path === SPY ? Promise.resolve(body) : Promise.reject(new Error("요청 실패 (HTTP 502)")));
     await chooseIef();
