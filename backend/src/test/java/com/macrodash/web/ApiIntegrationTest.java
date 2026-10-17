@@ -2,7 +2,6 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -188,7 +187,6 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @Disabled("QA-093: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-093: 판정 기록 시각은 설정값을 따른다 — AWS 데모(평일 08:50–18:00 운영)는 18시 전에 기록해야 쌓인다")
     void regimeRecordHourFollowsConfiguration() {
         JsonNode log = authorizedGet("/api/analytics/regime/log");

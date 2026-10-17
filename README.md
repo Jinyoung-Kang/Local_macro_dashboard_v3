@@ -316,6 +316,7 @@ docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d
 - AI 리포트는 Claude Haiku 5.5 하나로만 만들고(`AI_ENGINES=anthropic_haiku`, 키는 `.env`의 `ANTHROPIC_API_KEY`), 데모 방문자
   전체가 하루 `AI_DEMO_DAILY_LIMIT`건(기본 20)을 함께 씁니다. 데모 열람의 쓰기는 이 요청 하나만 열려 있습니다
   ([ADR 0014](docs/adr/0014-aws-demo-ai-report.md)). 앞단 Caddy 공개 쪽도 `POST /api/ai/report`를 통과시켜야 합니다.
+- 🧭 국면 판정 기록은 KST 17시 이후에 씁니다(로컬 18시). 데모는 18시에 꺼져 그 뒤 실행이 오지 않기 때문입니다(QA-093).
 
 ---
 

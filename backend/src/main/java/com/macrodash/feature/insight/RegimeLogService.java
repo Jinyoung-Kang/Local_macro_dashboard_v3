@@ -7,6 +7,7 @@ import com.macrodash.store.RegimeLogStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -29,7 +30,9 @@ import java.util.Map;
  *
  * <p>규칙
  * <ul>
- *   <li>KST {@value #RECORD_HOUR_KST}시 이후 하루 한 건. 아침에는 밤사이 수집이 아직 안 돌았을 수 있습니다.</li>
+ *   <li>기록 시각(KST, 설정 {@code dashboard.scheduler.regime-record-hour-kst}, 기본 {@value #DEFAULT_RECORD_HOUR_KST}시) 이후
+ *       하루 한 건. 아침에는 밤사이 수집이 아직 안 돌았을 수 있습니다. 백엔드가 그 시각 뒤에 켜져 있어야 기록되므로,
+ *       평일 08:50–18:00만 켜 두는 AWS 데모는 17시로 둡니다({@code compose.aws.yml}, QA-093).</li>
  *   <li>화면과 같은 계산({@link AnalyticsService#regimeNow()})을 쓰되, 수집을 일으키지 않고 저장본만 읽습니다.</li>
  *   <li>입력이 오래됐으면(일별 {@value #DAILY_MAX_AGE_DAYS}일, NFCI {@value #WEEKLY_MAX_AGE_DAYS}일 초과)
  *       "판정 불가"로 남깁니다 — 건너뛰면 빈 날이 보이지 않고, 오래된 값으로 판정하면 그날의 판정이 아닙니다.</li>
@@ -38,7 +41,8 @@ import java.util.Map;
 @Service
 public class RegimeLogService {
 
-    static final int RECORD_HOUR_KST = 18;
+    /** 기록 시각(KST 시)의 기본값. 배포마다 {@code dashboard.scheduler.regime-record-hour-kst}로 바꿉니다. */
+    static final int DEFAULT_RECORD_HOUR_KST = 18;
     /** 일별 입력(금리차·하이일드·순유동성)의 허용 지연 — 영업일 4일 + 주말. */
     static final int DAILY_MAX_AGE_DAYS = 6;
     /** NFCI(주간, 다음 주 수요일 발표)의 허용 지연. */
@@ -60,20 +64,39 @@ public class RegimeLogService {
     private final RegimeLogStore regimeLog;
     private final ObjectMapper mapper;
     private final Clock clock;
+    /** 이 시각(KST, 0–23) 이후 첫 정기 실행이 그날의 판정을 남깁니다. */
+    private final int recordHourKst;
 
     @Autowired
     public RegimeLogService(AnalyticsService analytics, StoreReader store, RegimeLogStore regimeLog,
-                            ObjectMapper mapper) {
-        this(analytics, store, regimeLog, mapper, Clock.systemUTC());
+                            ObjectMapper mapper,
+                            @Value("${dashboard.scheduler.regime-record-hour-kst:" + DEFAULT_RECORD_HOUR_KST + "}")
+                            int recordHourKst) {
+        this(analytics, store, regimeLog, mapper, Clock.systemUTC(), recordHourKst);
     }
 
+    /** 테스트용 — 기본 기록 시각. */
     RegimeLogService(AnalyticsService analytics, StoreReader store, RegimeLogStore regimeLog,
                      ObjectMapper mapper, Clock clock) {
+        this(analytics, store, regimeLog, mapper, clock, DEFAULT_RECORD_HOUR_KST);
+    }
+
+    /**
+     * @throws IllegalStateException 기록 시각이 0–23 밖일 때 — 24 같은 값이면 하루도 기록하지 않고 조용히 지나가므로
+     *                               기동할 때 멈춥니다
+     */
+    RegimeLogService(AnalyticsService analytics, StoreReader store, RegimeLogStore regimeLog,
+                     ObjectMapper mapper, Clock clock, int recordHourKst) {
+        if (recordHourKst < 0 || recordHourKst > 23) {
+            throw new IllegalStateException("dashboard.scheduler.regime-record-hour-kst는 0–23이어야 합니다: "
+                    + recordHourKst);
+        }
         this.analytics = analytics;
         this.store = store;
         this.regimeLog = regimeLog;
         this.mapper = mapper;
         this.clock = clock;
+        this.recordHourKst = recordHourKst;
     }
 
     /** 정기 실행. 실패해도 다음 주기에 다시 시도합니다(같은 날 두 번 기록되지는 않음). */
@@ -95,7 +118,7 @@ public class RegimeLogService {
             return Outcome.SCHEMA_NOT_READY;
         }
         ZonedDateTime now = Kst.now(clock);
-        if (now.getHour() < RECORD_HOUR_KST) {
+        if (now.getHour() < recordHourKst) {
             return Outcome.TOO_EARLY;
         }
         LocalDate today = now.toLocalDate();
@@ -154,13 +177,13 @@ public class RegimeLogService {
         out.put("available", true);
         out.put("startedOn", regimeLog.firstDate().map(LocalDate::toString).orElse(null));
         out.put("count", regimeLog.count());
-        out.put("recordHourKst", RECORD_HOUR_KST);
+        out.put("recordHourKst", recordHourKst);
         if (!pro && limit > FREE_LIMIT) {
             out.put("limitedTo", FREE_LIMIT);   // 화면이 "유료 등급은 전체" 안내를 띄웁니다
         }
         out.put("entries", entries);
         out.put("note", "하루 한 번(KST %d시 이후) 그날 화면에 보인 판정을 근거와 함께 남깁니다. "
-                .formatted(RECORD_HOUR_KST)
+                .formatted(recordHourKst)
                 + "기록은 추가만 하고 고치지 않습니다. 입력이 오래됐거나 빠진 날은 '판정 불가'로 남깁니다.");
         return out;
     }

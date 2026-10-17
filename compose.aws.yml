@@ -41,6 +41,9 @@ services:
       PUBLIC_URL: ${PUBLIC_ORIGIN}
       COOKIE_SECURE: "${COOKIE_SECURE:-true}"
       DASHBOARD_READ_MODE: store_only
+      # 국면 판정 기록 시각(KST, 기본 18). 이 배포는 평일 08:50–18:00만 켜져 18시 뒤 실행이 오지 않아 기록이 한 건도
+      # 쌓이지 않았음(QA-093). 운영 창 안에서 수집이 가장 오래 돈 뒤인 17시 — 30분 주기라 17:2x·17:5x 실행이 걸림.
+      DASHBOARD_SCHEDULER_REGIMERECORDHOURKST: "17"
       # 앞단(Caddy)이 X-Forwarded-For를 클라이언트 IP 하나로 덮어써 보냄. Tomcat RemoteIpValve는
       # 내부 대역(기본값: 10/8 · 172.16/12 · 192.168/16 · 127/8)에서 온 요청의 헤더만 믿는다.
       SERVER_FORWARDHEADERSSTRATEGY: native

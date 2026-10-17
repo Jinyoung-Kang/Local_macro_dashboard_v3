@@ -1,22 +1,35 @@
 package com.macrodash.feature.insight;
 
+import com.macrodash.Kst;
 import com.macrodash.analytics.Regime;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.RegimeLogStore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -97,6 +110,62 @@ class RegimeLogServiceTest {
 
         assertThat(service.recordToday()).isEqualTo(RegimeLogService.Outcome.TOO_EARLY);
         verify(analytics, never()).regimeNow();
+    }
+
+    /**
+     * AWS 데모의 하루치 정기 실행(QA-093). EC2가 평일 08:50에 켜지고 백엔드가 1~3분 뒤 뜨면, 기동 60초 뒤부터 30분마다
+     * 08:52 · 09:22 · … · 17:52에 돌고 18:00에 꺼집니다(aws-deploy 일정). 실행마다 그 시각의 시계로 서비스를 만듭니다.
+     */
+    private static List<RegimeLogService.Outcome> awsDay(int recordHourKst) {
+        RegimeLogStore regimeLog = mock(RegimeLogStore.class);
+        when(regimeLog.ready()).thenReturn(true);
+        AtomicBoolean recorded = new AtomicBoolean();
+        when(regimeLog.exists(TODAY)).thenAnswer(call -> recorded.get());
+        when(regimeLog.insertIfAbsent(any())).thenAnswer(call -> !recorded.getAndSet(true));
+        AnalyticsService analytics = mock(AnalyticsService.class);
+        when(analytics.regimeNow()).thenReturn(reading("2026-10-02"));
+
+        List<RegimeLogService.Outcome> outcomes = new ArrayList<>();
+        for (LocalTime at = LocalTime.of(8, 52); at.isBefore(LocalTime.of(18, 0)); at = at.plusMinutes(30)) {
+            Clock clock = Clock.fixed(TODAY.atTime(at).atZone(Kst.ZONE).toInstant(), ZoneOffset.UTC);
+            outcomes.add(new RegimeLogService(analytics, quietStore(), regimeLog, MAPPER, clock, recordHourKst)
+                    .recordToday());
+        }
+        return outcomes;
+    }
+
+    @Test
+    @DisplayName("QA-093: AWS 배포(compose.aws.yml)의 기록 시각이면 운영 창(평일 08:50–18:00) 안에서 하루 한 번 기록한다")
+    void awsDeploymentRecordsWithinOperatingWindow() throws Exception {
+        Path compose = Path.of("../compose.aws.yml");
+        assumeTrue(Files.exists(compose), "compose.aws.yml을 찾을 수 없습니다");
+        Matcher setting = Pattern.compile("(DASHBOARD_SCHEDULER_REGIME\\w*):\\s*\"(\\d+)\"")
+                .matcher(Files.readString(compose));
+        assertThat(setting.find()).as("compose.aws.yml backend에 판정 기록 시각 설정이 있어야 함").isTrue();
+
+        // 그 환경변수 이름이 실제로 이 설정에 붙는지 — 스프링 부트의 환경변수 이름 규칙으로 풀어 봅니다.
+        StandardEnvironment env = new StandardEnvironment();
+        env.getPropertySources().replace(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                        Map.of(setting.group(1), setting.group(2))));
+        ConfigurationPropertySources.attach(env);
+        int hour = Integer.parseInt(env.resolvePlaceholders("${dashboard.scheduler.regime-record-hour-kst:18}"));
+        assertThat(hour).isEqualTo(Integer.parseInt(setting.group(2)));
+
+        List<RegimeLogService.Outcome> day = awsDay(hour);
+        assertThat(day).containsOnlyOnce(RegimeLogService.Outcome.RECORDED);
+        assertThat(day.get(day.size() - 1)).as("17:52 — 이미 기록함").isEqualTo(RegimeLogService.Outcome.ALREADY_RECORDED);
+        assertThat(awsDay(RegimeLogService.DEFAULT_RECORD_HOUR_KST)).as("기본 18시면 정지 전 마지막 실행(17:52)까지 모두 아직 이름")
+                .containsOnly(RegimeLogService.Outcome.TOO_EARLY);
+    }
+
+    @Test
+    @DisplayName("기록 시각이 0–23 밖이면 기동하지 않는다 — 24면 하루도 기록하지 않고 조용히 지나감")
+    void rejectsRecordHourOutsideTheDay() {
+        assertThatThrownBy(() -> new RegimeLogService(mock(AnalyticsService.class), quietStore(),
+                mock(RegimeLogStore.class), MAPPER, kstAt(19), 24))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("regime-record-hour-kst");
     }
 
     @Test
