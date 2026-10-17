@@ -262,6 +262,76 @@ def test_market_flows_keeps_previous_market_on_partial_failure(store, monkeypatc
     assert payload["markets"]["KOSPI"]["records"][0]["date"] == "2026-09-25"
 
 
+def _kospi_only(fixture, kosdaq):
+    """KOSPI는 고정본을 돌려주고, KOSDAQ은 ``kosdaq``(예외면 던지고, 아니면 그 값을 돌려줌)."""
+    def fetch(symbol, count):
+        if symbol == "KOSDAQ":
+            if isinstance(kosdaq, Exception):
+                raise kosdaq
+            return kosdaq
+        return [toss.normalize_market_record(r) for r in fixture]
+    return fetch
+
+
+@pytest.mark.xfail(strict=True, reason="QA-076: 수정 전 재현 — fix 커밋에서 켬")
+def test_QA076_한_시장이_실패하면_이어받은_시장에_이전_값_표시와_그_시장을_받은_시각을_남긴다(store, monkeypatch):
+    """
+    한 시장만 실패하면 직전 저장본의 그 시장을 표시 없이 이어 써, 저장본 수집 시각(방금 받은 다른 시장의 시각)이
+    멈춘 시장에도 붙었습니다. 백엔드 알림은 그 시각으로 '그날이 지난 뒤 다시 받은 기록'을 확정으로 보므로, 장중에
+    마지막으로 받은 KOSDAQ 기록이 다음 날 확정치로 세졌습니다(QA-040 수정이 이 경로에서 무력화).
+    """
+    received = "2026-09-25T02:00:00+00:00"   # KOSDAQ을 마지막으로 받은 시각(25일 11시 KST, 장중)
+    store.put_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS, {"markets": {
+        "KOSDAQ": {"records": [{"date": "2026-09-25"}], "fetchedAt": received}}})
+    fixture = _fixture("market_investor_trading_kospi.json")["result"]["records"]
+    monkeypatch.setattr(tasks.toss_service, "fetch_market_investor_trading",
+                        _kospi_only(fixture, toss.TossError("HTTP 500")))
+
+    detail = tasks.task_toss_market_flows()
+
+    markets = store.read_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS).payload["markets"]
+    kosdaq = markets["KOSDAQ"]
+    assert kosdaq["records"] == [{"date": "2026-09-25"}]          # 값은 그대로 잇되
+    assert kosdaq["isStale"] is True and kosdaq["staleSince"]      # 이전 값이라는 표시와
+    assert "HTTP 500" in kosdaq["staleReason"]
+    assert kosdaq["fetchedAt"] == received                         # 그 시장을 실제로 받은 시각은 옛 시각 그대로
+    assert markets["KOSPI"]["fetchedAt"] and not markets["KOSPI"].get("isStale")
+    assert "이전 값" in detail and "KOSDAQ" in detail
+
+
+@pytest.mark.xfail(strict=True, reason="QA-076: 수정 전 재현 — fix 커밋에서 켬")
+def test_QA076_빈_응답인_시장도_사유를_남기고_이어받는다(store, monkeypatch):
+    store.put_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS, {"markets": {"KOSDAQ": {"records": [{"date": "2026-09-24"}]}}})
+    fixture = _fixture("market_investor_trading_kospi.json")["result"]["records"]
+    monkeypatch.setattr(tasks.toss_service, "fetch_market_investor_trading", _kospi_only(fixture, []))
+
+    detail = tasks.task_toss_market_flows()
+
+    snapshot = store.read_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS)
+    kosdaq = snapshot.payload["markets"]["KOSDAQ"]
+    assert "KOSDAQ" in detail and "빈 응답" in detail                # 예전엔 '1/2 시장'뿐 — 왜 빠졌는지 몰랐음
+    assert kosdaq["isStale"] is True
+    assert kosdaq["fetchedAt"], "받은 시각이 없던 예전 저장본은 그 저장본의 수집 시각으로 채웁니다"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-076: 수정 전 재현 — fix 커밋에서 켬")
+def test_QA076_오래_이어받은_시장은_더_잇지_않는다(store, monkeypatch):
+    """실패가 몇 주 이어져도 멈춘 시장 값이 기한 없이 남았습니다(QA-056의 이어받기 기한과 같은 규칙)."""
+    from datetime import datetime, timedelta, timezone
+
+    long_ago = (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
+    store.put_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS, {"markets": {"KOSDAQ": {
+        "records": [{"date": "2026-09-20"}], "fetchedAt": long_ago,
+        "isStale": True, "staleReason": "HTTP 500", "staleSince": long_ago}}})
+    fixture = _fixture("market_investor_trading_kospi.json")["result"]["records"]
+    monkeypatch.setattr(tasks.toss_service, "fetch_market_investor_trading",
+                        _kospi_only(fixture, toss.TossError("HTTP 500")))
+
+    tasks.task_toss_market_flows()
+
+    assert "KOSDAQ" not in store.read_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS).payload["markets"]
+
+
 def test_market_flows_without_key_is_empty_result(store, monkeypatch):
     monkeypatch.setattr(toss.settings, "toss_credentials", lambda: ("", ""))
     with pytest.raises(tasks.EmptyResult) as info:
