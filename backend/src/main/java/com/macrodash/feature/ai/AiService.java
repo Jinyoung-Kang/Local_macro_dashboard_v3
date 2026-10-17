@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -194,6 +195,12 @@ public class AiService {
 
     /** 테스트가 가짜 서버로 보낼 때만 씁니다. null이면 SDK 기본 주소(api.anthropic.com). */
     String anthropicBaseUrl;
+
+    /**
+     * 지금 시각(밀리초) — 대기 마감과 남은 예산 계산에만 씁니다. 테스트가 시간을 움직여 남은 예산에 따른 동작을 실제로
+     * 기다리지 않고 확인할 때 바꿔 끼웁니다. 호출마다 걸린 시간(latencyMs)은 실제 시계로 잽니다.
+     */
+    LongSupplier clockMillis = System::currentTimeMillis;
 
     /** NVIDIA·Cerebras 호출 주소. 테스트가 자동 탐색을 가짜 서버로만 돌릴 때(실제 호출 없이) 바꿉니다. */
     String nvidiaUrl = NVIDIA_URL;
@@ -490,7 +497,7 @@ public class AiService {
     private Map<String, Object> withFailover(String prompt, String systemPrompt) {
         List<String> attempts = new ArrayList<>();
         boolean charged = false;
-        long deadline = System.currentTimeMillis() + autoBudgetSeconds * 1000L;
+        long deadline = clockMillis.getAsLong() + autoBudgetSeconds * 1000L;
 
         for (String engineId : FAILOVER_ORDER) {
             if (!isAllowed(engineId)) {
@@ -503,7 +510,7 @@ public class AiService {
                 continue;
             }
 
-            int attemptSeconds = attemptBudget(deadline, System.currentTimeMillis());
+            int attemptSeconds = attemptBudget(deadline, clockMillis.getAsLong());
             if (attemptSeconds < 0) {
                 attempts.add("남은 엔진은 시도하지 않았습니다 — 자동 탐색 시간 예산 %d초를 다 썼습니다"
                         .formatted(autoBudgetSeconds));
@@ -520,7 +527,7 @@ public class AiService {
 
             if (Boolean.TRUE.equals(result.get("status"))) {
                 result.put("failoverPath", attempts);
-                int left = (int) ((deadline - System.currentTimeMillis()) / 1000);
+                int left = (int) ((deadline - clockMillis.getAsLong()) / 1000);
                 return translateIfNeeded(result, engine.provider(),
                         Math.min(autoAttemptSeconds, Math.max(MIN_ATTEMPT_SECONDS, left)));
             }
