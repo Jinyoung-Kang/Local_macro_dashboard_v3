@@ -1,5 +1,7 @@
 package com.macrodash.web;
 
+import com.macrodash.feature.auth.AccessPolicy;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -8,6 +10,8 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -15,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -28,11 +33,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * <p>컨트롤러를 나누거나 옮길 때 경로가 빠지거나 바뀌면 화면이 조용히 404를 받습니다.
  * 이 테스트는 (1) 경로 전체를 고정 목록과 비교하고, (2) docs/API.md의 백엔드 표와도
- * 맞춰 봅니다. 경로를 일부러 추가·삭제했다면 두 곳을 함께 고치면 됩니다.
+ * 맞춰 봅니다. (3) QA 점검 스크립트가 읽는 scripts/qa/routes.json도 대조합니다(QA-110).
+ * 경로를 일부러 추가·삭제했다면 세 곳을 함께 고치면 됩니다.
  */
 class RouteInventoryTest {
 
     private static final Path API_DOC = Path.of("../docs/API.md");
+    private static final Path QA_ROUTES = Path.of("../scripts/qa/routes.json");
 
     /** 화면이 부르는 경로 전체. 컨트롤러를 옮겨도 이 목록은 바뀌지 않아야 합니다. */
     private static final Set<String> EXPECTED = new TreeSet<>(List.of(
@@ -95,6 +102,31 @@ class RouteInventoryTest {
         Set<String> actual = declaredRoutes();
         actual.remove("GET /api/health");
         assertThat(documentedRoutes(Files.readString(API_DOC))).containsExactlyElementsOf(actual);
+    }
+
+    /**
+     * QA 인증 점검(auth-probe.sh)과 퍼저(fuzz-api.py)가 읽는 경로 목록. 예전에는 대조하는 곳이 없어 ADR 0010·0011로
+     * 늘어난 관리·알림·계정 경로 21개가 빠졌고, '쿠키 없이 모든 경로 → 401' 점검이 그 경로를 보내지도 않았습니다.
+     */
+    @Test
+    @Disabled("QA-110: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("scripts/qa/routes.json이 모든 경로를 담고, 그 공개 목록이 접근 정책의 공개 경로와 같다")
+    void qaRouteListMatchesRoutes() throws IOException, ClassNotFoundException {
+        assumeTrue(Files.exists(QA_ROUTES), "scripts/qa/routes.json을 찾을 수 없습니다");
+        JsonNode spec = new ObjectMapper().readTree(Files.readString(QA_ROUTES));
+        Set<String> publicRoutes = new TreeSet<>();
+        spec.get("public").forEach(node -> publicRoutes.add(node.asString()));
+        List<String> probed = new ArrayList<>();
+        spec.get("routes").forEach(node -> probed.add(node.get("m").asString() + " " + node.get("p").asString()));
+
+        assertThat(publicRoutes).as("routes.json의 public = AccessPolicy의 PUBLIC").containsExactlyInAnyOrderElementsOf(
+                AccessPolicy.routes().entrySet().stream().filter(e -> e.getValue() == AccessPolicy.Access.PUBLIC)
+                        .map(Map.Entry::getKey).toList());
+        assertThat(probed).as("routes에 같은 경로가 두 번").doesNotHaveDuplicates();
+        assertThat(probed).as("공개 경로는 public에만(로그인 필요 경로만 401을 기대)").doesNotContainAnyElementsOf(publicRoutes);
+        Set<String> listed = new TreeSet<>(probed);
+        listed.addAll(publicRoutes);
+        assertThat(listed).containsExactlyElementsOf(declaredRoutes());
     }
 
     @Test
