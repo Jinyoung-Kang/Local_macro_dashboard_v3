@@ -81,6 +81,8 @@ export default function AlertsPage() {
         }
       >
         {inbox.error && <ErrorState message={inbox.error} onRetry={inbox.reload} />}
+        {/* 읽음 처리가 실패하면 목록만 다시 읽혀 항목이 그대로 남을 뿐 이유가 보이지 않았습니다(QA-103). */}
+        {read.error && <Banner tone="warn">{read.error}</Banner>}
         {/* 읽는 중·실패에는 '아직 알림이 없습니다'가 아닙니다(QA-050). */}
         {!inbox.data ? (
           inbox.loading ? <Loading /> : null

@@ -2,6 +2,7 @@
 
 import {
   Card,
+  ErrorState,
   Freshness,
   Loading,
   SourceBadge,
@@ -18,7 +19,7 @@ import {
 import { endpoints } from "@/lib/endpoints";
 
 export function ScrapedSection() {
-  const { data, loading, refreshError } = useApi<{
+  const { data, loading, error, reload, refreshError } = useApi<{
     available: boolean;
     updatedAt?: string;
     items: {
@@ -50,6 +51,8 @@ export function ScrapedSection() {
       }
     >
       {loading && !data && <Loading />}
+      {/* 첫 조회가 실패하면 제목만 남은 빈 카드가 아니라 이유와 다시 시도를 보입니다(QA-103). */}
+      {error && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <Table
           rows={data.items ?? []}

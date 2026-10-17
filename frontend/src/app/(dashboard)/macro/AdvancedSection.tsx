@@ -6,6 +6,7 @@ import { RangeTabs, sliceByRange, type RangeValue } from "@/components/RangeTabs
 import {
   Banner,
   Card,
+  ErrorState,
   Freshness,
   Loading,
   Metric,
@@ -25,10 +26,15 @@ import { endpoints } from "@/lib/endpoints";
 export function AdvancedSection({
   data,
   loading,
+  error,
+  onRetry,
   refreshError,
 }: {
   data: AdvancedIndicators | null;
   loading: boolean;
+  /** 첫 조회가 실패했으면 그 문구(useApi의 error). 값이 있는 동안의 실패는 refreshError입니다. */
+  error?: string | null;
+  onRetry?: () => void;
   /** 새로 읽기가 실패했으면 그 문구 — 앞서 받은 값을 보이는 중이라고 알립니다(QA-067). */
   refreshError?: string | null;
 }) {
@@ -52,6 +58,15 @@ export function AdvancedSection({
     return (
       <Card title="심화 매크로 지표">
         <Loading />
+      </Card>
+    );
+  }
+  // 첫 조회가 실패하면 지표 칸 없는 빈 카드(선택지 없는 추이 선택 상자)가 아니라 이유와 다시 시도를 보입니다(QA-103).
+  // 위험 지표 카드(RiskSection)처럼 값이 없으면 일찍 돌려줍니다.
+  if (!data && error) {
+    return (
+      <Card title="심화 매크로 지표">
+        <ErrorState message={error} onRetry={onRetry} />
       </Card>
     );
   }

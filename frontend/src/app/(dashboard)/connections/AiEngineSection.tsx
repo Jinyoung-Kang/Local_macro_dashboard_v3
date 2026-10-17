@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Banner, Button, Card, Loading, Select, SourceBadge, Table } from "@/components/ui";
+import { Banner, Button, Card, ErrorState, Loading, Select, SourceBadge, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { errorMessage, useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiPost } from "@/lib/api";
@@ -36,6 +36,8 @@ export function AiEngineSection() {
       <h2 className="text-base font-semibold text-bright">AI 엔진</h2>
 
       {engines.loading && !engines.data && <Loading />}
+      {/* 엔진 목록을 받지 못하면 엔진 표가 없고 호출 버튼이 이유 없이 꺼져 있었습니다(QA-103, ai/report의 QA-050과 같음). */}
+      {engines.error && <ErrorState message={engines.error} onRetry={engines.reload} />}
 
       {engines.data && (
         <Card title="등록된 엔진" source={SOURCES.aiEngines} subtitle="엔진별 응답·지연시간·자동 번역 동작을 확인합니다">

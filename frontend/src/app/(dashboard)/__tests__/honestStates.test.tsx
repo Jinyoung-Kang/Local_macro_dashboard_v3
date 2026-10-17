@@ -135,7 +135,7 @@ describe("QA-099 지표별 단독 차트 — 백엔드가 받지 못한 이유�
 describe("QA-103 첫 조회·버튼 동작이 실패하면 이유를 보인다", () => {
   const FAILED = "요청 실패 (HTTP 503)";
   // 수정 전에는 error를 받지 않거나(스크래핑·AI 엔진 목록) 섹션에 넘기지 않아(심화 지표) 빈 카드·이유 없이 꺼진 버튼만 남았다.
-  it.fails.each<[string, string, () => ReactElement]>([
+  it.each<[string, string, () => ReactElement]>([
     ["스크래핑 시세", "/api/macro/scraped", () => <ScrapedSection />],
     ["매크로 심화 지표", "/api/macro/advanced", () => <MacroPage />],
     ["AI 엔진 목록(연결 테스트)", "/api/ai/engines", () => <AiEngineSection />],
@@ -149,7 +149,7 @@ describe("QA-103 첫 조회·버튼 동작이 실패하면 이유를 보인다",
   });
 
   // 수정 전에는 진단 요청이 실패하면(백엔드 5xx, 회원이 주소로 들어와 403) 안내 문구까지 사라져 카드가 비었다.
-  it.fails("토스 연결 진단이 실패하면 오류를 보인다", async () => {
+  it("토스 연결 진단이 실패하면 오류를 보인다", async () => {
     reads["/api/ai/toss/diagnostics"] = () => Promise.reject(new Error("요청 실패 (HTTP 403)"));
     render(<TossSection />);
 
@@ -159,7 +159,7 @@ describe("QA-103 첫 조회·버튼 동작이 실패하면 이유를 보인다",
   });
 
   // 수정 전에는 읽음 처리의 오류를 어디에도 그리지 않아, 실패해도 목록만 다시 읽혀 항목이 그대로 남았다.
-  it.fails("알림 읽음 처리가 실패하면 알림함에 알린다", async () => {
+  it("알림 읽음 처리가 실패하면 알림함에 알린다", async () => {
     reads["/api/alerts/rules"] = () => Promise.resolve({ available: true, rules: [] });
     reads["/api/alerts/inbox"] = () => Promise.resolve({ available: true, unread: 1, items: [
       { id: 1, read: false, late: false, title: "국면 전환", body: "본문", occurredOn: "2026-10-18" }] });

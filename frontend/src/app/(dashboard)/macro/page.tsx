@@ -218,7 +218,13 @@ export default function MacroPage() {
       )}
 
       <RiskSection risk={risk.data} loading={risk.loading} refreshError={risk.refreshError} />
-      <AdvancedSection data={advanced.data} loading={advanced.loading} refreshError={advanced.refreshError} />
+      <AdvancedSection
+        data={advanced.data}
+        loading={advanced.loading}
+        error={advanced.error}
+        onRetry={advanced.reload}
+        refreshError={advanced.refreshError}
+      />
       <SingleChartSection />
       <ScrapedSection />
     </div>

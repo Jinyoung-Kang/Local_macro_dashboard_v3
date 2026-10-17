@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Banner, Button, Card, Loading, SourceBadge } from "@/components/ui";
+import { Banner, Button, Card, ErrorState, Loading, SourceBadge } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiGet } from "@/lib/api";
@@ -42,6 +42,9 @@ export function TossSection() {
       >
         {runId === null && <p className="text-sm text-muted">버튼을 누르면 토스 서버에 한 번 연결해 봅니다.</p>}
         {diagnostics.loading && !diagnostics.data && <Loading />}
+        {/* 진단 요청 자체가 실패하면(백엔드 5xx·연결 끊김·운영자 아님 403) 빈 카드가 아니라 이유를 보입니다(QA-103).
+            수집기에 닿지 못한 것은 백엔드가 200 {ok:false}로 감싸 아래에서 '연결 실패'로 그립니다. */}
+        {diagnostics.error && <ErrorState message={diagnostics.error} onRetry={diagnostics.reload} />}
         {diagnostics.data && (
           <div className="flex flex-col gap-2">
             <p className={diagnostics.data.ok ? "text-ok" : "text-warn"}>
