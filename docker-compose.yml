@@ -7,7 +7,7 @@
 #   backend   API (Java/Spring Boot) — 저장본 읽기·분석·인증
 #   frontend  화면 (Next.js)
 #
-# 실행:  docker compose up -d --build
+# 실행:  make up   (빌드·기동 뒤 대기 중인 스키마까지 적용 — docker compose up만 쓰면 새 스키마가 빠질 수 있음, QA-016)
 # 접속:  http://localhost:3000  (비밀번호: .env의 APP_PASSWORD — 'make setup'이 만들어 줍니다)
 #
 # [포트를 어디까지 여는가]

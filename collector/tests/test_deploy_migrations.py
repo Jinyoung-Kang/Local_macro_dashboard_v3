@@ -49,13 +49,12 @@ def _aws_readme_commands() -> str:
 
 
 def _aws_header_commands() -> str:
-    """compose.aws.yml 머리말(services: 앞)의 명령 줄."""
+    """compose.aws.yml 머리말의 배포 명령 블록(첫 docker compose 줄부터 빈 주석 줄 앞까지, 이어지는 줄 포함)."""
     text = (ROOT / "compose.aws.yml").read_text(encoding="utf-8")
-    header = text[:text.index("\nservices:")]
-    return "\n".join(line for line in header.splitlines() if "docker compose" in line)
+    block = text[text.index("docker compose"):text.index("\nservices:")]
+    return block[:block.index("\n#\n")]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-107: 수정 전 재현 — AWS 배포 절차에 스키마 적용 단계가 없음")
 @pytest.mark.parametrize("where", ["README", "compose.aws.yml"])
 def test_QA107_AWS_배포_절차도_up_뒤에_스키마를_적용한다(where):
     commands = _aws_readme_commands() if where == "README" else _aws_header_commands()
@@ -66,7 +65,6 @@ def test_QA107_AWS_배포_절차도_up_뒤에_스키마를_적용한다(where):
     assert "sleep" in schema_line, f"{where}: 스키마 적용에 재시도가 없습니다"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-107: 수정 전 재현 — compose 머리말이 docker compose up을 직접 안내")
 def test_QA107_docker_compose_머리말의_실행_안내는_make_up():
     text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     run_line = next(line for line in text.splitlines() if line.startswith("# 실행:"))
