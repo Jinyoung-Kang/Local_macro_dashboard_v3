@@ -21,6 +21,7 @@ import LiquidityPage from "../liquidity/page";
 import { FxCompareSection } from "../macro/FxCompareSection";
 import MacroPage from "../macro/page";
 import RegimePage from "../regime/page";
+import { TrackRecordSection } from "../regime/TrackRecordSection";
 import SectorPage from "../sector/page";
 
 /** 첫 경로만 응답하고, 바꾼 뒤의 경로는 끝나지 않는 요청(로딩 중). */
@@ -139,5 +140,44 @@ describe("QA-066 페이지 조건을 바꿔도 스스로 읽는 하위 섹션의
 
     expect(button.isConnected).toBe(true);
     expect(screen.getByRole("button", { name: "엔/달러" }).getAttribute("aria-pressed")).toBe(pressed);
+  });
+});
+
+describe("QA-101 판정 성과 — 자산을 바꿔도 선택지가 줄지 않는다", () => {
+  const ASSETS = [
+    { ticker: "SPY", label: "S&P 500 (SPY)" },
+    { ticker: "QQQ", label: "나스닥 100 (QQQ)" },
+    { ticker: "IEF", label: "미국채 7-10년 (IEF)" },
+  ];
+  const SPY = "/api/analytics/regime/track-record?asset=SPY";
+  const body = { available: false, locked: false, message: "", asset: "SPY", assetLabel: "S&P 500 (SPY)",
+                 assets: ASSETS, horizons: [], limits: [] };
+
+  async function chooseIef() {
+    render(<TrackRecordSection tone={{}} />);
+    await screen.findByRole("option", { name: "미국채 7-10년 (IEF)" });
+    fireEvent.change(screen.getByLabelText("자산"), { target: { value: "IEF" } });
+  }
+
+  // 수정 전에는 새 자산의 응답을 기다리는 동안 선택지가 SPY 하나로 줄어, 요청은 IEF인데 선택 상자는 SPY를 보였다.
+  it.fails("새 자산을 읽는 동안에도 선택 상자가 고른 자산을 보이고 선택지가 그대로", async () => {
+    answerOnly(SPY, body);
+    await chooseIef();
+
+    const select = screen.getByLabelText("자산") as HTMLSelectElement;
+    expect(select.value).toBe("IEF");
+    expect(select.options).toHaveLength(3);
+  });
+
+  // 수정 전에는 실패하면 선택지가 SPY 하나(이미 선택된 상태)로 남아, SPY를 다시 골라도 change가 나지 않았다.
+  it.fails("새 자산 읽기가 실패해도 선택지가 남아 SPY로 돌아갈 수 있다", async () => {
+    api.apiGetShared.mockImplementation((path: string) =>
+      path === SPY ? Promise.resolve(body) : Promise.reject(new Error("요청 실패 (HTTP 502)")));
+    await chooseIef();
+    await screen.findByText(/HTTP 502/);
+
+    const select = screen.getByLabelText("자산") as HTMLSelectElement;
+    expect(select.value).toBe("IEF");
+    expect(select.options).toHaveLength(3);
   });
 });
