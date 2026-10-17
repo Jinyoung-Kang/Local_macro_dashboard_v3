@@ -163,3 +163,85 @@ def test_기다리다_한도를_넘기면_실패가_아니라_합류다(monkeypa
     release.set()
     leader.join(timeout=5)
     assert tasks._inflight == {}
+
+
+# ---- QA-079: 시간 상한을 넘긴 작업(좀비)과 같은 태스크가 동시에 다시 돌던 문제 ------------------------------
+@pytest.mark.xfail(strict=True, reason="QA-079: 수정 전 재현 — fix 커밋에서 켬")
+def test_상한을_넘긴_작업이_끝나기_전에는_같은_태스크를_다시_시작하지_않는다(monkeypatch):
+    """
+    시간 상한을 넘기면 호출자는 '시간 초과'로 돌아가지만 작업 스레드는 요청 timeout이 끝날 때까지 남습니다.
+    예전에는 그 순간 합치기 등록이 풀려, 백엔드가 30초 뒤 같은 태스크를 다시 요청하면 좀비와 나란히 두 번째
+    실행이 시작됐습니다(같은 소스를 동시에 두드리고 같은 행을 동시에 씀). 좀비가 끝날 때까지는 새로 시작하지 않고
+    곧바로 '이전 수집이 아직 진행 중'으로 돌려줘야 합니다 — 기다리게 하면 스케줄러의 그룹 실행이 길어집니다.
+    """
+    monkeypatch.setitem(tasks.TASK_DEADLINE_SECONDS, "fast", 0.2)
+    lock = threading.Lock()
+    runs: list[int] = []
+    active = [0]
+    peak = [0]
+    release = threading.Event()
+
+    def run() -> str:
+        with lock:
+            runs.append(1)
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        try:
+            release.wait(5)
+        finally:
+            with lock:
+                active[0] -= 1
+        return "늦은 결과"
+
+    task = tasks.Task("zombie_task", "fast", run, "")
+    try:
+        ok, detail = tasks.run_task(task)            # 0.2초 뒤 시간 초과 — 작업 스레드는 계속 돕니다
+        assert ok is False and "시간 초과" in detail
+
+        started = time.perf_counter()
+        again_ok, again_detail = tasks.run_task(task)  # 좀비가 아직 도는 중
+        waited = time.perf_counter() - started
+
+        assert len(runs) == 1, f"좀비와 나란히 {len(runs)}번째 실행이 시작됐습니다"
+        assert again_ok is True and "아직 진행 중" in again_detail
+        assert waited < 0.5, "좀비를 기다리지 않고 곧바로 돌려줘야 합니다(그룹 실행을 늘리지 않음)"
+    finally:
+        release.set()
+
+    deadline = time.time() + 3
+    while task.name in tasks._inflight and time.time() < deadline:
+        time.sleep(0.01)
+    assert tasks._inflight == {}, "좀비가 끝나면 등록이 풀려야 합니다"
+    assert tasks.run_task(task)[0] is True             # 끝난 뒤에는 새로 실행
+    assert len(runs) == 2 and peak[0] == 1
+
+
+@pytest.mark.xfail(strict=True, reason="QA-079: 수정 전 재현 — fix 커밋에서 켬")
+def test_워커를_얻지_못한_작업은_취소하고_외부_장애와_다른_사유로_남긴다(monkeypatch):
+    """
+    태스크는 워커 8개짜리 풀 하나를 함께 씁니다. 좀비가 워커를 모두 잡고 있으면 소스가 멀쩡한 태스크도 상한 안에
+    시작하지 못하는데, 예전에는 이것을 '외부 응답 없음 의심'으로 적고 대기열의 작업을 취소하지 않아 좀비가 풀린 뒤
+    몰아서 실행했습니다. 시작 못 한 작업은 취소하고 '워커 대기 초과'로 따로 적어야 실행 기록이 원인을 가리킵니다.
+    """
+    monkeypatch.setitem(tasks.TASK_DEADLINE_SECONDS, "fast", 0.2)
+    pool = ThreadPoolExecutor(max_workers=1)
+    monkeypatch.setattr(tasks.runner, "_task_threads", pool)
+    recorded: list[dict] = []
+    monkeypatch.setattr(tasks.store, "record_task_run", lambda *a, **kw: recorded.append(kw))
+    hang = threading.Event()
+    ran: list[int] = []
+    blocker = tasks.Task("blocker_task", "fast", lambda: hang.wait(5) and "끝", "")
+    healthy = tasks.Task("healthy_task", "fast", lambda: ran.append(1) or "정상", "")
+    try:
+        tasks.run_task(blocker)                      # 하나뿐인 워커를 잡은 채 시간 초과
+        ok, detail = tasks.run_task(healthy)         # 워커를 얻지 못하고 상한에 닿음
+    finally:
+        hang.set()
+        pool.shutdown(wait=True)
+
+    assert ok is False
+    assert "워커 대기 초과" in detail
+    assert "외부 응답 없음" not in detail
+    assert recorded[-1]["detail"] == detail
+    assert ran == [], "시작 못 한 작업은 취소돼 나중에 몰아서 실행되면 안 됩니다"
+    assert tasks._inflight == {}
