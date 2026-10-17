@@ -61,7 +61,6 @@ def throttling_server(monkeypatch):
         server.server_close()
 
 
-@pytest.mark.xfail(strict=True, reason="QA-080: 수정 전 재현 — fix 커밋에서 켬")
 @pytest.mark.parametrize("make_session", [
     pytest.param(app_http.get_session, id="default"),
     pytest.param(app_http.get_fred_session, id="fred"),

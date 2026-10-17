@@ -148,6 +148,7 @@ def _get_session() -> requests.Session:
                 status_forcelist=(429, 500, 502, 503, 504),
                 allowed_methods=("GET",),
                 raise_on_status=False,
+                retry_after_max=http.RETRY_AFTER_MAX_SECONDS,   # Retry-After 대기 상한(QA-080, http.py 참고)
             )
             adapter = HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=8)
             session.mount("https://", adapter)

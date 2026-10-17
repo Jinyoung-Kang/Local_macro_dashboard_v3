@@ -124,6 +124,13 @@ def sec_headers() -> dict:
 _lock = threading.Lock()
 _sessions: dict[str, requests.Session] = {}
 
+# 서버가 Retry-After로 요구하는 대기의 상한(초, QA-080). urllib3 기본은 6시간(21600초)까지 그대로 time.sleep하고,
+# 이 대기는 requests의 timeout에 들어가지 않습니다. 429·503에 'Retry-After: 3600'이 오면 요청 하나가 수집기
+# 스레드를 몇 시간 붙잡아 태스크 시간 상한 뒤에도 남고, /live/* 요청 경로는 스레드 한도(40)를 채웁니다.
+# 토스 클라이언트(services/toss.api_get)와 같은 5초로 자릅니다 — 더 오래 쉬라는 소스는 재시도를 다 쓴 뒤
+# 실패로 기록되고 다음 주기에 다시 시도합니다(재시도 수 × 5초가 요청 하나의 대기 상한).
+RETRY_AFTER_MAX_SECONDS = 5
+
 
 def _build_session(
     name: str,
@@ -140,6 +147,7 @@ def _build_session(
         status_forcelist=(403, 408, 429, 500, 502, 503, 504),
         allowed_methods=("GET", "POST"),
         raise_on_status=False,
+        retry_after_max=RETRY_AFTER_MAX_SECONDS,
     )
     adapter = HTTPAdapter(
         max_retries=retry,
