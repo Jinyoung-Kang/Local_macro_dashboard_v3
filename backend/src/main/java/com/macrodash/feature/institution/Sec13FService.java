@@ -156,6 +156,28 @@ public class Sec13FService {
         return topN > 0 && rows.size() > topN ? rows.subList(0, topN) : rows;
     }
 
+    /**
+     * 교집합에 넣을 한 기관의 행 — <b>지금 들고 있는</b> 항목은 평가액 상위 {@code limit}개, 전량 매도 행은 전부.
+     *
+     * <p>전량 매도 행은 평가액이 0이라 평가액 순으로 함께 자르면 늘 맨 뒤로 밀립니다. 그러면 보유 종목이
+     * {@code limit}개보다 적은 기관의 전량 매도만 '동시 매도'로 세어져, 같은 매도가 기관 규모에 따라 세어지기도
+     * 하고 빠지기도 했습니다(QA-082). 자르기는 보유 항목에만 하고, 전량 매도는 따로 붙입니다.
+     */
+    private List<Map<String, Object>> consensusRows(JsonNode current, JsonNode previous, int limit) {
+        List<Map<String, Object>> held = new ArrayList<>();
+        List<Map<String, Object>> closed = new ArrayList<>();
+        for (Map<String, Object> row : compareQuarters(current, previous, 0)) {
+            if (HoldingsDiff.CLOSED.equals(row.get("action"))) {
+                closed.add(row);
+            } else {
+                held.add(row);
+            }
+        }
+        List<Map<String, Object>> out = new ArrayList<>(held.size() > limit ? held.subList(0, limit) : held);
+        out.addAll(closed);
+        return out;
+    }
+
     /** 상위 종목의 분기별 비중 추이 (차트용). */
     private Map<String, Object> weightHistory(List<JsonNode> quarters, int topN) {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -246,7 +268,7 @@ public class Sec13FService {
             String institution = Institutions.byCik(cik).getOrDefault("name", cik);
             participants.add(institution);
 
-            for (Map<String, Object> holding : compareQuarters(current, previous, 100)) {
+            for (Map<String, Object> holding : consensusRows(current, previous, 100)) {
                 String name = String.valueOf(holding.get("name"));
                 aggregate.computeIfAbsent(name, key -> new Tally(key, holding.get("cusip"), null))
                         .add(institution, holding);
@@ -255,7 +277,8 @@ public class Sec13FService {
 
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Tally tally : aggregate.values()) {
-            if (tally.holders.size() < minHolders) {
+            // 전량 매도만 모인 집계는 보유 기관이 0곳입니다. minHolders가 0 이하로 와도 '보유'로 올리지 않습니다.
+            if (tally.holders.size() < Math.max(1, minHolders)) {
                 continue;
             }
             Map<String, Object> row = new LinkedHashMap<>();
@@ -407,6 +430,11 @@ public class Sec13FService {
      *
      * <p>모르는 평가액·비중은 더하지 않고 평균의 분모에도 넣지 않습니다. 0으로 더하면 합계와
      * 평균이 실제보다 작아지고 정렬 순서까지 바뀝니다.
+     *
+     * <p><b>전량 매도 행은 보유가 아닙니다</b>(QA-082). 그 기관은 '동시 매도'(sellers)와 액션 목록에만 들어가고,
+     * 보유 기관·평가액·비중에는 들어가지 않습니다. 예전에는 평가액·비중 0인 전량 매도 행을 그대로 더해, 지금 들고
+     * 있지 않은 기관이 '보유 기관'으로 세어지고 평균 비중이 그만큼 낮아졌습니다. 한 기관이 A주는 들고 C주만 전량
+     * 매도했다면 A주 행으로 보유 기관에 남습니다 — 보유 기관은 '전량 매도가 아닌 행이 하나라도 있는 기관'입니다.
      */
     private static final class Tally {
         final String name;
@@ -427,7 +455,6 @@ public class Sec13FService {
         }
 
         void add(String institution, Map<String, Object> holding) {
-            holders.add(institution);
             String action = String.valueOf(holding.get("action"));
             actions.add(action);
             if (action.contains("신규 매수") || action.contains("비중 확대")) {
@@ -436,6 +463,10 @@ public class Sec13FService {
             if (action.contains("전량 매도") || action.contains("비중 축소")) {
                 sellers.add(institution);
             }
+            if (HoldingsDiff.CLOSED.equals(action)) {
+                return;   // 지금 들고 있지 않습니다 — 보유 기관·평가액·비중에 넣지 않습니다
+            }
+            holders.add(institution);
             if (holding.get("value") instanceof Double value) {
                 totalValue = totalValue == null ? value : totalValue + value;
             }

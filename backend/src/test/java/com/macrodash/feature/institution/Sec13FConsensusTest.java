@@ -3,7 +3,6 @@ package com.macrodash.feature.institution;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -155,7 +154,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-082: 수정 전 재현 — fix 커밋에서 켬")
     @SuppressWarnings("unchecked")
     @DisplayName("QA-082 이번 분기에 전량 매도한 기관은 보유 기관이 아니다 — 보유 기관 수·평균 비중·평가액에서 빠지고 '동시 매도'에만 남는다")
     void closedPositionIsNotAHolding() {
@@ -188,7 +186,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-082: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-082 전량 매도는 보유 종목 수와 상관없이 같은 규칙으로 '동시 매도'에 센다 — 상위 100 자르기는 지금 보유한 항목에만")
     void closedPositionCountsAsSellerRegardlessOfPortfolioSize() {
         // 뱅가드는 지금 120종목을 들고 있고, 이번 분기에 X를 전량 매도했습니다. 예전에는 평가액 0인 전량 매도 행이
