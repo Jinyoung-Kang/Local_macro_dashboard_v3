@@ -221,6 +221,11 @@ export interface FlowSummary {
   breakdown?: FlowRow[];
   foreignerHolding?: { ratePct: number; date: string; changePp: number | null; fromDate: string | null };
   series?: { date: string; foreigner: number | null; institution: number | null; individual: number | null }[];
+  /** (시장 수급만) 그 시장을 실제로 받은 시각. 저장본 수집 시각은 마지막으로 받은 시장의 것입니다 */
+  fetchedAt?: string | null;
+  /** (시장 수급만) 이번 수집에 실패해 직전 값을 이어받은 시장 — 값은 fetchedAt 때의 것(QA-076) */
+  isStale?: boolean;
+  staleReason?: string | null;
 }
 
 export interface MarketFlowsResponse {

@@ -38,7 +38,7 @@ describe("QA-065 이어받은 업종 행", () => {
 describe("QA-076 이어받은 시장 수급", () => {
   // 수집 실패로 이어받은 시장(isStale)은 저장본 수집 시각이 새것이어도 그 시장 값은 예전 것입니다.
   // 화면이 그 시장을 '지금 값'처럼 보이면 안 됩니다.
-  it.fails("시장 수급 패널이 이어받은 시장에 '이전 값'과 사유·받은 시각을 붙인다", async () => {
+  it("시장 수급 패널이 이어받은 시장에 '이전 값'과 사유·받은 시각을 붙인다", async () => {
     const summary = (isStale: boolean) => ({
       records: 3, latestDate: "2026-10-16", latestUpdatedAt: "2026-10-16T05:00:00Z", provisional: false,
       investors: [], breakdown: [], fetchedAt: "2026-10-16T05:00:00Z", isStale,

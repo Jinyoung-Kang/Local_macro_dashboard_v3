@@ -57,6 +57,13 @@ export function MarketFlowsPanel({ market }: { market: string }) {
       {loading && !data && <Loading />}
       {error && <Banner tone="warn">{error}</Banner>}
       {data && !summary && <Banner tone="warn">{data.message ?? `${symbol} 투자자별 매매대금이 없습니다.`}</Banner>}
+      {summary?.isStale && (
+        // 이어받은 시장은 위 수집 시각(다른 시장을 받은 때)과 달리 예전 값입니다(QA-076).
+        <Banner tone="warn">
+          ⚠️ 이전 값 — 이번 수집 실패: {summary.staleReason ?? "사유 모름"}
+          {summary.fetchedAt ? ` · ${formatKst(summary.fetchedAt)}에 받은 값` : ""}
+        </Banner>
+      )}
       {summary && (
         <div className="flex flex-col gap-4">
           <Table<FlowRow>
