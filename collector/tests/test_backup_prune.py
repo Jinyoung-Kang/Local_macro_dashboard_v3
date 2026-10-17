@@ -15,8 +15,6 @@ import os
 import subprocess
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -58,7 +56,6 @@ def test_BACKUP_KEEP이_어디에도_없으면_최근_10개를_남긴다(tmp_pat
     assert _left(tmp_path) == _regular(12)[2:]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-071: 수정 전 재현 — .env의 BACKUP_KEEP을 읽지 않음")
 def test_QA071_env_파일의_BACKUP_KEEP_0이면_지우지_않는다(tmp_path):
     _make_backups(tmp_path / "b", _regular(12))
     result = _prune(tmp_path, ["BACKUP_KEEP=0"])
@@ -67,7 +64,6 @@ def test_QA071_env_파일의_BACKUP_KEEP_0이면_지우지_않는다(tmp_path):
     assert "삭제" not in result.stdout
 
 
-@pytest.mark.xfail(strict=True, reason="QA-071: 수정 전 재현 — .env의 BACKUP_KEEP을 읽지 않음")
 def test_QA071_env_파일의_BACKUP_KEEP_수만큼_남긴다(tmp_path):
     _make_backups(tmp_path / "b", _regular(12))
     result = _prune(tmp_path, ["BACKUP_KEEP=3"])
@@ -83,7 +79,6 @@ def test_셸_환경변수가_env_파일보다_앞선다(tmp_path):
     assert _left(tmp_path) == _regular(12)
 
 
-@pytest.mark.xfail(strict=True, reason="QA-071: 수정 전 재현 — 접두어가 겹치는 다른 백업까지 셈")
 def test_QA071_접두어가_겹치는_이름_붙인_백업은_세지도_지우지도_않는다(tmp_path):
     named = "macrodash-before-upgrade-20260901-120000.sql"
     _make_backups(tmp_path / "b", [named, *_regular(10)])

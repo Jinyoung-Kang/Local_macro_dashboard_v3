@@ -11,6 +11,8 @@
 #                                   실행(`docker compose exec -T postgres`). 빈 값이면 이 맥의
 #                                   psql·pg_dump를 바로 씁니다(테스트가 이렇게 씁니다).
 #   BACKUP_DIR                      백업 파일을 두는 폴더(기본 backups/)
+#   BACKUP_KEEP                     접두어별로 남길 백업 수. 환경변수 → .env → 기본 10 순서(0이면 지우지 않음).
+#                                   예전에는 환경변수만 봐서 .env에 적은 값이 무시되고 늘 10개만 남았습니다(QA-071).
 
 DB_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$DB_SCRIPTS_DIR/.." && pwd)"
@@ -37,6 +39,8 @@ DB_USER="${DB_USER:-macro}"
 DB_NAME="${DATABASE_NAME:-$(env_file_value DATABASE_NAME)}"
 DB_NAME="${DB_NAME:-macrodash}"
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_ROOT/backups}"
+BACKUP_KEEP="${BACKUP_KEEP:-$(env_file_value BACKUP_KEEP)}"
+BACKUP_KEEP="${BACKUP_KEEP:-10}"
 DB_EXEC="${DB_EXEC-docker compose exec -T postgres}"
 
 # docker compose는 compose 파일이 있는 폴더에서 실행해야 합니다.
@@ -87,12 +91,16 @@ new_backup_path() {
 
 # 같은 접두어의 백업을 최근 N개만 남기고 지웁니다(BACKUP_KEEP, 기본 10). 매번 25~40MB씩
 # 쌓여 지우지 않으면 끝없이 늘어납니다. 방금 만든 파일은 가장 최근이므로 항상 남습니다.
+# 숫자가 아니거나 0이면 아무것도 지우지 않습니다(잘못 적은 값은 지우지 않는 쪽으로).
 prune_backups() {
-    local prefix="$1" keep="${BACKUP_KEEP:-10}" old
+    local prefix="$1" keep="$BACKUP_KEEP" old
     [ "$keep" -gt 0 ] 2>/dev/null || return 0
+    # new_backup_path가 만드는 이름(<접두어>-YYYYmmdd-HHMMSS.sql)만 셉니다. `<접두어>-*.sql`로 세면
+    # 'macrodash' 정리가 'macrodash-before-upgrade-….sql'처럼 따로 이름 붙여 남긴 백업까지 지웠습니다(QA-071).
     # ls -t: 최근 파일이 앞. keep개 뒤부터가 지울 대상.
-    old="$(ls -t "$BACKUP_DIR/$prefix"-*.sql 2>/dev/null | tail -n +"$((keep + 1))")" || true
+    old="$(ls -t "$BACKUP_DIR/$prefix"-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].sql \
+        2>/dev/null | tail -n +"$((keep + 1))")" || true
     [ -n "$old" ] || return 0
     printf '%s\n' "$old" | while IFS= read -r f; do rm -f "$f"; done
-    echo "  정리     : 오래된 $prefix 백업 $(printf '%s\n' "$old" | wc -l | tr -d ' ')개 삭제 (최근 $keep개 보존)"
+    echo "  정리     : 오래된 $prefix 백업 $(printf '%s\n' "$old" | wc -l | tr -d ' ')개 삭제 (최근 ${keep}개 보존)"
 }
