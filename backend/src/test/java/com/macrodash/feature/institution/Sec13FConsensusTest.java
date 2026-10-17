@@ -1,8 +1,10 @@
 package com.macrodash.feature.institution;
 
+import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -289,6 +291,34 @@ class Sec13FConsensusTest {
         assertThat(rows.stream().map(row -> row.get("key")).distinct().count())
                 .as("이름이 겹쳐도 화면이 행을 구분할 고유 key")
                 .isEqualTo(4L);
+    }
+
+    // ------------------------------------------------------------ QA-113 채권 CUSIP은 보통주 행에 합치지 않는다
+    @Test
+    @SuppressWarnings("unchecked")
+    @Disabled("QA-113: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-113 'COM'으로 공시된 전환사채(CUSIP 발행 번호가 영문자)를 전량 매도해도 보통주 행의 '동시 매도'로 세지 않는다")
+    void bondReportedAsComIsNotMergedIntoCommonStock() {
+        // 피셔는 UBER 전환사채(90353TAJ9 — 7~8번째 글자 'AJ'는 채권 발행 번호)를 클래스 'COM'으로 공시합니다.
+        // 이번 분기에 그 사채를 전량 정리했지만 보통주(90353T100)는 그대로 들고 있습니다.
+        String common = """
+            {"name":"UBER TECHNOLOGIES INC","cusip":"90353T100","class":"COM","value":5000,"shares":50,"weight":0.5}""";
+        Sec13FService service = service(Map.of(
+                NPS, steady("""
+                    {"name":"UBER TECHNOLOGIES INC","cusip":"90353T100","class":"COM","value":2000,"shares":20,"weight":2.0}"""),
+                FISHER, """
+                    [{"reportDate":"2026-06-30","holdings":[%s]},
+                     {"reportDate":"2026-03-31","holdings":[%s,
+                        {"name":"UBER TECHNOLOGIES INC","cusip":"90353TAJ9","class":"COM","value":10,"shares":10000,"weight":0.001}]}]
+                    """.formatted(common, common)));
+
+        List<Map<String, Object>> rows = rows(service.consensus(List.of(NPS, FISHER), null, 1, 10));
+
+        Map<String, Object> uber = rowNamed(rows, "UBER TECHNOLOGIES INC");
+        assertThat(uber.get("holderCount")).isEqualTo(2);
+        assertThat(uber.get("sellCount")).as("피셔는 보통주를 팔지 않았다 — 사채 정리가 보통주의 '동시 매도'가 되면 안 됨").isEqualTo(0L);
+        assertThat((List<String>) uber.get("actions")).doesNotContain(HoldingsDiff.CLOSED);
+        assertThat(rows).as("사채 행은 지금 보유가 없어 교집합에 나오지 않는다").hasSize(1);
     }
 
     @Test
