@@ -233,7 +233,7 @@ class ApiIntegrationTest {
                     new HttpEntity<>(Map.of("role", "MEMBER", "tier", "FREE"), owner), String.class).getStatusCode())
                     .isEqualTo(HttpStatus.OK);
 
-            // 수집기(관심 종목 범위)와 정기 평가(알림함 배달)는 enabled만 보므로, 끄면 둘 다 따라옵니다.
+            // 수집기(관심 종목 범위)는 enabled만 보므로 꺼야 따라옵니다(정기 평가는 등급으로도 거름 — QA-115).
             List<Map<String, Object>> rules = jdbc.queryForList(
                     "SELECT id, kind, enabled FROM alert_rules WHERE user_id = ? ORDER BY id", memberId);
             assertThat(rules).extracting(row -> row.get("kind") + ":" + row.get("enabled")).containsExactly(

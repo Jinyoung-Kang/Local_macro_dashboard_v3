@@ -49,9 +49,19 @@ public class AlertStore {
                 + "WHERE user_id = ? ORDER BY id", ruleMapper(), userId);
     }
 
+    /**
+     * 정기 평가가 읽는 켜진 규칙. 국면 전환 밖의 종류는 지금 유료 기능을 쓸 수 있는 사용자(운영자 또는 PRO)의 것만 돌려줍니다 —
+     * 이 조건은 {@code CurrentUser.isPro()}와 같은 규칙이라, 한쪽을 바꾸면 다른 쪽도 함께 바꿉니다.
+     *
+     * <p>무료로 저장할 때 규칙을 끄지만({@link #disablePaidRules}), 그 처리가 생기기 전에 이미 내려간 회원이나 내리기와 겹친
+     * 켜기 요청으로 켜진 채 남은 규칙이 있을 수 있습니다. 그런 규칙이 무료 회원에게 유료 알림을 계속 넣지 않도록 읽을 때
+     * 등급으로 한 번 더 거릅니다(QA-115). 규칙 자체는 건드리지 않습니다.
+     */
     public List<Rule> enabledRules(String kind) {
-        return jdbc.query("SELECT id, user_id, kind, params::text AS params, enabled, created_at FROM alert_rules "
-                + "WHERE kind = ? AND enabled ORDER BY id", ruleMapper(), kind);
+        return jdbc.query("SELECT r.id, r.user_id, r.kind, r.params::text AS params, r.enabled, r.created_at "
+                + "FROM alert_rules r JOIN users u ON u.id = r.user_id "
+                + "WHERE r.kind = ? AND r.enabled "
+                + "AND (r.kind = 'REGIME_CHANGE' OR u.role = 'OWNER' OR u.tier = 'PRO') ORDER BY r.id", ruleMapper(), kind);
     }
 
     public int countRules(long userId) {
@@ -89,9 +99,9 @@ public class AlertStore {
     }
 
     /**
-     * 한 사용자의 유료 종류(국면 전환 밖) 규칙을 모두 끕니다 — 등급을 무료로 내릴 때(QA-091). 정기 평가(알림함 배달)와
-     * 수집기(관심 종목 수집 범위)는 {@code enabled}만 보므로 함께 따라옵니다. 지우지 않고 끄기만 해서, 다시 유료가 되면
-     * 회원이 켤 수 있습니다.
+     * 한 사용자의 유료 종류(국면 전환 밖) 규칙을 모두 끕니다 — 등급을 무료로 저장할 때(QA-091·QA-115). 수집기(관심 종목
+     * 수집 범위)는 {@code enabled}만 보므로 꺼야 따라옵니다(정기 평가는 {@link #enabledRules}가 등급으로도 거름). 지우지
+     * 않고 끄기만 해서, 다시 유료가 되면 회원이 켤 수 있습니다.
      *
      * @return 이번에 끈 규칙 수(이미 꺼져 있던 것은 세지 않음)
      */

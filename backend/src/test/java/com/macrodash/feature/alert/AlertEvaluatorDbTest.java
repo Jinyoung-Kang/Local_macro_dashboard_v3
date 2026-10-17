@@ -9,7 +9,6 @@ import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -207,7 +206,6 @@ class AlertEvaluatorDbTest {
     }
 
     @Test
-    @Disabled("QA-115: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-115 이미 무료인 회원에게 켜진 채 남은 유료 규칙은 배달하지 않는다 — 국면 전환은 그대로, 운영자는 등급과 무관")
     @SuppressWarnings("unchecked")
     void unpaidUsersGetNoPaidAlertsEvenIfRuleIsEnabled() throws Exception {

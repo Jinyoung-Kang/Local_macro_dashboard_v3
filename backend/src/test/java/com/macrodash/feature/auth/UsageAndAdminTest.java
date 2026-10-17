@@ -3,7 +3,6 @@ package com.macrodash.feature.auth;
 import com.macrodash.store.UsageStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -80,7 +79,6 @@ class UsageAndAdminTest {
     }
 
     @Test
-    @Disabled("QA-115: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-115 이미 무료인 회원을 무료로 다시 저장해도 켜진 유료 알림 규칙을 끈다 — 여러 번 저장해도 같음")
     void savingUnpaidUserDisablesPaidRulesEvenIfAlreadyUnpaid() {
         long ownerId = db.user("admin", "owner passphrase", "OWNER", "PRO");
