@@ -34,7 +34,6 @@ def calls(monkeypatch):
     return recorded
 
 
-@pytest.mark.xfail(strict=True, reason="QA-074: 수정 전 재현 — 시장·정렬·투자자 코드가 공식 명세와 다름")
 @pytest.mark.parametrize("market, investor, trade, iscd, rank_sort, etc_cls", [
     ("KOSPI", "외국인", "순매수", "0001", "0", "1"),
     ("KOSPI", "기관", "순매수", "0001", "0", "2"),
@@ -57,7 +56,6 @@ def test_QA074_가집계_요청이_공식_명세의_시장_금액정렬_투자�
     }
 
 
-@pytest.mark.xfail(strict=True, reason="QA-074: 수정 전 재현 — 투자자 구분 코드가 없는 투자주체도 전체 투자자로 부름")
 def test_QA074_투자자_구분_코드가_없는_투자주체는_부르지_않고_사유를_남긴다(calls):
     """명세의 투자자 구분은 외국인(1)·기관계(2)뿐입니다. 투신 등은 '전체 투자자' 순위를 받아 투신 금액으로 다시 거르게 됩니다."""
     assert kis.fetch_deal_ranking("20261019", "KOSPI", "투신", "순매수", 30) == []

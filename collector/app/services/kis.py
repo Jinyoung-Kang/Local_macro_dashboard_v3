@@ -34,6 +34,19 @@ TR_INVESTOR_TOTAL = "FHPTJ04400000"   # 외국인·기관 매매종목 가집계
 INDEX_CODE_KOSPI = "0001"
 INDEX_CODE_KOSPI200 = "2001"
 
+# FHPTJ04400000 요청 코드 — 공식 예제(koreainvestment/open-trading-api,
+# examples_llm/domestic_stock/foreign_institution_total)의 명세 그대로입니다(QA-074).
+#   FID_INPUT_ISCD 0000 전체 · 0001 코스피 · 1001 코스닥 / FID_DIV_CLS_CODE 0 수량 · 1 금액
+#   FID_RANK_SORT_CLS_CODE 0 순매수상위 · 1 순매도상위 / FID_ETC_CLS_CODE 0 전체 · 1 외국인 · 2 기관계 · 3 기타
+# 예전에는 KOSPI에 0000(전체 시장)을 보내 KOSDAQ 종목이 KOSPI 레이더에 섞였습니다. 응답 행에는 시장 필드가
+# 없어 받은 뒤에는 거를 수 없으므로 요청에서 맞춰야 합니다.
+DEAL_MARKET_CODES = {"KOSPI": "0001", "KOSDAQ": "1001"}
+DEAL_AMOUNT_SORT = "1"
+DEAL_RANK_SORT = {"순매수": "0", "순매도": "1"}
+# 투자자 구분 코드가 있는 투자주체만 지원합니다. 투신·은행 등은 코드가 없어 '전체 투자자' 순위를 받아
+# 그 투자주체 금액으로 다시 거르게 되는데, 그 순위 밖의 종목은 빠집니다 — 부르지 않고 빈 결과로 둡니다.
+DEAL_INVESTOR_CODES = {"외국인": "1", "기관": "2"}
+
 # 토큰 수명은 24시간이지만 여유를 두고 6시간마다 재발급합니다.
 _TOKEN_TTL_SECONDS = 6 * 60 * 60
 
@@ -242,24 +255,20 @@ def fetch_deal_ranking(
     ⚠️ 이 TR은 당일 데이터만 조회합니다. 장 마감 후에는 정상적으로 빈 결과입니다.
     """
     field_map = INVESTOR_FIELDS.get(investor)
-    if field_map is None:
-        logger.warning("KIS 가집계 미지원 투자주체: %s", investor)
+    investor_code = DEAL_INVESTOR_CODES.get(investor)
+    if field_map is None or investor_code is None:
+        logger.warning("KIS 가집계 미지원 투자주체: %s", unsupported_reason(investor))
         return []
 
     is_kospi = "KOSPI" in market.upper() or "코스피" in market
-    issue_code = "0000" if is_kospi else "1001"
-
-    if investor == "외국인":
-        rank_sort = "0" if trade_type == "순매수" else "1"
-    else:
-        rank_sort = "2" if trade_type == "순매수" else "3"
+    issue_code = DEAL_MARKET_CODES["KOSPI" if is_kospi else "KOSDAQ"]
 
     base_params = {
         "FID_COND_SCR_DIV_CODE": "16449",
         "FID_INPUT_ISCD": issue_code,
-        "FID_DIV_CLS_CODE": "0",
-        "FID_RANK_SORT_CLS_CODE": rank_sort,
-        "FID_ETC_CLS_CODE": "0",
+        "FID_DIV_CLS_CODE": DEAL_AMOUNT_SORT,
+        "FID_RANK_SORT_CLS_CODE": DEAL_RANK_SORT["순매수" if trade_type == "순매수" else "순매도"],
+        "FID_ETC_CLS_CODE": investor_code,
     }
 
     rows: list[dict] = []
@@ -335,6 +344,13 @@ def fetch_deal_ranking(
     for index, record in enumerate(top, start=1):
         record["rank"] = index
     return top
+
+
+def unsupported_reason(investor: str) -> str | None:
+    """가집계가 이 투자주체를 주지 않으면 그 사유(화면·로그용), 주면 None."""
+    if investor in DEAL_INVESTOR_CODES:
+        return None
+    return f"KIS 장중 가집계는 '{investor}' 구분이 없습니다 (외국인·기관계만)"
 
 
 def test_connection() -> dict:

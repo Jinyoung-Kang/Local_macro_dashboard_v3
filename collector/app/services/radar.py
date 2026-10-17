@@ -255,6 +255,10 @@ def diagnose_sources(investor: str) -> list[str]:
     """
     reasons: list[str] = []
 
+    kis_reason = kis.unsupported_reason(investor)
+    if kis_reason:
+        reasons.append(kis_reason)
+
     if investor not in DAUM_INVESTOR_TYPES:
         reasons.append(
             f"Daum은 '{investor}'{_object_particle(investor)} 제공하지 않습니다 "
