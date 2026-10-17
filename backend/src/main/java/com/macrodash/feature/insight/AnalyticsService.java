@@ -36,10 +36,20 @@ public class AnalyticsService {
     public record SeriesRef(String id, String label, String group, String unit, String source) {
     }
 
-    /** 저장본에서 계열을 꺼내는 방법. */
-    private interface Loader {
-        NavigableMap<LocalDate, Double> load();
+    /**
+     * 저장본에서 꺼낸 계열. 공식 값이 아니라 추정치면 그 출처 문구가 있습니다(공식 값이면 null).
+     *
+     * <p>KOSPI200 선물 계열은 KRX 수집이 실패하면(키 미설정 포함) 수집기가 KODEX 200 종가로 환산한 추정치로 채웁니다.
+     * 값만 꺼내고 이 사실을 버리면 추정치로 잰 상관이 공식 선물 종가인 것처럼 나갔습니다(QA-090).
+     */
+    private record Loaded(NavigableMap<LocalDate, Double> points, String estimatedSource) {
+        boolean estimated() {
+            return estimatedSource != null;
+        }
     }
+
+    /** KRX 선물 저장본이 추정치일 때의 출처 문구(KRX 화면의 추정 안내와 같은 사실). */
+    private static final String KRX_ESTIMATED_SOURCE = "KODEX 200 종가 기반 추정치 (KRX 선물 수집 실패)";
 
     private final StoreReader store;
 
@@ -108,8 +118,13 @@ public class AnalyticsService {
         }
 
         LocalDate cutoff = Kst.yearsAgo(Math.max(1, years));
-        NavigableMap<LocalDate, Double> left = sliceFrom(series(xId), cutoff);
-        NavigableMap<LocalDate, Double> right = sliceFrom(series(yId), cutoff);
+        Loaded xSeries = load(xId);
+        Loaded ySeries = load(yId);
+        // 계열마다 추정치인지 함께 내립니다. 추정치면 출처도 바꿉니다 — 화면은 출처 문구를 그대로 그립니다.
+        out.put("x", describe(x, xSeries));
+        out.put("y", describe(y, ySeries));
+        NavigableMap<LocalDate, Double> left = sliceFrom(xSeries.points(), cutoff);
+        NavigableMap<LocalDate, Double> right = sliceFrom(ySeries.points(), cutoff);
 
         if (left.isEmpty() || right.isEmpty()) {
             out.put("available", false);
@@ -161,8 +176,26 @@ public class AnalyticsService {
             notes.add("표본이 %d개뿐입니다. 발표 주기가 다른 계열(주간 NFCI 등)을 비교하면 "
                     .formatted(used.size()) + "겹치는 날짜만 남아 표본이 크게 줄어듭니다.");
         }
+        for (Map.Entry<SeriesRef, Loaded> entry : List.of(Map.entry(x, xSeries), Map.entry(y, ySeries))) {
+            if (entry.getValue().estimated()) {
+                notes.add("%s 계열은 %s입니다. 공식 값이 아니므로 이 상관계수도 추정치로 읽으세요."
+                        .formatted(entry.getKey().label(), entry.getValue().estimatedSource()));
+            }
+        }
         notes.add("상관은 같이 움직였다는 뜻일 뿐, 어느 쪽이 원인인지는 말해 주지 않습니다.");
         out.put("notes", notes);
+        return out;
+    }
+
+    /** 응답의 계열 설명 — 목록의 정의에 추정 여부를 붙이고, 추정치면 출처를 추정 출처로 바꿉니다. */
+    private static Map<String, Object> describe(SeriesRef ref, Loaded loaded) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", ref.id());
+        out.put("label", ref.label());
+        out.put("group", ref.group());
+        out.put("unit", ref.unit());
+        out.put("source", loaded.estimated() ? loaded.estimatedSource() : ref.source());
+        out.put("isEstimated", loaded.estimated());
         return out;
     }
 
@@ -300,9 +333,14 @@ public class AnalyticsService {
             case "etf" -> etfSeries(parts[1]);
             case "ticker" -> tickerSeries(parts[1]);
             case "liquidity" -> netLiquiditySeries();
-            case "krx" -> krxFuturesSeries();
+            case "krx" -> krxFuturesSeries().points();
             default -> new TreeMap<>();
         };
+    }
+
+    /** 계열과 추정 여부. 추정치가 될 수 있는 것은 KRX 선물 계열뿐이고, 나머지는 공식 값입니다. */
+    private Loaded load(String id) {
+        return id != null && id.startsWith("krx:") ? krxFuturesSeries() : new Loaded(series(id), null);
     }
 
     private NavigableMap<LocalDate, Double> fredSeries(String seriesId) {
@@ -356,12 +394,13 @@ public class AnalyticsService {
         return out;
     }
 
-    private NavigableMap<LocalDate, Double> krxFuturesSeries() {
+    /** KOSPI200 선물 종가. 저장본이 KODEX 200 기반 추정치면(KrxService와 같은 판정) 추정 출처를 함께 돌려줍니다. */
+    private Loaded krxFuturesSeries() {
         NavigableMap<LocalDate, Double> out = new TreeMap<>();
         Optional<Snapshot> snapshot = store.read(
                 Datasets.SNAP_KRX_FUTURES, Datasets.MAX_AGE_DAILY, "krx_futures");
         if (snapshot.isEmpty() || snapshot.get().payload() == null) {
-            return out;
+            return new Loaded(out, null);
         }
         for (JsonNode row : Json.array(snapshot.get().payload(), "rows")) {
             LocalDate date = Json.parseDate(Json.asText(row, "date"));
@@ -370,7 +409,8 @@ public class AnalyticsService {
                 out.put(date, close);
             }
         }
-        return out;
+        boolean estimated = Json.asBoolean(snapshot.get().payload(), "isEstimated") || snapshot.get().isEstimated();
+        return new Loaded(out, estimated ? KRX_ESTIMATED_SOURCE : null);
     }
 
     // ------------------------------------------------------------ 작은 도구

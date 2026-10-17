@@ -4,7 +4,6 @@ import com.macrodash.Kst;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -62,7 +61,6 @@ class CorrelationEstimateTest {
     }
 
     @Test
-    @Disabled("QA-090: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-090 KOSPI200 선물 계열이 KODEX 200 추정치면 응답이 그 계열에 isEstimated·추정 출처·안내문을 싣는다")
     void estimatedKrxSeriesIsMarked() {
         JsonNode response = MAPPER.valueToTree(service(true).correlation("krx:futures", "etf:SPY", 20, 1, "change"));
@@ -72,5 +70,17 @@ class CorrelationEstimateTest {
         assertThat(response.path("x").path("source").asString()).as("공식 일별 마감이라고 적지 않음").contains("KODEX 200");
         assertThat(response.path("y").path("isEstimated").asBoolean(true)).as("SPY는 추정치가 아님").isFalse();
         assertThat(response.path("notes").toString()).contains("추정");
+    }
+
+    @Test
+    @DisplayName("KRX 확정 저장본이면 공식 출처 그대로, isEstimated=false, 추정 안내문 없음")
+    void confirmedKrxSeriesKeepsOfficialSource() {
+        JsonNode response = MAPPER.valueToTree(service(false).correlation("krx:futures", "etf:SPY", 20, 1, "change"));
+
+        assertThat(response.path("x").path("isEstimated").isBoolean()).isTrue();
+        assertThat(response.path("x").path("isEstimated").asBoolean()).isFalse();
+        assertThat(response.path("x").path("source").asString()).isEqualTo("KRX Open API 일별 마감");
+        assertThat(response.path("x").path("label").asString()).isEqualTo("KOSPI200 선물 종가");
+        assertThat(response.path("notes").toString()).doesNotContain("추정");
     }
 }
