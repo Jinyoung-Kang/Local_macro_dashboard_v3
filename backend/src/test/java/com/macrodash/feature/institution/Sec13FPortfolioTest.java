@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -204,7 +203,6 @@ class Sec13FPortfolioTest {
 
     // ------------------------------------------------------------ QA-122 합친 클래스가 없는 줄은 발행사가 아니라 CUSIP으로 가른다
     @Test
-    @Disabled("QA-122: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-122 이름·클래스 표기가 같은 두 보통주 줄(합친 클래스 없음)은 '발행사 …'가 아니라 'CUSIP …'으로 가른다")
     void sameNameSingleClassLinesAreLabelledByCusip() {
         // 발행사 6자리가 다른 두 증권이 같은 공시 이름·같은 클래스 표기로 들어온 경우(재상장 등). 둘 다 합칠 클래스가 없습니다.

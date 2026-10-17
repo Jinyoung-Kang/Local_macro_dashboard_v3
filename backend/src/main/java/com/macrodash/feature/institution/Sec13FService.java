@@ -554,6 +554,10 @@ public class Sec13FService {
      * 달라졌습니다(QA-121). 같은 CUSIP을 다른 기관·분기가 보통주 계열로 적었고 반대 표기가 없으면 그 증권은 보통주로 봅니다.
      * 교집합과 비중 추이가 같은 규칙({@link Tally#commonStockIssuer})을 씁니다.
      *
+     * <p>행 키는 <b>실제로 다른 클래스를 합친 행만</b> {@code issuer:…}로 바꿉니다. 같은 발행사의 다른 클래스가 없는 보통주(AAPL)는
+     * {@code cusip:…} 그대로입니다 — 화면은 issuer: 키에 '발행사 … · 보통주 합산'을 적고 CUSIP을 감추므로, 클래스 하나뿐인 행에
+     * 붙이면 합친 숫자로 잘못 읽힙니다(QA-122).
+     *
      * <p>알려진 한계: 한 발행사 아래 서로 다른 사업을 따르는 트래킹 주식(Liberty Media 531229 아래 Formula One·Liberty Live·
      * SiriusXM 계열 'COM LBTY … C' 등)도 보통주 클래스로 보여 한 행으로 합쳐집니다. 이름 키를 쓰던 예전에도 같았고, 클래스
      * 표기만으로는 '같은 회사의 A·C주'와 가를 규칙이 없어 그대로 둡니다.
@@ -569,10 +573,10 @@ public class Sec13FService {
             String key = "issuer:" + issuer;
             Tally first = byKey.get(key);
             if (first == null) {
-                tally.key = key;
-                byKey.put(key, tally);
+                byKey.put(key, tally);   // 행 키는 아직 cusip:… — 합칠 다른 클래스가 없으면 그 증권 하나입니다
             } else {
                 first.absorb(tally);
+                first.key = key;
             }
         }
         return new ArrayList<>(byKey.values());
@@ -596,7 +600,7 @@ public class Sec13FService {
      */
     private static final class Tally {
         /**
-         * 행의 고유 키 — {@code cusip:…}, 보통주 클래스를 합친 행은 {@code issuer:…}(CUSIP 앞 6자리), CUSIP이 없으면
+         * 행의 고유 키 — {@code cusip:…}, 보통주 클래스를 둘 이상 실제로 합친 행은 {@code issuer:…}(CUSIP 앞 6자리), CUSIP이 없으면
          * {@code name:…}. 표시 이름은 겹칠 수 있어(서로 다른 ETF의 'ISHARES TR') 화면은 이 키로 행을 구분합니다.
          */
         String key;

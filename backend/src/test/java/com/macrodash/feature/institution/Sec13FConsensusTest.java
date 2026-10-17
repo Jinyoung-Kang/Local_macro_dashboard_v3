@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -368,7 +367,6 @@ class Sec13FConsensusTest {
 
     // ------------------------------------------------------------ QA-122 합친 클래스가 없으면 issuer: 키가 아니다
     @Test
-    @Disabled("QA-122: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-122 클래스가 하나뿐인 보통주(APPLE)의 행 key는 issuer:가 아니라 cusip: — 실제로 A·C를 합친 행만 issuer:")
     void singleClassCommonStockKeepsItsCusipKey() {
         Sec13FService service = service(Map.of(
@@ -389,7 +387,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-122: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-122 공통 신규 매수도 클래스가 하나뿐인 보통주의 key는 cusip:")
     void singleClassNewBuyKeepsItsCusipKey() {
         String bought = """
