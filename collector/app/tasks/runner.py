@@ -48,13 +48,19 @@ _inflight_lock = threading.Lock()
 
 
 class _InFlight:
-    """실행 중인 태스크 하나와 그 결과를 기다리는 자리."""
+    """
+    실행 중인 태스크 하나와 그 결과를 기다리는 자리.
 
-    __slots__ = ("done", "result")
+    ``overdue`` — 시간 상한을 넘겨 호출자에게는 '시간 초과'를 돌려줬지만 작업 스레드가 아직 도는 중(좀비).
+    이때 등록은 작업이 실제로 끝날 때까지 남겨 둡니다(QA-079).
+    """
+
+    __slots__ = ("done", "result", "overdue")
 
     def __init__(self) -> None:
         self.done = threading.Event()
         self.result: tuple[bool, str] = (False, "결과 없음")
+        self.overdue = False
 
 
 def run_task(task: Task, run_id: int | None = None) -> tuple[bool, str]:
@@ -69,22 +75,46 @@ def run_task(task: Task, run_id: int | None = None) -> tuple[bool, str]:
         if leader:
             entry = _InFlight()
             _inflight[task.name] = entry
+        overdue = entry.overdue
 
     if not leader:
+        if overdue:
+            return _still_running(task)
         return _wait_for_inflight(task, entry)
 
     try:
-        result = _execute_task(task, run_id)
+        result = _execute_task(task, run_id, entry)
         entry.result = result
         return result
     except BaseException as exc:      # 기다리는 쪽을 영원히 붙잡아 두지 않습니다.
         entry.result = (False, f"{type(exc).__name__}: {exc}")
         raise
     finally:
-        # 먼저 등록을 지워야 다음 호출이 새 수집을 시작할 수 있습니다.
-        with _inflight_lock:
-            _inflight.pop(task.name, None)
+        # 먼저 등록을 지워야 다음 호출이 새 수집을 시작할 수 있습니다. 단, 시간 상한을 넘겨 작업 스레드가 아직
+        # 돌면(overdue) 그 작업이 끝날 때 지웁니다(_finish_overdue). 여기서 지우면 다음 호출이 같은 태스크를
+        # 좀비와 나란히 또 시작해, 같은 소스를 동시에 두드리고 같은 행을 동시에 썼습니다(QA-079).
+        if not entry.overdue:
+            _release(task.name, entry)
         entry.done.set()
+
+
+def _release(name: str, entry: "_InFlight") -> None:
+    """등록을 지웁니다 — 그 사이 다른 실행이 같은 이름으로 등록했으면 그것은 건드리지 않습니다."""
+    with _inflight_lock:
+        if _inflight.get(name) is entry:
+            del _inflight[name]
+
+
+def _still_running(task: Task) -> tuple[bool, str]:
+    """
+    시간 상한을 넘긴 앞선 실행이 아직 끝나지 않았을 때 — 새로 시작하지도, 기다리지도 않습니다.
+
+    기다리게 하면 스케줄러의 그룹 실행이 좀비 수명만큼 길어집니다. 실패가 아닙니다(앞선 실행이 이미 '시간 초과'로
+    기록됐고, 그 작업이 끝나면 저장본은 그 작업이 씁니다) — 합류 대기 한도를 넘긴 경우와 같은 이유로 성공으로 둡니다.
+    """
+    logger.info("%s: 시간 상한을 넘긴 이전 실행이 아직 끝나지 않아 새로 시작하지 않습니다.", task.name)
+    return True, ("이전 수집이 아직 진행 중 — 시간 상한을 넘긴 앞선 실행이 끝나지 않아 새로 시작하지 않았습니다"
+                  "(그 실행이 끝나면 결과가 저장본에 반영됩니다)")
 
 
 def _wait_for_inflight(task: Task, entry: "_InFlight") -> tuple[bool, str]:
@@ -129,7 +159,9 @@ def _run_status(ok_count: int, failures: list[str]) -> str:
 # 태스크 하나의 시간 상한(초, 속도군별). 요청마다 timeout이 있어도 재시도 × 소스 수만큼 곱해져, 외부가
 # '연결은 받고 응답하지 않는' 상태에서는 2초짜리 fast 태스크가 3~4분씩 돌았습니다(QA-011). 상한을 넘기면
 # 실패로 기록하고 다음 태스크로 넘어갑니다. 작업 스레드는 요청 timeout들이 끝날 때까지 남아 뒤늦게
-# 끝나는데, 그 결과는 로그로만 남깁니다(저장본은 그 작업이 알아서 씁니다 — 진짜 데이터입니다).
+# 끝나는데, 그 결과는 로그로만 남깁니다(저장본은 그 작업이 알아서 씁니다 — 진짜 데이터입니다). 그동안 같은
+# 태스크는 새로 시작하지 않습니다(QA-079). 상한에는 대기열에서 워커를 기다린 시간도 들어가므로, 아직 시작도
+# 못 한 작업은 취소하고 '워커 대기 초과'로 따로 적습니다 — 외부 장애가 아니라 풀이 꽉 찬 것입니다.
 # weekly(13F)는 한 태스크가 10분 넘게 걸리는 것이 정상이라 길게 둡니다.
 TASK_DEADLINE_SECONDS: dict[str, float] = {"fast": 120.0, "slow": 600.0, "weekly": 1800.0}
 _task_threads = ThreadPoolExecutor(max_workers=8, thread_name_prefix="task")
@@ -139,7 +171,7 @@ def deadline_for(task: Task) -> float:
     return TASK_DEADLINE_SECONDS.get(task.speed, TASK_DEADLINE_SECONDS["slow"])
 
 
-def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
+def _execute_task(task: Task, run_id: int | None, entry: "_InFlight | None" = None) -> tuple[bool, str]:
     started_wall = datetime.now(timezone.utc)
     started = time.perf_counter()
 
@@ -153,9 +185,20 @@ def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
         detail = future.result(timeout=deadline) or ""
     except FuturesTimeoutError:
         status, ok = "error", False
-        detail = (f"시간 초과: {deadline:.0f}초 안에 끝나지 않았습니다 — 외부 응답 없음 의심. "
-                  "작업은 뒤에서 계속 끝나기를 기다립니다(결과는 로그에만)")
-        future.add_done_callback(lambda done, name=task.name, t0=started: _log_late_finish(name, t0, done))
+        if future.cancel():
+            # 대기열에서 워커를 기다리다 상한에 닿았습니다 — 시작도 안 했으니 외부 응답과 무관합니다. 취소해 두지
+            # 않으면 워커가 풀린 뒤 몰아서 실행됐습니다(QA-079).
+            detail = (f"워커 대기 초과(시작 못 함): {deadline:.0f}초 동안 작업 스레드를 얻지 못했습니다 — "
+                      "다른 수집이 작업 스레드를 모두 쓰는 중. 이번 실행은 취소했습니다(다음 주기에 다시)")
+        else:
+            detail = (f"시간 초과: {deadline:.0f}초 안에 끝나지 않았습니다 — 외부 응답 없음 의심. "
+                      "작업은 뒤에서 계속 끝나기를 기다립니다(결과는 로그에만, 끝날 때까지 같은 태스크는 새로 "
+                      "시작하지 않음)")
+            if entry is not None:
+                with _inflight_lock:
+                    entry.overdue = True
+            future.add_done_callback(
+                lambda done, name=task.name, t0=started: _finish_overdue(name, entry, t0, done))
     except EmptyResult as exc:
         status, ok, detail = "empty", False, f"{EMPTY_PREFIX}{exc}"
     except Exception as exc:  # noqa: BLE001
@@ -179,6 +222,15 @@ def _execute_task(task: Task, run_id: int | None) -> tuple[bool, str]:
         detail=detail,
     )
     return ok, detail
+
+
+def _finish_overdue(name: str, entry: "_InFlight | None", started: float, done) -> None:
+    """시간 상한을 넘긴 작업이 실제로 끝났을 때 — 로그를 남기고 합치기 등록을 풉니다."""
+    try:
+        _log_late_finish(name, started, done)
+    finally:
+        if entry is not None:
+            _release(name, entry)
 
 
 def _log_late_finish(name: str, started: float, done) -> None:
