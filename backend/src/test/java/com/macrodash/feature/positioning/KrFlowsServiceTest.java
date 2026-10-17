@@ -5,7 +5,6 @@ import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreRepository;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -67,7 +66,6 @@ class KrFlowsServiceTest {
     }
 
     @Test
-    @Disabled("QA-116: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-116 현물·선물 비교는 이어받은 KOSPI 현물에 이전 값 표시·사유·KOSPI를 받은 시각을 싣는다")
     void spotFuturesMarksCarriedOverKospi() throws Exception {
         LocalDate twoDaysAgo = Kst.today().minusDays(2);
@@ -91,7 +89,6 @@ class KrFlowsServiceTest {
     }
 
     @Test
-    @Disabled("QA-116: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-116 새로 받은 KOSPI 현물은 이전 값 표시 없이 받은 시각만 싣는다")
     void spotFuturesFreshKospiIsNotStale() throws Exception {
         LocalDate today = Kst.today();

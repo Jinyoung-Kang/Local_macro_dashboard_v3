@@ -83,7 +83,7 @@ describe("QA-116 이어받은 코스피 현물", () => {
     ...(spotIsStale ? { spotStaleReason: "KOSPI: HTTP 500", spotStaleSince: "2026-10-16T02:00:00Z" } : {}),
   });
 
-  it.fails("현물·선물 카드가 이어받은 현물에 '이전 값'과 사유·받은 시각을 붙인다", async () => {
+  it("현물·선물 카드가 이어받은 현물에 '이전 값'과 사유·받은 시각을 붙인다", async () => {
     api.apiGetShared.mockImplementation((path: string) =>
       path.startsWith("/api/krx/spot-futures") ? Promise.resolve(body(true)) : new Promise(() => {}));
 

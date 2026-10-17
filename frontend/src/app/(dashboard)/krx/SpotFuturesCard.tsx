@@ -2,7 +2,7 @@
 
 import { Banner, Card, Freshness, Loading, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
-import { deltaColor, formatSigned, formatSignedKrw } from "@/lib/format";
+import { deltaColor, formatKst, formatSigned, formatSignedKrw } from "@/lib/format";
 import type { SpotFuturesResponse, SpotFuturesRow } from "@/lib/types";
 import { endpoints } from "@/lib/endpoints";
 
@@ -42,6 +42,13 @@ export function SpotFuturesCard() {
       {data && !data.available && <Banner tone="warn">{data.message ?? "비교할 데이터가 없습니다."}</Banner>}
       {data?.available && (
         <>
+          {data.spotIsStale && (
+            // 이어받은 현물은 위 수집 시각(다른 시장을 받은 때)과 달리 예전 값입니다(QA-116).
+            <Banner tone="warn">
+              ⚠️ 이전 값 — 이번 수집 실패: {data.spotStaleReason ?? "사유 모름"}
+              {data.spotFetchedAt ? ` · ${formatKst(data.spotFetchedAt)}에 받은 값` : ""}
+            </Banner>
+          )}
           {!data.sameDay && (
             <Banner tone="warn">
               두 출처의 기준일이 달라({data.spotDate} / {data.futuresDate}) 당일 비교는 하지 않습니다. 5·20일

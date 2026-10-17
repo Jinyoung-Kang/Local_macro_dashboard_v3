@@ -135,14 +135,17 @@ public class KrFlowsService {
     /**
      * 코스피 현물(토스 공식, 원)과 KOSPI200 선물(Daum, 계약)의 투자자별 방향 비교.
      *
-     * @return {@code available, spotDate, futuresDate, sameDay, rows[]}
+     * @return {@code available, spotDate, futuresDate, sameDay, rows[], spotFetchedAt, spotIsStale(+spotStaleReason·
+     *         spotStaleSince)} + 신선도. 저장본 신선도는 마지막으로 받은 시장의 것이라, 이어받은 현물은
+     *         {@code spotIsStale}·{@code spotFetchedAt}을 봅니다
      */
     public Map<String, Object> spotFutures() {
         Map<String, Object> out = new LinkedHashMap<>();
         Optional<Snapshot> snapshot = readMarketSnapshot();
-        List<FlowRecord> spot = snapshot.filter(s -> s.payload() != null)
-                .map(s -> FlowJson.records(Json.array(s.payload().path("markets").path("KOSPI"), "records")))
-                .orElse(List.of());
+        JsonNode kospi = snapshot.filter(s -> s.payload() != null)
+                .map(s -> s.payload().path("markets").path("KOSPI"))
+                .orElse(null);
+        List<FlowRecord> spot = FlowJson.records(Json.array(kospi, "records"));
         Map<String, Object> futures = krx.investorTrend();
         Object rows = futures.get("rows");
         List<JsonNode> futuresRows = new ArrayList<>();
@@ -161,6 +164,16 @@ public class KrFlowsService {
         out.put("spotSource", SOURCE + " — 코스피 투자자별 매매대금(원)");
         out.put("futuresSource", futures.get("source") + " — 계약");
         snapshot.get().putFreshness(out);
+        // 저장본 수집 시각은 마지막으로 받은 시장(코스닥일 수 있음)의 것입니다. KOSPI만 실패해 이어받은 현물은 그 시각과
+        // 달리 예전 값이라, KOSPI를 받은 시각과 이전 값 표시를 따로 내립니다(QA-116, 시장 수급의 QA-076과 같은 규칙).
+        // 받은 시각이 없는 예전 저장본은 null입니다.
+        boolean spotStale = Json.asBoolean(kospi, "isStale");
+        out.put("spotFetchedAt", Json.asText(kospi, "fetchedAt"));
+        out.put("spotIsStale", spotStale);
+        if (spotStale) {
+            out.put("spotStaleReason", Json.asText(kospi, "staleReason"));
+            out.put("spotStaleSince", Json.asText(kospi, "staleSince"));
+        }
         return out;
     }
 

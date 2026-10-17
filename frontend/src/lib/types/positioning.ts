@@ -273,4 +273,10 @@ export interface SpotFuturesResponse {
   futuresSource?: string;
   collectedAtKst?: string;
   ageSeconds?: number | null;
+  /** 코스피 현물을 실제로 받은 시각. 저장본 수집 시각(collectedAtKst)은 마지막으로 받은 시장의 것입니다 */
+  spotFetchedAt?: string | null;
+  /** 이번 수집에 실패해 직전 KOSPI 현물을 이어받음 — 값은 spotFetchedAt 때의 것(QA-116) */
+  spotIsStale?: boolean;
+  spotStaleReason?: string | null;
+  spotStaleSince?: string | null;
 }

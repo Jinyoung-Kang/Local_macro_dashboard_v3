@@ -188,7 +188,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 |---|---|
 | `GET /api/kr/investor-flows` | 코스피·코스닥 전체 투자자별 매매대금(원) — 최근일·5일·20일 누적, 연속 일수, 기관 7세부, 20일 계열. 시장마다 `fetchedAt`(그 시장을 받은 시각)·`isStale`(수집 실패로 이전 값을 이어 씀 — `staleReason`·`staleSince`, 3일 지나면 그 시장은 빠짐) |
 | `GET /api/kr/stock-flows?codes=005930,000660` | 종목별 투자자 매매동향(주, 20거래일) — 누적·연속 일수·연기금·외국인 보유율 변화. 최대 60개, 형식이 틀린 코드는 무시 |
-| `GET /api/krx/spot-futures` | 코스피 현물(토스, 원) × KOSPI200 선물(Daum, 계약) 투자자별 **방향** 비교. 기준일이 다르면 당일 판정 안 함 |
+| `GET /api/krx/spot-futures` | 코스피 현물(토스, 원) × KOSPI200 선물(Daum, 계약) 투자자별 **방향** 비교. 기준일이 다르면 당일 판정 안 함. `spotFetchedAt`(코스피 현물을 받은 시각)·`spotIsStale`(수집 실패로 이전 값을 이어 씀 — `spotStaleReason`·`spotStaleSince`) |
 
 누적 값은 `{sum, days, window}`입니다. `days < window`면 값이 없는 날(당일 잠정치의 null)을 건너뛴 것입니다.
 
