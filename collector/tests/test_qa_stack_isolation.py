@@ -15,7 +15,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,14 +40,12 @@ def test_외부_키_목록이_비어_있지_않다():
     assert {"ANTHROPIC_API_KEY", "NVIDIA_API_KEY", "MAIL_HOST"} <= _external_backend_keys()
 
 
-@pytest.mark.xfail(strict=True, reason="QA-072: 수정 전 재현 — QA 덧붙임 파일에 backend 고정값이 없음")
 def test_QA072_QA_스택_백엔드는_외부_키를_보간_없는_빈_값으로_고정한다():
     override = _backend_env(ROOT / "scripts/qa/docker-compose.qa.yml")
     not_pinned = {k: override.get(k) for k in sorted(_external_backend_keys()) if override.get(k) != ""}
     assert not_pinned == {}
 
 
-@pytest.mark.xfail(strict=True, reason="QA-072: 수정 전 재현 — make_env에 ANTHROPIC_API_KEY 줄이 없음")
 def test_QA072_env_qa_템플릿도_같은_키를_비운다():
     script = (ROOT / "scripts/qa/qa-stack.sh").read_text(encoding="utf-8")
     template = script[script.index("cat > .env.qa <<ENV"):script.index("\nENV\n")]

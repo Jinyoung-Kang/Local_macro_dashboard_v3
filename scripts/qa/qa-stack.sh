@@ -34,7 +34,8 @@ COLLECTOR_API_TOKEN=$(random_token 40)
 DASHBOARD_READ_MODE=auto
 COLLECTOR_SCHEDULER=false
 COLLECTOR_RUN_LOG_RETENTION_DAYS=90
-# 외부 API 키는 전부 비움 — 유료·한도 API를 부르지 않습니다(프록시가 어차피 막습니다).
+# 외부 API 키는 전부 비움 — 유료·한도 API를 부르지 않습니다. 수집기는 차단 프록시가, 백엔드의 AI·메일 키는
+# docker-compose.qa.yml이 빈 값으로 고정해 막습니다(셸에 export한 키가 이 파일의 빈 값을 이기므로, QA-072).
 FRED_API_KEY=
 KRX_API_KEY=
 KIS_APP_KEY=
@@ -46,10 +47,12 @@ TOSS_CLIENT_SECRET=
 SEC_USER_AGENT=
 DATA_GO_KR_SERVICE_KEY=
 DART_API_KEY=
+ANTHROPIC_API_KEY=
 NVIDIA_API_KEY=
 CEREBRAS_API_KEY=
 CLOUDFLARE_ACCOUNT_ID=
 CLOUDFLARE_API_TOKEN=
+MAIL_HOST=
 WEB_BIND_HOST=127.0.0.1
 COOKIE_SECURE=false
 DATABASE_USER=macro

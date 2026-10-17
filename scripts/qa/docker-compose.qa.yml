@@ -2,6 +2,10 @@
 #
 # - 수집기의 외부 요청은 전부 qaproxy(차단 프록시)로 보냅니다. 유료·한도 API를 한 번도 부르지 않고,
 #   프록시 모드를 바꿔 "외부가 느리다/먹통이다"를 흉내 냅니다(scripts/qa/blackhole-proxy.py).
+# - 백엔드는 프록시를 거치지 않습니다(AI SDK가 HTTP_PROXY를 보지 않음). 그래서 AI 엔진·메일 키를 아래에서
+#   보간 없는 빈 값으로 고정합니다. compose 보간은 셸 환경이 env 파일보다 앞서, 셸 프로필에 export한 키가
+#   .env.qa의 빈 값을 이기고 퍼저가 실제 계정으로 과금했습니다(QA-072). 실제 엔진 경로를 시험해야 하면
+#   이 고정값을 의도적으로 바꾸세요.
 # - 포트·프로젝트 이름·비밀값은 .env.qa가 정합니다(운영 .env와 분리).
 services:
   qaproxy:
@@ -16,6 +20,15 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  backend:
+    environment:
+      ANTHROPIC_API_KEY: ""
+      NVIDIA_API_KEY: ""
+      CEREBRAS_API_KEY: ""
+      CLOUDFLARE_ACCOUNT_ID: ""
+      CLOUDFLARE_API_TOKEN: ""
+      MAIL_HOST: ""
 
   collector:
     depends_on:
