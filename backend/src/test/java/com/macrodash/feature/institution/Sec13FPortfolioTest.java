@@ -4,6 +4,7 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -86,6 +87,52 @@ class Sec13FPortfolioTest {
 
         assertThat(series.get("MYSTERY CO")).as("2026-03-31 미보유 → 0, 2026-06-30 보유·비중 모름 → null")
                 .isEqualTo(Arrays.asList(0.0, null));
+    }
+
+    // ------------------------------------------------------------ QA-112 비중 추이도 교집합과 같은 증권 단위
+    @Test
+    @Disabled("QA-112: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-112 이름이 같은 서로 다른 ETF(ISHARES TR 아래 두 CUSIP)는 두 줄로 남고 각자의 비중을 가진다 — 보유 표와 같은 숫자")
+    void differentEtfsUnderOneNameStayTwoLines() {
+        // 브리지워터 저장본의 모양: iShares Trust(464287·464288) 아래 서로 다른 ETF가 'ISHARES TR' 한 이름으로 공시됩니다.
+        Sec13FService service = service(NPS, """
+                [{"reportDate":"2026-06-30","holdings":[
+                    {"name":"BIG CO","cusip":"111111111","class":"COM","value":1200,"shares":12,"weight":12.0},
+                    {"name":"ISHARES TR","cusip":"464287200","class":"CORE S&P500 ETF","value":900,"shares":9,"weight":9.0},
+                    {"name":"ISHARES TR","cusip":"464288588","class":"MBS ETF","value":50,"shares":1,"weight":0.5}]},
+                 {"reportDate":"2026-03-31","holdings":[
+                    {"name":"BIG CO","cusip":"111111111","class":"COM","value":1100,"shares":12,"weight":11.0},
+                    {"name":"ISHARES TR","cusip":"464287200","class":"CORE S&P500 ETF","value":800,"shares":9,"weight":8.0},
+                    {"name":"ISHARES TR","cusip":"464288588","class":"MBS ETF","value":60,"shares":1,"weight":0.6}]}]
+                """);
+
+        Map<String, List<Double>> series = weightSeries(service.portfolio(NPS, 8, 15));
+
+        assertThat(series.keySet()).as("두 ETF를 한 줄로 더하면(9.0 + 0.5) 어떤 증권과도 맞지 않는 숫자가 된다")
+                .containsExactly("BIG CO", "ISHARES TR · CORE S&P500 ETF", "ISHARES TR · MBS ETF");
+        assertThat(series.get("ISHARES TR · CORE S&P500 ETF")).as("과거 → 최신").containsExactly(8.0, 9.0);
+        assertThat(series.get("ISHARES TR · MBS ETF")).containsExactly(0.6, 0.5);
+    }
+
+    @Test
+    @Disabled("QA-112: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-112 같은 이름의 보통주와 우선주는 합치지 않고, 클래스 표기로도 갈리지 않으면 CUSIP을 붙여 줄 이름을 가른다")
+    void commonAndPreferredStaySeparateAndLabelsStayUnique() {
+        Sec13FService service = service(NPS, """
+                [{"reportDate":"2026-06-30","holdings":[
+                    {"name":"WELLS FARGO & CO","cusip":"949746101","class":"COM","value":500,"shares":5,"weight":5.0},
+                    {"name":"WELLS FARGO & CO","cusip":"949746804","class":"PERP PFD CNV A","value":400,"shares":4,"weight":4.0},
+                    {"name":"ISHARES TR","cusip":"464287200","class":"COM","value":300,"shares":3,"weight":3.0},
+                    {"name":"ISHARES TR","cusip":"464287655","class":"COM","value":200,"shares":2,"weight":2.0}]}]
+                """);
+
+        Map<String, List<Double>> series = weightSeries(service.portfolio(NPS, 8, 15));
+
+        assertThat(series).as("네 증권이 네 줄 — 이름으로 합치면 두 줄(9.0, 5.0)이 된다").hasSize(4);
+        assertThat(series.get("WELLS FARGO & CO · COM")).containsExactly(5.0);
+        assertThat(series.get("WELLS FARGO & CO · PERP PFD CNV A")).containsExactly(4.0);
+        assertThat(series.get("ISHARES TR · CUSIP 464287200")).as("클래스 표기(COM)가 같아 CUSIP으로 가른다").containsExactly(3.0);
+        assertThat(series.get("ISHARES TR · CUSIP 464287655")).containsExactly(2.0);
     }
 
     // ------------------------------------------------------------ QA-086 분기 수는 이력 범위일 뿐
