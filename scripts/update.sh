@@ -51,7 +51,8 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 
 if git rev-parse --abbrev-ref "@{u}" >/dev/null 2>&1; then
-  if git merge --ff-only --quiet "@{u}" 2>/dev/null; then
+  # git의 오류 문구는 버리지 않고 받아 둡니다. 실패 이유가 '갈라짐'만 있는 것이 아닙니다(아래).
+  if merge_err="$(git merge --ff-only --quiet "@{u}" 2>&1 >/dev/null)"; then
     after="$(git rev-parse HEAD)"
     if [ "$before" = "$after" ]; then
       echo "이미 최신입니다 ($branch)."
@@ -69,9 +70,22 @@ if git rev-parse --abbrev-ref "@{u}" >/dev/null 2>&1; then
       echo "    403(denied)이 나면 맥의 GitHub 자격 증명 문제입니다 — README 9장을 보세요."
     fi
   else
+    # 양쪽에 서로 없는 커밋이 있을 때만 '갈라짐'입니다. 그 밖의 실패(받는 커밋이 새로 만드는 파일과 같은 이름의
+    # 추적 안 된 파일, 남은 .git/index.lock 등)를 갈라짐으로 알리면 graph에 아무것도 보이지 않아 원인을 찾을 수
+    # 없었습니다(QA-109). 그때는 git이 알려 준 이유를 그대로 보여 줍니다.
+    ahead="$(git rev-list --count "@{u}..HEAD" 2>/dev/null || echo 0)"
+    behind="$(git rev-list --count "HEAD..@{u}" 2>/dev/null || echo 0)"
     echo ""
-    echo "⚠️  자동으로 합칠 수 없습니다(로컬 커밋이 갈라져 있습니다)."
-    echo "    확인:  git log --oneline --graph $branch origin/$branch | head"
+    if [ "$ahead" != "0" ] && [ "$behind" != "0" ]; then
+      echo "⚠️  자동으로 합칠 수 없습니다(로컬 커밋이 갈라져 있습니다 — 로컬에만 ${ahead}개, 원격에만 ${behind}개)."
+      echo "    확인:  git log --oneline --graph $branch origin/$branch | head"
+    else
+      echo "⚠️  받지 못했습니다. git이 알려 준 이유:"
+      printf '%s\n' "$merge_err" | sed 's/^/      /'
+      if printf '%s' "$merge_err" | grep -q "untracked working tree files would be overwritten"; then
+        echo "    받는 코드에 같은 이름의 새 파일이 있습니다 — 위 파일을 다른 곳으로 옮기거나 지운 뒤 다시 make update"
+      fi
+    fi
     exit 1
   fi
 else

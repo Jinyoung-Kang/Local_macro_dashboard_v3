@@ -244,6 +244,7 @@ git remote prune origin
 | `refusing to allow a Personal Access Token to … workflow` | `.github/workflows/`를 고친 경우입니다. 토큰 설정에서 `workflow` 권한만 체크하면 됩니다 |
 | `Permission denied (publickey)` | 원격이 SSH인데 키가 없습니다. `git remote -v` 확인 후 HTTPS로 변경 |
 | `make update`가 `수정 중인 파일이 있어 당기지 않았습니다` | `git status` 확인 후 `git restore <파일>`(버리기) 또는 `git stash`(보관) |
+| `make update`가 `받지 못했습니다` + `untracked working tree files would be overwritten` | 받는 코드가 새로 만드는 파일과 같은 이름의, git이 추적하지 않는 파일이 이 폴더에 있습니다. 출력에 나온 파일을 다른 곳으로 옮기거나 지운 뒤 다시 `make update` |
 | push는 안 되는데 코드는 최신 | 정상입니다. 받기와 올리기는 별개입니다. 화면 왼쪽 아래 버전이 최신이면 돌고 있는 코드는 최신이 맞습니다 |
 
 **403 해결 순서**

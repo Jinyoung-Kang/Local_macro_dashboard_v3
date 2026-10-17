@@ -69,7 +69,6 @@ def _update(here: Path) -> subprocess.CompletedProcess:
     )
 
 
-@pytest.mark.xfail(strict=True, reason="QA-109: 수정 전 재현 — 추적 안 된 파일 충돌을 '갈라짐'으로 알림")
 def test_QA109_추적_안_된_파일과_겹치면_갈라짐이_아니라_git의_이유를_보여_준다(repos):
     here, other = repos
     _commit(other, "docs/improve/plan.md", "from elsewhere\n")
