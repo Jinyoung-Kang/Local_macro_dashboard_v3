@@ -54,7 +54,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AI_ENGINES: anthropic_haiku
       AI_DEMO_DAILY_LIMIT: ${AI_DEMO_DAILY_LIMIT:-20}
-      # 앞단 CloudFront 원본 응답 한도(120초)보다 먼저 포기해야 방문자가 오류 페이지 대신 실패 안내를 받고 사용량이 되돌아간다(ADR 0014)
+      # 앞단 CloudFront 원본 응답 한도(120초)보다 먼저 포기해야 방문자가 오류 페이지 대신 실패 안내를 받는다(번역 단계 포함 한도,
+      # QA-094). 대기 시간 초과는 과금됐을 수 있어 공용 한도를 되돌리지 않는다(ADR 0014, QA-021)
       AI_TIMEOUT_SECONDS: "110"
       NVIDIA_API_KEY: ""
       CEREBRAS_API_KEY: ""
