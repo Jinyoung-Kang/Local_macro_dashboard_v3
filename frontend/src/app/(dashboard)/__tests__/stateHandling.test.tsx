@@ -88,3 +88,31 @@ describe("QA-051", () => {
     expect((screen.getByLabelText("m@test.local 등급") as HTMLSelectElement).disabled).toBe(true);
   });
 });
+
+describe("QA-105 사용자 관리 — 회원 만들기", () => {
+  async function submitNewMember() {
+    reads["/api/admin/users"] = () => Promise.resolve({ users: [] });
+    reads["/api/admin/audit"] = () => Promise.resolve({ entries: [] });
+    render(<AdminUsersPage />);
+    fireEvent.change(await screen.findByLabelText("이메일"), { target: { value: "m@test.local" } });
+    fireEvent.change(screen.getByLabelText("처음 비밀번호(10자 이상)"), { target: { value: "Abcdefgh1234!" } });
+    fireEvent.click(screen.getByRole("button", { name: "회원 만들기" }));
+  }
+
+  // 수정 전에는 결과와 상관없이 비밀번호 칸을 비워, 메일 중복·형식 오류·연결 실패를 고쳐 다시 보내려면 처음부터 다시 쳐야 했다.
+  it.fails("실패하면 처음 비밀번호 입력을 남긴다", async () => {
+    api.apiPost.mockRejectedValue(new Error("이미 있는 메일 주소입니다."));
+    await submitNewMember();
+
+    expect(await screen.findByText("이미 있는 메일 주소입니다.")).toBeTruthy();
+    expect((screen.getByLabelText("처음 비밀번호(10자 이상)") as HTMLInputElement).value).toBe("Abcdefgh1234!");
+  });
+
+  it("성공하면 처음 비밀번호 입력을 지운다", async () => {
+    api.apiPost.mockResolvedValue({ ok: true, message: "회원을 만들었습니다." });
+    await submitNewMember();
+
+    expect(await screen.findByText("회원을 만들었습니다.")).toBeTruthy();
+    expect((screen.getByLabelText("처음 비밀번호(10자 이상)") as HTMLInputElement).value).toBe("");
+  });
+});
