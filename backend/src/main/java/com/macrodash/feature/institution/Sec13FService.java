@@ -181,19 +181,18 @@ public class Sec13FService {
         return out;
     }
 
-    /** 상위 종목의 분기별 비중 추이 (차트용). */
+    /**
+     * 상위 종목의 분기별 비중 추이 (차트용).
+     *
+     * <p>줄 하나는 <b>회사(이름) 하나</b>이고, 값은 그 분기에 같은 이름으로 든 항목들의 비중 합입니다 — 교집합이 한 기관의
+     * A·C주를 합치는 것과 같은 규칙입니다(QA-084). 예전에는 이름을 항목마다 목록에 넣고 분기마다 첫 항목만 읽어,
+     * ALPHABET A·C주가 상위에 함께 있으면 줄 하나가 덮여 사라지고 값은 A주 비중뿐이었습니다. 상위는 최신 분기의
+     * 합친 비중 순으로 고릅니다.
+     */
     private Map<String, Object> weightHistory(List<JsonNode> quarters, int topN) {
         Map<String, Object> out = new LinkedHashMap<>();
         if (quarters.isEmpty()) {
             return out;
-        }
-
-        List<String> names = new ArrayList<>();
-        for (JsonNode holding : Json.array(quarters.get(0), "holdings")) {
-            names.add(Json.asText(holding, "name"));
-            if (names.size() >= Math.max(1, Math.min(topN, 15))) {
-                break;
-            }
         }
 
         List<String> dates = new ArrayList<>();
@@ -202,25 +201,50 @@ public class Sec13FService {
         java.util.Collections.reverse(ordered);
         ordered.forEach(q -> dates.add(Json.asText(q, "reportDate")));
 
+        List<Map<String, Double>> weightsByQuarter = ordered.stream().map(Sec13FService::weightByName).toList();
+        Map<String, Double> latest = weightsByQuarter.get(weightsByQuarter.size() - 1);
+        // 비중을 모르는 회사는 맨 뒤로. 같은 비중이면 저장본 순서(평가액 순)를 지킵니다(정렬은 안정적).
+        List<String> names = latest.keySet().stream()
+                .sorted(Comparator.comparingDouble((String name) ->
+                        latest.get(name) == null ? Double.NEGATIVE_INFINITY : latest.get(name)).reversed())
+                .limit(Math.max(1, Math.min(topN, 15)))
+                .toList();
+
         Map<String, List<Double>> series = new LinkedHashMap<>();
         for (String name : names) {
             List<Double> values = new ArrayList<>();
-            for (JsonNode quarter : ordered) {
-                Double weight = null;
-                for (JsonNode holding : Json.array(quarter, "holdings")) {
-                    if (name.equals(Json.asText(holding, "name"))) {
-                        weight = Json.asDouble(holding, "weight");
-                        break;
-                    }
-                }
-                // 보유하지 않은 분기는 0%가 맞습니다(데이터 없음이 아니라 미보유).
-                values.add(weight == null ? 0.0 : weight);
+            for (Map<String, Double> weights : weightsByQuarter) {
+                // 들고 있지 않은 분기는 0%가 맞습니다(데이터 없음이 아니라 미보유). 들고 있는데 비중을 모르면 null입니다.
+                values.add(weights.containsKey(name) ? weights.get(name) : Double.valueOf(0.0));
             }
             series.put(name, values);
         }
 
         out.put("dates", dates);
         out.put("series", series);
+        return out;
+    }
+
+    /**
+     * 한 분기의 이름 → 비중 합(저장본 순서 유지). 같은 이름의 항목(A·C주)은 아는 비중끼리 더하고,
+     * 그 이름의 비중을 하나도 모르면 null입니다 — 0으로 두면 '들고 있지 않음'과 구별되지 않습니다.
+     */
+    private static Map<String, Double> weightByName(JsonNode quarter) {
+        Map<String, Double> out = new LinkedHashMap<>();
+        for (JsonNode holding : Json.array(quarter, "holdings")) {
+            String name = Json.asText(holding, "name");
+            if (name == null) {
+                continue;
+            }
+            Double weight = Json.asDouble(holding, "weight");
+            Double sum = out.get(name);
+            // 삼항식으로 쓰면 Double과 double이 섞여 null이 언박싱됩니다(NPE). 나눠서 씁니다.
+            if (sum == null) {
+                out.put(name, weight);
+            } else if (weight != null) {
+                out.put(name, sum + weight);
+            }
+        }
         return out;
     }
 

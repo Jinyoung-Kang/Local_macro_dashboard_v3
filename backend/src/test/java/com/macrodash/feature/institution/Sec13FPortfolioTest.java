@@ -3,7 +3,6 @@ package com.macrodash.feature.institution;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -47,7 +46,6 @@ class Sec13FPortfolioTest {
 
     // ------------------------------------------------------------ QA-084 비중 추이는 회사(이름) 단위 합
     @Test
-    @Disabled("QA-084: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-084 비중 추이·히트맵은 이름이 같은 클래스(A·C주)의 비중을 분기마다 합친다 — 한 칸을 버리지 않는다")
     void weightHistorySumsShareClassesOfOneName() {
         Sec13FService service = service(NPS, """
@@ -72,7 +70,6 @@ class Sec13FPortfolioTest {
     }
 
     @Test
-    @Disabled("QA-084: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-084 들고 있는데 비중을 모르면 0이 아니라 null — 들고 있지 않은 분기만 0")
     void unknownWeightIsNullNotZero() {
         Sec13FService service = service(NPS, """

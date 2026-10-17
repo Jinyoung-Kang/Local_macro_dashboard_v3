@@ -27,7 +27,8 @@ export interface PortfolioResponse {
   quarters: { filingDate: string; reportDate: string; totalValue: number; holdingCount: number }[];
   latest?: { reportDate: string; filingDate: string; totalValue: number | null };
   holdings: Holding[];
-  weightHistory?: { dates: string[]; series: Record<string, number[]> };
+  /** 줄 하나 = 회사(이름) 하나, 값 = 그 분기 같은 이름 항목들의 비중 합. 미보유 분기는 0, 들고 있는데 비중을 모르면 null */
+  weightHistory?: { dates: string[]; series: Record<string, (number | null)[]> };
 }
 
 export interface ConsensusRow {
