@@ -68,7 +68,11 @@ public class VerificationService {
     }
 
     public Map<String, Object> run() {
-        ZonedDateTime now = ZonedDateTime.now(Kst.ZONE);
+        return run(ZonedDateTime.now(Kst.ZONE));
+    }
+
+    /** {@link #run()}의 본체 — 시각을 받아 테스트가 휴장일·장중을 고를 수 있게 합니다. */
+    Map<String, Object> run(ZonedDateTime now) {
         Optional<JsonNode> readings = collector.verificationReadings("KOSPI", "외국인", "순매수");
 
         if (readings.isEmpty()) {
