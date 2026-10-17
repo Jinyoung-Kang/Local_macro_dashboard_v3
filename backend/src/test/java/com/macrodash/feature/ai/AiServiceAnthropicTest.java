@@ -1,7 +1,9 @@
 package com.macrodash.feature.ai;
 
+import com.anthropic.client.AnthropicClient;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,6 +36,7 @@ class AiServiceAnthropicTest {
     private final AtomicInteger hits = new AtomicInteger();
     private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
     private final List<String> apiKeys = new CopyOnWriteArrayList<>();
+    private final List<String> timeoutHeaders = new CopyOnWriteArrayList<>();
 
     @AfterEach
     void stop() {
@@ -48,6 +52,8 @@ class AiServiceAnthropicTest {
             hits.incrementAndGet();
             requests.add(MAPPER.readTree(exchange.getRequestBody().readAllBytes()));
             apiKeys.add(String.valueOf(exchange.getRequestHeaders().getFirst("x-api-key")));
+            // SDK가 그 호출에 실제로 건 전체 대기 한도(초)를 이 헤더로 보냅니다.
+            timeoutHeaders.add(String.valueOf(exchange.getRequestHeaders().getFirst("X-Stainless-Timeout")));
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, bytes.length);
@@ -168,6 +174,35 @@ class AiServiceAnthropicTest {
         assertThat(result.get("status")).isEqualTo(false);
         assertThat(String.valueOf(result.get("error"))).contains("429");
         assertThat(hits.get()).as("SDK 자동 재시도가 꺼져 있어야 합니다").isEqualTo(1);
+    }
+
+    @Test
+    @Disabled("QA-119: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-119 대기 한도가 호출마다 달라도(번역의 남은 초 15~110) Claude 클라이언트는 하나만 만들고, 한도는 그 호출에 건다")
+    void oneClientServesEveryAttemptBudget() throws Exception {
+        String base = startServer(200, message("[{\"type\":\"text\",\"text\":\"답입니다.\"}]", "end_turn", ""));
+        AtomicInteger created = new AtomicInteger();
+        AiService service = new AiService(110, 60, 180) {
+            @Override
+            AnthropicClient newAnthropicClient(int seconds) {
+                created.incrementAndGet();
+                return super.newAnthropicClient(seconds);
+            }
+        };
+        for (String field : List.of("nvidiaKey", "cerebrasKey", "cloudflareAccountId", "cloudflareToken")) {
+            ReflectionTestUtils.setField(service, field, "");
+        }
+        ReflectionTestUtils.setField(service, "anthropicKey", "test-key");
+        service.anthropicBaseUrl = base;
+
+        // AWS(대기 한도 110초, 늘 직접 경로)에서 번역이 받을 수 있는 남은 초 전부.
+        for (int seconds = 15; seconds <= 110; seconds++) {
+            assertThat(service.callAnthropic("Claude", MODEL, "질문", null, seconds)).containsEntry("status", true);
+        }
+
+        assertThat(created.get()).as("클라이언트마다 SDK 타이머 스레드·연결 풀이 생겨 재시작 전까지 남음").isEqualTo(1);
+        assertThat(timeoutHeaders).as("호출마다 그 시도의 대기 한도")
+                .containsExactlyElementsOf(IntStream.rangeClosed(15, 110).mapToObj(String::valueOf).toList());
     }
 
     @Test
