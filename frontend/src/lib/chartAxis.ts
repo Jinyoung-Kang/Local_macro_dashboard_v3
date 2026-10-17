@@ -72,3 +72,45 @@ export function truncateToWidth(text: string, maxWidth: number): string {
   return out + "…";
 }
 
+/** 이름과 구분자 사이의 표시 — 백엔드 13F 비중 추이 줄 이름(`이름 · 클래스`, `이름 · CUSIP …`)과 같습니다. */
+const TAG_SEPARATOR = " · ";
+
+/**
+ * 이름표를 폭에 맞춰 줄이되, 첫 ' · ' 뒤의 구분자는 그대로 둡니다 — 줄이는 쪽은 앞의 이름입니다.
+ *
+ * 같은 이름의 두 항목을 가르려고 붙인 구분자(' · COM'과 ' · PERP PFD CNV A', ' · CUSIP 464287200'과 '…655')가
+ * 앞에서부터 자르면 통째로 잘려 다시 같은 이름표가 됩니다(QA-120). 이름은 적어도 `minNameWidth`만큼 남기고,
+ * 그래도 폭을 넘으면 구분자를 자르지 않고 이름표를 그만큼 길게 둡니다. ' · '가 없으면 {@link truncateToWidth}와 같습니다.
+ */
+export function truncateKeepingTag(label: string, maxWidth: number, minNameWidth = 12): string {
+  const at = label.indexOf(TAG_SEPARATOR);
+  if (at < 0) {
+    return truncateToWidth(label, maxWidth);
+  }
+  const tag = label.slice(at);
+  const nameWidth = Math.max(minNameWidth, maxWidth - visualWidth(tag));
+  return `${truncateToWidth(label.slice(0, at), nameWidth).replace(/\s+…$/, "…")}${tag}`;
+}
+
+/**
+ * 여러 키의 이름표 — 각자 {@link truncateKeepingTag}로 줄이고, 그래도 다른 키와 같아진 이름표는 줄이지 않은 키로 둡니다.
+ * 키가 서로 다르면 이름표도 서로 다릅니다(같은 이름표 아래 다른 숫자가 보이지 않게).
+ */
+export function distinctLabels(keys: readonly string[], maxWidth: number): string[] {
+  const labels = keys.map((key) => truncateKeepingTag(key, maxWidth));
+  for (;;) {
+    const counts = new Map<string, number>();
+    labels.forEach((label) => counts.set(label, (counts.get(label) ?? 0) + 1));
+    let changed = false;
+    labels.forEach((label, index) => {
+      if ((counts.get(label) ?? 0) > 1 && label !== keys[index]) {
+        labels[index] = keys[index];
+        changed = true;
+      }
+    });
+    if (!changed) {
+      return labels;
+    }
+  }
+}
+

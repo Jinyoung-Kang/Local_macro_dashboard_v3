@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MultiLineSeries, WeightHeatmap } from "@/components/charts";
+import { distinctLabels } from "@/lib/chartAxis";
 import { weightHistoryRows } from "@/lib/chartData";
 import {
   Banner,
@@ -31,6 +32,9 @@ const SERIES_COLORS = [
   "#39C5CF", "#DB6D28", "#8B949E", "#7EE787", "#FF7B72",
 ];
 
+/** 선 이름표 폭 — 예전 '앞 18자 + …'와 같은 폭입니다. 구분자가 붙은 이름표는 구분자만큼 더 길 수 있습니다. */
+const LINE_LABEL_WIDTH = 19;
+
 /**
  * 📑 기관 13F 포트폴리오 분석.
  *
@@ -57,13 +61,15 @@ export default function InstitutionsPage() {
 
   const chartData = history ? weightHistoryRows(history.dates, history.series) : [];
 
-  const chartSeries = Object.keys(history?.series ?? {})
-    .slice(0, 10)
-    .map((name, index) => ({
-      key: name,
-      name: name.length > 18 ? `${name.slice(0, 18)}…` : name,
-      color: SERIES_COLORS[index % SERIES_COLORS.length],
-    }));
+  // 범례·툴팁 이름표. 키 뒤의 구분자(' · 클래스', ' · CUSIP …')는 남기고 이름 쪽을 줄입니다 — 앞에서 자르면
+  // 같은 이름의 두 줄이 같은 이름표가 됩니다(QA-120).
+  const lineKeys = Object.keys(history?.series ?? {}).slice(0, 10);
+  const lineLabels = distinctLabels(lineKeys, LINE_LABEL_WIDTH);
+  const chartSeries = lineKeys.map((key, index) => ({
+    key,
+    name: lineLabels[index],
+    color: SERIES_COLORS[index % SERIES_COLORS.length],
+  }));
 
   return (
     <div className="flex flex-col gap-6">

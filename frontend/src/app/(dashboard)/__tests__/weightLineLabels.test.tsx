@@ -63,7 +63,7 @@ function answer() {
 describe("QA-120 비중 추이 선 이름표", () => {
   // 수정 전에는 키를 앞 18자에서 잘라(`name.slice(0, 18) + '…'`) 구분자가 통째로 사라졌다 —
   // 'WELLS FARGO & CO ·…', 'ISHARES TR · CUSIP…', 'ALPHABET INC · CAP…'가 두 번씩 나왔다.
-  it.fails("이름이 같은 줄들의 이름표가 서로 다르고, 구분자(클래스·CUSIP)가 이름표에 남는다", async () => {
+  it("이름이 같은 줄들의 이름표가 서로 다르고, 구분자(클래스·CUSIP)가 이름표에 남는다", async () => {
     answer();
     render(<InstitutionsPage />);
     const list = await screen.findByRole("list", { name: "선 이름표" });
