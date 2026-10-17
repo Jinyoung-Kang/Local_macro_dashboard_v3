@@ -5,6 +5,7 @@ import {
   Banner,
   Card,
   ErrorState,
+  Freshness,
   Loading,
   Metric,
   Select,
@@ -65,7 +66,7 @@ const TIMELINE_COLOR: Record<string, string> = {
 
 export default function RegimePage() {
   const [years, setYears] = useState("5");
-  const { data, loading, error, reload } = useApi<RegimeResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<RegimeResponse>(
     endpoints.insight.regime(years),
     300_000,
   );
@@ -83,12 +84,16 @@ export default function RegimePage() {
             성장·신용 축 × 유동성 축 · 기준일 {data?.asOf ?? EMPTY}
           </p>
         </div>
-        <Select
-          label="이력 기간"
-          value={years}
-          onChange={setYears}
-          options={["3", "5", "10"].map((value) => ({ value, label: `최근 ${value}년` }))}
-        />
+        <div className="flex items-center gap-2">
+          {/* 자동 갱신이 실패하면 앞서 받은 값을 그대로 보이므로 '새로 읽지 못함'을 붙입니다(QA-104, QA-067과 같음). */}
+          <Freshness refreshError={refreshError} />
+          <Select
+            label="이력 기간"
+            value={years}
+            onChange={setYears}
+            options={["3", "5", "10"].map((value) => ({ value, label: `최근 ${value}년` }))}
+          />
+        </div>
       </header>
 
       {/* 컨트롤(머리말·첫 카드)은 늘 그리고 본문만 로딩·오류로 바꿉니다 — 페이지 전체를 바꾸면 방금 조작한

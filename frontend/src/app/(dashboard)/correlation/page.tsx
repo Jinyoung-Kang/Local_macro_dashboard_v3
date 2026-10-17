@@ -7,6 +7,7 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  Freshness,
   Loading,
   Metric,
   Select,
@@ -37,7 +38,7 @@ export default function CorrelationPage() {
   const [years, setYears] = useState("3");
   const [mode, setMode] = useState("change");
 
-  const { data, loading, error, reload } = useApi<CorrelationResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<CorrelationResponse>(
     endpoints.insight.correlation({ x, y, window, years, mode }),
     300_000,
   );
@@ -56,7 +57,8 @@ export default function CorrelationPage() {
         </p>
       </header>
 
-      <Card title="비교할 지표">
+      {/* 자동 갱신이 실패하면 앞서 받은 값을 그대로 보이므로 '새로 읽지 못함'을 붙입니다(QA-104, QA-067과 같음). */}
+      <Card title="비교할 지표" actions={<Freshness refreshError={refreshError} />}>
         <div className="flex flex-wrap items-end gap-3">
           <Select label="지표 X" value={x} onChange={setX} options={options} />
           <Select label="지표 Y" value={y} onChange={setY} options={options} />

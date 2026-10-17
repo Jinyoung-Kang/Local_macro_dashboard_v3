@@ -148,7 +148,7 @@ describe("QA-104 자동 갱신하는 나머지 패널도 실패를 표시한다"
 
   for (const { name, make, bodies, card, header } of panels) {
     // 수정 전에는 refreshError를 받지 않아 앞서 받은 값이 표시 없이 그대로 남았다.
-    it.fails(`${name}: 새로 읽기에 실패하면 '새로 읽지 못함'`, async () => {
+    it(`${name}: 새로 읽기에 실패하면 '새로 읽지 못함'`, async () => {
       firstThenFail(bodies);
       const { rerender } = render(make());
       const area = header

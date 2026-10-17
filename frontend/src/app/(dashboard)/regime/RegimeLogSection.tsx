@@ -1,6 +1,6 @@
 "use client";
 
-import { Banner, Card, ErrorState, Loading, Table } from "@/components/ui";
+import { Banner, Card, ErrorState, Freshness, Loading, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { endpoints } from "@/lib/endpoints";
 import { EMPTY } from "@/lib/format";
@@ -15,7 +15,7 @@ import type { RegimeLogEntry, RegimeLogResponse } from "@/lib/types";
  * 판정 성과를 말할 때 "나중에 맞춰 고친 것 아니냐"에 답하는 근거가 이 기록입니다.
  */
 export function RegimeLogSection({ tone }: { tone: Record<string, string> }) {
-  const { data, loading, error, reload } = useApi<RegimeLogResponse>(endpoints.insight.regimeLog(60), 600_000);
+  const { data, loading, error, reload, refreshError } = useApi<RegimeLogResponse>(endpoints.insight.regimeLog(60), 600_000);
 
   return (
     <Card
@@ -26,6 +26,8 @@ export function RegimeLogSection({ tone }: { tone: Record<string, string> }) {
           ? `${data.startedOn ?? EMPTY}부터 ${data.count ?? 0}건 · 매일 KST ${data.recordHourKst ?? 18}시 이후 한 건`
           : "그날 화면에 보인 판정을 하루 한 건씩 남깁니다"
       }
+      // 자동 갱신이 실패하면 앞서 받은 값을 그대로 보이므로 '새로 읽지 못함'을 붙입니다(QA-104, QA-067과 같음).
+      actions={<Freshness refreshError={refreshError} />}
     >
       {loading && !data && <Loading label="판정 기록을 읽는 중…" />}
       {error && <ErrorState message={error} onRetry={reload} />}

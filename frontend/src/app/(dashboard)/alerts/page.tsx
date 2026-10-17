@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Banner, Button, Card, ErrorState, Loading, Select, Table } from "@/components/ui";
+import { Banner, Button, Card, ErrorState, Freshness, Loading, Select, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useSessionUser } from "@/hooks/useSessionUser";
@@ -75,9 +75,13 @@ export default function AlertsPage() {
         title="알림함"
         subtitle={`읽지 않은 알림 ${inbox.data ? `${inbox.data.unread}건` : EMPTY} · 90일 보관`}
         actions={
-          <Button onClick={async () => { await read.run(null); void inbox.reload(); notifyAlertsRead(); }} disabled={demo || read.busy || !inbox.data?.unread}>
-            모두 읽음
-          </Button>
+          <span className="flex items-center gap-2">
+            {/* 자동 갱신(5분)이 실패하면 새 알림이 들어오지 않은 채 남으므로 '새로 읽지 못함'을 붙입니다(QA-104). */}
+            <Freshness refreshError={inbox.refreshError} />
+            <Button onClick={async () => { await read.run(null); void inbox.reload(); notifyAlertsRead(); }} disabled={demo || read.busy || !inbox.data?.unread}>
+              모두 읽음
+            </Button>
+          </span>
         }
       >
         {inbox.error && <ErrorState message={inbox.error} onRetry={inbox.reload} />}

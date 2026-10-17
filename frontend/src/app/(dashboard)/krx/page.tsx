@@ -274,6 +274,8 @@ export default function KrxPage() {
         title="장중 수급 가속도 (최근 30분)"
         subtitle="장중에만 값이 있습니다."
         source="Daum 금융 시간별 선물 수급 (비공식)"
+        // 1분마다 다시 읽습니다. 실패하면 마지막 값이 '최근 30분'으로 남으므로 '새로 읽지 못함'을 붙입니다(QA-104).
+        actions={<Freshness refreshError={intraday.refreshError} />}
       >
         {intraday.error && <ErrorState message={intraday.error} onRetry={intraday.reload} />}
         {intraday.data?.skipped && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Banner, Card, ErrorState, Loading, Select, Table } from "@/components/ui";
+import { Banner, Card, ErrorState, Freshness, Loading, Select, Table } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import { useRemembered } from "@/hooks/useRemembered";
 import { endpoints } from "@/lib/endpoints";
@@ -27,7 +27,7 @@ const DEFAULT_ASSETS = [{ ticker: "SPY", label: "S&P 500 (SPY)" }];
 export function TrackRecordSection({ tone }: { tone: Record<string, string> }) {
   const [asset, setAsset] = useState("SPY");
   const [view, setView] = useState<"start" | "all">("start");
-  const { data, loading, error, reload } = useApi<TrackRecordResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<TrackRecordResponse>(
     endpoints.insight.regimeTrackRecord(asset),
     600_000,
   );
@@ -48,7 +48,9 @@ export function TrackRecordSection({ tone }: { tone: Record<string, string> }) {
           : "판정을 과거에 그대로 적용했을 때 그 뒤 수익률"
       }
       actions={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 자동 갱신이 실패하면 앞서 받은 값을 그대로 보이므로 '새로 읽지 못함'을 붙입니다(QA-104, QA-067과 같음). */}
+          <Freshness refreshError={refreshError} />
           <Select
             label="자산"
             value={asset}

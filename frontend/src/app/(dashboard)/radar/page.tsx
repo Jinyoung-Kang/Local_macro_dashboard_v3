@@ -466,7 +466,7 @@ function ConsensusPanel({
   interval: string;
   topN: string;
 }) {
-  const { data, loading, error, reload } = useApi<RadarConsensusResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<RadarConsensusResponse>(
     endpoints.positioning.radarConsensus({ market, tradeType, intervalType: interval, topN }),
     60_000,
   );
@@ -488,6 +488,7 @@ function ConsensusPanel({
           collectedAt={data?.collectedAtKst}
           ageSeconds={data?.ageSeconds}
           stale={data?.stale}
+          refreshError={refreshError}
         />
       }
     >

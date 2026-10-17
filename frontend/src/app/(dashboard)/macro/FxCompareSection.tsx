@@ -36,7 +36,7 @@ export function FxCompareSection() {
   const [period, setPeriod] = useState("1y");
   const [mode, setMode] = useState<"index" | "raw">("index");
 
-  const { data, loading, error, reload } = useApi<FxSeriesResponse>(
+  const { data, loading, error, reload, refreshError } = useApi<FxSeriesResponse>(
     endpoints.macro.fx(selected, period, mode),
     600_000,
   );
@@ -88,6 +88,7 @@ export function FxCompareSection() {
           collectedAt={data?.collectedAtKst}
           ageSeconds={data?.ageSeconds}
           stale={data?.stale}
+          refreshError={refreshError}
         />
       }
     >

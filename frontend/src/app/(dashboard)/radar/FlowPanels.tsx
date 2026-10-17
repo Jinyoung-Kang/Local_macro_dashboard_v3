@@ -96,7 +96,7 @@ export function MarketFlowsPanel({ market }: { market: string }) {
 // ------------------------------------------------------------------ 종목 지속성
 export function StockFlowsPanel({ rows }: { rows: { code: string; name: string }[] }) {
   const codes = stableCodesKey(rows.map((row) => row.code));
-  const { data, loading, error } = useApi<StockFlowsResponse>(
+  const { data, loading, error, refreshError } = useApi<StockFlowsResponse>(
     codes ? endpoints.positioning.stockFlows(codes) : null,
     300_000,
   );
@@ -111,7 +111,13 @@ export function StockFlowsPanel({ rows }: { rows: { code: string; name: string }
     <Card
       title="수급 지속성 — 며칠째 사고 있나 (종목별 20거래일)"
       source={data?.source ?? "토스증권 Open API (공식)"}
-      actions={<SourceBadge>단위: 주</SourceBadge>}
+      actions={
+        <span className="flex items-center gap-2">
+          {/* 자동 갱신이 실패하면 앞서 받은 값을 그대로 보이므로 '새로 읽지 못함'을 붙입니다(QA-104, QA-067과 같음). */}
+          <Freshness refreshError={refreshError} />
+          <SourceBadge>단위: 주</SourceBadge>
+        </span>
+      }
     >
       {loading && !data && <Loading />}
       {error && <Banner tone="warn">{error}</Banner>}
