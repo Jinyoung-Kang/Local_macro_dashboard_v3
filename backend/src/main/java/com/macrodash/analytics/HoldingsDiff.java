@@ -1,5 +1,6 @@
 package com.macrodash.analytics;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -15,7 +16,7 @@ import java.util.Set;
  * 한 곳에만 둡니다.
  *
  * <p>직전 분기가 없으면 "비교 데이터 없음"입니다 — 신규 매수로 단정하지 않습니다
- * (수집된 분기가 하나뿐일 수도 있기 때문입니다).
+ * (수집된 분기가 하나뿐이거나, 바로 앞 분기가 저장돼 있지 않을 수 있기 때문입니다 — {@link #previousQuarterEnd}).
  */
 public final class HoldingsDiff {
 
@@ -114,6 +115,23 @@ public final class HoldingsDiff {
             return "cusip:" + cusip;
         }
         return "name:" + holding.name() + "|" + (holding.cls() == null ? "" : holding.cls().trim());
+    }
+
+    /**
+     * 보고일 바로 앞의 분기 말일(03-31·06-30·09-30·12-31) — '직전 분기'가 가리켜야 하는 날짜.
+     *
+     * <p>저장본의 바로 다음 항목을 직전 분기로 쓰면, 분기가 빠진 기관(노르웨이: 1·3분기 공시가 저장되지 않음)은
+     * 6개월 떨어진 공시를 '직전 분기 대비'로 비교하게 됩니다(QA-085). 비교 상대는 이 날짜의 공시여야 하고,
+     * 없으면 직전 분기가 없는 것입니다. 보고일이 분기 말일이 아니어도 그 앞의 가장 가까운 분기 말일입니다.
+     *
+     * @param reportDate 보고 분기 말일. null이면 null
+     */
+    public static LocalDate previousQuarterEnd(LocalDate reportDate) {
+        if (reportDate == null) {
+            return null;
+        }
+        int firstMonthOfQuarter = (reportDate.getMonthValue() - 1) / 3 * 3 + 1;
+        return LocalDate.of(reportDate.getYear(), firstMonthOfQuarter, 1).minusDays(1);
     }
 
     /** 액션 분류 규칙 (구버전 classify_qoq_action과 동일). */

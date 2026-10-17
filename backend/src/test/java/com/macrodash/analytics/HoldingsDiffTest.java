@@ -3,6 +3,7 @@ package com.macrodash.analytics;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -91,5 +92,16 @@ class HoldingsDiffTest {
 
         assertThat(change.weightDiff()).isNull();
         assertThat(change.action()).isEqualTo(HoldingsDiff.CANNOT_COMPARE);
+    }
+
+    @Test
+    @DisplayName("QA-085 직전 분기 말일 — 분기 말일이면 석 달 전 말일, 아니면 그 앞의 가장 가까운 분기 말일")
+    void previousQuarterEnd() {
+        assertThat(HoldingsDiff.previousQuarterEnd(LocalDate.of(2026, 6, 30))).isEqualTo(LocalDate.of(2026, 3, 31));
+        assertThat(HoldingsDiff.previousQuarterEnd(LocalDate.of(2026, 3, 31))).isEqualTo(LocalDate.of(2025, 12, 31));
+        assertThat(HoldingsDiff.previousQuarterEnd(LocalDate.of(2025, 12, 31))).isEqualTo(LocalDate.of(2025, 9, 30));
+        assertThat(HoldingsDiff.previousQuarterEnd(LocalDate.of(2025, 9, 30))).isEqualTo(LocalDate.of(2025, 6, 30));
+        assertThat(HoldingsDiff.previousQuarterEnd(LocalDate.of(2026, 5, 15))).isEqualTo(LocalDate.of(2026, 3, 31));
+        assertThat(HoldingsDiff.previousQuarterEnd(null)).isNull();
     }
 }

@@ -285,9 +285,12 @@ public class AlertEvaluator {
             if (filed == null) {
                 continue;
             }
-            List<Holding> added = quarters.size() < 2 ? List.of()
-                    : AlertRules.newPositions(HoldingsJson.holdings(latest), HoldingsJson.holdings(quarters.get(1)));
-            if (quarters.size() < 2 || added.isEmpty()) {
+            // 직전 분기는 바로 앞 분기 말일의 공시입니다. 분기가 빠진 기관을 6개월 전과 비교해 '직전 분기에 없던
+            // 종목'이라고 알리지 않습니다(QA-085).
+            JsonNode previous = HoldingsJson.previousQuarter(quarters, latest);
+            List<Holding> added = previous == null ? List.of()
+                    : AlertRules.newPositions(HoldingsJson.holdings(latest), HoldingsJson.holdings(previous));
+            if (added.isEmpty()) {
                 continue;   // 비교할 직전 분기가 없거나 신규 편입이 없으면 알릴 것이 없습니다
             }
             String name = Institutions.byCik(cik).get("name");

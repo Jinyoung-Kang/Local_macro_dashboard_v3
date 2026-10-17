@@ -93,7 +93,8 @@ public class Sec13FService {
         out.put("quarters", quarterSummaries);
 
         JsonNode latest = selected.get(0);
-        JsonNode previous = selected.size() > 1 ? selected.get(1) : null;
+        // 직전 분기는 바로 앞 분기 말일의 공시입니다. 그 분기가 저장돼 있지 않으면 비교하지 않습니다(QA-085).
+        JsonNode previous = HoldingsJson.previousQuarter(selected, latest);
 
         Map<String, Object> latestBlock = new LinkedHashMap<>();   // Map.of는 null(모르는 평가액)을 거부합니다
         latestBlock.put("reportDate", String.valueOf(Json.asText(latest, "reportDate")));
@@ -291,7 +292,8 @@ public class Sec13FService {
             }
 
             JsonNode current = quarters.get(index);
-            JsonNode previous = index + 1 < quarters.size() ? quarters.get(index + 1) : null;
+            // 바로 앞 분기가 빠진 기관은 6개월 변화를 이번 분기 매매로 세지 않습니다 — 액션은 '비교 데이터 없음'(QA-085).
+            JsonNode previous = HoldingsJson.previousQuarter(quarters, current);
             String institution = Institutions.byCik(cik).getOrDefault("name", cik);
             participants.add(institution);
 
@@ -385,7 +387,11 @@ public class Sec13FService {
             }
 
             JsonNode current = quarters.get(index);
-            JsonNode previous = quarters.get(index + 1);
+            JsonNode previous = HoldingsJson.previousQuarter(quarters, current);
+            if (previous == null) {
+                // 바로 앞 분기가 저장돼 있지 않으면(분기가 빠진 기관) 신규 매수를 판정할 수 없습니다(QA-085).
+                continue;
+            }
             String institution = Institutions.byCik(cik).getOrDefault("name", cik);
             participants.add(institution);
 

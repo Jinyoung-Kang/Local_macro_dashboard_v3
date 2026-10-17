@@ -7,6 +7,7 @@ import com.macrodash.analytics.PortfolioRisk;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import com.macrodash.support.HoldingsJson;
 import com.macrodash.support.Json;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -66,8 +67,9 @@ public class GuruService {
             if (weights.isEmpty()) {
                 continue;
             }
-            Map<String, Double> previous = quarters.size() > 1
-                    ? weightsOf(quarters.get(1)) : Map.of();
+            // 직전 분기는 바로 앞 분기 말일의 공시입니다. 분기가 빠졌으면 반년치 회전율을 내지 않습니다(QA-085).
+            JsonNode previousQuarter = HoldingsJson.previousQuarter(quarters, latest);
+            Map<String, Double> previous = previousQuarter == null ? Map.of() : weightsOf(previousQuarter);
 
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("cik", cik);

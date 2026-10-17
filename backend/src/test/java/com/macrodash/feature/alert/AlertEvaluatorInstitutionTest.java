@@ -6,7 +6,6 @@ import com.macrodash.store.Datasets;
 import com.macrodash.store.RegimeLogStore;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreRepository;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -53,7 +52,6 @@ class AlertEvaluatorInstitutionTest {
     }
 
     @Test
-    @Disabled("QA-085: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-085 직전 분기(2026-03-31)가 저장돼 있지 않으면 6개월 전과 비교해 '신규 편입' 알림을 만들지 않는다")
     void noNewPositionEventAcrossAMissingQuarter() {
         AlertStore alerts = alertsWatchingNorges();

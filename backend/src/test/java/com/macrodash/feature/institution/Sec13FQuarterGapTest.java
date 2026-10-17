@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -67,7 +66,6 @@ class Sec13FQuarterGapTest {
     }
 
     @Test
-    @Disabled("QA-085: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-085 포트폴리오 — 다음 저장 분기가 바로 앞 분기가 아니면 '비교 데이터 없음'(6개월 변화를 신규 매수로 부르지 않음)")
     void portfolioDoesNotCompareAcrossAMissingQuarter() {
         Sec13FService service = new Sec13FService(store(Map.of(NORGES, NORGES_WITH_GAP)));
@@ -78,7 +76,6 @@ class Sec13FQuarterGapTest {
     }
 
     @Test
-    @Disabled("QA-085: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-085 공통 신규 매수·교집합 — 직전 분기가 빠진 기관의 6개월 변화를 '이번 분기 매수'로 세지 않는다")
     void consensusAndNewBuysSkipAMissingQuarter() {
         Sec13FService service = new Sec13FService(store(Map.of(NPS, NPS_CONSECUTIVE, NORGES, NORGES_WITH_GAP)));
@@ -94,7 +91,6 @@ class Sec13FQuarterGapTest {
     }
 
     @Test
-    @Disabled("QA-085: 수정 전 재현 — fix 커밋에서 켬")
     @SuppressWarnings("unchecked")
     @DisplayName("QA-085 구루 스타일 — 직전 분기가 빠지면 분기 회전율은 6개월치가 아니라 null")
     void turnoverIsUnknownAcrossAMissingQuarter() {
