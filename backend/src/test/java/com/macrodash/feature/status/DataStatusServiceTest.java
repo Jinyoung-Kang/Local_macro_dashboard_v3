@@ -5,6 +5,7 @@ import com.macrodash.read.StoreReader;
 import com.macrodash.store.StoreRepository;
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.UpstreamUnavailableException;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -18,7 +19,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -129,5 +132,23 @@ class DataStatusServiceTest {
 
         assertThat(service.taskHistory("x", 10)).containsEntry("history", List.of());
         assertThat(service.tasks()).containsEntry("tasks", List.of());
+    }
+
+    // 수정 전에는 수집기에 닿지 못해도 누락 목록을 빈 목록으로 넘겨 '누락 데이터셋 0'이 됐다(화면은 초록 '오류·경고 없음').
+    @Test
+    @Disabled("QA-102: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("오류·경고 모음: 수집기에 닿지 못하면 누락 데이터셋 수는 모름(null), 복사 텍스트도 '확인 못 함'")
+    @SuppressWarnings("unchecked")
+    void issuesWithoutCollectorDoNotClaimZeroMissing() {
+        when(collector.status()).thenReturn(Optional.empty());
+        when(collector.tasks()).thenReturn(Optional.empty());
+        when(repository.readTaskSummary()).thenReturn(List.of());
+        when(repository.readRecentTaskIssues(any(), anyInt())).thenReturn(List.of());
+
+        Map<String, Object> out = service.issues();
+
+        assertThat(out).containsEntry("collectorReachable", false);
+        assertThat((Map<String, Object>) out.get("counts")).containsEntry("missingDatasets", null);
+        assertThat((String) out.get("text")).contains("확인 못 함(수집기 연결 안 됨)").doesNotContain("누락 데이터셋 0");
     }
 }

@@ -1,5 +1,6 @@
 package com.macrodash.feature.status;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -69,5 +70,31 @@ class StatusIssuesTest {
     void empty() {
         String text = (String) StatusIssues.build(List.of(), List.of(), List.of(), "ok", null, NOW).get("text");
         assertThat(text).contains("■ 지금 실패 중인 태스크 (최근 결과 기준)\n  없음");
+    }
+
+    // 수정 전에는 '모름'(null)을 빈 목록으로 바꿔 counts.missingDatasets=0, 텍스트에 '누락 데이터셋 0'과 '없음'을 적었다.
+    @Test
+    @Disabled("QA-102: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("누락 데이터셋을 모르면(수집기 불통) 0·'없음'이 아니라 null·'확인 못 함'")
+    @SuppressWarnings("unchecked")
+    void unknownMissingIsNotZero() {
+        Map<String, Object> out = StatusIssues.build(List.of(), List.of(), null, null, null, NOW);
+
+        assertThat((Map<String, Object>) out.get("counts")).containsEntry("missingDatasets", null);
+        assertThat(out).containsEntry("missing", null);
+        assertThat((String) out.get("text"))
+                .contains("누락 데이터셋 확인 못 함(수집기 연결 안 됨)")
+                .doesNotContain("누락 데이터셋 0")
+                .doesNotContain("■ 있어야 하는데 없는 데이터셋\n  없음");
+    }
+
+    @Test
+    @DisplayName("누락 데이터셋이 정말 없으면(수집기가 빈 목록을 줌) 0과 '없음'")
+    @SuppressWarnings("unchecked")
+    void knownEmptyMissingIsZero() {
+        Map<String, Object> out = StatusIssues.build(List.of(), List.of(), List.of(), "ok", Set.of(), NOW);
+
+        assertThat((Map<String, Object>) out.get("counts")).containsEntry("missingDatasets", 0);
+        assertThat((String) out.get("text")).contains("누락 데이터셋 0", "■ 있어야 하는데 없는 데이터셋\n  없음");
     }
 }

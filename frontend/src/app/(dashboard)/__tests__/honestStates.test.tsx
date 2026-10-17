@@ -2,7 +2,7 @@
  * '모름'을 '정상'·'없음'으로 보여 주지 않는다 — 조회가 실패하거나 값을 확인하지 못했을 때의 화면 문구.
  * (PRINCIPLES: 실패는 실패로, 모르는 값은 "—")
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => {
@@ -44,6 +44,25 @@ describe("QA-045 상태 화면 — 수집기에 닿지 못하면 누락 여부�
 
     expect(await screen.findByText(/누락 여부를 확인하지 못했습니다/)).toBeTruthy();
     expect(screen.queryByText("누락된 데이터셋이 없습니다.")).toBeNull();
+  });
+});
+
+describe("QA-102 상태 화면 오류·경고 로그 — 수집기에 닿지 못하면 누락 데이터셋 수를 모른다", () => {
+  // 수정 전에는 누락 수를 모르는데도(null) '0개'로 적고, 실행 기록에 실패가 없으면 초록 '오류·경고가 없습니다'를 보였다.
+  it.fails("누락 데이터셋은 '—'이고 초록 '오류·경고가 없습니다'를 보이지 않는다", async () => {
+    reads["/api/status/issues"] = () => Promise.resolve({
+      generatedAt: "2026-10-18 09:00 KST", collectorReachable: false, lookbackHours: 24, lastRunStatus: null,
+      counts: { errors: 0, warnings: 0, recentGroups: 0, missingDatasets: null },
+      current: [], recent: [], missing: null, text: "요약: … 누락 데이터셋 확인 못 함(수집기 연결 안 됨)",
+    });
+    reads["/api/status"] = () => Promise.resolve({ readMode: "auto", collectorReachable: false, taskSummary: [] });
+
+    render(<StatusPage />);
+    const section = (await screen.findByRole("heading", { name: "수집 오류·경고 로그" })).closest("section") as HTMLElement;
+    const metric = (await within(section).findByText("누락 데이터셋")).parentElement as HTMLElement;
+
+    expect(metric.textContent).toBe("누락 데이터셋—");
+    expect(within(section).queryByText(/오류·경고가 없습니다/)).toBeNull();
   });
 });
 
