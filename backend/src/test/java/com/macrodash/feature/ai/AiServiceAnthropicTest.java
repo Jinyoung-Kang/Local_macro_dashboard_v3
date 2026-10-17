@@ -3,7 +3,6 @@ package com.macrodash.feature.ai;
 import com.anthropic.client.AnthropicClient;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -177,7 +176,6 @@ class AiServiceAnthropicTest {
     }
 
     @Test
-    @Disabled("QA-119: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-119 대기 한도가 호출마다 달라도(번역의 남은 초 15~110) Claude 클라이언트는 하나만 만들고, 한도는 그 호출에 건다")
     void oneClientServesEveryAttemptBudget() throws Exception {
         String base = startServer(200, message("[{\"type\":\"text\",\"text\":\"답입니다.\"}]", "end_turn", ""));

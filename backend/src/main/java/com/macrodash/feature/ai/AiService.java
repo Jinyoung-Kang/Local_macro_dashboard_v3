@@ -2,6 +2,7 @@ package com.macrodash.feature.ai;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.core.RequestOptions;
 import com.anthropic.errors.AnthropicIoException;
 import com.anthropic.errors.AnthropicServiceException;
 import com.anthropic.errors.NotFoundException;
@@ -183,8 +184,14 @@ public class AiService {
     /** 대기 한도별 RestClient. 한도가 다르면 팩토리도 달라야 해서 나눠 둡니다. */
     private final Map<Integer, RestClient> clients = new ConcurrentHashMap<>();
 
-    /** 대기 한도별 Claude 클라이언트(공식 SDK). 키·주소는 기동 때 정해지므로 한도만 키로 씁니다. */
-    private final Map<Integer, AnthropicClient> anthropicClients = new ConcurrentHashMap<>();
+    /**
+     * Claude 클라이언트(공식 SDK) — 하나만 만들어 씁니다. 키·주소는 기동 때 정해지고, 시도마다 다른 대기 한도는 요청
+     * 옵션으로 넘깁니다. 예전에는 한도마다 클라이언트를 만들어 두었는데, 클라이언트마다 SDK의 타이머 스레드와 OkHttp 연결
+     * 풀이 생기고, 번역이 남은 초(15..한도)를 받으면서 재시작 전까지 최대 (한도−14)개가 쌓였습니다(QA-119).
+     * 처음 부를 때 만듭니다 — 키는 생성 뒤에 주입됩니다.
+     */
+    private volatile AnthropicClient anthropicClient;
+    private final Object anthropicClientLock = new Object();
 
     /**
      * Claude API 키. 단위 테스트에서는 주입이 없어 빈 문자열로 시작합니다(null이면 키 확인이 터집니다).
@@ -787,7 +794,9 @@ public class AiService {
 
         long started = System.currentTimeMillis();
         try {
-            Message message = anthropicClient(attemptSeconds).messages().create(params.build());
+            // 대기 한도는 이 호출에만 겁니다. SDK가 그 한도로 연결 풀을 같이 쓰는 호출을 만듭니다.
+            Message message = anthropicClient().messages().create(params.build(),
+                    RequestOptions.builder().timeout(Duration.ofSeconds(attemptSeconds)).build());
             long elapsed = System.currentTimeMillis() - started;
 
             StopReason stop = message.stopReason().orElse(null);
@@ -858,14 +867,25 @@ public class AiService {
         return text.toString();
     }
 
-    /** 대기 한도별 Claude 클라이언트. */
-    private AnthropicClient anthropicClient(int seconds) {
-        return anthropicClients.computeIfAbsent(seconds, this::newAnthropicClient);
+    /** 하나뿐인 Claude 클라이언트. 기본 대기 한도는 설정값(timeoutSeconds)이고, 호출마다 요청 옵션의 한도가 덮어씁니다. */
+    private AnthropicClient anthropicClient() {
+        AnthropicClient client = anthropicClient;
+        if (client == null) {
+            synchronized (anthropicClientLock) {
+                client = anthropicClient;
+                if (client == null) {
+                    client = newAnthropicClient(timeoutSeconds);
+                    anthropicClient = client;
+                }
+            }
+        }
+        return client;
     }
 
     /**
-     * Claude 클라이언트를 새로 만듭니다. 키는 생성자에 명시해 넘깁니다 — 넘기지 않으면 SDK가 환경 변수·
-     * 로컬 프로필에서 자격 증명을 찾아, 설정하지 않은 키로 조용히 호출할 수 있습니다. 테스트가 만든 수를 셀 때 바꿔 끼웁니다.
+     * Claude 클라이언트를 새로 만듭니다({@code seconds}는 요청 옵션이 없을 때의 기본 대기 한도). 키는 생성자에 명시해
+     * 넘깁니다 — 넘기지 않으면 SDK가 환경 변수·로컬 프로필에서 자격 증명을 찾아, 설정하지 않은 키로 조용히 호출할 수
+     * 있습니다. 테스트가 만든 수를 셀 때 바꿔 끼웁니다.
      */
     AnthropicClient newAnthropicClient(int seconds) {
         AnthropicOkHttpClient.Builder builder = AnthropicOkHttpClient.builder()
