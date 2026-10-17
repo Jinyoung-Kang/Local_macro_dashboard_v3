@@ -32,7 +32,7 @@ public final class Scorecard {
     }
 
     /**
-     * 가격 시계열에서 측정값을 뽑습니다.
+     * 가격 시계열에서 측정값을 뽑습니다 — 전체 시계열과 측정 구간이 같을 때.
      *
      * @param series    종목 일별 종가 (날짜 오름차순)
      * @param benchmark 베타를 재는 기준 계열. null이면 베타만 null이 됩니다
@@ -40,10 +40,32 @@ public final class Scorecard {
      */
     public static Raw measure(NavigableMap<LocalDate, Double> series,
                               NavigableMap<LocalDate, Double> benchmark) {
+        return measure(series, series, benchmark);
+    }
+
+    /**
+     * 가격 시계열에서 측정값을 뽑습니다.
+     *
+     * <p><b>'최근 n거래일' 지표(모멘텀 1·3·6·12개월, 200일 추세 위치)는 측정 구간과 상관없이 전체 시계열로</b> 잽니다.
+     * 측정 구간(1년)으로 먼저 자르면 표본이 많아야 252개라 252거래일 전 값이 남지 않아, 기본 화면에서 12개월
+     * 모멘텀이 모든 종목에서 늘 비었습니다(QA-088). 측정 구간은 그 구간의 성격을 재는 변동성·최대낙폭·베타·표본 수에만
+     * 씁니다. 측정 구간이 전체 시계열의 끝부분이면 '최근 n거래일'의 값은 구간 안에 있을 때 그대로라, 2년 이상
+     * 구간의 값은 예전과 같습니다.
+     *
+     * @param history   잘리지 않은 전체 일별 종가 (날짜 오름차순)
+     * @param window    측정 구간으로 자른 종가 — history의 끝부분이어야 합니다
+     * @param benchmark 베타를 재는 기준 계열(측정 구간). null이면 베타만 null이 됩니다
+     * @return 측정값 묶음. <b>측정 구간 표본이 30 거래일 미만이면 모든 값이 null</b>입니다
+     */
+    public static Raw measure(NavigableMap<LocalDate, Double> history,
+                              NavigableMap<LocalDate, Double> window,
+                              NavigableMap<LocalDate, Double> benchmark) {
+        NavigableMap<LocalDate, Double> series = window;
         if (series == null || series.size() < 30) {
             return new Raw(null, null, null, null, null, null, null, null,
                     series == null ? 0 : series.size());
         }
+        NavigableMap<LocalDate, Double> full = history == null ? series : history;
 
         double[] returns = dailyReturns(series);
         Double beta = null;
@@ -56,14 +78,14 @@ public final class Scorecard {
         }
 
         return new Raw(
-                momentum(series, 21),
-                momentum(series, 63),
-                momentum(series, 126),
-                momentum(series, 252),
+                momentum(full, 21),
+                momentum(full, 63),
+                momentum(full, 126),
+                momentum(full, 252),
                 PortfolioRisk.annualizedVolatility(returns),
                 beta,
                 PortfolioRisk.maxDrawdown(returns),
-                trendPosition(series, 200),
+                trendPosition(full, 200),
                 returns.length);
     }
 

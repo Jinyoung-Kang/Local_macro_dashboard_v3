@@ -234,6 +234,31 @@ class GuruAndRiskTest {
             assertThat(raw.momentum12m()).isNull();
             assertThat(raw.maxDrawdown()).isNull();
         }
+
+        @Test
+        @DisplayName("QA-088 모멘텀·추세는 전체 시계열로 — 1년 구간에서도 12개월 모멘텀이 나오고, 2년 이상 구간은 값이 그대로")
+        void recentTradingDayMetricsUseTheWholeHistory() {
+            NavigableMap<LocalDate, Double> full = new TreeMap<>();
+            LocalDate start = LocalDate.of(2021, 1, 4);
+            for (int i = 0; i < 5 * 250; i++) {
+                full.put(start.plusDays(i * 73L / 50), 100.0 + i * 0.05 + 4.0 * Math.sin(i / 9.0));
+            }
+            LocalDate end = full.lastKey();
+
+            NavigableMap<LocalDate, Double> oneYear = full.tailMap(end.minusYears(1), true);
+            assertThat(oneYear.size()).as("1년 구간 표본").isLessThanOrEqualTo(252);
+            assertThat(Scorecard.measure(oneYear, null).momentum12m()).as("구간만 보면 비는 값").isNull();
+            Scorecard.Raw measured = Scorecard.measure(full, oneYear, null);
+            assertThat(measured.momentum12m()).isNotNull();
+            assertThat(measured.samples()).as("표본 수는 측정 구간").isEqualTo(oneYear.size() - 1);
+
+            for (int years : new int[]{2, 3, 4}) {
+                NavigableMap<LocalDate, Double> window = full.tailMap(end.minusYears(years), true);
+                assertThat(Scorecard.measure(full, window, null))
+                        .as("%d년 구간 — 예전(구간만으로 잰 값)과 같음", years)
+                        .isEqualTo(Scorecard.measure(window, null));
+            }
+        }
     }
 
     // ------------------------------------------------------------ 도우미

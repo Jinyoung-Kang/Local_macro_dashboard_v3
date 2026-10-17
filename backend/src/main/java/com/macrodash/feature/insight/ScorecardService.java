@@ -125,12 +125,15 @@ public class ScorecardService {
             return out;
         }
 
+        // 측정 구간(변동성·낙폭·베타)은 cutoff부터, '최근 n거래일' 지표(모멘텀·추세)는 잘리지 않은 저장본 전체로 잽니다.
+        // 1년 구간으로 먼저 자르면 252거래일 전 값이 남지 않아 12개월 모멘텀이 늘 비었습니다(QA-088).
         LocalDate cutoff = Kst.today().minusYears(window);
-        NavigableMap<LocalDate, Double> series = Json.dateValueSeries(tickers.get(symbol), "dates", "close", cutoff);
+        NavigableMap<LocalDate, Double> history = Json.dateValueSeries(tickers.get(symbol), "dates", "close", null);
+        NavigableMap<LocalDate, Double> series = history.tailMap(cutoff, true);
         NavigableMap<LocalDate, Double> benchmarkSeries =
                 Json.dateValueSeries(tickers.get(benchmarkTicker), "dates", "close", cutoff);
 
-        Scorecard.Raw raw = Scorecard.measure(series, benchmarkSeries);
+        Scorecard.Raw raw = Scorecard.measure(history, series, benchmarkSeries);
         if (raw.samples() == null || raw.samples() < 30) {
             out.put("available", false);
             out.put("message", "가격 표본이 부족합니다(30 거래일 미만).");
@@ -148,8 +151,8 @@ public class ScorecardService {
         List<Double> uDrawdown = new ArrayList<>();
         List<Double> uTrend = new ArrayList<>();
         tickers.propertyNames().forEach(ticker -> {
-            NavigableMap<LocalDate, Double> other = Json.dateValueSeries(tickers.get(ticker), "dates", "close", cutoff);
-            Scorecard.Raw one = Scorecard.measure(other, null);
+            NavigableMap<LocalDate, Double> other = Json.dateValueSeries(tickers.get(ticker), "dates", "close", null);
+            Scorecard.Raw one = Scorecard.measure(other, other.tailMap(cutoff, true), null);
             if (one.momentum12m() != null) {
                 uMomentum12m.add(one.momentum12m());
             }

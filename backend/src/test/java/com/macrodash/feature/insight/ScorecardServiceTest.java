@@ -1,10 +1,11 @@
 package com.macrodash.feature.insight;
 
 import com.macrodash.Kst;
+import com.macrodash.analytics.Scorecard;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
+import com.macrodash.support.Json;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -14,8 +15,10 @@ import tools.jackson.databind.node.ObjectNode;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -81,7 +84,6 @@ class ScorecardServiceTest {
     }
 
     @Test
-    @Disabled("QA-088: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-088 기본 구간(1년)에서도 12개월 모멘텀을 잰다 — 측정 구간 자르기는 변동성·낙폭·베타에만")
     void twelveMonthMomentumIsMeasuredInTheDefaultOneYearWindow() {
         Map<String, Object> card = service().scorecard("AAPL", "SPY", 1);
@@ -91,5 +93,40 @@ class ScorecardServiceTest {
         assertThat(momentum.get("value")).as("1년 구간 표본(≤252)만으로는 252 거래일 전 값이 없어 늘 비었음").isNotNull();
         assertThat(momentum.get("score")).as("유니버스도 같은 방식이라 백분위가 나옴").isNotNull();
         assertThat(card.get("scoredCount")).isEqualTo(5);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("QA-088 2년 이상 구간은 값·백분위가 예전(구간으로 자른 시계열만으로 잰 값)과 같다")
+    void twoYearsAndLongerWindowsAreUnchanged() {
+        ObjectNode payload = equityHistory();
+        ScorecardService service = service();
+        for (int years : new int[]{2, 3, 5}) {
+            // 예전 계산: 종목·기준·유니버스 모두 측정 구간으로 자른 시계열만으로 잽니다.
+            LocalDate cutoff = Kst.today().minusYears(years);
+            NavigableMap<LocalDate, Double> aapl = Json.dateValueSeries(payload.get("tickers").get("AAPL"), "dates", "close", cutoff);
+            NavigableMap<LocalDate, Double> spy = Json.dateValueSeries(payload.get("tickers").get("SPY"), "dates", "close", cutoff);
+            Scorecard.Raw before = Scorecard.measure(aapl, spy);
+            List<Double> universe = new ArrayList<>();
+            for (String ticker : TICKERS) {
+                universe.add(Scorecard.measure(Json.dateValueSeries(
+                        payload.get("tickers").get(ticker), "dates", "close", cutoff), null).momentum12m());
+            }
+
+            Map<String, Object> card = service.scorecard("AAPL", "SPY", years);
+
+            Map<String, Object> momentum = metric(card, "12개월 모멘텀");
+            assertThat(momentum.get("value")).as("%d년 구간 12개월 모멘텀", years).isEqualTo(before.momentum12m());
+            assertThat(momentum.get("score")).isEqualTo(Scorecard.percentileScore(before.momentum12m(), universe, true));
+            assertThat(metric(card, "3개월 모멘텀").get("value")).isEqualTo(before.momentum3m());
+            assertThat(metric(card, "변동성 (연율)").get("value")).isEqualTo(before.volatility());
+            assertThat(metric(card, "최대낙폭").get("value")).isEqualTo(before.maxDrawdown());
+            assertThat(metric(card, "추세 위치").get("value")).isEqualTo(before.trendPosition());
+            Map<String, Object> raw = (Map<String, Object>) card.get("raw");
+            assertThat(raw.get("momentum1m")).isEqualTo(before.momentum1m());
+            assertThat(raw.get("momentum6m")).isEqualTo(before.momentum6m());
+            assertThat(raw.get("beta")).isEqualTo(before.beta());
+            assertThat(raw.get("samples")).isEqualTo(before.samples());
+        }
     }
 }

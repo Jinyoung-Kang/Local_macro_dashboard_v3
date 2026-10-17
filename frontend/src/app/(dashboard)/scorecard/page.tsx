@@ -186,7 +186,12 @@ export default function ScorecardPage() {
                         row.score === null ? (
                           <span
                             className="text-muted"
-                            title="비교 대상이 10개 미만이라 백분위를 내지 않습니다"
+                            // 값 자체가 없으면(표본 부족) 원인은 비교 대상 수가 아닙니다 — 두 경우를 나눠 적습니다(QA-088).
+                            title={
+                              row.value === null
+                                ? "표본이 부족해 값을 잴 수 없어 백분위도 없습니다"
+                                : "비교 대상이 10개 미만이라 백분위를 내지 않습니다"
+                            }
                           >
                             {EMPTY}
                           </span>
