@@ -2,6 +2,7 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -17,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.web.filter.FormContentFilter;
 import tools.jackson.databind.JsonNode;
 
 import java.util.List;
@@ -78,6 +81,9 @@ class ApiIntegrationTest {
     @Autowired
     com.macrodash.feature.auth.PasswordHasher hasher;
 
+    @Autowired
+    ApplicationContext context;
+
     static final String OWNER = "owner@test.local";
     static final String MEMBER = "member@test.local";
     /** 테스트용 데모 열람 토큰(32자 이상). 실제 배포 토큰은 서버의 .env에만 있습니다. */
@@ -128,6 +134,16 @@ class ApiIntegrationTest {
                 url("/api/macro/overview"), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @Disabled("QA-069: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-069: 인증 전에 PUT·PATCH·DELETE의 form 본문을 상한 없이 읽는 Spring 기본 필터(FormContentFilter)가 없다")
+    void noFormContentFilterBeforeAuthentication() {
+        // 이 필터는 SessionFilter(order 1)보다 앞(order -9900, 모든 경로)에서 돌아, 로그인 없이 보낸 수백 MB form 본문을
+        // 통째로 문자열로 만듭니다 — 본문 상한(SessionFilter.capBody)보다 먼저라 막지 못합니다. 요청으로 힙을 실제로
+        // 고갈시키는 시험은 같은 JVM의 다른 테스트를 흔들므로, 필터가 등록되지 않았는지만 봅니다.
+        assertThat(context.getBeansOfType(FormContentFilter.class)).isEmpty();
     }
 
     @Test
