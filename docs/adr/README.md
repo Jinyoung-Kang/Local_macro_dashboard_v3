@@ -20,3 +20,4 @@
 | [0012](0012-aws-demo-deployment.md) | AWS 데모 배포: RDS · 앞단 프록시 뒤 같은 출처(`NEXT_PUBLIC_API_BASE=/`) · 프록시 IP 신뢰 · 공개 데모에서 닫는 것 |
 | [0013](0013-demo-viewer-mode.md) | 데모 열람: 접근 코드를 통과한 공개 방문자는 로그인 없이 읽기 전용(앞단이 붙이는 `X-Demo-Viewer` 토큰, 기본 꺼짐) |
 | [0014](0014-aws-demo-ai-report.md) | AWS 데모의 AI 리포트: 엔진 허용 목록(`AI_ENGINES`) · 데모 방문자 공용 하루 한도(메모리) · 데모 쓰기는 `POST /api/ai/report` 하나 |
+| [0015](0015-13f-security-identity.md) | 13F 보유 종목의 단위: 이름이 아니라 증권(CUSIP), 보통주 클래스만 발행사로 합침(발행 번호가 숫자인 지분 증권), 직전 분기는 바로 앞 분기만, 티커 매칭은 수집기가 저장할 때 |
