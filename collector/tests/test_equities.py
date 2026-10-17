@@ -91,3 +91,68 @@ def test_equity_task_keeps_previous_snapshot_when_everything_fails(store, monkey
 
     assert "Yahoo 차단" in str(caught.value)
     assert "AAPL" in store.read_snapshot(catalog.SNAP_EQUITY_HISTORY).payload["tickers"]
+
+
+# ---- QA-087: 13F 이름 변형(NVIDIA CORPORATION 등)이 위험 분석에서 '매핑표에 없음'으로 빠지던 문제 ---------------
+@pytest.mark.xfail(strict=True, reason="QA-087: 수정 전 재현 — 2단계 매칭이 펀드·ETF·신탁을 운영회사에 붙임")
+def test_QA087_펀드_ETF_신탁은_법인격을_떼도_운영회사에_붙지_않는다():
+    """
+    'ETF'·'TR'은 법인격 표기와 함께 떼어 내는 토큰이라, 'GOLDMAN SACHS ETF TR'(골드만삭스 운용 ETF 신탁)이
+    핵심 이름 'GOLDMAN SACHS'로 골드만삭스 주식(GS)에 붙었습니다. 펀드의 가격을 운영회사 주가로 계산하게 됩니다.
+    """
+    assert equities.lookup("GOLDMAN SACHS ETF TR") is None
+    assert equities.lookup("MORGAN STANLEY ETF TR") is None
+    assert equities.lookup("BLACKROCK ETF TR") is None
+    # 매핑표에 그대로 있는 ETF 이름과 운영회사 이름 변형은 그대로 찾습니다.
+    assert equities.lookup("SPDR S&P 500 ETF TR") == ("SPY", "ETF·펀드")
+    assert equities.lookup("GOLDMAN SACHS GROUP INC") == ("GS", "금융")
+    assert equities.lookup("NVIDIA CORPORATION") == ("NVDA", "정보기술")
+    assert equities.lookup("NVIDIA CORP COM") == ("NVDA", "정보기술")
+
+
+def _holding(name, cls="COM", shares=10.0, weight=10.0):
+    return {"name": name, "class": cls, "cusip": "000000000", "value": weight, "shares": shares, "weight": weight}
+
+
+@pytest.mark.xfail(strict=True, reason="QA-087: 수정 전 재현 — 13F 저장본 보유 항목에 티커가 없음")
+def test_QA087_13F를_저장할_때_보유마다_두_단계_매칭으로_티커를_붙인다(store, monkeypatch):
+    """
+    백엔드 위험 분석은 이름을 매핑표 키와 정확히 비교만 해, 'NVIDIA CORPORATION'(국민연금 등 최대 보유)이 '매핑표에 없음'으로
+    빠졌습니다. 문서의 두 단계 매칭(equities.lookup)은 테스트에서만 불렸습니다. 수집기가 13F를 저장할 때 보유마다 티커를
+    붙이고(모르면 None), 펀드·ETF·신탁과 채권(PRN·노트) 행은 운영회사 주가로 덮지 않습니다.
+    """
+    import copy
+
+    holdings = [
+        _holding("NVIDIA CORPORATION"),
+        _holding("NVIDIA CORP COM"),
+        _holding("APPLE INC"),
+        _holding("GOLDMAN SACHS ETF TR", cls="ACCESS TREASURY"),
+        _holding("MORGAN STANLEY", cls="COM NEW"),
+        _holding("FORD MTR CO", cls="NOTE 3/1", shares=None),        # 전환사채(PRN) — 주식 가격으로 계산하지 않음
+        _holding("BOOKING HOLDINGS INC", cls="DBCV 0.750% 5/0"),
+        _holding("SOME OBSCURE HOLDINGS LLC"),
+    ]
+    monkeypatch.setattr(tasks.filings.http, "sec_user_agent", lambda: "test-agent")
+    monkeypatch.setattr(tasks.filings.sec_service, "collect_13f", lambda cik, quarters, previous_quarters=None: {
+        "cik": cik, "error": None,
+        "quarters": [{"filingDate": "2026-08-14", "reportDate": "2026-06-30", "totalValue": 80.0,
+                      "holdings": copy.deepcopy(holdings)}],
+    })
+
+    tasks.task_sec_13f()
+
+    cik = indicators.INSTITUTIONS[0]["cik"]
+    for quarters in (catalog.MAX_TRACKED_QUARTERS, 1):
+        saved = store.read_snapshot(catalog.snap_sec_13f(cik, quarters)).payload["quarters"][0]["holdings"]
+        assert all("ticker" in h for h in saved), "티커를 정했다는 표시(모르면 None)가 모든 보유에 있어야 합니다"
+        assert {h["name"]: h["ticker"] for h in saved} == {
+            "NVIDIA CORPORATION": "NVDA",
+            "NVIDIA CORP COM": "NVDA",
+            "APPLE INC": "AAPL",
+            "GOLDMAN SACHS ETF TR": None,
+            "MORGAN STANLEY": "MS",
+            "FORD MTR CO": None,
+            "BOOKING HOLDINGS INC": None,
+            "SOME OBSCURE HOLDINGS LLC": None,
+        }
