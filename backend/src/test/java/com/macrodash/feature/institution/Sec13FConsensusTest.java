@@ -3,6 +3,7 @@ package com.macrodash.feature.institution;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -138,5 +139,81 @@ class Sec13FConsensusTest {
         assertThat((List<String>) rows.get(0).get("buyers")).containsExactly(Institutions.byCik(NPS).get("name"));
         assertThat(rows.get(0).get("totalValue")).isEqualTo(1000.0);
         assertThat(rows.get(0).get("avgWeight")).isEqualTo(10.0);
+    }
+
+    // ------------------------------------------------------------ QA-082 전량 매도는 '보유'가 아니다
+    private static final String SCION = "0001649339";
+    private static final String VANGUARD = "0000102909";
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> rows(Map<String, Object> response) {
+        return (List<Map<String, Object>>) response.get("rows");
+    }
+
+    private static Map<String, Object> rowNamed(List<Map<String, Object>> rows, String name) {
+        return rows.stream().filter(row -> name.equals(row.get("name"))).findFirst().orElseThrow();
+    }
+
+    @Test
+    @Disabled("QA-082: 수정 전 재현 — fix 커밋에서 켬")
+    @SuppressWarnings("unchecked")
+    @DisplayName("QA-082 이번 분기에 전량 매도한 기관은 보유 기관이 아니다 — 보유 기관 수·평균 비중·평가액에서 빠지고 '동시 매도'에만 남는다")
+    void closedPositionIsNotAHolding() {
+        // 국민연금은 X를 5% 들고 있고, 사이언은 이번 분기에 X를 전량 매도했습니다(지금은 Y만 보유).
+        Sec13FService service = service(Map.of(
+                NPS, """
+                    [{"reportDate":"2026-06-30","holdings":[
+                        {"name":"X CORP","cusip":"111111111","class":"COM","value":500,"shares":10,"weight":5.0}]},
+                     {"reportDate":"2026-03-31","holdings":[
+                        {"name":"X CORP","cusip":"111111111","class":"COM","value":500,"shares":10,"weight":5.0}]}]
+                    """,
+                SCION, """
+                    [{"reportDate":"2026-06-30","holdings":[
+                        {"name":"Y CORP","cusip":"222222222","class":"COM","value":100,"shares":1,"weight":100.0}]},
+                     {"reportDate":"2026-03-31","holdings":[
+                        {"name":"X CORP","cusip":"111111111","class":"COM","value":300,"shares":3,"weight":100.0}]}]
+                    """));
+
+        assertThat(rows(service.consensus(List.of(NPS, SCION), null, 2, 10)))
+                .as("X를 지금 들고 있는 기관은 국민연금 1곳 — '보유 기관 2곳'으로 올리면 안 됨")
+                .isEmpty();
+
+        Map<String, Object> x = rowNamed(rows(service.consensus(List.of(NPS, SCION), null, 1, 10)), "X CORP");
+        assertThat(x.get("holderCount")).isEqualTo(1);
+        assertThat((List<String>) x.get("holders")).containsExactly(Institutions.byCik(NPS).get("name"));
+        assertThat(x.get("avgWeight")).as("전량 매도의 0%를 평균에 넣지 않음(넣으면 2.5)").isEqualTo(5.0);
+        assertThat(x.get("maxWeight")).isEqualTo(5.0);
+        assertThat(x.get("totalValue")).isEqualTo(500.0);
+        assertThat(x.get("sellCount")).as("'동시 매도'에는 그대로 남는다").isEqualTo(1L);
+    }
+
+    @Test
+    @Disabled("QA-082: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-082 전량 매도는 보유 종목 수와 상관없이 같은 규칙으로 '동시 매도'에 센다 — 상위 100 자르기는 지금 보유한 항목에만")
+    void closedPositionCountsAsSellerRegardlessOfPortfolioSize() {
+        // 뱅가드는 지금 120종목을 들고 있고, 이번 분기에 X를 전량 매도했습니다. 예전에는 평가액 0인 전량 매도 행이
+        // 상위 100 밖으로 밀려, 보유 종목이 100개 미만인 기관의 전량 매도만 '동시 매도'로 셌습니다.
+        StringBuilder current = new StringBuilder();
+        for (int i = 0; i < 120; i++) {
+            current.append(i == 0 ? "" : ",").append("""
+                    {"name":"FILLER %d","cusip":"9%08d","class":"COM","value":%d,"shares":1,"weight":0.5}"""
+                    .formatted(i, i, 1000 - i));
+        }
+        Sec13FService service = service(Map.of(
+                NPS, """
+                    [{"reportDate":"2026-06-30","holdings":[
+                        {"name":"X CORP","cusip":"111111111","class":"COM","value":500,"shares":10,"weight":5.0}]},
+                     {"reportDate":"2026-03-31","holdings":[
+                        {"name":"X CORP","cusip":"111111111","class":"COM","value":500,"shares":10,"weight":5.0}]}]
+                    """,
+                VANGUARD, """
+                    [{"reportDate":"2026-06-30","holdings":[%s]},
+                     {"reportDate":"2026-03-31","holdings":[
+                        {"name":"X CORP","cusip":"111111111","class":"COM","value":300,"shares":3,"weight":1.0}]}]
+                    """.formatted(current)));
+
+        Map<String, Object> x = rowNamed(rows(service.consensus(List.of(NPS, VANGUARD), null, 1, 200)), "X CORP");
+        assertThat(x.get("holderCount")).isEqualTo(1);
+        assertThat(x.get("sellCount")).as("뱅가드의 전량 매도도 '동시 매도'").isEqualTo(1L);
     }
 }
