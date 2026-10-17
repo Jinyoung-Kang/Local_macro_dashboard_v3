@@ -79,6 +79,26 @@ class SnapshotTextRadarTest {
         assertThat(text).doesNotContain("당일 잠정치");
     }
 
+    @Test
+    @DisplayName("QA-076 수집 실패로 이어받은 시장 수급은 AI 입력에 '이전 값'과 사유를 적는다")
+    void carriedOverMarketFlowsAreMarked() {
+        KrFlowsService flows = mock(KrFlowsService.class);
+        Map<String, Object> kosdaq = new java.util.LinkedHashMap<>();
+        kosdaq.put("latestDate", "2099-03-11");
+        kosdaq.put("provisional", true);
+        kosdaq.put("isStale", true);
+        kosdaq.put("staleReason", "KOSDAQ: HTTP 500");
+        kosdaq.put("investors", java.util.List.of());
+        when(flows.marketFlows()).thenReturn(Map.of("available", true, "markets", Map.of("KOSDAQ", kosdaq)));
+
+        String text = new SnapshotTextService(
+                mock(MacroService.class), mock(LiquidityService.class), mock(SectorService.class),
+                mock(CotService.class), mock(KrxService.class), mock(RadarService.class),
+                mock(Sec13FService.class), flows).fullText();
+
+        assertThat(text).contains("KOSDAQ — 기준일 2099-03-11 (장중 잠정치) ⚠️ 이전 값(이번 수집 실패: KOSDAQ: HTTP 500)");
+    }
+
     /** 레이더 외의 구간은 빈 응답(데이터 없음)으로 둡니다. */
     private static SnapshotTextService service(RadarService radar) {
         return new SnapshotTextService(

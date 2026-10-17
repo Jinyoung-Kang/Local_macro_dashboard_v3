@@ -54,7 +54,8 @@ public class KrFlowsService {
     /**
      * 코스피·코스닥 시장 전체의 투자자별 매매대금 요약.
      *
-     * @return {@code available, unit(KRW), markets: {KOSPI|KOSDAQ: summary}} + 신선도
+     * @return {@code available, unit(KRW), markets: {KOSPI|KOSDAQ: summary + fetchedAt·isStale(+staleReason·staleSince)}}
+     *         + 신선도. 저장본 신선도는 마지막으로 받은 시장의 것이라, 이어받은 시장은 {@code isStale}·{@code fetchedAt}을 봅니다
      */
     public Map<String, Object> marketFlows() {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -68,9 +69,21 @@ public class KrFlowsService {
         LocalDate today = Kst.today();
         Map<String, Object> markets = new LinkedHashMap<>();
         for (String market : List.of("KOSPI", "KOSDAQ")) {
-            List<FlowRecord> records = FlowJson.records(Json.array(payload.path("markets").path(market), "records"));
+            JsonNode node = payload.path("markets").path(market);
+            List<FlowRecord> records = FlowJson.records(Json.array(node, "records"));
             if (!records.isEmpty()) {
-                markets.put(market, InvestorFlows.summarize(records, today, 20));
+                // 수집 실패로 이어받은 시장(isStale)은 그 시장을 받은 날로 잠정치를 판정합니다 — 장중에 받은 기록은 날이
+                // 바뀌어도 잠정치입니다(QA-076). 받은 날을 모르면 오늘.
+                boolean stale = Json.asBoolean(node, "isStale");
+                LocalDate fetchedOn = stale ? FlowJson.marketFetchedOn(node, snapshot.get().collectedAt()) : null;
+                Map<String, Object> summary = InvestorFlows.summarize(records, fetchedOn != null ? fetchedOn : today, 20);
+                summary.put("fetchedAt", Json.asText(node, "fetchedAt"));
+                summary.put("isStale", stale);
+                if (stale) {
+                    summary.put("staleReason", Json.asText(node, "staleReason"));
+                    summary.put("staleSince", Json.asText(node, "staleSince"));
+                }
+                markets.put(market, summary);
             }
         }
         out.put("available", !markets.isEmpty());

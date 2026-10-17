@@ -563,8 +563,13 @@ public class SnapshotTextService {
         Map<String, Object> markets = (Map<String, Object>) result.get("markets");
         for (Map.Entry<String, Object> entry : markets.entrySet()) {
             Map<String, Object> summary = (Map<String, Object>) entry.getValue();
-            lines.add("%s — 기준일 %s%s".formatted(entry.getKey(), summary.get("latestDate"),
-                    Boolean.TRUE.equals(summary.get("provisional")) ? " (장중 잠정치)" : ""));
+            // 수집 실패로 이어받은 시장이면 그렇다고 적습니다(QA-076) — 저장본 수집 시각은 다른 시장의 것입니다.
+            lines.add("%s — 기준일 %s%s%s".formatted(entry.getKey(), summary.get("latestDate"),
+                    Boolean.TRUE.equals(summary.get("provisional")) ? " (장중 잠정치)" : "",
+                    Boolean.TRUE.equals(summary.get("isStale"))
+                            ? " ⚠️ 이전 값(이번 수집 실패" + (summary.get("staleReason") == null ? ""
+                                    : ": " + summary.get("staleReason")) + ")"
+                            : ""));
             for (Map<String, Object> row : (List<Map<String, Object>>) summary.get("investors")) {
                 lines.add("- %s: 최근일 %s · 5일 %s · 20일 %s".formatted(
                         row.get("label"), eok(row.get("latest")),

@@ -188,9 +188,11 @@ public class AlertEvaluator {
                     : market.filter(s -> s.payload() != null)
                             .map(s -> FlowJson.records(Json.array(s.payload().path("markets").path(target), "records")))
                             .orElse(List.of());
-            LocalDate collectedOn = stock ? null : market
-                    .map(Snapshot::collectedAt).filter(java.util.Objects::nonNull)
-                    .map(at -> at.atZone(Kst.ZONE).toLocalDate()).orElse(null);
+            // 시장은 그 시장을 받은 날로 확정을 봅니다 — 한 시장만 실패해 이어받은 시장에 저장본 수집 시각(방금 받은 다른
+            // 시장의 시각)을 쓰면 장중 기록이 다음 날 확정으로 세졌습니다(QA-076). 예전 저장본은 저장본 수집 시각.
+            LocalDate collectedOn = stock ? null : market.filter(s -> s.payload() != null)
+                    .map(s -> FlowJson.marketFetchedOn(s.payload().path("markets").path(target), s.collectedAt()))
+                    .orElse(null);
             List<AlertRules.DayNet> finalized = finalizedForeignNet(records, today, stock, collectedOn);
             for (AlertRules.StreakHit hit : AlertRules.streakReached(finalized, n)) {
                 Long sum = sumNet(finalized, hit);
@@ -212,7 +214,8 @@ public class AlertEvaluator {
      * <p>종목의 지난 기록도 확정 칸이 비었으면 장중 잠정치입니다 — 장중에 레이더 대상이었다가 빠져 다시 받지 않은 종목.
      * 그날은 빼지 않고 '모름'(null)으로 둬 연속을 끊습니다. 빼면 앞뒤 날이 이어져 연속이 하루 길게 잡힙니다(QA-064).
      *
-     * @param marketCollectedOn 시장 저장본을 받은 날(KST). 모르면 null(시장 기록은 확정으로 보지 않음)
+     * @param marketCollectedOn 그 시장 기록을 받은 날(KST, {@link FlowJson#marketFetchedOn}). 모르면 null(시장 기록은
+     *                          확정으로 보지 않음)
      */
     static List<AlertRules.DayNet> finalizedForeignNet(List<FlowRecord> records, LocalDate today, boolean stock,
                                                        LocalDate marketCollectedOn) {

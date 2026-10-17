@@ -258,7 +258,9 @@ def test_market_flows_keeps_previous_market_on_partial_failure(store, monkeypatc
 
     assert detail.startswith("1/2 시장")
     payload = store.read_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS).payload
-    assert payload["markets"]["KOSDAQ"] == {"records": [{"date": "old"}]}
+    # 값은 그대로 잇되, 이어받았다는 표시가 붙습니다(QA-076 — 예전엔 표시 없이 같은 사전을 그대로 이어 썼음).
+    assert payload["markets"]["KOSDAQ"]["records"] == [{"date": "old"}]
+    assert payload["markets"]["KOSDAQ"]["isStale"] is True
     assert payload["markets"]["KOSPI"]["records"][0]["date"] == "2026-09-25"
 
 
@@ -273,7 +275,6 @@ def _kospi_only(fixture, kosdaq):
     return fetch
 
 
-@pytest.mark.xfail(strict=True, reason="QA-076: 수정 전 재현 — fix 커밋에서 켬")
 def test_QA076_한_시장이_실패하면_이어받은_시장에_이전_값_표시와_그_시장을_받은_시각을_남긴다(store, monkeypatch):
     """
     한 시장만 실패하면 직전 저장본의 그 시장을 표시 없이 이어 써, 저장본 수집 시각(방금 받은 다른 시장의 시각)이
@@ -299,7 +300,6 @@ def test_QA076_한_시장이_실패하면_이어받은_시장에_이전_값_표�
     assert "이전 값" in detail and "KOSDAQ" in detail
 
 
-@pytest.mark.xfail(strict=True, reason="QA-076: 수정 전 재현 — fix 커밋에서 켬")
 def test_QA076_빈_응답인_시장도_사유를_남기고_이어받는다(store, monkeypatch):
     store.put_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS, {"markets": {"KOSDAQ": {"records": [{"date": "2026-09-24"}]}}})
     fixture = _fixture("market_investor_trading_kospi.json")["result"]["records"]
@@ -314,7 +314,6 @@ def test_QA076_빈_응답인_시장도_사유를_남기고_이어받는다(store
     assert kosdaq["fetchedAt"], "받은 시각이 없던 예전 저장본은 그 저장본의 수집 시각으로 채웁니다"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-076: 수정 전 재현 — fix 커밋에서 켬")
 def test_QA076_오래_이어받은_시장은_더_잇지_않는다(store, monkeypatch):
     """실패가 몇 주 이어져도 멈춘 시장 값이 기한 없이 남았습니다(QA-056의 이어받기 기한과 같은 규칙)."""
     from datetime import datetime, timedelta, timezone

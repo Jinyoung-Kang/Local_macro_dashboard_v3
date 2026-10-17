@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .. import catalog, http, store
 from ..services import (
@@ -38,10 +38,14 @@ def task_toss_market_flows() -> str:
     🏦 코스피·코스닥 전체의 투자자별 매매대금 (원, 일별 최근 30거래일).
 
     레이더(시장 전체 수급)와 국내 파생(현물·선물 수급 동조)이 함께 씁니다.
-    한 시장이 실패하면 그 시장만 이전 저장본을 유지합니다.
+    시장마다 받은 시각(``fetchedAt``)을 남깁니다. 한 시장이 실패하거나 빈 응답이면 그 시장만 직전 저장본으로
+    잇고 ``isStale``·``staleSince``를 붙입니다(3일 지나면 뺌 — 다른 태스크와 같은 규칙, QA-032·QA-056).
+    예전에는 표시 없이 이어 써서, 저장본 수집 시각(방금 받은 다른 시장의 시각)이 멈춘 시장에도 붙었고, 알림이
+    장중에 마지막으로 받은 기록을 다음 날 확정치로 셌습니다(QA-076). 백엔드는 시장별 ``fetchedAt``으로 확정을 봅니다.
     """
     fetched: dict[str, dict] = {}
     reasons: list[str] = []
+    fetched_at = datetime.now(timezone.utc).isoformat()
     for symbol in toss_service.MARKET_SYMBOLS:
         try:
             records = toss_service.fetch_market_investor_trading(symbol, TOSS_MARKET_DAYS)
@@ -51,20 +55,42 @@ def task_toss_market_flows() -> str:
             reasons.append(f"{symbol}: {exc}")
             continue
         if records:
-            fetched[symbol] = {"records": records}
+            fetched[symbol] = {"records": records, "fetchedAt": fetched_at}
+        else:
+            reasons.append(f"{symbol}: 빈 응답(기록 0건)")
 
     if not fetched:
         raise EmptyResult(f"0/{len(toss_service.MARKET_SYMBOLS)} 시장 — 기존 저장본 유지" + _reason_suffix(reasons))
 
-    previous = store.read_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS)
-    markets = dict(((previous.payload or {}).get("markets") or {}) if previous else {})
-    markets.update(fetched)
+    fresh_count = len(fetched)
+    carried = carry_over_missing(
+        fetched, _previous_markets(), toss_service.MARKET_SYMBOLS, reasons[0] if reasons else None,
+        lambda market: bool(market.get("records")),
+    )
     store.put_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS, {
         "source": "토스증권 Open API — 시장 지표 투자자별 매매대금",
         "unit": "KRW",
-        "markets": markets,
+        "markets": {symbol: fetched[symbol] for symbol in toss_service.MARKET_SYMBOLS if symbol in fetched},
     })
-    return f"{len(fetched)}/{len(toss_service.MARKET_SYMBOLS)} 시장" + _reason_suffix(reasons)
+    return (f"{fresh_count}/{len(toss_service.MARKET_SYMBOLS)} 시장" + carried_suffix(carried)
+            + _reason_suffix(reasons))
+
+
+def _previous_markets() -> dict[str, dict]:
+    """
+    직전 저장본의 시장별 기록. ``fetchedAt``이 없는 예전 저장본은 그 저장본의 수집 시각으로 채웁니다 — 그 시장을
+    그보다 늦게 받았을 수는 없으므로, 이어받은 시장이 이번 수집 시각을 얻어 장중 기록이 확정으로 세지는 일이 없습니다.
+    """
+    previous = store.read_snapshot(catalog.SNAP_TOSS_MARKET_FLOWS)
+    if previous is None or not isinstance(previous.payload, dict):
+        return {}
+    collected_at = previous.collected_at.isoformat() if previous.collected_at else None
+    markets: dict[str, dict] = {}
+    for symbol, market in (previous.payload.get("markets") or {}).items():
+        if isinstance(market, dict):
+            markets[symbol] = market if market.get("fetchedAt") or not collected_at else {
+                **market, "fetchedAt": collected_at}
+    return markets
 
 
 def _toss_universe() -> list[str]:

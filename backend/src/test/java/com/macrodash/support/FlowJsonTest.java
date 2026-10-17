@@ -74,4 +74,21 @@ class FlowJsonTest {
         assertThat(futures.net5d()).isNull();
         assertThat(futures.net20d()).isNull();
     }
+
+    @Test
+    @DisplayName("QA-076 시장을 받은 날 — 시장별 fetchedAt(KST) 우선, 예전 저장본은 저장본 수집 시각, 이어받았는데 시각을 모르면 null")
+    void marketFetchedOnPrefersPerMarketTime() throws Exception {
+        java.time.Instant collected = java.time.Instant.parse("2099-03-11T15:30:00Z");     // 03-12 00:30 KST
+
+        assertThat(FlowJson.marketFetchedOn(MAPPER.readTree("""
+                {"fetchedAt": "2099-03-11T02:00:00.123456+00:00", "isStale": true}
+                """), collected)).as("이어받은 시장은 그 시장을 받은 날").isEqualTo(java.time.LocalDate.of(2099, 3, 11));
+        assertThat(FlowJson.marketFetchedOn(MAPPER.readTree("{\"records\": []}"), collected))
+                .as("fetchedAt이 없는 예전 저장본").isEqualTo(java.time.LocalDate.of(2099, 3, 12));
+        assertThat(FlowJson.marketFetchedOn(MAPPER.readTree("{\"isStale\": true}"), collected))
+                .as("이어받았는데 받은 시각을 모름 — 확정으로 보지 않음").isNull();
+        assertThat(FlowJson.marketFetchedOn(MAPPER.readTree("{\"fetchedAt\": \"어제\"}"), collected))
+                .as("읽을 수 없는 시각은 없는 것과 같음").isEqualTo(java.time.LocalDate.of(2099, 3, 12));
+        assertThat(FlowJson.marketFetchedOn(null, null)).isNull();
+    }
 }

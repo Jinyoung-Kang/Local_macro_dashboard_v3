@@ -9,7 +9,6 @@ import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -170,7 +169,6 @@ class AlertEvaluatorDbTest {
     }
 
     @Test
-    @Disabled("QA-076: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-076 한 시장만 실패해 이어받은 시장은 그 시장을 받은 시각으로 확정 — 다른 시장을 새로 받아도 장중 값을 확정으로 세지 않는다")
     @SuppressWarnings("unchecked")
     void carriedOverMarketIsFinalizedByItsOwnFetchTime() throws Exception {
