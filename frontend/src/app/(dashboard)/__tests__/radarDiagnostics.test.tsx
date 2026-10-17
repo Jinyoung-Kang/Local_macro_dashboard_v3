@@ -36,7 +36,7 @@ afterEach(() => cleanup());
 
 describe("QA-098 레이더 데이터 소스 연결 테스트는 운영자에게만", () => {
   // 수정 전에는 역할을 보지 않고 버튼을 그려, 회원·데모 방문자가 누르면 403을 받고 빈 카드만 보였다.
-  it.fails.each([
+  it.each([
     ["일반 회원", MEMBER],
     ["데모 방문자", DEMO],
     ["사용자를 아직 모름", undefined],
@@ -47,7 +47,7 @@ describe("QA-098 레이더 데이터 소스 연결 테스트는 운영자에게�
   });
 
   // 수정 전에는 진단 패널이 오류를 받지 않아 제목과 '다시 검사' 버튼만 남은 빈 카드였다.
-  it.fails("운영자가 연 진단이 실패하면 오류 문구와 다시 시도를 보인다", async () => {
+  it("운영자가 연 진단이 실패하면 오류 문구와 다시 시도를 보인다", async () => {
     render(<SessionUserProvider user={OWNER}><RadarPage /></SessionUserProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: TOGGLE }));

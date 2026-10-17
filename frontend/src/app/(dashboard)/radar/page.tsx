@@ -18,6 +18,8 @@ import {
   Table,
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
+import { useSessionUser } from "@/hooks/useSessionUser";
+import { isOwner } from "@/lib/access";
 import { MarketFlowsPanel, StockFlowsPanel } from "./FlowPanels";
 import { deltaColor, EMPTY, formatKrw, formatNumber, formatPercent, formatWithUnit } from "@/lib/format";
 import type {
@@ -55,6 +57,9 @@ export default function RadarPage() {
   const [interval, setInterval] = useState("TODAY");
   const [topN, setTopN] = useState("30");
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  // 연결 진단은 운영자 전용 경로입니다(백엔드 403). 회원·데모 방문자가 눌러 봐야 빈 카드만 남았으므로(QA-098)
+  // 사이드바의 수동 새로고침처럼 운영자에게만 버튼을 보입니다. 사용자를 아직 모르면(세션 응답 전) 숨깁니다.
+  const owner = isOwner(useSessionUser());
 
   const query = endpoints.positioning.radarRanking({ market, investor, tradeType, intervalType: interval, topN });
 
@@ -90,13 +95,15 @@ export default function RadarPage() {
             refreshError={refreshError}
           />
           <Button onClick={reload}>새로고침</Button>
-          <Button onClick={() => setShowDiagnostics((value) => !value)}>
-            {showDiagnostics ? "진단 닫기" : "데이터 소스 연결 테스트"}
-          </Button>
+          {owner && (
+            <Button onClick={() => setShowDiagnostics((value) => !value)}>
+              {showDiagnostics ? "진단 닫기" : "데이터 소스 연결 테스트"}
+            </Button>
+          )}
         </div>
       </header>
 
-      {showDiagnostics && <DiagnosticsPanel />}
+      {owner && showDiagnostics && <DiagnosticsPanel />}
 
       <Card>
         <div className="flex flex-wrap items-end gap-3">
@@ -293,7 +300,7 @@ function OmittedNote({ count }: { count: number }) {
 }
 
 function DiagnosticsPanel() {
-  const { data, loading, reload } = useApi<DiagnosticsResponse>(endpoints.positioning.radarDiagnostics);
+  const { data, loading, error, reload } = useApi<DiagnosticsResponse>(endpoints.positioning.radarDiagnostics);
 
   return (
     <Card
@@ -302,6 +309,8 @@ function DiagnosticsPanel() {
       actions={<Button onClick={reload}>다시 검사</Button>}
     >
       {loading && !data && <Loading />}
+      {/* 진단 자체가 실패하면(백엔드 5xx·연결 끊김) 빈 카드가 아니라 이유와 다시 시도를 보입니다(QA-098). */}
+      {error && !data && <ErrorState message={error} onRetry={reload} />}
       {data && !data.available && <Banner tone="warn">{data.message}</Banner>}
       {data?.sources && (
         <Table
