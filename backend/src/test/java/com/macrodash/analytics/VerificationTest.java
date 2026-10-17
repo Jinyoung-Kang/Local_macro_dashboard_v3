@@ -120,6 +120,21 @@ class VerificationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("QA-111: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-111: KRX 연말 휴장일(평일인 12-31)은 장중이 아니다 — 확정 대조는 되고 장중 가집계 대조는 안 된다")
+    void yearEndClosureIsNotASession() {
+        ZonedDateTime yearEnd = ZonedDateTime.of(LocalDateTime.of(2026, 12, 31, 11, 0), KST);   // 목요일
+
+        Verification.Gate settled = Verification.settledGate(yearEnd);
+        assertThat(settled.allowed()).isTrue();
+        assertThat(settled.reason()).contains("휴장");
+        assertThat(Verification.intradayGate(yearEnd).allowed()).isFalse();
+        // 주말인 12-31은 그냥 주말입니다.
+        assertThat(Verification.settledGate(ZonedDateTime.of(LocalDateTime.of(2028, 12, 31, 11, 0), KST)).reason())
+                .contains("주말");
+    }
+
+    @Test
     @DisplayName("수급 대조는 시간 조건이 정반대 — 정규장에만 가능")
     void rankingComparisonRequiresRegularSession() {
         ZonedDateTime duringSession = ZonedDateTime.of(
