@@ -140,7 +140,7 @@ export default function ConsensusPage() {
           <Card title="교집합 상세" source={SOURCES.sec13f} subtitle={usdKrw.note}>
             <Table
               rows={data.rows}
-              rowKey={(row) => row.name}
+              rowKey={(row) => row.key}
               columns={[
                 { key: "name", header: "종목", render: (row) => row.name },
                 {
@@ -266,7 +266,7 @@ function NewBuysCard({ reportDate }: { reportDate: string }) {
         <>
           <Table
             rows={data.rows}
-            rowKey={(row) => row.name}
+            rowKey={(row) => row.key}
             columns={[
               { key: "name", header: "종목", render: (row) => row.name },
               {

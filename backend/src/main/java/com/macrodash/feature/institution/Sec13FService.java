@@ -11,13 +11,16 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 📑 기관 13F 포트폴리오 · 🎯 13F Money 교집합.
@@ -269,20 +272,20 @@ public class Sec13FService {
             participants.add(institution);
 
             for (Map<String, Object> holding : consensusRows(current, previous, 100)) {
-                String name = String.valueOf(holding.get("name"));
-                aggregate.computeIfAbsent(name, key -> new Tally(key, holding.get("cusip"), null))
+                aggregate.computeIfAbsent(securityKey(holding), key -> new Tally(key, holding.get("cusip"), null))
                         .add(institution, holding);
             }
         }
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Tally tally : aggregate.values()) {
+        for (Tally tally : mergeShareClasses(aggregate.values())) {
             // 전량 매도만 모인 집계는 보유 기관이 0곳입니다. minHolders가 0 이하로 와도 '보유'로 올리지 않습니다.
             if (tally.holders.size() < Math.max(1, minHolders)) {
                 continue;
             }
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", tally.name);
+            row.put("key", tally.key);
+            row.put("name", tally.displayName());
             row.put("cusip", tally.cusip);
             row.put("holders", new ArrayList<>(tally.holders));
             row.put("actions", tally.actions);
@@ -367,20 +370,20 @@ public class Sec13FService {
                 if (!action.contains("신규 매수")) {
                     continue;
                 }
-                String name = String.valueOf(holding.get("name"));
-                aggregate.computeIfAbsent(name,
+                aggregate.computeIfAbsent(securityKey(holding),
                                 key -> new Tally(key, holding.get("cusip"), Json.asText(current, "reportDate")))
                         .add(institution, holding);
             }
         }
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Tally tally : aggregate.values()) {
+        for (Tally tally : mergeShareClasses(aggregate.values())) {
             if (tally.holders.size() < Math.max(1, minHolders)) {
                 continue;
             }
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", tally.name);
+            row.put("key", tally.key);
+            row.put("name", tally.displayName());
             row.put("cusip", tally.cusip);
             row.put("buyers", new ArrayList<>(tally.holders));
             row.put("totalValue", tally.totalValue);
@@ -424,9 +427,68 @@ public class Sec13FService {
     }
 
     /**
-     * 회사(이름) 하나의 집계. <b>기관 단위</b>로 셉니다 — 한 기관이 같은 회사를 두 클래스(ALPHABET A·C주,
-     * BERKSHIRE A·B주)로 들어도 보유 기관 1곳이고, 그 기관의 비중은 두 항목의 합입니다. 항목 단위로
-     * 세면 그 기관이 두 번 들어가 holderCount·minHolders·정렬이 틀어졌습니다.
+     * 교집합·공통 신규 매수의 집계 단위 — 공시 이름이 아니라 <b>증권(CUSIP)</b>입니다(QA-083).
+     *
+     * <p>13F의 종목 이름(nameOfIssuer)은 제출 기관이 자유롭게 적습니다. 같은 NVIDIA를 한 곳은 'NVIDIA CORPORATION',
+     * 다른 곳은 'NVIDIA CORP COM'으로 적어, 이름으로 묶으면 보유 기관 수가 갈라졌습니다. 반대로 'ISHARES TR' 한 이름
+     * 아래 서로 다른 ETF가 한 행으로 합쳐지기도 했습니다. CUSIP이 없으면 이름+종류입니다(분기 대비 키와 같은 규칙).
+     */
+    static String securityKey(Map<String, Object> holding) {
+        Object cusip = holding.get("cusip");
+        String text = cusip == null ? "" : String.valueOf(cusip).trim();
+        if (!text.isEmpty()) {
+            return "cusip:" + text;
+        }
+        Object cls = holding.get("class");
+        return "name:" + holding.get("name") + "|" + (cls == null ? "" : String.valueOf(cls).trim());
+    }
+
+    /** 보통주 계열 클래스 표기(COM, CL A, CAP STK CL C, ORD SHS …). */
+    private static final Pattern COMMON_CLASS =
+            Pattern.compile("\\b(COM|COMMON|CL|CLASS|ORD|ORDINARY|SHS|SHARES|STK|STOCK)\\b");
+
+    /** 보통주가 아닌 표기 — 우선주·예탁증서·채권·워런트·유닛·펀드 등. 하나라도 있으면 합치지 않습니다. */
+    private static final Pattern NOT_COMMON_CLASS = Pattern.compile("(^|\\s)\\*?W\\b|\\b(PFD|PREF|PREFERRED|PRF|PERP"
+            + "|DEP|DEPOSITARY|NOTE|NOTES|DEB|DEBT|BOND|BD|BDS|CONV|CV|UNIT|UNITS|WT|WTS|WARRANT|WARRANTS|RIGHT|RIGHTS|RT"
+            + "|ETF|ETN|FUND|FD|FDS|TR|TRUST|INDEX|IDX|BEN|ADR|ADS|SPDR|ISHARES|PORTFOLIO|PORTFOLIOS|SERIES|TRADED)\\b");
+
+    /** 펀드·ETF 발행사 이름(ISHARES TR, VANGUARD INDEX FDS, SPDR SERIES TRUST …). */
+    private static final Pattern FUND_NAME = Pattern.compile(
+            "\\b(ETF|ETN|FUND|FD|FDS|TR|TRUST|INDEX|IDX|ISHARES|SPDR|PORTFOLIO|PORTFOLIOS|SERIES|TRADED)\\b");
+
+    /**
+     * 한 회사의 여러 보통주 클래스(ALPHABET A·C주, BERKSHIRE A·B주)를 한 행으로 합칩니다 — 리뷰 B-2의 결정을
+     * 증권 키 위에서 지킵니다. 한 기관이 두 클래스를 들어도 보유 기관 1곳이고, 그 기관의 비중은 두 항목의 합입니다.
+     *
+     * <p>합치는 조건은 둘 다입니다. ① CUSIP 앞 6자리(발행사)가 같고 ② 그 증권에 붙은 클래스 표기가 모두 보통주 계열이며
+     * 펀드·ETF 이름이 아닐 것. 앞 6자리만 보면 iShares Trust(464287)처럼 한 발행사 아래 서로 다른 ETF 수백 개가 한 행이
+     * 되고, 같은 회사의 보통주와 우선주·전환사채도 합쳐집니다. 조건을 못 맞추면 합치지 않습니다 — 한 회사가 두 행으로
+     * 보이는 쪽이 다른 증권을 섞는 쪽보다 덜 틀립니다.
+     */
+    private static List<Tally> mergeShareClasses(Collection<Tally> tallies) {
+        Map<String, Tally> byKey = new LinkedHashMap<>();
+        for (Tally tally : tallies) {
+            String issuer = tally.commonStockIssuer();
+            if (issuer == null) {
+                byKey.put(tally.key, tally);
+                continue;
+            }
+            String key = "issuer:" + issuer;
+            Tally first = byKey.get(key);
+            if (first == null) {
+                tally.key = key;
+                byKey.put(key, tally);
+            } else {
+                first.absorb(tally);
+            }
+        }
+        return new ArrayList<>(byKey.values());
+    }
+
+    /**
+     * 증권 하나(또는 한 회사의 보통주 클래스들)의 집계. <b>기관 단위</b>로 셉니다 — 한 기관이 같은 회사를 두 클래스로
+     * 들어도 보유 기관 1곳이고, 그 기관의 비중은 두 항목의 합입니다. 항목 단위로 세면 그 기관이 두 번 들어가
+     * holderCount·minHolders·정렬이 틀어졌습니다.
      *
      * <p>모르는 평가액·비중은 더하지 않고 평균의 분모에도 넣지 않습니다. 0으로 더하면 합계와
      * 평균이 실제보다 작아지고 정렬 순서까지 바뀝니다.
@@ -437,9 +499,18 @@ public class Sec13FService {
      * 매도했다면 A주 행으로 보유 기관에 남습니다 — 보유 기관은 '전량 매도가 아닌 행이 하나라도 있는 기관'입니다.
      */
     private static final class Tally {
-        final String name;
+        /**
+         * 행의 고유 키 — {@code cusip:…}, 보통주 클래스를 합친 행은 {@code issuer:…}(CUSIP 앞 6자리), CUSIP이 없으면
+         * {@code name:…}. 표시 이름은 겹칠 수 있어(서로 다른 ETF의 'ISHARES TR') 화면은 이 키로 행을 구분합니다.
+         */
+        String key;
+        /** 대표 CUSIP(처음 들어온 증권의 것). 모르면 null. */
         final Object cusip;
         final String reportDate;
+        /** 공시 이름 → 그 이름을 쓴 기관. 표시 이름은 가장 많은 기관이 쓴 이름입니다. */
+        final Map<String, Set<String>> nameUsers = new LinkedHashMap<>();
+        /** 기관들이 이 증권에 붙인 클래스 표기(대문자, 공백 정리). 합칠지 판단할 때만 씁니다. */
+        final Set<String> classes = new LinkedHashSet<>();
         final Set<String> holders = new LinkedHashSet<>();
         final List<String> actions = new ArrayList<>();
         final Set<String> buyers = new LinkedHashSet<>();
@@ -448,13 +519,21 @@ public class Sec13FService {
         final Map<String, Double> weightByHolder = new LinkedHashMap<>();
         Double totalValue;
 
-        Tally(String name, Object cusip, String reportDate) {
-            this.name = name;
+        Tally(String key, Object cusip, String reportDate) {
+            this.key = key;
             this.cusip = cusip;
             this.reportDate = reportDate;
         }
 
         void add(String institution, Map<String, Object> holding) {
+            if (holding.get("name") != null) {
+                nameUsers.computeIfAbsent(String.valueOf(holding.get("name")), name -> new LinkedHashSet<>())
+                        .add(institution);
+            }
+            Object cls = holding.get("class");
+            classes.add(cls == null ? "" : String.join(" ",
+                    String.valueOf(cls).toUpperCase(Locale.ROOT).trim().split("\\s+")));
+
             String action = String.valueOf(holding.get("action"));
             actions.add(action);
             if (action.contains("신규 매수") || action.contains("비중 확대")) {
@@ -473,6 +552,53 @@ public class Sec13FService {
             if (holding.get("weight") instanceof Double weight) {
                 weightByHolder.merge(institution, weight, Double::sum);
             }
+        }
+
+        /** 같은 회사의 다른 보통주 클래스를 이 행에 더합니다. 기관이 겹치면 그 기관의 비중은 합입니다. */
+        void absorb(Tally other) {
+            other.nameUsers.forEach((name, users) ->
+                    nameUsers.computeIfAbsent(name, key -> new LinkedHashSet<>()).addAll(users));
+            classes.addAll(other.classes);
+            holders.addAll(other.holders);
+            actions.addAll(other.actions);
+            buyers.addAll(other.buyers);
+            sellers.addAll(other.sellers);
+            other.weightByHolder.forEach((institution, weight) -> weightByHolder.merge(institution, weight, Double::sum));
+            if (other.totalValue != null) {
+                totalValue = totalValue == null ? other.totalValue : totalValue + other.totalValue;
+            }
+        }
+
+        /**
+         * 보통주 계열이고 펀드가 아니면 발행사(CUSIP 앞 6자리), 아니면 null(합치지 않음).
+         * 기관마다 표기가 달라도 <b>모든</b> 표기가 조건을 맞춰야 합니다.
+         */
+        String commonStockIssuer() {
+            String text = cusip == null ? "" : String.valueOf(cusip).trim();
+            if (!key.startsWith("cusip:") || text.length() < 6 || classes.isEmpty()) {
+                return null;
+            }
+            for (String cls : classes) {
+                if (!COMMON_CLASS.matcher(cls).find() || NOT_COMMON_CLASS.matcher(cls).find()) {
+                    return null;
+                }
+            }
+            for (String name : nameUsers.keySet()) {
+                if (FUND_NAME.matcher(name.toUpperCase(Locale.ROOT)).find()) {
+                    return null;
+                }
+            }
+            return text.substring(0, 6).toUpperCase(Locale.ROOT);
+        }
+
+        /** 가장 많은 기관이 쓴 이름. 같으면 짧은 이름, 그래도 같으면 사전순 — 같은 데이터에서 늘 같은 이름이 나옵니다. */
+        String displayName() {
+            return nameUsers.entrySet().stream()
+                    .min(Comparator.<Map.Entry<String, Set<String>>>comparingInt(entry -> -entry.getValue().size())
+                            .thenComparingInt(entry -> entry.getKey().length())
+                            .thenComparing(Map.Entry::getKey))
+                    .map(Map.Entry::getKey)
+                    .orElseGet(() -> cusip == null ? "(이름 없음)" : String.valueOf(cusip));
         }
 
         /** 비중을 아는 기관들의 평균. 하나도 모르면 null. */

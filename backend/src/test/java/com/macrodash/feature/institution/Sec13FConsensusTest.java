@@ -3,7 +3,6 @@ package com.macrodash.feature.institution;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -227,7 +226,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-083 같은 CUSIP을 기관마다 다른 이름으로 공시해도 한 종목이다 — 표시 이름은 가장 많이 쓰인 이름")
     void sameCusipUnderDifferentNamesIsOneRow() {
         Sec13FService service = service(Map.of(
@@ -249,7 +247,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-083 한 회사의 A·C주는 기관마다 클래스 표기가 달라도 한 행이다(B-2 유지)")
     void shareClassesOfOneIssuerStayOneRowAcrossLabels() {
         Sec13FService service = service(Map.of(
@@ -271,7 +268,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-083 이름이 같아도 다른 증권(서로 다른 ETF, 보통주와 우선주)은 한 행으로 합치지 않는다 — 행마다 고유 key")
     void differentSecuritiesUnderOneNameStaySeparate() {
         // iShares Trust 아래 서로 다른 ETF 둘(발행사 6자리 464287은 같음)과, 웰스파고 보통주·우선주.
@@ -296,7 +292,6 @@ class Sec13FConsensusTest {
     }
 
     @Test
-    @Disabled("QA-083: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-083 공통 신규 매수도 증권으로 센다 — 같은 CUSIP을 다른 이름으로 새로 담은 두 기관은 2곳")
     void newBuysCountSameCusipUnderDifferentNames() {
         Sec13FService service = service(Map.of(

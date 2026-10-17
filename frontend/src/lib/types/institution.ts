@@ -31,7 +31,11 @@ export interface PortfolioResponse {
 }
 
 export interface ConsensusRow {
+  /** 행의 고유 키(증권 또는 한 회사의 보통주 클래스들). 표시 이름은 겹칠 수 있어 화면은 이것으로 행을 구분합니다. */
+  key: string;
+  /** 가장 많은 기관이 쓴 공시 이름 */
   name: string;
+  /** 대표 CUSIP */
   cusip: string;
   holders: string[];
   actions: string[];
@@ -169,6 +173,8 @@ export interface NewBuysResponse {
   minHolders: number;
   note?: string;
   rows: {
+    /** 행의 고유 키 — 교집합과 같은 규칙 */
+    key: string;
     name: string;
     cusip?: string;
     buyers: string[];
