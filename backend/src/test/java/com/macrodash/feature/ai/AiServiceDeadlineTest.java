@@ -1,6 +1,5 @@
 package com.macrodash.feature.ai;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -62,7 +61,6 @@ class AiServiceDeadlineTest {
     }
 
     @Test
-    @Disabled("QA-094: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-094: 직접 고른 엔진(AWS)의 번역은 남은 시간만 받는다 — 110초 중 40초를 썼으면 70초")
     void directTranslationGetsOnlyTheRemainingTime() {
         TimedService ai = new TimedService(110, 60, 180, "anthropic_haiku", 40_000);
@@ -74,7 +72,6 @@ class AiServiceDeadlineTest {
     }
 
     @Test
-    @Disabled("QA-094: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-094: 남은 시간이 15초보다 적으면 번역을 건너뛰고 원문과 이유를 준다 — 앞단 120초보다 먼저 끝나게")
     void directTranslationIsSkippedWhenTimeIsUp() {
         TimedService ai = new TimedService(110, 60, 180, "anthropic_haiku", 100_000);
@@ -88,7 +85,6 @@ class AiServiceDeadlineTest {
     }
 
     @Test
-    @Disabled("QA-094: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-094: 자동 탐색도 예산이 15초 미만으로 남으면 번역하지 않는다 — '전체 N초' 약속을 넘기지 않게")
     void failoverTranslationDoesNotOverrunTheBudget() {
         // 허용 목록 없음 + Claude 키만 → 자동 탐색이 켜지고 첫 엔진(Haiku)이 답합니다. 예산 60초 중 50초를 씀.

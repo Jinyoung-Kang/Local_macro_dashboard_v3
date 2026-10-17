@@ -87,7 +87,8 @@ dashboard:
     cloudflare-account-id: ${CLOUDFLARE_ACCOUNT_ID:}
     cloudflare-api-token: ${CLOUDFLARE_API_TOKEN:}
     # 추론형 모델(gpt-oss, DeepSeek-R1 등)은 응답까지 몇 분이 걸릴 수 있습니다.
-    # 아래 한도는 "엔진을 직접 고른 경우"에 적용됩니다.
+    # 아래 한도는 "엔진을 직접 고른 경우" 생성 전체(번역 포함)에 적용됩니다 — 응답이 한국어가 아니면 번역은 남은 시간만
+    # 받고, 15초 미만으로 남았으면 원문을 그대로 보여 줍니다(QA-094).
     timeout-seconds: ${AI_TIMEOUT_SECONDS:240}
     # '⚡ 자동 탐색'은 되는 엔진을 빨리 찾는 것이 목적이라 한도가 따로입니다.
     #   auto-attempt-seconds  엔진 하나를 기다리는 한도 (넘으면 다음 엔진)

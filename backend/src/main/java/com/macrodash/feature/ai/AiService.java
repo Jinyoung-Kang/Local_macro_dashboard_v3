@@ -174,7 +174,7 @@ public class AiService {
     static final long ANTHROPIC_MAX_TOKENS = 16_000L;
 
     /**
-     * 남은 예산이 이보다 적으면 다음 엔진을 부르지 않습니다(초).
+     * 남은 예산이 이보다 적으면 다음 엔진을 부르지 않습니다(초). 번역도 같습니다 — 원문을 그대로 보여 줍니다(QA-094).
      *
      * <p>5초를 남겨 두고 호출해 봐야 타임아웃만 한 번 더 겪습니다.
      */
@@ -219,7 +219,7 @@ public class AiService {
     private String cloudflareToken;
 
     /**
-     * 응답 대기 한도(초).
+     * 응답 대기 한도(초). 엔진을 직접 고른 경우 <b>번역까지 포함한</b> 생성 전체의 한도입니다(QA-094).
      *
      * <p>추론형 모델(gpt-oss, DeepSeek-R1 등)은 생성 전에 긴 추론 단계를 거쳐
      * 몇 분이 걸릴 수 있습니다. 실제로 150초에서 이렇게 끊겼습니다.
@@ -474,10 +474,14 @@ public class AiService {
         if (auto) {
             return withFailover(prompt, systemPrompt);
         }
-        // 사용자가 엔진을 직접 골랐다면 그 엔진을 끝까지 기다립니다.
+        // 사용자가 엔진을 직접 골랐다면 그 엔진을 한도 끝까지 기다립니다.
         // 추론형 모델이 느린 것은 선택의 결과이지 고장이 아닙니다.
+        // 한도는 번역까지 포함한 전체입니다 — 번역에는 남은 시간만 줍니다(QA-094). 예전에는 번역이 한도를 처음부터
+        // 다시 받아, 앞단(CloudFront 120초)보다 먼저 포기하려고 고른 AWS의 110초가 최악 220초가 됐습니다.
+        long deadline = clockMillis.getAsLong() + timeoutSeconds * 1000L;
         Map<String, Object> result = call(engine, prompt, systemPrompt, timeoutSeconds);
-        return translateIfNeeded(result, engine.provider(), timeoutSeconds);
+        return translateIfNeeded(result, engine.provider(), deadline, timeoutSeconds,
+                "대기 한도 %d초".formatted(timeoutSeconds));
     }
 
     private Engine findEngine(String engineId) {
@@ -527,9 +531,8 @@ public class AiService {
 
             if (Boolean.TRUE.equals(result.get("status"))) {
                 result.put("failoverPath", attempts);
-                int left = (int) ((deadline - clockMillis.getAsLong()) / 1000);
-                return translateIfNeeded(result, engine.provider(),
-                        Math.min(autoAttemptSeconds, Math.max(MIN_ATTEMPT_SECONDS, left)));
+                return translateIfNeeded(result, engine.provider(), deadline, autoAttemptSeconds,
+                        "자동 탐색 예산 %d초".formatted(autoBudgetSeconds));
             }
         }
 
@@ -549,11 +552,16 @@ public class AiService {
      * 기다리면 "전체 N초"라는 약속이 의미를 잃습니다.
      */
     int attemptBudget(long deadlineMs, long nowMs) {
+        return attemptBudget(deadlineMs, nowMs, autoAttemptSeconds);
+    }
+
+    /** {@link #attemptBudget(long, long)}와 같은 규칙, 시도 하나의 한도만 따로 — 직접 경로의 번역은 전체 한도까지 받습니다. */
+    private static int attemptBudget(long deadlineMs, long nowMs, int capSeconds) {
         int remaining = (int) ((deadlineMs - nowMs) / 1000);
         if (remaining < MIN_ATTEMPT_SECONDS) {
             return -1;
         }
-        return Math.min(autoAttemptSeconds, remaining);
+        return Math.min(capSeconds, remaining);
     }
 
     private static long millisOf(Map<String, Object> result) {
@@ -908,11 +916,16 @@ public class AiService {
     /**
      * 응답이 한국어가 아니면 제공자별 번역기로 한 번 더 호출합니다.
      *
-     * <p>번역도 한 번의 AI 호출이라 그만큼 더 기다립니다. 자동 탐색에서는 남은
-     * 예산만큼만 걸어, 번역 때문에 전체 대기가 두 배가 되지 않게 합니다.
+     * <p>번역도 한 번의 AI 호출이지만 <b>호출한 쪽의 마감</b> 안에서만 합니다(QA-094). 남은 시간만 주고(시도 한도
+     * {@code capSeconds} 이하), {@value #MIN_ATTEMPT_SECONDS}초보다 적게 남았으면 번역하지 않고 원문과 그 이유를
+     * 돌려줍니다. 예전에는 직접 고른 엔진의 번역이 한도를 처음부터 다시 받아 전체 대기가 두 배까지 됐고, 자동 탐색도
+     * 최소 15초를 줘 예산을 넘겼습니다 — 화면의 "최대 N초"·"전체 N초" 약속과 AWS 앞단 한도가 깨졌습니다.
+     *
+     * @param deadlineMs 이 생성의 마감 시각({@link #clockMillis} 기준)
+     * @param limitLabel 건너뛸 때 이유에 적을 한도 이름(예: "대기 한도 110초")
      */
     private Map<String, Object> translateIfNeeded(Map<String, Object> result, String provider,
-                                                  int attemptSeconds) {
+                                                  long deadlineMs, int capSeconds, String limitLabel) {
         if (!Boolean.TRUE.equals(result.get("status"))) {
             return result;
         }
@@ -931,6 +944,12 @@ public class AiService {
         if (!providerAllowed(translator)) {
             result.put("translationInfo", "자동 번역 건너뜀 — 이 배포에서 쓰지 않는 번역기(%s)입니다. 분석 원문을 그대로 표시합니다."
                     .formatted(translator));
+            return result;
+        }
+        int attemptSeconds = attemptBudget(deadlineMs, clockMillis.getAsLong(), capSeconds);
+        if (attemptSeconds < 0) {
+            result.put("translationInfo", ("자동 번역 건너뜀 — %s 안에 번역할 시간이 남지 않았습니다(%d초 미만). "
+                    + "분석 원문을 그대로 표시합니다.").formatted(limitLabel, MIN_ATTEMPT_SECONDS));
             return result;
         }
 
