@@ -2,6 +2,7 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -209,6 +210,50 @@ class ApiIntegrationTest {
         }
         assertThat(rest.exchange(url("/api/analytics/regime/log"), HttpMethod.HEAD,
                 new HttpEntity<>(null, headers), String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @Disabled("QA-091: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-091 운영자가 유료 → 무료로 내리면 국면 전환 밖의 알림 규칙이 꺼지고(감사 기록에 개수), 회원이 다시 켤 수 없다")
+    void tierDowngradeDisablesPaidAlertRules() {
+        long memberId = users.findByEmail(MEMBER).orElseThrow().id();
+        users.updateRoleAndTier(memberId, "MEMBER", "PRO");
+        jdbc.update("DELETE FROM alert_rules WHERE user_id = ?", memberId);
+        try {
+            for (String[] rule : new String[][]{
+                    {"REGIME_CHANGE", "{}"},
+                    {"FOREIGN_STREAK", "{\"target\":\"KOSPI\",\"n\":5}"},
+                    {"FOREIGN_STREAK", "{\"target\":\"STOCK\",\"code\":\"005930\",\"n\":5}"},
+                    {"INSTITUTION_NEW", "{\"cik\":\"0001067983\"}"}}) {
+                jdbc.update("INSERT INTO alert_rules (user_id, kind, params) VALUES (?, ?, ?::jsonb)",
+                        memberId, rule[0], rule[1]);
+            }
+            HttpHeaders owner = new HttpHeaders();
+            owner.add(HttpHeaders.COOKIE, sessionCookie);
+            owner.setContentType(MediaType.APPLICATION_JSON);
+            assertThat(rest.exchange(url("/api/admin/users/" + memberId), HttpMethod.POST,
+                    new HttpEntity<>(Map.of("role", "MEMBER", "tier", "FREE"), owner), String.class).getStatusCode())
+                    .isEqualTo(HttpStatus.OK);
+
+            // 수집기(관심 종목 범위)와 정기 평가(알림함 배달)는 enabled만 보므로, 끄면 둘 다 따라옵니다.
+            List<Map<String, Object>> rules = jdbc.queryForList(
+                    "SELECT id, kind, enabled FROM alert_rules WHERE user_id = ? ORDER BY id", memberId);
+            assertThat(rules).extracting(row -> row.get("kind") + ":" + row.get("enabled")).containsExactly(
+                    "REGIME_CHANGE:true", "FOREIGN_STREAK:false", "FOREIGN_STREAK:false", "INSTITUTION_NEW:false");
+            assertThat(jdbc.queryForObject("SELECT detail->>'disabledAlertRules' FROM audit_log "
+                    + "WHERE action = 'user.updated' AND detail->>'target' = ? ORDER BY id DESC LIMIT 1",
+                    String.class, String.valueOf(memberId))).as("감사 기록에 끈 규칙 수").isEqualTo("3");
+
+            HttpHeaders member = new HttpHeaders();
+            member.add(HttpHeaders.COOKIE, login(MEMBER, "test-password"));
+            member.setContentType(MediaType.APPLICATION_JSON);
+            assertThat(rest.exchange(url("/api/alerts/rules/" + rules.get(1).get("id")), HttpMethod.POST,
+                    new HttpEntity<>(Map.of("enabled", true), member), String.class).getStatusCode())
+                    .as("무료 등급은 유료 종류 규칙을 다시 켤 수 없음").isEqualTo(HttpStatus.FORBIDDEN);
+        } finally {
+            jdbc.update("DELETE FROM alert_rules WHERE user_id = ?", memberId);
+            users.updateRoleAndTier(memberId, "MEMBER", "FREE");
+        }
     }
 
     @Test

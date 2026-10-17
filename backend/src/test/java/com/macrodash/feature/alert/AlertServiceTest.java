@@ -5,6 +5,7 @@ import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Holding;
 import com.macrodash.store.AlertStore;
 import com.macrodash.support.CurrentUser;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -15,6 +16,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -101,6 +103,32 @@ class AlertServiceTest {
         AlertService service = new AlertService(store, MAPPER);
 
         assertThat(service.setEnabled(PRO, 9, true).status()).isEqualTo(200);
+    }
+
+    @Test
+    @Disabled("QA-091: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-091 무료 등급은 꺼 둔 유료 종류 규칙을 다시 켤 수 없다 — 만들 때와 같은 403(국면 전환은 켜고, 끄기는 언제나)")
+    void freeTierCannotReEnablePaidKinds() {
+        AlertStore store = mock(AlertStore.class);
+        AlertStore.Rule institution = new AlertStore.Rule(9, FREE.id(), "INSTITUTION_NEW",
+                MAPPER.createObjectNode().put("cik", "0001067983"), false, java.time.Instant.now());
+        AlertStore.Rule market = new AlertStore.Rule(10, FREE.id(), "FOREIGN_STREAK",
+                MAPPER.createObjectNode().put("target", "KOSPI").put("n", 5), false, java.time.Instant.now());
+        AlertStore.Rule regime = new AlertStore.Rule(11, FREE.id(), "REGIME_CHANGE",
+                MAPPER.createObjectNode(), false, java.time.Instant.now());
+        when(store.rules(FREE.id())).thenReturn(List.of(institution, market, regime));
+        when(store.setEnabled(anyLong(), anyLong(), anyBoolean())).thenReturn(1);
+        AlertService service = new AlertService(store, MAPPER);
+
+        AlertService.Result reEnabled = service.setEnabled(FREE, 9, true);
+        assertThat(reEnabled.status()).isEqualTo(403);
+        assertThat(reEnabled.message()).contains("무료 등급은 국면 전환 알림만");
+        assertThat(service.setEnabled(FREE, 10, true).status()).isEqualTo(403);
+        verify(store, never()).setEnabled(9, FREE.id(), true);
+        verify(store, never()).setEnabled(10, FREE.id(), true);
+
+        assertThat(service.setEnabled(FREE, 11, true).status()).as("국면 전환은 무료 등급도 켬").isEqualTo(200);
+        assertThat(service.setEnabled(FREE, 9, false).status()).as("끄기는 등급과 무관").isEqualTo(200);
     }
 
     @Test
