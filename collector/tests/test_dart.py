@@ -197,3 +197,78 @@ def test_키가_없으면_EmptyResult(monkeypatch):
     monkeypatch.setattr(tasks.dart_service, "fetch_corp_codes", missing)
     with pytest.raises(tasks.EmptyResult, match="DART_API_KEY"):
         tasks.task_dart_fundamentals()
+
+
+# ---- QA-077: 최신 연도 호출이 일시 실패하면 저장된 최신 연도 재무를 한 해 전 자료로 덮던 문제 ----------------
+def _year_row(stock, year, equity):
+    return {**_row(stock, "CFS", "자본총계", equity), "bsns_year": str(year)}
+
+
+def _two_company_store(stored):
+    from app import catalog
+
+    return _FakeStore(
+        snapshots={
+            catalog.SNAP_DART_CORP_CODES: {"codes": {
+                "005930": {"corpCode": "00126380", "name": "삼성전자"},
+                "000660": {"corpCode": "00164779", "name": "SK하이닉스"},
+            }},
+            catalog.SNAP_DART_FUNDAMENTALS: {"companies": stored},
+        },
+        codes=["005930", "000660"],
+    )
+
+
+@pytest.mark.xfail(strict=True, reason="QA-077: 수정 전 재현 — 실패한 묶음이 전년도 재조회 대상이 됨")
+def test_QA077_최신_연도_묶음_호출이_실패하면_전년도로_다시_받지_않고_저장본을_유지한다(monkeypatch):
+    """
+    '한 해 전으로'는 최신 연도 호출이 **성공했는데** 그 회사 행이 없을 때만입니다. 호출 자체가 실패한 묶음
+    (시간 초과·5xx)까지 전년도로 다시 받으면, 저장된 최신 연도 재무가 한 해 전 자료로 덮여 PER·PBR이 후퇴합니다.
+    """
+    from app import catalog, tasks
+
+    latest = tasks._latest_annual_year(__import__("datetime").datetime.now(tasks.KST).date())
+    fake = _two_company_store({"005930": {"bsnsYear": str(latest), "fsDiv": "CFS",
+                                          "accounts": {"자본총계": {"current": 100.0}}}})
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
+    monkeypatch.setattr(tasks.dart_service, "BATCH", 1)   # 회사마다 한 묶음
+    calls = []
+
+    def fetch(corp_codes, year):
+        calls.append((tuple(corp_codes), year))
+        if corp_codes == ["00126380"] and year == latest:
+            raise publicapi.PublicApiError("HTTP 503 — JSON이 아닌 응답")
+        if corp_codes == ["00126380"]:
+            return [_year_row("005930", year, "90")]
+        return [] if year == latest else [_year_row("000660", year, "5")]   # SK하이닉스는 최신 보고서가 아직 없음
+
+    monkeypatch.setattr(tasks.dart_service, "fetch_accounts", fetch)
+    result = tasks.task_dart_fundamentals()
+
+    companies = fake.snapshots[catalog.SNAP_DART_FUNDAMENTALS]["companies"]
+    assert (("00126380",), latest - 1) not in calls
+    assert companies["005930"]["bsnsYear"] == str(latest)
+    assert companies["005930"]["accounts"]["자본총계"]["current"] == 100.0
+    assert companies["000660"]["bsnsYear"] == str(latest - 1)
+    # 결과 문구는 실제로 받은 연도를 적습니다(전부 최신 연도인 것처럼 적지 않음).
+    assert f"{latest - 1}년" in result
+
+
+@pytest.mark.xfail(strict=True, reason="QA-077: 수정 전 재현 — 저장본보다 이른 연도로 덮음")
+def test_QA077_저장본보다_이른_사업연도로는_덮지_않는다(monkeypatch):
+    """최신 연도 응답에 그 회사 행이 빠진 날(정정·철회 공시 등)에도 저장된 최신 연도 재무를 한 해 전 자료로 바꾸지 않습니다."""
+    from app import catalog, tasks
+
+    latest = tasks._latest_annual_year(__import__("datetime").datetime.now(tasks.KST).date())
+    fake = _two_company_store({"005930": {"bsnsYear": str(latest), "fsDiv": "CFS",
+                                          "accounts": {"자본총계": {"current": 100.0}}}})
+    monkeypatch.setattr(tasks.korea_public, "store", fake)
+    monkeypatch.setattr(tasks.dart_service, "fetch_accounts", lambda codes, year: (
+        [_year_row("000660", year, "7")] if year == latest else [_year_row("005930", year, "90")]))
+
+    tasks.task_dart_fundamentals()
+
+    companies = fake.snapshots[catalog.SNAP_DART_FUNDAMENTALS]["companies"]
+    assert companies["005930"]["bsnsYear"] == str(latest)
+    assert companies["005930"]["accounts"]["자본총계"]["current"] == 100.0
+    assert companies["000660"]["bsnsYear"] == str(latest)
