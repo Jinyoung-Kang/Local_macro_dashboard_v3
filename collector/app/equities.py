@@ -294,15 +294,32 @@ def lookup_holding(holding: dict) -> tuple[str, str] | None:
     13F 보유 한 줄(sec13f 저장 형태) → (티커, 섹터). 모르면 None.
 
     lookup()에 클래스(titleOfClass)를 함께 넘기고, 채권(PRN)·노트·전환사채 행은 처음부터 덮지 않습니다 —
-    채권 원금(PRN, 저장본의 shares가 None)이거나 클래스에 _DEBT_TOKENS가 있는 행은 회사 이름이 같아도 주가와 다른
-    증권입니다. 우선주(의무전환 우선주 '… MAND CONV' 포함)·워런트는 거르지 않아 같은 회사 보통주의 티커에 붙습니다 —
+    채권 원금(PRN, 저장본의 shares가 None)이거나 클래스에 _DEBT_TOKENS가 있거나 CUSIP 발행 번호가 지분 증권이 아닌
+    (_is_equity_cusip) 행은 회사 이름이 같아도 주가와 다른 증권입니다. 마지막 검사는 사채를 클래스 'COM'·주식 수로 공시한
+    행(피셔의 FORD MTR CO 345370CZ1) 때문입니다 — 클래스·PRN만 보면 포드 주가로 계산됐습니다(QA-123).
+    우선주(의무전환 우선주 '… MAND CONV' 포함)·워런트는 거르지 않아 같은 회사 보통주의 티커에 붙습니다 —
     보통주 가격으로 근사한 것입니다(같은 회사의 주식형 증권이라 '엉뚱한 회사의 가격'은 아님).
     """
     if "shares" in holding and holding["shares"] is None:
         return None
     if _tokens(holding.get("class")) & _DEBT_TOKENS:
         return None
+    if not _is_equity_cusip(holding.get("cusip")):
+        return None
     return lookup(holding.get("name") or "", holding.get("class") or "")
+
+
+def _is_equity_cusip(cusip: object) -> bool:
+    """
+    CUSIP 7~8번째 글자(발행 번호)가 숫자면 지분 증권, 영문자가 섞이면 채권 등입니다 — 백엔드 13F 집계(Sec13FService,
+    QA-113)와 같은 규칙입니다. CUSIP을 모르거나 8자보다 짧으면 판단하지 않고 True(예전처럼 이름으로 찾음)입니다.
+    iShares iBonds처럼 발행 번호에 영문자를 쓰는 ETF도 있지만, 펀드라 어차피 운영회사 티커에 붙이지 않습니다.
+    """
+    text = str(cusip or "").strip()
+    if len(text) < 8:
+        return True
+    issue = text[6:8]
+    return issue.isascii() and issue.isdigit()
 
 
 def attach_tickers(quarters: list[dict]) -> int:
