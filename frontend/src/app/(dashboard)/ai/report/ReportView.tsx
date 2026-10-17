@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import {
   type Block,
   numericColumns,
@@ -24,7 +24,9 @@ import {
  * - 표: 앱의 다른 표와 같은 모양, 숫자 열은 오른쪽 정렬
  */
 export function ReportView({ markdown }: { markdown: string }) {
-  const sections = splitSections(parseMarkdown(markdown));
+  // 같은 본문을 렌더마다 다시 해석하지 않습니다 — 생성 중에는 경과 초 표시가 1초마다, '추가 지시' 입력은 글자마다
+  // 페이지를 다시 그리는데, 그때마다 이전 리포트 전체를 다시 해석했습니다(QA-100).
+  const sections = useMemo(() => splitSections(parseMarkdown(markdown)), [markdown]);
   const titled = sections.filter((section) => section.title);
 
   return (

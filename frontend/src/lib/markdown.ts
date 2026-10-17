@@ -30,14 +30,54 @@ export type Section = {
   blocks: Block[];
 };
 
-const HEADING = /^(#{1,4})\s+(.+?)\s*#*\s*$/;
 const BULLET = /^\s*[-*•]\s+(.*)$/;
 const ORDERED = /^\s*\d+[.)]\s+(.*)$/;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
-const TABLE_DIVIDER = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+// 이웃한 `\s*`가 `\|?`를 사이에 두고 붙지 않게 씁니다(`\s*\|?\s*` → `\s*(?:\|\s*)?`, 받는 줄은 같음).
+// 예전 모양은 공백이 길게 이어진 줄에서 2제곱으로 역추적했습니다(QA-100).
+const TABLE_DIVIDER = /^\s*(?:\|\s*)?:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*(?:\|\s*)?$/;
 const HR = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
 const QUOTE = /^\s*>\s?(.*)$/;
 const FENCE = /^\s*```/;
+/** 정규식 `\s`와 같은 공백 한 글자(String.prototype.trim이 지우는 글자와도 같음). */
+const SPACE = /\s/;
+/** 정규식 `.`이 건너지 못하는 줄 바꿈 글자 — 줄은 \n으로 나눴으므로 남는 것은 U+2028·U+2029뿐입니다. */
+const LINE_BREAK = /[\n\r\u2028\u2029]/;
+
+/**
+ * 제목 줄(`#`~`####` + 공백 + 제목)이면 수준과 글자를, 아니면 null.
+ *
+ * 예전 정규식 `/^(#{1,4})\s+(.+?)\s*#*\s*$/`과 같은 결과를 냅니다 — 꼬리의 공백·`#`을 떼고("### 제목 ###" →
+ * "제목", "## C#" → "C"), 그러고 나면 남는 것이 없을 때는 첫 글자 하나를 남기며("# #" → "#"), 뒤가 공백뿐이면 빈
+ * 제목입니다("#  "). 그 정규식은 게으른 `.+?` 뒤의 `\s*#*\s*`가 3제곱으로 역추적해, 공백이 길게 이어진 제목 줄
+ * 하나(1,500칸에 약 2초, 4,000칸에 수십 초)로 탭이 멈췄습니다(QA-100). 여기서는 앞과 뒤에서 한 번씩만 훑습니다.
+ */
+function parseHeading(line: string): { level: number; text: string } | null {
+  let level = 0;
+  while (level < line.length && line[level] === "#") level++;
+  if (level < 1 || level > 4) return null;   // "##### 다섯"은 제목이 아닙니다
+
+  let start = level;
+  while (start < line.length && SPACE.test(line[start])) start++;
+  if (start === level) return null;          // # 뒤에 공백이 있어야 합니다("#nospace"는 문단)
+
+  if (start === line.length) {
+    // 뒤가 공백뿐: 공백이 두 칸 이상이면 빈 제목("#  "), 한 칸이면 제목이 아닙니다("# ").
+    for (let i = line.length - 1; i > level; i--) {
+      if (!LINE_BREAK.test(line[i])) return { level, text: "" };
+    }
+    return null;
+  }
+
+  // 꼬리의 공백 → # → 공백을 뗍니다. 제목은 적어도 한 글자입니다.
+  let end = line.length;
+  while (end > start && SPACE.test(line[end - 1])) end--;
+  while (end > start && line[end - 1] === "#") end--;
+  while (end > start && SPACE.test(line[end - 1])) end--;
+  const text = line.slice(start, Math.max(end, start + 1));
+  // 제목 가운데 줄 바꿈 글자가 끼어 있으면 예전처럼 제목으로 보지 않습니다(문단으로 남음).
+  return LINE_BREAK.test(text) ? null : { level, text: text.trim() };
+}
 
 /** 표의 한 줄을 칸으로. 양끝 파이프를 떼고, 칸 안의 공백을 다듬습니다. */
 export function splitRow(line: string): string[] {
@@ -73,10 +113,10 @@ export function parseMarkdown(source: string): Block[] {
       continue;
     }
 
-    const heading = HEADING.exec(line);
+    const heading = parseHeading(line);
     if (heading) {
       flushParagraph();
-      blocks.push({ type: "heading", level: heading[1].length, text: heading[2].trim() });
+      blocks.push({ type: "heading", ...heading });
       continue;
     }
 

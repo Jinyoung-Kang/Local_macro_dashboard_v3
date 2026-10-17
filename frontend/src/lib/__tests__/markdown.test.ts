@@ -161,16 +161,19 @@ describe("QA-100 제목·표 구분선 해석은 줄 길이에 선형", () => {
 
   // 수정 전에는 게으른 `.+?` 뒤의 `\s*#*\s*`가 3제곱으로 역추적해, 공백 1,500칸 제목 줄 하나에 약 2초가 걸렸다
   // (4,000칸이면 수십 초). 생성 중에는 경과 초 표시 때문에 1초마다 다시 해석해 탭이 멈췄다.
-  it.fails("공백이 길게 이어진 제목 줄도 바로 해석한다", () => {
-    const text = "1. 핵심 요약" + " ".repeat(1500) + "x";
-    const started = performance.now();
-    const blocks = parseMarkdown(`## ${text}`);
-    expect(performance.now() - started).toBeLessThan(50);
-    expect(blocks).toEqual([{ type: "heading", level: 2, text }]);
+  it("공백이 길게 이어진 제목 줄도 바로 해석한다", () => {
+    // 1,500칸은 수정 전 재현용(수정 전 약 2초), 4,000·20,000칸은 수정 뒤에도 줄 길이에 선형인지 봅니다.
+    for (const spaces of [1500, 4000, 20000]) {
+      const text = "1. 핵심 요약" + " ".repeat(spaces) + "x";
+      const started = performance.now();
+      const blocks = parseMarkdown(`## ${text}`);
+      expect(performance.now() - started, `${spaces}칸`).toBeLessThan(50);
+      expect(blocks).toEqual([{ type: "heading", level: 2, text }]);
+    }
   });
 
   // 수정 전에는 구분선 정규식의 이웃한 `\s*\|?\s*`가 2제곱으로 역추적해, 표 머리 다음 줄의 공백 20,000칸에 1초 가까이 걸렸다.
-  it.fails("공백이 길게 이어진 표 구분선 후보 줄도 바로 판정한다", () => {
+  it("공백이 길게 이어진 표 구분선 후보 줄도 바로 판정한다", () => {
     const started = performance.now();
     const blocks = parseMarkdown("| a | b |\n|--" + " ".repeat(20000) + "x|");
     expect(performance.now() - started).toBeLessThan(50);
