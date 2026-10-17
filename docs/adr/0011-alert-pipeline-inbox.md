@@ -5,6 +5,7 @@
   - `AlertRulesTest`: 국면 3일 확정, 판정 불가 무시, 연속 N일, 13F 신규
   - `AlertEvaluatorDbTest`: 한 번만, 규칙 끄기, 백필 금지, 지난 사건
   - `AlertServiceTest`: 등급별 상한, 수집 범위, 확정 기록만, 행동 지시 금지어
+  - `AlertServiceConcurrencyTest`: 동시 요청에도 상한(QA-092)
   - `test_tasks.py`(관심 종목 수집 범위), `test_table_ownership.py`
 
 ## 배경
@@ -63,3 +64,5 @@
 - 등급(D5):
   - 무료는 국면 전환 1개, 유료는 20개, 운영자는 50개입니다.
   - 관심 종목은 사용자당 20개, 전체 60개입니다.
+  - 상한 검사부터 저장(만들기·켜기)까지는 서비스 안의 잠금 하나로 한 줄로 세웁니다(QA-092). 백엔드가 한 프로세스라는 전제이고,
+    여러 대로 늘리면 `AlertStore` 안에서 트랜잭션 + `pg_advisory_xact_lock`으로 옮겨야 합니다.

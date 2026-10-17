@@ -2,7 +2,6 @@ package com.macrodash.feature.alert;
 
 import com.macrodash.store.AlertStore;
 import com.macrodash.support.CurrentUser;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -36,7 +35,6 @@ class AlertServiceConcurrencyTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    @Disabled("QA-092: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-092 한 유료 회원이 서로 다른 종목 30개를 동시에 만들어도 규칙·관심 종목은 20개까지")
     void concurrentCreatesRespectPerUserCaps() throws Exception {
         CurrentUser pro = new CurrentUser(7, "p@x", "MEMBER", "PRO", null);
@@ -52,7 +50,6 @@ class AlertServiceConcurrencyTest {
     }
 
     @Test
-    @Disabled("QA-092: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-092 전체 59종목일 때 두 회원이 서로 다른 새 종목을 동시에 만들거나 켜도 전체 60종목을 넘지 않는다")
     void concurrentCreatesAndEnablesRespectTotalCap() throws Exception {
         RacingStore store = new RacingStore(2);

@@ -43,6 +43,16 @@ public class AlertService {
 
     private final AlertStore alerts;
     private final ObjectMapper mapper;
+    /**
+     * 상한 검사(세기)부터 저장(만들기·켜기)까지를 한 줄로 세우는 잠금(QA-092). 세기와 저장이 따로 도는 문장이라, 동시에 들어온
+     * 요청이 모두 저장 전 값을 보고 통과해 규칙 수·사용자 20종목·전체 60종목을 넘었습니다. 전체 60을 넘으면 수집기가 코드
+     * 순으로 앞 60개만 받아, 먼저 규칙을 건 다른 사용자의 종목이 조용히 수집에서 빠집니다.
+     *
+     * <p>백엔드가 한 프로세스라는 전제입니다(로컬 compose·AWS EC2 한 대, ADR 0012). 여러 대로 늘리면 이 잠금으로는 막지
+     * 못합니다 — 그때는 {@code AlertStore} 안에서 트랜잭션을 열고 {@code pg_advisory_xact_lock(고정 키)}을 건 뒤 세고 저장해야
+     * 합니다(자동 커밋 문장 하나로 잠그면 문장이 끝날 때 풀려 소용없습니다).
+     */
+    private final Object ruleCapLock = new Object();
 
     public AlertService(AlertStore alerts, ObjectMapper mapper) {
         this.alerts = alerts;
@@ -72,8 +82,14 @@ public class AlertService {
         return user.isOwner() ? OWNER_RULES : user.isPro() ? PRO_RULES : FREE_RULES;
     }
 
-    /** 규칙 만들기 — 종류와 대상 검사, 등급별 상한. */
+    /** 규칙 만들기 — 종류와 대상 검사, 등급별 상한. 상한 검사부터 저장까지 한 줄로(QA-092). */
     public Result create(CurrentUser user, String kind, JsonNode params) {
+        synchronized (ruleCapLock) {
+            return createLocked(user, kind, params);
+        }
+    }
+
+    private Result createLocked(CurrentUser user, String kind, JsonNode params) {
         if (!user.isPro() && !"REGIME_CHANGE".equals(kind)) {
             return new Result(403, FREE_TIER_ONLY_REGIME);
         }
@@ -122,7 +138,14 @@ public class AlertService {
         return new Result(200, "알림 규칙을 만들었습니다. 지금부터 생기는 사건만 알림함에 들어옵니다(과거 사건은 보내지 않음).");
     }
 
+    /** 켜기·끄기. 켜기는 만들기와 같은 검사를 하므로 같은 잠금 안에서(QA-092 — 끄기는 수를 줄이기만 하지만 함께 둡니다). */
     public Result setEnabled(CurrentUser user, long ruleId, boolean enabled) {
+        synchronized (ruleCapLock) {
+            return setEnabledLocked(user, ruleId, enabled);
+        }
+    }
+
+    private Result setEnabledLocked(CurrentUser user, long ruleId, boolean enabled) {
         if (enabled) {
             // 켤 때도 관심 종목 상한을 봅니다. 상한은 켜진 규칙만 세므로, 껐다 켜면 넘을 수 있었고 수집기는 앞쪽
             // 60종목만 받아 넘친 종목 규칙은 조용히 울리지 않았습니다(QA-041).
