@@ -94,7 +94,9 @@ public class Sec13FService {
 
         JsonNode latest = selected.get(0);
         // 직전 분기는 바로 앞 분기 말일의 공시입니다. 그 분기가 저장돼 있지 않으면 비교하지 않습니다(QA-085).
-        JsonNode previous = HoldingsJson.previousQuarter(selected, latest);
+        // 고른 분기 수(selected)가 아니라 저장된 전체에서 찾습니다 — 분기 수는 목록·히트맵 범위일 뿐이라,
+        // '최근 1개 분기'를 골랐다고 저장된 직전 분기를 버리면 모든 액션이 '비교 데이터 없음'이 됐습니다(QA-086).
+        JsonNode previous = HoldingsJson.previousQuarter(allQuarters, latest);
 
         Map<String, Object> latestBlock = new LinkedHashMap<>();   // Map.of는 null(모르는 평가액)을 거부합니다
         latestBlock.put("reportDate", String.valueOf(Json.asText(latest, "reportDate")));

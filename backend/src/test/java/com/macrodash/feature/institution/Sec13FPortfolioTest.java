@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -91,7 +90,6 @@ class Sec13FPortfolioTest {
 
     // ------------------------------------------------------------ QA-086 분기 수는 이력 범위일 뿐
     @Test
-    @Disabled("QA-086: 수정 전 재현 — fix 커밋에서 켬")
     @SuppressWarnings("unchecked")
     @DisplayName("QA-086 '최근 1개 분기'를 골라도 저장된 직전 분기와 비교한다 — 분기 수는 목록·히트맵 범위에만")
     void oneQuarterViewStillComparesWithStoredPreviousQuarter() {
