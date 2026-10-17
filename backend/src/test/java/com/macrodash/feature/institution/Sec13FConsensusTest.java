@@ -4,7 +4,6 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -296,7 +295,6 @@ class Sec13FConsensusTest {
     // ------------------------------------------------------------ QA-113 채권 CUSIP은 보통주 행에 합치지 않는다
     @Test
     @SuppressWarnings("unchecked")
-    @Disabled("QA-113: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-113 'COM'으로 공시된 전환사채(CUSIP 발행 번호가 영문자)를 전량 매도해도 보통주 행의 '동시 매도'로 세지 않는다")
     void bondReportedAsComIsNotMergedIntoCommonStock() {
         // 피셔는 UBER 전환사채(90353TAJ9 — 7~8번째 글자 'AJ'는 채권 발행 번호)를 클래스 'COM'으로 공시합니다.

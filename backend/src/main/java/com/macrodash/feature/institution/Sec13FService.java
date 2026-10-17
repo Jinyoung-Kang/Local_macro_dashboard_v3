@@ -540,10 +540,16 @@ public class Sec13FService {
      * 한 회사의 여러 보통주 클래스(ALPHABET A·C주, BERKSHIRE A·B주)를 한 행으로 합칩니다 — 리뷰 B-2의 결정을
      * 증권 키 위에서 지킵니다. 한 기관이 두 클래스를 들어도 보유 기관 1곳이고, 그 기관의 비중은 두 항목의 합입니다.
      *
-     * <p>합치는 조건은 둘 다입니다. ① CUSIP 앞 6자리(발행사)가 같고 ② 그 증권에 붙은 클래스 표기가 모두 보통주 계열이며
-     * 펀드·ETF 이름이 아닐 것. 앞 6자리만 보면 iShares Trust(464287)처럼 한 발행사 아래 서로 다른 ETF 수백 개가 한 행이
-     * 되고, 같은 회사의 보통주와 우선주·전환사채도 합쳐집니다. 조건을 못 맞추면 합치지 않습니다 — 한 회사가 두 행으로
-     * 보이는 쪽이 다른 증권을 섞는 쪽보다 덜 틀립니다.
+     * <p>합치는 조건은 셋 다입니다. ① CUSIP 앞 6자리(발행사)가 같고 ② CUSIP 7~8번째 글자(발행 번호)가 숫자인 지분 증권이며
+     * ③ 그 증권에 붙은 클래스 표기가 모두 보통주 계열이고 펀드·ETF 이름이 아닐 것. 앞 6자리만 보면 iShares Trust(464287)처럼
+     * 한 발행사 아래 서로 다른 ETF 수백 개가 한 행이 되고, 같은 회사의 보통주와 우선주·전환사채도 합쳐집니다. 클래스 표기만
+     * 믿으면 안 되는 이유는 ②입니다 — 피셔는 전환사채를 'COM'으로 공시해(90353TAJ9 UBER — 발행 번호 'AJ'는 채권), 사채를
+     * 정리한 행이 보통주 행에 합쳐져 보통주를 그대로 든 기관이 '동시 매도'로 세어졌습니다(QA-113). 조건을 못 맞추면 합치지
+     * 않습니다 — 한 회사가 두 행으로 보이는 쪽이 다른 증권을 섞는 쪽보다 덜 틀립니다.
+     *
+     * <p>알려진 한계: 한 발행사 아래 서로 다른 사업을 따르는 트래킹 주식(Liberty Media 531229 아래 Formula One·Liberty Live·
+     * SiriusXM 계열 'COM LBTY … C' 등)도 보통주 클래스로 보여 한 행으로 합쳐집니다. 이름 키를 쓰던 예전에도 같았고, 클래스
+     * 표기만으로는 '같은 회사의 A·C주'와 가를 규칙이 없어 그대로 둡니다.
      */
     private static List<Tally> mergeShareClasses(Collection<Tally> tallies) {
         Map<String, Tally> byKey = new LinkedHashMap<>();
@@ -653,12 +659,16 @@ public class Sec13FService {
         }
 
         /**
-         * 보통주 계열이고 펀드가 아니면 발행사(CUSIP 앞 6자리), 아니면 null(합치지 않음).
+         * 지분 증권이고 보통주 계열이며 펀드가 아니면 발행사(CUSIP 앞 6자리), 아니면 null(합치지 않음).
          * 기관마다 표기가 달라도 <b>모든</b> 표기가 조건을 맞춰야 합니다.
          */
         String commonStockIssuer() {
             String text = cusip == null ? "" : String.valueOf(cusip).trim();
-            if (!key.startsWith("cusip:") || text.length() < 6 || classes.isEmpty()) {
+            if (!key.startsWith("cusip:") || text.length() < 8 || classes.isEmpty()) {
+                return null;
+            }
+            // CUSIP 7~8번째 글자(발행 번호)가 영문자면 채권 등 지분 증권이 아닙니다 — 클래스를 'COM'으로 적었어도 합치지 않습니다(QA-113).
+            if (!Character.isDigit(text.charAt(6)) || !Character.isDigit(text.charAt(7))) {
                 return null;
             }
             for (String cls : classes) {
