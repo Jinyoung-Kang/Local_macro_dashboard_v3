@@ -2,6 +2,7 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "dashboard.ai.cloudflare-account-id=", "dashboard.ai.cloudflare-api-token=",
         "dashboard.ai.demo-daily-limit=7",
         "dashboard.scheduler.enabled=false",             // 정기 작업이 테스트 DB에 쓰면 결과가 실행 시각에 따라 달라짐
+        "dashboard.scheduler.regime-record-hour-kst=17", // 설정 주입이 실제로 먹는지 확인용(QA-093, AWS 배포값)
         // 데모 열람(ADR 0013)을 켜 둡니다 — 헤더를 보내지 않는 다른 테스트는 평소와 같습니다(그것도 함께 확인됨).
         "dashboard.demo-viewer-token=" + ApiIntegrationTest.DEMO_TOKEN
 })
@@ -183,6 +185,17 @@ class ApiIntegrationTest {
         JsonNode session = rest.exchange(url("/api/auth/session"), HttpMethod.GET,
                 new HttpEntity<>(null, headers), JsonNode.class).getBody();
         assertThat(session.path("user").path("role").asText()).isEqualTo("MEMBER");
+    }
+
+    @Test
+    @Disabled("QA-093: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-093: 판정 기록 시각은 설정값을 따른다 — AWS 데모(평일 08:50–18:00 운영)는 18시 전에 기록해야 쌓인다")
+    void regimeRecordHourFollowsConfiguration() {
+        JsonNode log = authorizedGet("/api/analytics/regime/log");
+
+        assertThat(log.path("available").asBoolean()).isTrue();
+        assertThat(log.path("recordHourKst").asInt()).isEqualTo(17);
+        assertThat(log.path("note").asString()).contains("KST 17시 이후");
     }
 
     @Test
