@@ -53,3 +53,21 @@ def test_이전_거래일_목록은_공휴일과_주말을_건너뛴다():
 def test_공휴일_목록이_비어_있으면_주말만_건너뛴다():
     krcalendar.set_holidays(())
     assert krcalendar.latest_completed_session(datetime(2026, 1, 1, 10, 0, tzinfo=KST)) == "20260101"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-081: 수정 전 재현 — 수집기 달력이 KRX 연말 휴장일(12-31)을 모름")
+def test_QA081_평일인_12월_31일은_KRX_연말_휴장이다():
+    """
+    KRX는 12-31(평일이면)에 열지 않습니다(화면 marketCalendar.ts와 같은 규칙). 수집기 달력이 그날을 거래일로 보면
+    날짜를 밝히지 않는 소스(KIS 가집계·Daum 기간 응답)의 전 거래일 데이터가 12-31 날짜로 이력에 쌓이고,
+    12-31 장중에는 KIS를 먼저 부릅니다. 이 판정은 공휴일 목록(천문연)과 별개입니다.
+    """
+    krcalendar.set_holidays({"2026-12-25", "2027-01-01"})
+    assert krcalendar.is_trading_day(date(2026, 12, 31)) is False
+    assert krcalendar.is_regular_session(datetime(2026, 12, 31, 10, 0, tzinfo=KST)) is False
+    assert krcalendar.latest_completed_session(datetime(2026, 12, 31, 10, 0, tzinfo=KST)) == "20261230"
+    assert krcalendar.latest_completed_session(datetime(2027, 1, 1, 10, 0, tzinfo=KST)) == "20261230"
+    assert krcalendar.previous_trading_days(date(2027, 1, 4), 2) == [date(2026, 12, 30), date(2026, 12, 29)]
+    # 공휴일 목록이 비어 있어도(첫 기동) 연말 휴장은 압니다.
+    krcalendar.set_holidays(())
+    assert krcalendar.is_trading_day(date(2026, 12, 31)) is False
