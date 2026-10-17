@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
 
 from app import catalog
 
@@ -222,6 +223,34 @@ def test_purge_removes_old_history_only(store):
 
     assert removed["timeseries"] == 1
     assert [row["date"] for row in store.read_timeseries("demo", "S")] == ["2026-01-03"]
+
+
+@pytest.mark.xfail(strict=True, reason="QA-070: 수정 전 재현 — 수동 정리가 데이터셋을 가리지 않고 지움")
+def test_qa070_purge_keeps_history_that_cannot_be_refetched(store):
+    """
+    수동 정리(/maintenance/purge)는 스스로 보존 기한을 두는 데이터셋(허용 목록)만 지웁니다(QA-070).
+
+    FRED·순유동성 누적은 증분 적재라 지운 구간이 다시 채워지지 않고(판정 성과가 전 구간을 씀, ADR 0009),
+    레이더 이력은 외부에서 다시 받을 수 없습니다(ADR 0005). 예전에는 둘 다 기간만 보고 지웠습니다.
+    """
+    old = (datetime.now(timezone.utc) - timedelta(days=800)).date().isoformat()
+    recent = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()
+    store.put_timeseries(catalog.TS_FRED, "BAMLH0A0HYM2", [(old, 3.9), (recent, 3.1)])
+    store.put_observations(catalog.OBS_RADAR, old, [{"entity": "KOSPI|외국인|순매수|005930"}], entity_key="entity")
+    store.put_observations(catalog.OBS_FSC_PRICE, old, [{"code": "005930"}], entity_key="code")
+    store.put_observations(catalog.OBS_FSC_PRICE, recent, [{"code": "005930"}], entity_key="code")
+
+    removed = store.purge_older_than(400)
+
+    assert [row["date"] for row in store.read_timeseries(catalog.TS_FRED, "BAMLH0A0HYM2")] == [old, recent]
+    assert len(store.read_observations(catalog.OBS_RADAR, obs_date=old)) == 1
+    # 허용 목록(금융위 시세)은 지금처럼 기간으로 지웁니다.
+    assert store.read_observations(catalog.OBS_FSC_PRICE, obs_date=old) == []
+    assert len(store.read_observations(catalog.OBS_FSC_PRICE, obs_date=recent)) == 1
+    assert removed["timeseries"] == 0
+    assert removed["observations"] == 1
+    # 오래된 행이 있었지만 남긴 데이터셋을 응답으로 알립니다.
+    assert set(removed["excluded"]) == {catalog.TS_FRED, catalog.OBS_RADAR}
 
 
 def test_task_summary_hides_removed_tasks(store):
