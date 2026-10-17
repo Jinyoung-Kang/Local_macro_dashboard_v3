@@ -4,7 +4,6 @@ import com.macrodash.store.AuditLogStore;
 import com.macrodash.store.EmailTokenStore;
 import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,8 +23,7 @@ import static org.mockito.Mockito.when;
  */
 class RateLimitTest {
 
-    /** RateLimit이 기억하는 키 상한(RateLimit.MAX_TRACKED와 같은 값). */
-    private static final int CAP = 10_000;
+    private static final int CAP = RateLimit.MAX_TRACKED;
 
     private final LoginThrottleTest.MutableClock clock = new LoginThrottleTest.MutableClock();
 
@@ -35,7 +33,6 @@ class RateLimitTest {
     }
 
     @Test
-    @Disabled("QA-073: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-073: 한 주소가 이메일만 바꿔 보내도 요청 기록이 늘지 않는다 — 주소 한도를 먼저 본다")
     void manyEmailsFromOneAddressStayBounded() {
         AccountMail mail = mock(AccountMail.class);
@@ -56,7 +53,6 @@ class RateLimitTest {
     }
 
     @Test
-    @Disabled("QA-073: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-073: 기록이 꽉 차면 처음 보는 키는 기록하지 않고 거절한다 — 이미 아는 키는 그대로 센다")
     void fullTableRefusesUnseenKeys() {
         RateLimit limit = new RateLimit(5, Duration.ofHours(1), clock);
@@ -70,7 +66,6 @@ class RateLimitTest {
     }
 
     @Test
-    @Disabled("QA-073: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-073: 꽉 찬 기록의 정리는 요청마다가 아니라 일정 간격에 한 번 — 창이 지난 키는 그때 빠진다")
     void fullTablePrunesOnInterval() {
         // 창(5초)을 정리 간격(10초)보다 짧게 잡아, '창은 지났지만 정리 간격은 안 지난' 순간을 만듭니다.

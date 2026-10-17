@@ -17,9 +17,9 @@
 | POST | `/api/auth/logout-all` | 다른 기기의 내 세션을 모두 끊음(지금 기기는 남김) → `{ok, revoked}` |
 | GET | `/api/auth/sessions` | 내 로그인 세션 목록 `{sessions:[{id, current, createdAt, lastSeenAt, expiresAt, userAgent}]}` |
 | POST | `/api/auth/password` | `{"current", "next"}` — 지금 비밀번호 확인, 규칙(10자 이상·흔한 값·이메일 포함·반복 금지) 위반이면 400, 성공하면 다른 기기 세션을 끊음 |
-| POST | `/api/auth/signup` | 공개. `{"email","password","agreed":true}` — 무료 회원, 메일 인증 전. 이미 있는 주소도 **같은 200**(그 주소 주인에게만 안내 메일). 동의·비밀번호 규칙·형식 위반 400, 메일 미설정 503, (주소·이메일)마다 시간당 5회 초과 429 |
+| POST | `/api/auth/signup` | 공개. `{"email","password","agreed":true}` — 무료 회원, 메일 인증 전. 이미 있는 주소도 **같은 200**(그 주소 주인에게만 안내 메일). 동의·비밀번호 규칙·형식 위반 400, 메일 미설정 503, 접속 주소마다·(주소·이메일)마다 시간당 5회 초과 429(요청 기록이 1만 키로 꽉 찬 동안은 처음 보는 주소도 429, QA-073) |
 | POST | `/api/auth/verify` | 공개. `{"token"}` — 메일 인증 링크(24시간, 한 번만). 인증 전 계정은 로그인 시 403 `unverified` |
-| POST | `/api/auth/reset/request` | 공개. `{"email"}` — 가입 여부와 무관하게 같은 200. 인증된 계정에만 재설정 메일(30분, 한 번만) |
+| POST | `/api/auth/reset/request` | 공개. `{"email"}` — 가입 여부와 무관하게 같은 200. 인증된 계정에만 재설정 메일(30분, 한 번만). 요청 제한(429)은 가입과 같음 |
 | POST | `/api/auth/reset/confirm` | 공개. `{"token","password"}` — 새 비밀번호, 성공하면 그 계정의 모든 세션을 끊음 |
 | POST | `/api/auth/delete` | `{"password"}` — 비밀번호 재확인 뒤 계정·세션·토큰 삭제(감사 기록은 사용자 번호만 비움), 운영자 계정은 400 |
 | GET | `/api/admin/users` | 운영자. 사용자 목록 `{users:[{id, email, role, tier, verified, createdAt}]}` |

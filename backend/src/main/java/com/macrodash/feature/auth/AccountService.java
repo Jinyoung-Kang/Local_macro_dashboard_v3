@@ -81,7 +81,8 @@ public class AccountService {
         this.audit = audit;
         this.hasher = hasher;
         this.mail = mail;
-        // 주소·이메일마다 시간당 5번 — 메일 폭탄·계정 탐색을 늦춥니다.
+        // 주소마다, (주소·이메일)마다 시간당 5번 — 메일 폭탄·계정 탐색을 늦춥니다.
+        // 기억하는 키 수에는 상한이 있습니다(RateLimit, QA-073).
         this.mailRequests = new RateLimit(5, Duration.ofHours(1), clock);
     }
 
@@ -105,7 +106,8 @@ public class AccountService {
         if (problem != null) {
             return Result.bad(problem);
         }
-        if (!mailRequests.allow(client + "|" + normalized) || !mailRequests.allow("ip|" + client)) {
+        // 주소 키를 먼저 봅니다 — 주소 한도가 찬 뒤에도 이메일만 바꿔 보내면 이메일 키가 요청마다 쌓였습니다(QA-073).
+        if (!mailRequests.allow("ip|" + client) || !mailRequests.allow(client + "|" + normalized)) {
             return new Result(429, "요청이 너무 많습니다. 한 시간 뒤에 다시 시도하세요.");
         }
         Optional<UserStore.User> existing = users.findByEmail(normalized);
@@ -148,7 +150,8 @@ public class AccountService {
         if (normalized == null) {
             return Result.bad("메일 주소 형식이 아닙니다.");
         }
-        if (!mailRequests.allow(client + "|" + normalized) || !mailRequests.allow("ip|" + client)) {
+        // 주소 키 먼저(QA-073, 가입과 같음)
+        if (!mailRequests.allow("ip|" + client) || !mailRequests.allow(client + "|" + normalized)) {
             return new Result(429, "요청이 너무 많습니다. 한 시간 뒤에 다시 시도하세요.");
         }
         Optional<UserStore.User> user = users.findByEmail(normalized);
