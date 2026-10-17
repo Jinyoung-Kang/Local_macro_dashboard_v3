@@ -12,8 +12,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 from app.services import toss as toss_service
 from app.tasks import toss
 
@@ -28,7 +26,6 @@ def _budget_line() -> str:
     return doc[start:doc.index("\n- **", start + 1)]
 
 
-@pytest.mark.xfail(strict=True, reason="문서 수정 전 재현 — '1시간에 최대 42회'가 코드(202회)와 다름")
 def test_DATA_SOURCES의_토스_호출_예산이_코드_상수와_같다():
     text = _budget_line()
     stated = re.search(r"1시간에 최대 (\d+)회", text)
