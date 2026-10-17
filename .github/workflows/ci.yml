@@ -59,10 +59,13 @@ jobs:
 
       # 알려진 취약점 점검. 실패해도 빌드를 막지 않고 경고로 남깁니다 — 고치는 쪽이 사람이고,
       # 새 공시가 올라올 때마다 모든 PR이 빨개지면 아무도 보지 않게 됩니다.
+      # 감사 대상은 이미지(Dockerfile)·위 설치와 같은 constraints.txt의 고정판입니다. `-r requirements.txt`는
+      # 임시 환경에서 constraints 없이 다시 해석해 그날의 최신 간접 의존성을 검사했습니다 — 고정판에 공시가 나고
+      # 상위 판에서 고쳐지면 경고가 뜨지 않았습니다(QA-108). --no-deps·--disable-pip: 다시 해석·설치하지 않음.
       - name: 취약점 점검 (pip-audit)
         working-directory: collector
         continue-on-error: true
-        run: pip install pip-audit==2.10.1 && pip-audit -r requirements.txt
+        run: pip install pip-audit==2.10.1 && pip-audit --disable-pip --no-deps -r constraints.txt
 
       - name: 스키마 적용 (번호 순서)
         env:

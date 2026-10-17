@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,7 +29,6 @@ def test_취약점_점검은_빌드를_막지_않는다():
     assert _pip_audit_step().get("continue-on-error") is True
 
 
-@pytest.mark.xfail(strict=True, reason="QA-108: 수정 전 재현 — requirements.txt를 다시 해석해 감사")
 def test_QA108_pip_audit는_이미지와_같은_constraints_고정판을_감사한다():
     run = _pip_audit_step()["run"]
     audit = run[run.rindex("pip-audit "):]          # 'pip install pip-audit==…' 뒤의 실제 감사 명령
