@@ -34,3 +34,41 @@ describe("QA-065 이어받은 업종 행", () => {
     expect(screen.getAllByText(/이전 값/)).toHaveLength(1);
   });
 });
+
+describe("QA-076 이어받은 시장 수급", () => {
+  // 수집 실패로 이어받은 시장(isStale)은 저장본 수집 시각이 새것이어도 그 시장 값은 예전 것입니다.
+  // 화면이 그 시장을 '지금 값'처럼 보이면 안 됩니다.
+  it.fails("시장 수급 패널이 이어받은 시장에 '이전 값'과 사유·받은 시각을 붙인다", async () => {
+    const summary = (isStale: boolean) => ({
+      records: 3, latestDate: "2026-10-16", latestUpdatedAt: "2026-10-16T05:00:00Z", provisional: false,
+      investors: [], breakdown: [], fetchedAt: "2026-10-16T05:00:00Z", isStale,
+      staleReason: isStale ? "KOSDAQ: HTTP 500" : null,
+    });
+    api.apiGetShared.mockImplementation((path: string) =>
+      path.startsWith("/api/kr/investor-flows")
+        ? Promise.resolve({ available: true, collectedAtKst: "2026-10-17 10:00 KST", ageSeconds: 60,
+                            markets: { KOSPI: summary(false), KOSDAQ: summary(true) } })
+        : new Promise(() => {}));
+
+    const { MarketFlowsPanel } = await import("../radar/FlowPanels");
+    render(<MarketFlowsPanel market="KOSDAQ" />);
+    await screen.findByText(/코스닥 전체/);
+
+    expect(screen.getByText(/이전 값/).textContent).toContain("KOSDAQ: HTTP 500");
+  });
+
+  it("새로 받은 시장에는 '이전 값'을 붙이지 않는다", async () => {
+    api.apiGetShared.mockImplementation((path: string) =>
+      path.startsWith("/api/kr/investor-flows")
+        ? Promise.resolve({ available: true, collectedAtKst: "2026-10-17 10:00 KST", ageSeconds: 60,
+                            markets: { KOSPI: { records: 3, latestDate: "2026-10-17", investors: [], breakdown: [],
+                                                isStale: false } } })
+        : new Promise(() => {}));
+
+    const { MarketFlowsPanel } = await import("../radar/FlowPanels");
+    render(<MarketFlowsPanel market="KOSPI" />);
+    await screen.findByText(/코스피 전체/);
+
+    expect(screen.queryByText(/이전 값/)).toBeNull();
+  });
+});
