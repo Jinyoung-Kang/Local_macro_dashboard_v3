@@ -107,7 +107,7 @@ public class VerificationService {
             results.add(compareIndex(payload));
         }
 
-        results.add(compareRankingTop(payload, now));
+        results.add(compareRankingTop(payload, now, holiday));
 
         // 토스증권 공식 — 키가 없으면 "확인 못 함"으로 남깁니다(일치로 위장하지 않음).
         String noToss = "토스 키(TOSS_CLIENT_ID/SECRET)가 없어 이 항목은 대조하지 않습니다.";
@@ -269,9 +269,9 @@ public class VerificationService {
      * <p>금액은 가집계 시점 차이로 조금씩 다를 수 있지만, <b>1위 종목명</b>이
      * 갈라지면 둘 중 하나의 파싱이 깨졌다는 강한 신호입니다.
      */
-    private Verification.Result compareRankingTop(JsonNode payload, ZonedDateTime now) {
+    private Verification.Result compareRankingTop(JsonNode payload, ZonedDateTime now, boolean holiday) {
         String name = "KOSPI 외국인 순매수 1위 종목";
-        Verification.Gate gate = Verification.intradayGate(now);
+        Verification.Gate gate = Verification.intradayGate(now, holiday);
         if (!gate.allowed()) {
             return Verification.skipped(name, gate.reason());
         }

@@ -3,7 +3,6 @@ package com.macrodash.feature.status;
 import com.macrodash.collector.CollectorClient;
 import com.macrodash.feature.publicdata.CalendarService;
 import com.macrodash.read.StoreReader;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -31,7 +30,6 @@ class VerificationServiceTest {
     private static final String RANKING = "KOSPI 외국인 순매수 1위 종목";
 
     @Test
-    @Disabled("QA-111: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-111: 평일 공휴일 장 시간에는 수급 1위 대조를 건너뛴다(휴장)")
     void rankingComparisonIsSkippedOnPublicHoliday() throws Exception {
         CollectorClient collector = mock(CollectorClient.class);

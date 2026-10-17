@@ -1,6 +1,7 @@
 package com.macrodash.analytics;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -202,6 +203,9 @@ public final class Verification {
         if (holiday) {
             return new Gate(true, "공휴일 (확정 데이터)");
         }
+        if (isKrxYearEndClosure(nowKst.toLocalDate())) {
+            return new Gate(true, "KRX 연말 휴장일 (확정 데이터)");
+        }
         LocalTime time = nowKst.toLocalTime();
         if (time.isAfter(LocalTime.of(16, 29))) {
             return new Gate(true, "장 마감 후 (확정 데이터)");
@@ -221,9 +225,20 @@ public final class Verification {
      * 마감 후에는 빈 데이터를 정상적으로 돌려줍니다.
      */
     public static Gate intradayGate(ZonedDateTime nowKst) {
+        return intradayGate(nowKst, false);
+    }
+
+    /**
+     * @param holiday 오늘이 한국 공휴일인가. 휴장일에는 가집계 TR이 빈 값을 주므로, 장 시간에 대조하면
+     *                운영자 진단에 거짓 오류가 납니다(QA-111)
+     */
+    public static Gate intradayGate(ZonedDateTime nowKst, boolean holiday) {
         if (nowKst.getDayOfWeek() == DayOfWeek.SATURDAY
                 || nowKst.getDayOfWeek() == DayOfWeek.SUNDAY) {
             return new Gate(false, "주말입니다. 장중 가집계 비교는 정규장에만 가능합니다.");
+        }
+        if (holiday || isKrxYearEndClosure(nowKst.toLocalDate())) {
+            return new Gate(false, "휴장일입니다. 장중 가집계 비교는 정규장에만 가능합니다.");
         }
         LocalTime time = nowKst.toLocalTime();
         boolean open = !time.isBefore(LocalTime.of(9, 0)) && time.isBefore(LocalTime.of(15, 30));
@@ -232,6 +247,17 @@ public final class Verification {
                 : new Gate(false,
                 "정규장(09:00~15:30)이 아닙니다. KIS 가집계 TR은 장중 전용이라 지금은 "
                         + "빈 데이터를 돌려줍니다.");
+    }
+
+    /**
+     * KRX 연말 휴장일인가 — 평일인 12월 31일. 공휴일이 아니라 거래소 규정이라 천문연 공휴일 목록에 없습니다.
+     *
+     * <p>같은 규칙이 화면({@code lib/marketCalendar.ts})과 수집기({@code krcalendar.KRX_YEAR_END_CLOSURE})에도 있습니다.
+     * 12-31이 주말이면 그냥 주말로 봅니다(그해 직전 평일이 휴장인지는 규정을 확인하지 못해 다루지 않음).
+     */
+    public static boolean isKrxYearEndClosure(LocalDate date) {
+        return date.getMonthValue() == 12 && date.getDayOfMonth() == 31
+                && date.getDayOfWeek() != DayOfWeek.SATURDAY && date.getDayOfWeek() != DayOfWeek.SUNDAY;
     }
 
     public record Gate(boolean allowed, String reason) {
