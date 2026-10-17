@@ -16,6 +16,7 @@ vi.mock("@/hooks/useRefreshSignal", () => ({ useRefreshSignal: () => signal }));
 
 import AlertsPage from "../alerts/page";
 import CotPage from "../cot/page";
+import { SingleChartSection } from "../macro/SingleChartSection";
 import RadarPage from "../radar/page";
 import StatusPage from "../status/page";
 
@@ -87,5 +88,21 @@ describe("QA-050 자동 갱신이 실패하면 수집 시각 배지 옆에 알�
 
     rerender(<Freshness collectedAt="2026-10-11 09:00 KST" />);
     expect(screen.queryByText("⚠️ 새로 읽지 못함")).toBeNull();
+  });
+});
+
+describe("QA-099 지표별 단독 차트 — 백엔드가 받지 못한 이유를 보인다", () => {
+  // 수정 전에는 available·message를 보지 않아, 공개 데모(store_only)에서 10개 중 8개 지표가 이유 없이
+  // '표시할 시계열이 없습니다'만 보였다(수집기 실패 사유도 같은 식으로 버려졌다).
+  it.fails.each([
+    "store_only 모드에서는 저장하지 않는 지표의 차트를 조회하지 않습니다.",
+    "수집기에서 시계열을 받지 못했습니다.",
+  ])("응답이 '%s'이면 그 문구를 보이고 빈 차트를 그리지 않는다", async (message) => {
+    reads["/api/macro/ticker"] = () => Promise.resolve({ available: false, symbol: "^VIX", points: [], message });
+
+    render(<SingleChartSection />);
+
+    expect(await screen.findByText(message, {}, { timeout: 500 })).toBeTruthy();
+    expect(screen.queryByText("표시할 시계열이 없습니다.")).toBeNull();
   });
 });
