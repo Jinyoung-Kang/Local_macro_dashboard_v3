@@ -29,6 +29,14 @@ spring:
       datetime:
         write-dates-as-timestamps: false
 
+  # Spring 기본 필터 FormContentFilter를 끕니다(QA-069). 인증(SessionFilter)보다 먼저 모든 경로에서 돌며
+  # PUT·PATCH·DELETE의 form 본문을 상한 없이 통째로 문자열로 읽어, 로그인 없이 큰 본문 몇 개로 힙을 고갈시킬 수
+  # 있었습니다(본문 상한 SessionFilter.capBody보다 앞). 이 앱의 PUT·PATCH·DELETE 처리기는 form 파라미터를 읽지 않습니다.
+  mvc:
+    formcontent:
+      filter:
+        enabled: false
+
 server:
   port: ${SERVER_PORT:8080}
   # JSON 응답 압축. 거시 지표 개요·환율 5년 차트는 한 번에 250KB 안팎이라

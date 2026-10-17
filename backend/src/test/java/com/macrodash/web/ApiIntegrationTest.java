@@ -2,7 +2,6 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -137,7 +136,6 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @Disabled("QA-069: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-069: 인증 전에 PUT·PATCH·DELETE의 form 본문을 상한 없이 읽는 Spring 기본 필터(FormContentFilter)가 없다")
     void noFormContentFilterBeforeAuthentication() {
         // 이 필터는 SessionFilter(order 1)보다 앞(order -9900, 모든 경로)에서 돌아, 로그인 없이 보낸 수백 MB form 본문을
