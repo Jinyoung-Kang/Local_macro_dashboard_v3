@@ -79,7 +79,7 @@ def run_task(task: Task, run_id: int | None = None) -> tuple[bool, str]:
 
     if not leader:
         if overdue:
-            return _still_running(task)
+            return _still_running(task, run_id)
         return _wait_for_inflight(task, entry)
 
     try:
@@ -105,16 +105,31 @@ def _release(name: str, entry: "_InFlight") -> None:
             del _inflight[name]
 
 
-def _still_running(task: Task) -> tuple[bool, str]:
+def _still_running(task: Task, run_id: int | None) -> tuple[bool, str]:
     """
     시간 상한을 넘긴 앞선 실행이 아직 끝나지 않았을 때 — 새로 시작하지도, 기다리지도 않습니다.
 
     기다리게 하면 스케줄러의 그룹 실행이 좀비 수명만큼 길어집니다. 실패가 아닙니다(앞선 실행이 이미 '시간 초과'로
     기록됐고, 그 작업이 끝나면 저장본은 그 작업이 씁니다) — 합류 대기 한도를 넘긴 경우와 같은 이유로 성공으로 둡니다.
+
+    실행 기록은 한 줄 남깁니다 — ⚠️ empty(이번 호출은 아무것도 받지 않음, 기존 저장본 유지), 소요 0. 상태 화면의
+    '다시 실행'은 시작만 요청하고 실행 기록에 새 행이 생길 때까지 기다리는데, 남기지 않으면 15분을 기다린 뒤
+    '끝나면 아래 표에 결과가 나타납니다'라고 틀리게 안내했습니다(좀비의 늦은 결과는 로그에만 남음). ✅로 적지 않는
+    것은 아무것도 받지 않았는데 정상으로 보이기 때문입니다(QA-117).
     """
     logger.info("%s: 시간 상한을 넘긴 이전 실행이 아직 끝나지 않아 새로 시작하지 않습니다.", task.name)
-    return True, ("이전 수집이 아직 진행 중 — 시간 상한을 넘긴 앞선 실행이 끝나지 않아 새로 시작하지 않았습니다"
-                  "(그 실행이 끝나면 결과가 저장본에 반영됩니다)")
+    detail = ("이전 수집이 아직 진행 중 — 시간 상한을 넘긴 앞선 실행이 끝나지 않아 새로 시작하지 않았습니다"
+              "(그 실행이 끝나면 결과가 저장본에 반영됩니다)")
+    store.record_task_run(
+        run_id,
+        task.name,
+        speed=task.speed,
+        status="empty",
+        started_at=datetime.now(timezone.utc),
+        duration_ms=0,
+        detail=detail,
+    )
+    return True, detail
 
 
 def _wait_for_inflight(task: Task, entry: "_InFlight") -> tuple[bool, str]:
@@ -160,8 +175,9 @@ def _run_status(ok_count: int, failures: list[str]) -> str:
 # '연결은 받고 응답하지 않는' 상태에서는 2초짜리 fast 태스크가 3~4분씩 돌았습니다(QA-011). 상한을 넘기면
 # 실패로 기록하고 다음 태스크로 넘어갑니다. 작업 스레드는 요청 timeout들이 끝날 때까지 남아 뒤늦게
 # 끝나는데, 그 결과는 로그로만 남깁니다(저장본은 그 작업이 알아서 씁니다 — 진짜 데이터입니다). 그동안 같은
-# 태스크는 새로 시작하지 않습니다(QA-079). 상한에는 대기열에서 워커를 기다린 시간도 들어가므로, 아직 시작도
-# 못 한 작업은 취소하고 '워커 대기 초과'로 따로 적습니다 — 외부 장애가 아니라 풀이 꽉 찬 것입니다.
+# 태스크는 새로 시작하지 않고 ⚠️ '이전 수집이 아직 진행 중' 한 줄만 기록합니다(QA-079·QA-117). 상한에는
+# 대기열에서 워커를 기다린 시간도 들어가므로, 아직 시작도 못 한 작업은 취소하고 '워커 대기 초과'로 따로
+# 적습니다 — 외부 장애가 아니라 풀이 꽉 찬 것입니다.
 # weekly(13F)는 한 태스크가 10분 넘게 걸리는 것이 정상이라 길게 둡니다.
 TASK_DEADLINE_SECONDS: dict[str, float] = {"fast": 120.0, "slow": 600.0, "weekly": 1800.0}
 _task_threads = ThreadPoolExecutor(max_workers=8, thread_name_prefix="task")

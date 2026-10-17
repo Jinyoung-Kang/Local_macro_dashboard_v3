@@ -215,7 +215,6 @@ def test_상한을_넘긴_작업이_끝나기_전에는_같은_태스크를_다�
     assert len(runs) == 2 and peak[0] == 1
 
 
-@pytest.mark.xfail(strict=True, reason="QA-117: 수정 전 재현 — fix 커밋에서 켬")
 def test_QA117_좀비가_도는_동안의_호출도_실행_기록을_한_줄_남긴다(monkeypatch):
     """
     상태 화면의 '다시 실행'은 시작만 요청하고(백그라운드), 실행 기록에 기준 시각보다 새 행이 생길 때까지 최대 15분
