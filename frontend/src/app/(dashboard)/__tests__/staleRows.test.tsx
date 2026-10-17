@@ -1,5 +1,5 @@
 /**
- * 수집 실패로 이어받은 이전 값(isStale) 행을 '지금 값'처럼 보이지 않는다(QA-065).
+ * 수집 실패로 이어받은 이전 값(isStale) 행을 '지금 값'처럼 보이지 않는다(QA-065·QA-076·QA-116).
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -68,6 +68,41 @@ describe("QA-076 이어받은 시장 수급", () => {
     const { MarketFlowsPanel } = await import("../radar/FlowPanels");
     render(<MarketFlowsPanel market="KOSPI" />);
     await screen.findByText(/코스피 전체/);
+
+    expect(screen.queryByText(/이전 값/)).toBeNull();
+  });
+});
+
+describe("QA-116 이어받은 코스피 현물", () => {
+  // 현물·선물 카드도 같은 토스 시장 저장본의 KOSPI 기록을 씁니다. KOSPI만 실패해 이어받으면 카드의 수집 시각은
+  // 방금 받은 코스닥의 것이라, 현물 값이 예전 것이라는 표시가 따로 있어야 합니다.
+  const body = (spotIsStale: boolean) => ({
+    available: true, spotDate: "2026-10-16", futuresDate: "2026-10-16", sameDay: true, rows: [],
+    collectedAtKst: "2026-10-18 10:00 KST", ageSeconds: 60,
+    spotFetchedAt: "2026-10-16T02:00:00Z", spotIsStale,
+    ...(spotIsStale ? { spotStaleReason: "KOSPI: HTTP 500", spotStaleSince: "2026-10-16T02:00:00Z" } : {}),
+  });
+
+  it.fails("현물·선물 카드가 이어받은 현물에 '이전 값'과 사유·받은 시각을 붙인다", async () => {
+    api.apiGetShared.mockImplementation((path: string) =>
+      path.startsWith("/api/krx/spot-futures") ? Promise.resolve(body(true)) : new Promise(() => {}));
+
+    const { SpotFuturesCard } = await import("../krx/SpotFuturesCard");
+    render(<SpotFuturesCard />);
+    await screen.findByText(/현물 기준일 2026-10-16/);
+
+    const banner = screen.getByText(/이전 값/).textContent;
+    expect(banner).toContain("KOSPI: HTTP 500");
+    expect(banner).toContain("2026-10-16 11:00");
+  });
+
+  it("새로 받은 현물에는 '이전 값'을 붙이지 않는다", async () => {
+    api.apiGetShared.mockImplementation((path: string) =>
+      path.startsWith("/api/krx/spot-futures") ? Promise.resolve(body(false)) : new Promise(() => {}));
+
+    const { SpotFuturesCard } = await import("../krx/SpotFuturesCard");
+    render(<SpotFuturesCard />);
+    await screen.findByText(/현물 기준일 2026-10-16/);
 
     expect(screen.queryByText(/이전 값/)).toBeNull();
   });
