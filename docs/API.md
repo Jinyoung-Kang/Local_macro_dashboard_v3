@@ -204,7 +204,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 |---|---|
 | `GET /api/ai/engines` | `{engines:[{id, label, provider, model, description, speedHint, available, unavailableReason}], keys, enabled, timeoutSeconds, autoAttemptSeconds, autoBudgetSeconds}`. `available`은 이 배포에서 허용됐고(`AI_ENGINES`, ADR 0014) 키도 있는지이고, 못 쓰면 `unavailableReason`이 `not_allowed`(허용 목록 밖 — 키가 있어도)·`no_key`(쓸 수 있으면 null). `auto`는 허용 목록이 없으면 키가 하나라도 있을 때, 있으면 키가 있는 허용 엔진이 둘 이상일 때만 씁니다. `keys`는 제공자별 키 유무(허용 목록과 무관), `enabled`는 키가 있는 허용 엔진이 하나라도 있는지. 데모 열람에게만 `quota: {used, limit, shared: true}`(방문자 공용 하루 한도의 오늘 사용량) |
 | `GET /api/ai/report-types` | 리포트 종류 |
-| `GET /api/ai/snapshot-text` | AI에 전달되는 원본 텍스트 (본문은 `/api/snapshot/text`와 같습니다) |
+| `GET /api/ai/snapshot-text` | AI에 전달되는 원본 텍스트 `{text}` (본문은 `/api/snapshot/text`와 같고 같은 응답 캐시를 씁니다) |
 | `POST /api/ai/report` | `{engineId, reportType, extraInstruction}` → 엔진 응답(`status`·`response`·`error`·`provider`·`model`·`failoverPath` 등) + `reportType`·`promptChars`·`quota: {used, limit}`(운영자는 `limit: null`). 하루(KST) 한도를 다 쓰면 엔진을 부르지 않고 200 `{status: false, error, quota}`입니다. 실패는 **모델에 닿지 않았을 때만**(`charged: false` — 키 없음·허용 목록 밖·제공자의 HTTP 오류·연결 실패) 한 건을 되돌리고, 거절·빈 응답·응답 대기 시간 초과(`charged: true`)는 되돌리지 않습니다. 허용 목록 밖 엔진·못 쓰는 `auto`(엔진 미지정 포함)는 외부 호출 없이 `{status: false, error: "이 배포에서는 쓸 수 없는 엔진입니다: …"}`. **데모 열람**은 방문자 전체가 하루 `AI_DEMO_DAILY_LIMIT`건(기본 20, 백엔드 메모리 — 재시작하면 0부터)을 함께 쓰고 `quota`에 `shared: true`가 붙습니다. 다 쓰면 `error`는 "데모의 오늘 AI 리포트 한도(N건)를 모두 썼습니다. 내일(KST 0시) 다시 시도해 주세요." |
 | `POST /api/ai/test?engineId=&prompt=` | 연결 테스트 |
 | `GET /api/ai/toss/diagnostics` | 토스 연결 진단 |

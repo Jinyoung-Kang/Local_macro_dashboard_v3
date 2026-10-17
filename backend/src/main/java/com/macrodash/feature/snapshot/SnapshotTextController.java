@@ -26,11 +26,11 @@ public class SnapshotTextController {
      *
      * <p>AI 메뉴의 {@code /api/ai/snapshot-text}와 같은 텍스트지만 경로를 나눠
      * 둡니다. 원본 데이터를 보는 일은 AI 키가 없어도 되는 기능인데, AI 경로
-     * 아래에 두면 "AI 기능"으로 읽히기 때문입니다.
+     * 아래에 두면 "AI 기능"으로 읽히기 때문입니다. 응답 캐시 항목은 같습니다(QA-097).
      */
     @GetMapping("/snapshot/text")
     public Map<String, Object> snapshotText() {
         // 전 화면을 훑어 만드는 텍스트 — 같은 저장본이면 다시 만들지 않습니다(ComputedCache).
-        return cache.get("snapshot.text", snapshotText::payload);
+        return cache.get(SnapshotTextService.CACHE_KEY, snapshotText::payload);
     }
 }

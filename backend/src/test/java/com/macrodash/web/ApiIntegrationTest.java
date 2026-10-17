@@ -2,7 +2,6 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -582,7 +581,6 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @Disabled("QA-097: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-097: /api/ai/snapshot-text도 /api/snapshot/text와 같은 응답 캐시를 거친다 — 같은 저장본이면 다시 만들지 않음")
     void aiSnapshotTextSharesTheSnapshotTextCache() {
         insertSnapshot(Datasets.SNAP_MACRO_COLLECTED, """
