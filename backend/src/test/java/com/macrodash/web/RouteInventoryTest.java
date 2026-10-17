@@ -1,7 +1,6 @@
 package com.macrodash.web;
 
 import com.macrodash.feature.auth.AccessPolicy;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -109,7 +108,6 @@ class RouteInventoryTest {
      * 늘어난 관리·알림·계정 경로 21개가 빠졌고, '쿠키 없이 모든 경로 → 401' 점검이 그 경로를 보내지도 않았습니다.
      */
     @Test
-    @Disabled("QA-110: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("scripts/qa/routes.json이 모든 경로를 담고, 그 공개 목록이 접근 정책의 공개 경로와 같다")
     void qaRouteListMatchesRoutes() throws IOException, ClassNotFoundException {
         assumeTrue(Files.exists(QA_ROUTES), "scripts/qa/routes.json을 찾을 수 없습니다");

@@ -44,6 +44,7 @@ DEFAULTS = {  # 다른 파라미터는 이 값으로 둡니다(정상 요청이 
     "intervalType": "TODAY", "targetDate": "", "latest": "true", "obsDate": "", "codes": "005930,000660", "task": "",
     "limit": "40", "runFast": "false", "taskName": "kr_holidays", "x": "DGS10", "y": "DGS2", "window": "60",
     "engineId": "", "prompt": "", "reportType": "", "base": "USD", "quote": "KRW", "symbols": "KOSPI,KOSDAQ", "live": "false",
+    "asset": "SPY",
 }
 
 
@@ -96,7 +97,9 @@ def main() -> None:
     for route in spec["routes"]:
         if args.only and route["p"] != args.only:
             continue
-        if route["p"] in ("/api/auth/logout",):
+        # fuzz: false — 세션을 끊거나 계정·사용자·알림 규칙을 바꾸는 경로(routes.json). 부르면 이후 요청이 전부 401이
+        # 되거나 QA 계정 상태가 바뀝니다. 인증 누락 점검(auth-probe.sh)은 쿠키 없이 이 경로도 보냅니다.
+        if route.get("fuzz") is False:
             continue
         params = {**route.get("q", {}), **route.get("path", {}), **route.get("body", {})}
         cases = [("(기본값)", None, None)]

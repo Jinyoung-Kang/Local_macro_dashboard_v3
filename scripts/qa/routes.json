@@ -1,9 +1,13 @@
 {
-  "_comment": "백엔드 API 경로와 파라미터 종류(docs/API.md 기준). auth-probe.sh·fuzz-api.py가 읽습니다. kind: int|str|date|list|enum|bool|path",
+  "_comment": "백엔드 API 경로와 파라미터 종류(docs/API.md 기준). auth-probe.sh·fuzz-api.py가 읽습니다. kind: int|str|date|list|enum|bool|path. public = 로그인 없이 열린 경로(AccessPolicy의 PUBLIC과 같음), routes = 그 밖의 모든 경로 — 둘을 합치면 백엔드 경로 전체이고 RouteInventoryTest가 대조합니다. mutating = 상태를 바꿈, fuzz: false = 퍼저가 부르지 않음(계정·사용자·알림 규칙을 바꾸거나 세션을 끊음).",
   "public": [
     "GET /api/health",
     "GET /api/auth/session",
-    "POST /api/auth/login"
+    "POST /api/auth/login",
+    "POST /api/auth/signup",
+    "POST /api/auth/verify",
+    "POST /api/auth/reset/request",
+    "POST /api/auth/reset/confirm"
   ],
   "routes": [
     {
@@ -332,6 +336,20 @@
     },
     {
       "m": "GET",
+      "p": "/api/analytics/regime/log",
+      "q": {
+        "limit": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/analytics/regime/track-record",
+      "q": {
+        "asset": "str"
+      }
+    },
+    {
+      "m": "GET",
       "p": "/api/snapshot/text"
     },
     {
@@ -387,7 +405,37 @@
     {
       "m": "POST",
       "p": "/api/auth/logout",
-      "mutating": true
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "POST",
+      "p": "/api/auth/logout-all",
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "GET",
+      "p": "/api/auth/sessions"
+    },
+    {
+      "m": "POST",
+      "p": "/api/auth/password",
+      "body": {
+        "current": "str",
+        "next": "str"
+      },
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "POST",
+      "p": "/api/auth/delete",
+      "body": {
+        "password": "str"
+      },
+      "mutating": true,
+      "fuzz": false
     },
     {
       "m": "GET",
@@ -398,6 +446,89 @@
       "p": "/api/cot/asset",
       "q": {
         "name": "str"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/alerts/rules"
+    },
+    {
+      "m": "POST",
+      "p": "/api/alerts/rules",
+      "body": {
+        "kind": "str"
+      },
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "POST",
+      "p": "/api/alerts/rules/{id}",
+      "path": {
+        "id": "int"
+      },
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "DELETE",
+      "p": "/api/alerts/rules/{id}",
+      "path": {
+        "id": "int"
+      },
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "GET",
+      "p": "/api/alerts/inbox",
+      "q": {
+        "limit": "int"
+      }
+    },
+    {
+      "m": "GET",
+      "p": "/api/alerts/unread-count"
+    },
+    {
+      "m": "POST",
+      "p": "/api/alerts/inbox/read",
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "GET",
+      "p": "/api/admin/users"
+    },
+    {
+      "m": "POST",
+      "p": "/api/admin/users",
+      "body": {
+        "email": "str",
+        "password": "str",
+        "tier": "str"
+      },
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "POST",
+      "p": "/api/admin/users/{id}",
+      "path": {
+        "id": "int"
+      },
+      "body": {
+        "role": "str",
+        "tier": "str"
+      },
+      "mutating": true,
+      "fuzz": false
+    },
+    {
+      "m": "GET",
+      "p": "/api/admin/audit",
+      "q": {
+        "limit": "int"
       }
     }
   ]

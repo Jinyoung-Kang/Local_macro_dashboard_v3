@@ -14,21 +14,38 @@ check() {  # check <설명> <기대코드(정규식)> <실제코드>
 }
 code() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$@"; }
 
-echo "## 1. 쿠키 없이 모든 경로 → 401 (공개 3개 제외)"
-python3 - "$ROOT/scripts/qa/routes.json" <<'PY' | while read -r m p; do
-import json, sys
+echo "## 1. 쿠키 없이 — 로그인이 필요한 경로(routes.json의 routes)는 모두 401, 공개 경로(public)는 401이 아님"
+# routes.json은 백엔드 경로 전체를 담고 public은 AccessPolicy의 공개 경로와 같습니다(RouteInventoryTest가 대조, QA-110).
+# 목록을 먼저 받아 두고 돕니다 — 예전처럼 `python3 … | while`로 돌면 루프가 서브셸이라 이 절의 실패가 끝의 합계에
+# 더해지지 않았습니다.
+probe_list="$(python3 - "$ROOT/scripts/qa/routes.json" <<'PY'
+import json, re, sys
 d = json.load(open(sys.argv[1]))
+sample = {"seriesId": "DGS10", "taskName": "fred_series"}
+fill = lambda p: re.sub(r"\{(\w+)\}", lambda m: sample.get(m.group(1), "1"), p)
 for r in d["routes"]:
-    p = r["p"].replace("{seriesId}", "DGS10").replace("{taskName}", "fred_series")
-    print(r["m"], p)
+    print("auth", r["m"], fill(r["p"]))
+for route in d["public"]:
+    m, p = route.split(" ", 1)
+    print("public", m, fill(p))
 PY
-  c=$(code -X "$m" "http://$BASE$p")
+)"
+while read -r kind m p; do
+  [ -n "$kind" ] || continue
+  if [ "$kind" = "auth" ]; then
+    check "$m $p" "401" "$(code -X "$m" "http://$BASE$p")"
+    continue
+  fi
   case "$m $p" in
-    "GET /api/health") check "$m $p" "200|503" "$c" ;;
-    "GET /api/auth/session") check "$m $p" "200" "$c" ;;
-    *) check "$m $p" "401" "$c" ;;
+    "GET /api/health") check "$m $p (공개)" "200|503" "$(code "http://$BASE$p")" ;;
+    "GET /api/auth/session") check "$m $p (공개)" "200" "$(code "http://$BASE$p")" ;;
+    # 로그인은 4절에서 따로 봅니다(여기서 부르면 실패 기록·지연만 늘어남, 빈 자격 증명의 401은 처리기의 응답).
+    "POST /api/auth/login") ;;
+    # 가입·인증·재설정: 빈 본문이면 400, 메일이 꺼진 QA 스택의 가입·재설정 요청은 503, 연속 호출은 429
+    *) check "$m $p (공개)" "400|429|503" "$(code -X "$m" -H 'Content-Type: application/json' \
+         -H "Origin: http://localhost:$FRONT_PORT" --data-binary '{}' "http://$BASE$p")" ;;
   esac
-done
+done <<< "$probe_list"
 
 echo "## 2. 경로 변형으로 공개 경로 판정 우회 시도 → 401 (또는 404/400), 200은 실패"
 for p in "/api/health/../status" "/api/health/..;/status" "/api//status" "/API/status" "/api/status/" "/api/status%2f" "/api/health%2F..%2Fstatus" "/api/status;x" "/api/status?x=/api/health" "//api/status" "/api/./status" "/api/auth/session/../../status"; do
@@ -98,4 +115,4 @@ check "GET /health 토큰 없음(공개)" "200" "$(code "http://127.0.0.1:$CPORT
 check "GET /health Host: attacker.example" "400" "$(code -H 'Host: attacker.example' "http://127.0.0.1:$CPORT/health")"
 check "GET /live/radar Bearer 틀린 토큰" "401|403" "$(code -H 'Authorization: Bearer wrong' "http://127.0.0.1:$CPORT/live/radar")"
 
-echo; echo "실패 $fails건"; exit $(( fails > 0 ))
+echo; echo "실패 ${fails}건"; exit $(( fails > 0 ))
