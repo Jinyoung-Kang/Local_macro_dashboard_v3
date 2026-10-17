@@ -154,3 +154,20 @@ def test_QA087_13F를_저장할_때_보유마다_두_단계_매칭으로_티커�
             "BOOKING HOLDINGS INC": None,
             "SOME OBSCURE HOLDINGS LLC": None,
         }
+
+
+# ---- QA-123: 클래스를 'COM'·주식 수로 공시한 사채가 보통주 티커에 붙던 문제 ---------------------------------------------
+@pytest.mark.xfail(strict=True, reason="QA-123: 수정 전 재현 — fix 커밋에서 켬")
+def test_QA123_COM으로_공시된_사채는_CUSIP_발행_번호로_걸러_보통주_티커에_붙지_않는다():
+    """
+    일부 기관(피셔)은 전환사채를 클래스 'COM'·주식 수(SH)로 공시합니다. 백업(2026-10-12)의 FORD MTR CO 345370CZ1이 그 예로,
+    다른 기관은 같은 CUSIP을 'NOTE 3/1'·원금(PRN)으로 공시합니다. 클래스·PRN만 보면 이 행이 포드 주가(F)로 계산됩니다.
+    백엔드 13F 집계(QA-113)와 같은 규칙으로 CUSIP 7~8번째 글자(발행 번호)가 숫자가 아니면 지분 증권이 아니라고 봅니다.
+    """
+    bond = {"name": "FORD MTR CO", "class": "COM", "cusip": "345370CZ1", "value": 19.0, "shares": 19000.0, "weight": 0.0}
+    common = {"name": "FORD MTR CO", "class": "COM", "cusip": "345370860", "value": 100.0, "shares": 10.0, "weight": 1.0}
+
+    assert equities.lookup_holding(bond) is None, "사채 행을 포드 주가로 덮으면 안 됩니다"
+    assert equities.lookup_holding(common) == ("F", "임의소비재"), "같은 회사의 보통주는 그대로 찾습니다"
+    assert equities.lookup_holding({**common, "cusip": None}) == ("F", "임의소비재"), "CUSIP을 모르면 예전처럼 이름으로 찾습니다"
+
