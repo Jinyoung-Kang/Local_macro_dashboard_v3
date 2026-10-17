@@ -1,0 +1,48 @@
+"""
+tests/test_secret_files_ignored.py
+비밀값 파일(.env와 그 복사본)이 git 추적 대상이 되지 않는지 — 저장소 최상위 .gitignore.
+
+예전 .gitignore는 `.env`·`.env.qa`만 이름으로 적어, AWS 배포용으로 만든 `.env.aws` 같은 복사본은 `git add .`
+한 번에 커밋될 수 있었습니다(저장소는 공개될 수 있다고 봅니다). 지금은 `.env*`를 막고 키 이름만 담은
+예시(`*.example`)만 추적합니다 — 각 서비스의 .dockerignore와 같은 방식입니다.
+"""
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _in_git_checkout() -> bool:
+    if shutil.which("git") is None:
+        return False
+    probe = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=ROOT, capture_output=True, text=True)
+    return probe.returncode == 0 and probe.stdout.strip() == "true"
+
+
+pytestmark = pytest.mark.skipif(not _in_git_checkout(), reason="git 저장소가 아니라 건너뜁니다.")
+
+
+def _ignored(name: str) -> bool:
+    # --no-index: 이미 추적 중인지와 상관없이 무시 규칙만 봅니다.
+    return subprocess.run(["git", "check-ignore", "-q", "--no-index", name], cwd=ROOT).returncode == 0
+
+
+@pytest.mark.parametrize("name", [".env", ".env.qa", ".env.aws", ".env.prod", "collector/.env", "frontend/.env.local"])
+def test_env_파일과_복사본은_추적하지_않는다(name):
+    assert _ignored(name)
+
+
+@pytest.mark.parametrize("name", [".env.example", ".env.aws.example"])
+def test_키_이름만_담은_예시는_추적한다(name):
+    assert not _ignored(name)
+
+
+def test_추적_중인_파일이_무시_규칙에_걸리지_않는다():
+    listed = subprocess.run(["git", "ls-files", "-ci", "--exclude-standard"], cwd=ROOT,
+                            capture_output=True, text=True, check=True)
+    assert listed.stdout.split() == []
