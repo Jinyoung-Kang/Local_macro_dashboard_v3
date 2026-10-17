@@ -237,7 +237,8 @@ _FUND_TOKENS = {
     "ETF", "ETFS", "ETN", "ETNS", "TR", "TRUST", "FUND", "FUNDS", "FD", "FDS",
     "PORTFOLIO", "INDEX", "UNIT", "UNITS", "BEN",
 }
-# 주식이 아닌 증권(노트·전환사채·채권)을 뜻하는 클래스(titleOfClass) 토큰. 회사 이름이 같아도 주가로 덮지 않습니다.
+# 채무증권(노트·전환사채·채권)을 뜻하는 클래스(titleOfClass) 토큰. 회사 이름이 같아도 주가로 덮지 않습니다.
+# 우선주·워런트 토큰(PFD·CONV·W 등)은 일부러 넣지 않습니다 — 같은 회사 보통주 티커로 근사합니다(lookup_holding).
 _DEBT_TOKENS = {"NOTE", "NOTES", "DEBT", "DEB", "DBCV", "SDCV", "BOND", "BONDS"}
 FUND_SECTOR = "ETF·펀드"
 
@@ -292,8 +293,10 @@ def lookup_holding(holding: dict) -> tuple[str, str] | None:
     """
     13F 보유 한 줄(sec13f 저장 형태) → (티커, 섹터). 모르면 None.
 
-    lookup()에 클래스(titleOfClass)를 함께 넘기고, 주식이 아닌 행은 처음부터 덮지 않습니다 —
-    채권 원금(PRN, 저장본의 shares가 None)·노트·전환사채는 회사 이름이 같아도 주가와 다른 증권입니다.
+    lookup()에 클래스(titleOfClass)를 함께 넘기고, 채권(PRN)·노트·전환사채 행은 처음부터 덮지 않습니다 —
+    채권 원금(PRN, 저장본의 shares가 None)이거나 클래스에 _DEBT_TOKENS가 있는 행은 회사 이름이 같아도 주가와 다른
+    증권입니다. 우선주(의무전환 우선주 '… MAND CONV' 포함)·워런트는 거르지 않아 같은 회사 보통주의 티커에 붙습니다 —
+    보통주 가격으로 근사한 것입니다(같은 회사의 주식형 증권이라 '엉뚱한 회사의 가격'은 아님).
     """
     if "shares" in holding and holding["shares"] is None:
         return None
