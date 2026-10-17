@@ -239,7 +239,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 | 🔒 `POST /collect?group=fast\|slow\|weekly\|all&wait=true` | 작업군 실행 |
 | 🔒 `POST /collect/task/{taskName}` | 태스크 1건 실행 |
 | 🔒 `POST /refresh?scope=global` | 새로고침 기준 시각 갱신 |
-| 🔒 `POST /maintenance/purge?days=400` | 오래된 누적 이력 정리 |
+| 🔒 `POST /maintenance/purge?days=400` | 오래된 누적 행 정리 — **실행 전 `make backup`**. 허용 목록(`catalog.PURGEABLE_DATASETS`: 금융위 시세·토스 종목 수급)과 옛 실행 기록만 지움. 레이더 이력·FRED·순유동성·KRX 선물·금융위 시장 합계는 지우지 않고 응답 `excluded`에 적음 |
 | 🔒 `GET /live/radar?...` | 수급 랭킹 즉시 수집 (폴백 체인 전체) |
 | 🔒 `GET /live/ticker/{symbol}?period=` | 티커 시계열 즉시 수집 |
 | 🔒 `GET /live/daum-intraday?minutes=30` | 장중 수급 가속도 |

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app import catalog
 
@@ -218,14 +217,20 @@ def test_missing_datasets_lists_expected_names(store):
 
 
 def test_purge_removes_old_history_only(store):
-    store.put_timeseries("demo", "S", [("2000-01-03", 1.0), ("2026-01-03", 2.0)])
+    """허용 목록 데이터셋에서도 기간이 지난 행만 지웁니다. 목록 밖 데이터셋은 남기고 알립니다(QA-070)."""
+    recent = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()
+    store.put_observations(catalog.OBS_TOSS_STOCK_FLOW, "2000-01-03", [{"code": "005930"}], entity_key="code")
+    store.put_observations(catalog.OBS_TOSS_STOCK_FLOW, recent, [{"code": "005930"}], entity_key="code")
+    store.put_timeseries("demo", "S", [("2000-01-03", 1.0), (recent, 2.0)])
     removed = store.purge_older_than(365)
 
-    assert removed["timeseries"] == 1
-    assert [row["date"] for row in store.read_timeseries("demo", "S")] == ["2026-01-03"]
+    assert removed["observations"] == 1
+    assert [row["obsDate"] for row in store.read_observations(catalog.OBS_TOSS_STOCK_FLOW)] == [recent]
+    assert removed["timeseries"] == 0
+    assert [row["date"] for row in store.read_timeseries("demo", "S")] == ["2000-01-03", recent]
+    assert removed["excluded"] == ["demo"]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-070: 수정 전 재현 — 수동 정리가 데이터셋을 가리지 않고 지움")
 def test_qa070_purge_keeps_history_that_cannot_be_refetched(store):
     """
     수동 정리(/maintenance/purge)는 스스로 보존 기한을 두는 데이터셋(허용 목록)만 지웁니다(QA-070).

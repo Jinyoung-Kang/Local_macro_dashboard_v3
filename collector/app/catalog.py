@@ -86,6 +86,15 @@ OBS_FSC_PRICE = "fsc_price"     # 금융위 공식 일별 시세 (entity = 6자�
 TS_FSC_MARKET = "fsc_market"    # 시장별 합계 시가총액·거래대금 (series = "KOSPI.marketCap" 등)
 OBS_TOSS_STOCK_FLOW = "toss_stock_flow"  # 종목별 일별 투자자 매매동향 (토스증권 공식, entity = 종목코드)
 
+# 수동 정리(POST /maintenance/purge)가 기간으로 지워도 되는 누적 데이터셋 — 허용 목록(QA-070).
+# 조건은 둘입니다: 그 데이터셋을 쓰는 태스크가 이미 보존 기한을 두고 스스로 정리하고(금융위·토스 400일),
+# 원천이 지난 날짜를 다시 줍니다. 여기 없는 데이터셋은 기간이 지나도 지우지 않습니다.
+#   - radar_ranking: 외부에서 다시 받을 수 없는 이력(ADR 0005)
+#   - fred · fed_liquidity: 증분 적재라 지운 구간이 다시 채워지지 않고, 판정 성과가 전 구간을 씀(ADR 0009)
+#   - krx_futures: 원천이 최근 40일만 줌
+#   - fsc_market: 태스크가 보존 기한을 두지 않고, 보충은 최근 7일만 함
+PURGEABLE_DATASETS = (OBS_FSC_PRICE, OBS_TOSS_STOCK_FLOW)
+
 
 # ==============================================================================
 # 신선도 기준 (초)
