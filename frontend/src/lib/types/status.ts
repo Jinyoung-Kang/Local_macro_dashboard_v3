@@ -95,9 +95,11 @@ export interface StatusIssuesResponse {
   collectorReachable: boolean;
   lookbackHours: number;
   lastRunStatus?: string | null;
-  counts: { errors: number; warnings: number; recentGroups: number; missingDatasets: number };
+  /** missingDatasets는 수집기에 닿지 못하면 null(모름) — 기대 목록은 수집기만 압니다. */
+  counts: { errors: number; warnings: number; recentGroups: number; missingDatasets: number | null };
   current: { level: "error" | "warning"; task: string; status: string; at: string; detail: string }[];
   recent: { level: "error" | "warning"; task: string; count: number; firstAt: string; at: string; detail: string }[];
-  missing: string[];
+  /** 수집기에 닿지 못하면 null(모름). */
+  missing: string[] | null;
   text: string;
 }

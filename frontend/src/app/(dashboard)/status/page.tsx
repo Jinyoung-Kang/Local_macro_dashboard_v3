@@ -19,7 +19,7 @@ import { useRefreshSignal } from "@/hooks/useRefreshSignal";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useTaskRunner } from "@/hooks/useTaskRunner";
 import { apiPost } from "@/lib/api";
-import { EMPTY, formatAge, formatKst, formatNumber } from "@/lib/format";
+import { EMPTY, formatAge, formatKst, formatNumber, formatWithUnit } from "@/lib/format";
 import type {
   PublicApiDiagnosticsResponse,
   StatusIssuesResponse,
@@ -411,7 +411,10 @@ function IssuesPanel() {
   const { data, loading, error, reload, refreshError } = useApi<StatusIssuesResponse>(endpoints.status.issues, 60_000);
   const counts = data?.counts;
   const hasIssues =
-    !!counts && counts.errors + counts.warnings + counts.recentGroups + counts.missingDatasets > 0;
+    !!counts && counts.errors + counts.warnings + counts.recentGroups + (counts.missingDatasets ?? 0) > 0;
+  // 수집기에 닿지 못하면 누락 데이터셋 수는 모릅니다(null). '0개'·초록 '오류·경고가 없습니다'로 보이면 모름이
+  // 정상처럼 읽혔습니다(QA-102). 예전 백엔드는 이때도 0을 보냈으므로 연결 여부도 함께 봅니다.
+  const missingUnknown = !!data && (!data.collectorReachable || counts?.missingDatasets == null);
 
   return (
     <Card
@@ -435,7 +438,7 @@ function IssuesPanel() {
             <Metric label="현재 오류" value={`${counts?.errors ?? 0}건`} tone={counts?.errors ? "text-danger" : undefined} />
             <Metric label="현재 경고" value={`${counts?.warnings ?? 0}건`} tone={counts?.warnings ? "text-warn" : undefined} />
             <Metric label="최근 실패 유형" value={`${counts?.recentGroups ?? 0}개`} />
-            <Metric label="누락 데이터셋" value={`${counts?.missingDatasets ?? 0}개`} />
+            <Metric label="누락 데이터셋" value={missingUnknown ? EMPTY : formatWithUnit(counts?.missingDatasets, 0, "개")} />
           </div>
           {!data.collectorReachable && (
             <Banner tone="warn">수집기에 연결하지 못해 DB 기록만으로 만들었습니다(누락 데이터셋·없앤 태스크 거르기 제외).</Banner>
@@ -444,6 +447,11 @@ function IssuesPanel() {
             <pre tabIndex={0} className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded border border-border bg-canvas p-3 text-[11px] leading-relaxed text-body">
               {data.text}
             </pre>
+          ) : missingUnknown ? (
+            <p className="text-sm text-muted">
+              실행 기록에는 최근 {data.lookbackHours}시간 동안 오류·경고가 없지만, 수집기에 연결하지 못해 누락 데이터셋은
+              확인하지 못했습니다.
+            </p>
           ) : (
             <p className="text-sm text-ok">✅ 최근 {data.lookbackHours}시간 동안 오류·경고가 없습니다.</p>
           )}

@@ -1,6 +1,5 @@
 package com.macrodash.feature.status;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -74,7 +73,6 @@ class StatusIssuesTest {
 
     // 수정 전에는 '모름'(null)을 빈 목록으로 바꿔 counts.missingDatasets=0, 텍스트에 '누락 데이터셋 0'과 '없음'을 적었다.
     @Test
-    @Disabled("QA-102: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("누락 데이터셋을 모르면(수집기 불통) 0·'없음'이 아니라 null·'확인 못 함'")
     @SuppressWarnings("unchecked")
     void unknownMissingIsNotZero() {

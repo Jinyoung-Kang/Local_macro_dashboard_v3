@@ -49,7 +49,7 @@ describe("QA-045 상태 화면 — 수집기에 닿지 못하면 누락 여부�
 
 describe("QA-102 상태 화면 오류·경고 로그 — 수집기에 닿지 못하면 누락 데이터셋 수를 모른다", () => {
   // 수정 전에는 누락 수를 모르는데도(null) '0개'로 적고, 실행 기록에 실패가 없으면 초록 '오류·경고가 없습니다'를 보였다.
-  it.fails("누락 데이터셋은 '—'이고 초록 '오류·경고가 없습니다'를 보이지 않는다", async () => {
+  it("누락 데이터셋은 '—'이고 초록 '오류·경고가 없습니다'를 보이지 않는다", async () => {
     reads["/api/status/issues"] = () => Promise.resolve({
       generatedAt: "2026-10-18 09:00 KST", collectorReachable: false, lookbackHours: 24, lastRunStatus: null,
       counts: { errors: 0, warnings: 0, recentGroups: 0, missingDatasets: null },

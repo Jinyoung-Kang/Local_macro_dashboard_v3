@@ -169,7 +169,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 | `POST /api/status/refresh?runFast=true` | 수동 새로고침 |
 | `POST /api/status/run/{taskName}` | 태스크 실행을 **시작만** 하고 바로 **202** `{accepted, task, baselineStartedAt}`. 끝났는지는 `/api/status/history?task=&limit=1`의 `startedAt`이 `baselineStartedAt`보다 새로워졌는지로 확인합니다(화면이 3초 간격으로 확인). 없는 태스크 400, 수집기에 닿지 못하면 502 |
 | `POST /api/verification` | 교차 검증 (판정 포함) |
-| `GET /api/status/issues` | 수집 오류·경고 모음 — 지금 실패 중인 태스크, 최근 24시간 실패 이력(같은 사유는 묶음·횟수), 누락 데이터셋. `text`는 복사용이며 **비밀값이 가려져** 있습니다. 실행 기록은 DB에서 직접 읽어 수집기가 꺼져 있어도 동작 |
+| `GET /api/status/issues` | 수집 오류·경고 모음 — 지금 실패 중인 태스크, 최근 24시간 실패 이력(같은 사유는 묶음·횟수), 누락 데이터셋. `text`는 복사용이며 **비밀값이 가려져** 있습니다. 실행 기록은 DB에서 직접 읽어 수집기가 꺼져 있어도 동작하고, 그때 누락 데이터셋(`counts.missingDatasets`·`missing`)은 `null`(모름)이며 `text`에는 '확인 못 함(수집기 연결 안 됨)' |
 | `GET /api/status/public-apis` | 국내 공공 API 연결 진단 — **API마다 실제 1회 호출**. 결과에 키 값은 없음 |
 
 ### 🧭 국면 · 🔗 상관관계

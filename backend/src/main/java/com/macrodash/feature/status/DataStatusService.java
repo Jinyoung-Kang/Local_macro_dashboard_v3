@@ -109,7 +109,8 @@ public class DataStatusService {
      * ⚠️ 수집 오류·경고 모음 (복사용 텍스트 포함). {@link StatusIssues} 참고.
      *
      * <p>실행 기록은 DB에서 직접 읽습니다 — 수집기가 죽어 있을 때가 가장 로그가 필요한
-     * 때입니다. 수집기에 닿으면 등록된 태스크 목록과 누락 데이터셋을 더합니다.
+     * 때입니다. 수집기에 닿으면 등록된 태스크 목록과 누락 데이터셋을 더합니다. 닿지 않으면
+     * 누락 데이터셋은 모름(null)입니다.
      */
     public Map<String, Object> issues() {
         Optional<JsonNode> collectorStatus = collector.status();
@@ -117,12 +118,14 @@ public class DataStatusService {
         List<Map<String, Object>> history =
                 repository.readRecentTaskIssues(Instant.now().minus(ISSUE_LOOKBACK), ISSUE_WINDOW);
 
-        List<String> missing = new ArrayList<>();
+        // 누락 목록은 수집기만 압니다. 닿지 않으면 null(모름)로 넘깁니다 — 빈 목록을 넘기면 '누락 0'이 됩니다(QA-102).
+        List<String> missing = null;
         String lastRunStatus = null;
         java.util.Set<String> registered = null;
         if (collectorStatus.isPresent()) {
             JsonNode payload = collectorStatus.get();
             lastRunStatus = Json.asText(payload, "lastRunStatus");
+            missing = new ArrayList<>();
             for (JsonNode entry : Json.array(payload, "missingDatasets")) {
                 missing.add(Json.asText(entry, "label") + " (" + Json.asText(entry, "name") + ")");
             }

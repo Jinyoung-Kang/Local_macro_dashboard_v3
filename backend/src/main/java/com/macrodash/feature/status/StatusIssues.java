@@ -33,13 +33,17 @@ public final class StatusIssues {
     /** 한 사유의 최대 길이. 수집기가 1000자로 자르지만 텍스트 한 덩어리가 너무 길어지지 않게. */
     static final int MAX_DETAIL = 600;
 
+    /** 누락 데이터셋을 모를 때(수집기 불통) 텍스트에 적는 말. */
+    static final String MISSING_UNKNOWN = "확인 못 함(수집기 연결 안 됨)";
+
     private StatusIssues() {
     }
 
     /**
      * @param latest          태스크별 최근 결과 (task, status, started_at, detail)
      * @param history         최근 실행 기록 중 ok가 아닌 행 (최신이 앞)
-     * @param missingDatasets 있어야 하는데 없는 데이터셋 이름 (없으면 빈 목록)
+     * @param missingDatasets 있어야 하는데 없는 데이터셋 이름 (없으면 빈 목록). null이면 모름 — 기대 목록은 수집기만
+     *                        알아서, 수집기에 연결하지 못하면 개수도 null이고 텍스트는 '확인 못 함'입니다
      * @param lastRunStatus   마지막 수집 실행 상태 (ok·partial·fail·interrupted 등, 모르면 null)
      * @param registeredTasks 지금 등록된 태스크 이름. null이면 거르지 않음(수집기에 연결 못 함)
      * @param now             생성 시각
@@ -79,13 +83,15 @@ public final class StatusIssues {
 
         long errors = current.stream().filter(item -> "error".equals(item.get("level"))).count();
         long warnings = current.size() - errors;
-        List<String> missing = missingDatasets == null ? List.of() : missingDatasets;
+        // 모름(null)을 빈 목록으로 바꾸지 않습니다. 바꾸면 수집기가 꺼진 동안 '누락 데이터셋 0'이 되어, 화면은 초록
+        // '오류·경고가 없습니다'를 보였고 복사 텍스트에도 '없음'이 찍혀 나갔습니다(QA-102).
+        List<String> missing = missingDatasets;
 
         Map<String, Object> counts = new LinkedHashMap<>();
         counts.put("errors", errors);
         counts.put("warnings", warnings);
         counts.put("recentGroups", recent.size());
-        counts.put("missingDatasets", missing.size());
+        counts.put("missingDatasets", missing == null ? null : missing.size());
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("generatedAt", Kst.stamp(now));
@@ -157,10 +163,14 @@ public final class StatusIssues {
         StringBuilder out = new StringBuilder();
         out.append("[Local Macro Dashboard] 수집 오류·경고 로그\n");
         out.append("생성: ").append(Kst.stamp(now)).append('\n');
+        if (missing == null) {
+            // 화면 밖으로 복사돼 나가는 텍스트라, 무엇을 확인하지 못했는지를 텍스트 안에 남깁니다.
+            out.append("※ 수집기에 연결하지 못해 DB 실행 기록만으로 만들었습니다\n");
+        }
         out.append("요약: 현재 오류 ").append(counts.get("errors"))
                 .append(" · 현재 경고 ").append(counts.get("warnings"))
                 .append(" · 최근 실패 유형 ").append(counts.get("recentGroups"))
-                .append(" · 누락 데이터셋 ").append(counts.get("missingDatasets"));
+                .append(" · 누락 데이터셋 ").append(missing == null ? MISSING_UNKNOWN : counts.get("missingDatasets"));
         if (lastRunStatus != null) {
             out.append(" · 마지막 실행 ").append(lastRunStatus);
         }
@@ -187,10 +197,13 @@ public final class StatusIssues {
             out.append('\n').append("    ").append(item.get("detail")).append('\n');
         }
         out.append("\n■ 있어야 하는데 없는 데이터셋\n");
-        if (missing.isEmpty()) {
+        if (missing == null) {
+            out.append("  ").append(MISSING_UNKNOWN).append(" — 기대 목록은 수집기만 압니다\n");
+        } else if (missing.isEmpty()) {
             out.append("  없음\n");
+        } else {
+            missing.forEach(name -> out.append("  - ").append(name).append('\n'));
         }
-        missing.forEach(name -> out.append("  - ").append(name).append('\n'));
         return out.toString();
     }
 

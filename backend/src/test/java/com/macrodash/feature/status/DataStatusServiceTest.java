@@ -5,7 +5,6 @@ import com.macrodash.read.StoreReader;
 import com.macrodash.store.StoreRepository;
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.UpstreamUnavailableException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -136,7 +135,6 @@ class DataStatusServiceTest {
 
     // 수정 전에는 수집기에 닿지 못해도 누락 목록을 빈 목록으로 넘겨 '누락 데이터셋 0'이 됐다(화면은 초록 '오류·경고 없음').
     @Test
-    @Disabled("QA-102: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("오류·경고 모음: 수집기에 닿지 못하면 누락 데이터셋 수는 모름(null), 복사 텍스트도 '확인 못 함'")
     @SuppressWarnings("unchecked")
     void issuesWithoutCollectorDoNotClaimZeroMissing() {
