@@ -392,6 +392,40 @@ def test_QA060_이어받은_카드의_스프레드용_금리도_이전_값으로
     assert rates["us10y"]["current"] == 4.12 and rates["us10y"]["isStale"] is True
     assert rates["us02y"]["isStale"] is False
 
+@pytest.mark.parametrize("previous_us02y, expected", [
+    (None, None),                                                    # 받은 적 없음 → 백엔드가 '수집 실패'
+    ({"current": 3.55, "previous": 3.50}, {"current": 3.55, "previous": 3.50, "isStale": True}),
+], ids=["no-previous", "carry-over"])
+def test_QA075_보정_실패한_2년물은_선물_가격_대신_이전_값이나_빈_값으로_저장한다(store, monkeypatch, previous_us02y, expected):
+    """2년물 보정이 실패한 수집 라운드 전체 경로: rates.us02y에 ZT=F 가격(102.4)이 저장되지 않습니다(QA-075)."""
+    previous_items = [_card("us10y", 4.08)] + ([_card("us02y", 3.55)] if previous_us02y else [])
+    store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, {
+        "categories": [{"id": "ust", "items": previous_items}],
+        "rates": {"us10y": {"current": 4.08, "previous": 4.05},
+                  **({"us02y": previous_us02y} if previous_us02y else {})},
+    })
+    monkeypatch.setattr(tasks.market_service, "collect_macro_cards", lambda categories: {
+        "categories": [{"id": "ust", "items": [_card("us10y", 4.10), _card("us02y", 102.4)]}],
+        "rates": {"us10y": {"current": 4.10, "previous": 4.08}, "us02y": {"current": 102.4, "previous": 102.3}},
+    })
+    monkeypatch.setattr(tasks.market_service, "now_kst_text", lambda: "now")
+    read_snapshot = store.read_snapshot   # 국채 보정이 방금 저장된 스크래핑 저장본을 쓰지 않게(스크래핑 실패 경로)
+    monkeypatch.setattr(tasks.macro_cards.store, "read_snapshot",
+                        lambda name: None if name == catalog.SNAP_SCRAPER_MARKETS else read_snapshot(name))
+
+    def boom():
+        raise RuntimeError("TradingView 차단")
+
+    monkeypatch.setattr(tasks.macro_cards.scraper_service, "collect_scraped_markets", boom)
+    monkeypatch.setattr(tasks.macro_cards, "inject_scraped_indices", lambda payload: payload)
+
+    tasks.task_macro_collected()
+
+    rates = store.read_snapshot(catalog.SNAP_MACRO_COLLECTED).payload["rates"]
+    assert rates.get("us02y") == expected
+    assert rates["us10y"]["current"] == 4.10
+
+
 def test_QA001_failed_card_without_previous_value_stays_failed(store, monkeypatch):
     """직전 저장본에도 없던 카드는 그대로 실패입니다 — 없는 숫자를 만들지 않습니다."""
     store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, {"categories": [{"id": "fx", "items": [_card("dxy", 98.1)]}], "rates": {}})

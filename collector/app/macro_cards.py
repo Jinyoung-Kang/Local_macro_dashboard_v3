@@ -137,7 +137,13 @@ def _fail_unconverted_price_cards(payload: dict, overridden: set[str]) -> dict:
     ZT=F는 2년 국채 선물 **가격**(~100pt)입니다. 보정이 실패했을 때 그 값을 그대로 두면
     "미국채 2년물 수익률(%)" 라벨 아래 101.5가 ok로 남고, AI 텍스트와 스프레드 계산까지
     가격을 수익률로 읽습니다. 모르는 값은 모른다고 적습니다.
+
+    스프레드 계산용 rates에서도 그 키를 뺍니다. collect_macro_cards가 카드 가격으로 rates를 채우므로,
+    카드만 고치면 rates.us02y에 선물 가격이 남아 백엔드가 '실시간' 10Y−2Y를 −98%p로 냈습니다(QA-075).
+    빠진 키는 task_macro_collected가 직전 저장본 값으로 이어받거나(isStale), 없으면 백엔드가 null('수집 실패')로 둡니다.
+    10년·30년(^TNX·^TYX)은 원본이 이미 수익률이라 남깁니다.
     """
+    rates = payload.get("rates")
     for category in payload.get("categories") or []:
         for item in category.get("items") or []:
             key = item.get("key")
@@ -148,6 +154,10 @@ def _fail_unconverted_price_cards(payload: dict, overridden: set[str]) -> dict:
                     "delta": None, "pct": None, "prevStr": "N/A", "prevValue": None, "deltaStr": "N/A",
                     "note": "수익률 보정 실패 — 원본(ZT=F)은 선물 가격이라 수익률로 쓰지 않습니다",
                 })
+    if isinstance(rates, dict):
+        for key in indicators.BOND_PRICE_ONLY_KEYS:
+            if key not in overridden:
+                rates.pop(key, None)
     return payload
 
 

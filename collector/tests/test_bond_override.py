@@ -134,7 +134,6 @@ def _boom():
     raise RuntimeError("TradingView 차단")
 
 
-@pytest.mark.xfail(strict=True, reason="QA-075: 수정 전 재현 — 보정 못 한 선물 가격이 rates에 남음")
 @pytest.mark.parametrize("scrape", [
     _boom,
     lambda: _scraped(us02y={"status": "fail", "price": None}),
