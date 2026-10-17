@@ -119,6 +119,41 @@ def test_single_key_override_failure_also_fails_the_futures_card(no_snapshot, mo
     assert set(result["rates"]) == {"us10y", "us30y"}
 
 
+def _payload_with_rates() -> dict:
+    """운영 모양 — collect_macro_cards는 카드 가격으로 rates도 채웁니다(us02y는 ZT=F 선물 가격)."""
+    payload = _payload()
+    payload["rates"] = {
+        "us02y": {"current": 101.5, "previous": 101.4},
+        "us10y": {"current": 4.10, "previous": 4.08},
+        "us30y": {"current": 4.70, "previous": 4.66},
+    }
+    return payload
+
+
+def _boom():
+    raise RuntimeError("TradingView 차단")
+
+
+@pytest.mark.xfail(strict=True, reason="QA-075: 수정 전 재현 — 보정 못 한 선물 가격이 rates에 남음")
+@pytest.mark.parametrize("scrape", [
+    _boom,
+    lambda: _scraped(us02y={"status": "fail", "price": None}),
+], ids=["scrape-exception", "us02y-fail"])
+def test_QA075_보정하지_못한_선물_가격은_스프레드용_rates에서도_뺀다(no_snapshot, monkeypatch, scrape):
+    """
+    카드만 '수집 실패'로 바꾸고 rates.us02y에 ZT=F 가격(~101.5)을 남기면, 백엔드가 그것을 2년물 수익률로 읽어
+    '실시간' 10Y−2Y를 4.10 − 101.5 = −97.4%p로 냅니다(QA-075). 10년·30년은 원본이 이미 수익률이라 남깁니다 —
+    빼면 30Y−2Y 스크래핑 패널이 '수집 실패'로 뜨던 회귀(1e4d3be)가 되살아납니다.
+    """
+    monkeypatch.setattr(macro_cards.scraper_service, "collect_scraped_markets", scrape)
+
+    result = macro_cards.apply_bond_override(_payload_with_rates())
+
+    assert "us02y" not in result["rates"]
+    assert result["rates"]["us10y"]["current"] is not None
+    assert result["rates"]["us30y"]["current"] is not None
+
+
 _STALE = {"isStale": True, "staleReason": "HTTP 429", "note": "⚠️ 이전 값", "collectedAt": "2026-10-11 09:00:00 KST"}
 
 
