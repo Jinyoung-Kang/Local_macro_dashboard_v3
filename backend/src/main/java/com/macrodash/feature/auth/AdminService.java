@@ -1,5 +1,6 @@
 package com.macrodash.feature.auth;
 
+import com.macrodash.store.AlertStore;
 import com.macrodash.store.AuditLogStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
@@ -27,11 +28,13 @@ public class AdminService {
     private final UserStore users;
     private final AuditLogStore audit;
     private final PasswordHasher hasher;
+    private final AlertStore alerts;
 
-    public AdminService(UserStore users, AuditLogStore audit, PasswordHasher hasher) {
+    public AdminService(UserStore users, AuditLogStore audit, PasswordHasher hasher, AlertStore alerts) {
         this.users = users;
         this.audit = audit;
         this.hasher = hasher;
+        this.alerts = alerts;
     }
 
     public List<Map<String, Object>> users() {
@@ -62,9 +65,21 @@ public class AdminService {
             return "자기 자신의 운영자 역할은 내릴 수 없습니다(운영자가 없어지면 아무도 관리할 수 없습니다).";
         }
         users.updateRoleAndTier(userId, role, tier);
-        audit.append(admin.id(), "user.updated", Map.of("target", userId, "role", role, "tier", tier,
+        Map<String, Object> detail = new LinkedHashMap<>(Map.of("target", userId, "role", role, "tier", tier,
                 "fromRole", target.role(), "fromTier", target.tier()));
+        // 유료에서 무료로 내리면 국면 전환 밖의 알림 규칙을 끕니다(명세 B5 — 등급 변경은 다음 요청부터 반영). 끄지 않으면
+        // 정기 평가가 유료 알림을 계속 넣고, 관심 종목이 종목별 수급 수집 범위(전체 60)를 계속 차지했습니다(QA-091).
+        // 다시 유료로 올려도 저절로 켜지 않습니다 — 회원이 알림 화면에서 켭니다.
+        if (paid(target.role(), target.tier()) && !paid(role, tier) && alerts.ready()) {
+            detail.put("disabledAlertRules", alerts.disablePaidRules(userId));
+        }
+        audit.append(admin.id(), "user.updated", detail);
         return null;
+    }
+
+    /** 유료 기능을 쓸 수 있는 역할·등급인가 — {@link CurrentUser#isPro()}와 같은 규칙(운영자는 등급과 무관). */
+    private static boolean paid(String role, String tier) {
+        return "OWNER".equals(role) || "PRO".equals(tier);
     }
 
     /** 메일 없이 회원을 만듭니다(인증된 상태). 처음 비밀번호는 운영자가 정해 전달하고, 회원이 내 계정에서 바꿉니다. */

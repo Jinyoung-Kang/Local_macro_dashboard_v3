@@ -2,7 +2,6 @@ package com.macrodash.web;
 
 import com.macrodash.store.Datasets;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -213,7 +212,6 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @Disabled("QA-091: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-091 운영자가 유료 → 무료로 내리면 국면 전환 밖의 알림 규칙이 꺼지고(감사 기록에 개수), 회원이 다시 켤 수 없다")
     void tierDowngradeDisablesPaidAlertRules() {
         long memberId = users.findByEmail(MEMBER).orElseThrow().id();

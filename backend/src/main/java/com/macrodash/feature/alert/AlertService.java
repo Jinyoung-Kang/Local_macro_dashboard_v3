@@ -34,6 +34,8 @@ public class AlertService {
     static final int MAX_STREAK = 20;
     static final Set<String> MARKETS = Set.of("KOSPI", "KOSDAQ");
     private static final Pattern STOCK_CODE = Pattern.compile("^\\d{6}$");
+    private static final String FREE_TIER_ONLY_REGIME =
+            "무료 등급은 국면 전환 알림만 쓸 수 있습니다. 다른 알림은 유료 등급에서 쓸 수 있습니다.";
 
     /** 결과 — {@code status}는 HTTP 상태. */
     public record Result(int status, String message) {
@@ -73,7 +75,7 @@ public class AlertService {
     /** 규칙 만들기 — 종류와 대상 검사, 등급별 상한. */
     public Result create(CurrentUser user, String kind, JsonNode params) {
         if (!user.isPro() && !"REGIME_CHANGE".equals(kind)) {
-            return new Result(403, "무료 등급은 국면 전환 알림만 쓸 수 있습니다. 다른 알림은 유료 등급에서 쓸 수 있습니다.");
+            return new Result(403, FREE_TIER_ONLY_REGIME);
         }
         if (alerts.countRules(user.id()) >= ruleLimit(user)) {
             return new Result(400, "알림 규칙은 %d개까지 만들 수 있습니다.".formatted(ruleLimit(user)));
@@ -126,6 +128,11 @@ public class AlertService {
             // 60종목만 받아 넘친 종목 규칙은 조용히 울리지 않았습니다(QA-041).
             AlertStore.Rule rule = alerts.rules(user.id()).stream()
                     .filter(candidate -> candidate.id() == ruleId).findFirst().orElse(null);
+            // 켤 때도 만들 때와 같은 등급 검사를 합니다. 유료에서 무료로 내린 회원이 꺼 둔(또는 등급을 내릴 때 꺼진) 유료
+            // 종류 규칙을 다시 켤 수 있었습니다(QA-091). 끄기는 등급과 무관합니다.
+            if (rule != null && !user.isPro() && !"REGIME_CHANGE".equals(rule.kind())) {
+                return new Result(403, FREE_TIER_ONLY_REGIME);
+            }
             if (rule != null && !rule.enabled() && "FOREIGN_STREAK".equals(rule.kind())
                     && "STOCK".equals(rule.params().path("target").asText())) {
                 Result capped = stockCapProblem(user, rule.params().path("code").asText());

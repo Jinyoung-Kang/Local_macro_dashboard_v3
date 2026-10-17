@@ -5,7 +5,6 @@ import com.macrodash.analytics.FlowRecord;
 import com.macrodash.analytics.Holding;
 import com.macrodash.store.AlertStore;
 import com.macrodash.support.CurrentUser;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -106,7 +105,6 @@ class AlertServiceTest {
     }
 
     @Test
-    @Disabled("QA-091: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-091 무료 등급은 꺼 둔 유료 종류 규칙을 다시 켤 수 없다 — 만들 때와 같은 403(국면 전환은 켜고, 끄기는 언제나)")
     void freeTierCannotReEnablePaidKinds() {
         AlertStore store = mock(AlertStore.class);

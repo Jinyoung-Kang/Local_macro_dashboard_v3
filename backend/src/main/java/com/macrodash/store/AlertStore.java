@@ -88,6 +88,18 @@ public class AlertStore {
         return jdbc.update("UPDATE alert_rules SET enabled = ? WHERE id = ? AND user_id = ?", enabled, ruleId, userId);
     }
 
+    /**
+     * 한 사용자의 유료 종류(국면 전환 밖) 규칙을 모두 끕니다 — 등급을 무료로 내릴 때(QA-091). 정기 평가(알림함 배달)와
+     * 수집기(관심 종목 수집 범위)는 {@code enabled}만 보므로 함께 따라옵니다. 지우지 않고 끄기만 해서, 다시 유료가 되면
+     * 회원이 켤 수 있습니다.
+     *
+     * @return 이번에 끈 규칙 수(이미 꺼져 있던 것은 세지 않음)
+     */
+    public int disablePaidRules(long userId) {
+        return jdbc.update("UPDATE alert_rules SET enabled = false "
+                + "WHERE user_id = ? AND kind <> 'REGIME_CHANGE' AND enabled", userId);
+    }
+
     public int deleteRule(long ruleId, long userId) {
         return jdbc.update("DELETE FROM alert_rules WHERE id = ? AND user_id = ?", ruleId, userId);
     }

@@ -63,7 +63,8 @@ class UsageAndAdminTest {
     void adminActions() {
         long ownerId = db.user("admin", "owner passphrase", "OWNER", "PRO");
         CurrentUser owner = new CurrentUser(ownerId, db.email("admin"), "OWNER", "PRO", null);
-        AdminService admin = new AdminService(db.users, db.audit, db.hasher);
+        AdminService admin = new AdminService(db.users, db.audit, db.hasher, new com.macrodash.store.AlertStore(
+                db.jdbc, new tools.jackson.databind.ObjectMapper(), new com.macrodash.store.SchemaCheck(db.jdbc)));
 
         assertThat(admin.create(owner, db.email("m1"), "member passphrase", "FREE")).isNull();
         assertThat(admin.create(owner, db.email("m1"), "member passphrase", "FREE")).contains("이미");
