@@ -4,6 +4,7 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -130,6 +131,76 @@ class Sec13FPortfolioTest {
         assertThat(series.get("WELLS FARGO & CO · PERP PFD CNV A")).containsExactly(4.0);
         assertThat(series.get("ISHARES TR · CUSIP 464287200")).as("클래스 표기(COM)가 같아 CUSIP으로 가른다").containsExactly(3.0);
         assertThat(series.get("ISHARES TR · CUSIP 464287655")).containsExactly(2.0);
+    }
+
+    // ------------------------------------------------------------ QA-121 8분기에 쌓인 클래스 표기 중 하나가 자유 문구여도 A·C주는 한 줄
+    @Test
+    @Disabled("QA-121: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-121 한 분기는 클래스를 'ALPHABET INC'(회사 이름), 다른 분기는 'CAPSTKCLA'(공백 없음)로 적어도 8분기 비중 추이의 A·C주는 한 줄")
+    void shareClassesStayOneLineWhenSomeQuarterLabelsAreFreeText() {
+        // 국민연금 저장본(백업 2026-10-12)의 모양: 2025-12-31은 A·C 모두 class 'ALPHABET INC', 2024-09-30은 'CAPSTKCLA'/'CAPSTKCLC',
+        // 나머지 분기는 'CAP STK CL A/C'. 비중 추이는 8분기 항목을 한 집계에 더해 표기가 모두 쌓입니다.
+        Sec13FService service = service(NPS, """
+                [{"reportDate":"2026-06-30","holdings":[
+                    {"name":"BIG CO","cusip":"111111111","class":"COM","value":1200,"shares":12,"weight":12.0},
+                    {"name":"ALPHABET INC","cusip":"02079K305","class":"CAP STK CL A","value":600,"shares":6,"weight":6.0},
+                    {"name":"ALPHABET INC","cusip":"02079K107","class":"CAP STK CL C","value":400,"shares":4,"weight":4.0},
+                    {"name":"SMALL CO","cusip":"222222222","class":"COM","value":100,"shares":1,"weight":1.0}]},
+                 {"reportDate":"2026-03-31","holdings":[
+                    {"name":"BIG CO","cusip":"111111111","class":"COM","value":1100,"shares":12,"weight":11.0},
+                    {"name":"ALPHABET INC","cusip":"02079K305","class":"ALPHABET INC","value":500,"shares":6,"weight":5.0},
+                    {"name":"ALPHABET INC","cusip":"02079K107","class":"ALPHABET INC","value":300,"shares":4,"weight":3.0},
+                    {"name":"SMALL CO","cusip":"222222222","class":"COM","value":150,"shares":1,"weight":1.5}]},
+                 {"reportDate":"2025-12-31","holdings":[
+                    {"name":"BIG CO","cusip":"111111111","class":"COM","value":1000,"shares":12,"weight":10.0},
+                    {"name":"ALPHABETINC","cusip":"02079K305","class":"CAPSTKCLA","value":400,"shares":6,"weight":4.0},
+                    {"name":"ALPHABETINC","cusip":"02079K107","class":"CAPSTKCLC","value":200,"shares":4,"weight":2.0},
+                    {"name":"SMALL CO","cusip":"222222222","class":"COM","value":200,"shares":1,"weight":2.0}]}]
+                """);
+
+        Map<String, List<Double>> series = weightSeries(service.portfolio(NPS, 8, 3));
+
+        assertThat(series.keySet()).as("A·C주가 두 줄로 갈리면 SMALL CO가 상위 3에서 밀려난다")
+                .containsExactly("BIG CO", "ALPHABET INC", "SMALL CO");
+        assertThat(series.get("ALPHABET INC")).as("과거 → 최신, 분기마다 A주 + C주").containsExactly(6.0, 8.0, 10.0);
+    }
+
+    @Test
+    @DisplayName("QA-121 우선주 표기가 한 분기라도 붙은 증권은 같은 발행사의 보통주와 합치지 않는다")
+    void preferredLabelInAnyQuarterKeepsTheSecuritySeparate() {
+        // 949746804는 최신 분기에 'CL B'로, 앞 분기에 'PERP PFD CNV A'로 공시됐습니다 — 우선주 표기가 하나라도 있으면 합치지 않습니다.
+        Sec13FService service = service(NPS, """
+                [{"reportDate":"2026-06-30","holdings":[
+                    {"name":"WELLS FARGO & CO","cusip":"949746101","class":"COM","value":500,"shares":5,"weight":5.0},
+                    {"name":"WELLS FARGO & CO","cusip":"949746804","class":"CL B","value":400,"shares":4,"weight":4.0}]},
+                 {"reportDate":"2026-03-31","holdings":[
+                    {"name":"WELLS FARGO & CO","cusip":"949746101","class":"COM","value":500,"shares":5,"weight":5.5},
+                    {"name":"WELLS FARGO & CO","cusip":"949746804","class":"PERP PFD CNV A","value":400,"shares":4,"weight":3.5}]}]
+                """);
+
+        Map<String, List<Double>> series = weightSeries(service.portfolio(NPS, 8, 15));
+
+        assertThat(series).as("보통주와 우선주를 한 줄(9.0)로 더하면 안 됨").hasSize(2);
+        assertThat(series.values()).containsExactlyInAnyOrder(List.of(5.5, 5.0), List.of(3.5, 4.0));
+    }
+
+    @Test
+    @DisplayName("QA-121 펀드·ETF 신탁 이름(ISHARES TR) 아래 증권은 클래스 표기가 보통주 계열이어도 합치지 않는다")
+    void fundTrustNamesNeverMergeAcrossQuarters() {
+        Sec13FService service = service(NPS, """
+                [{"reportDate":"2026-06-30","holdings":[
+                    {"name":"ISHARES TR","cusip":"464287200","class":"COM","value":300,"shares":3,"weight":3.0},
+                    {"name":"ISHARES TR","cusip":"464287655","class":"COM","value":200,"shares":2,"weight":2.0}]},
+                 {"reportDate":"2026-03-31","holdings":[
+                    {"name":"ISHARES TR","cusip":"464287200","class":"SHS","value":300,"shares":3,"weight":2.5},
+                    {"name":"ISHARES TR","cusip":"464287655","class":"SHS","value":200,"shares":2,"weight":1.5}]}]
+                """);
+
+        Map<String, List<Double>> series = weightSeries(service.portfolio(NPS, 8, 15));
+
+        assertThat(series).as("같은 발행사(464287) 아래 서로 다른 ETF").hasSize(2);
+        assertThat(series.get("ISHARES TR · CUSIP 464287200")).containsExactly(2.5, 3.0);
+        assertThat(series.get("ISHARES TR · CUSIP 464287655")).containsExactly(1.5, 2.0);
     }
 
     // ------------------------------------------------------------ QA-086 분기 수는 이력 범위일 뿐

@@ -4,6 +4,7 @@ import com.macrodash.analytics.HoldingsDiff;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -266,6 +267,29 @@ class Sec13FConsensusTest {
         assertThat(alphabet.get("totalValue")).isEqualTo(2000.0);
         assertThat(alphabet.get("maxWeight")).as("국민연금의 ALPHABET 비중 = 6 + 4").isEqualTo(10.0);
         assertThat(alphabet.get("avgWeight")).isEqualTo(6.0);
+    }
+
+    @Test
+    @Disabled("QA-121: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-121 한 기관이 클래스를 회사 이름('ALPHABET INC')으로 적어도, 다른 기관이 보통주 계열로 적은 A·C주는 한 행이다")
+    void freeTextClassLabelDoesNotSplitShareClasses() {
+        // 국민연금은 2025-12-31 분기에 A·C주의 class를 둘 다 'ALPHABET INC'로 공시했습니다(백업 2026-10-12).
+        Sec13FService service = service(Map.of(
+                NPS, steady("""
+                    {"name":"ALPHABET INC","cusip":"02079K305","class":"ALPHABET INC","value":600,"shares":10,"weight":6.0},
+                    {"name":"ALPHABET INC","cusip":"02079K107","class":"ALPHABET INC","value":400,"shares":10,"weight":4.0}"""),
+                FISHER, steady("""
+                    {"name":"ALPHABET INC","cusip":"02079K305","class":"CAP STK CL A","value":1000,"shares":20,"weight":2.0},
+                    {"name":"ALPHABET INC","cusip":"02079K107","class":"CAP STK CL C","value":500,"shares":10,"weight":1.0}""")));
+
+        List<Map<String, Object>> rows = rows(service.consensus(List.of(NPS, FISHER), null, 1, 10));
+
+        assertThat(rows).as("A·C주가 두 행으로 갈리면 안 됨").hasSize(1);
+        Map<String, Object> alphabet = rows.get(0);
+        assertThat(alphabet.get("key")).isEqualTo("issuer:02079K");
+        assertThat(alphabet.get("holderCount")).isEqualTo(2);
+        assertThat(alphabet.get("totalValue")).isEqualTo(2500.0);
+        assertThat(alphabet.get("maxWeight")).as("국민연금의 ALPHABET 비중 = 6 + 4").isEqualTo(10.0);
     }
 
     @Test
