@@ -21,10 +21,10 @@ def holidays():
 
 def test_평일_공휴일_아침_이후에는_전_거래일이_최근_거래일이다():
     """
-    2026-01-01(목) 10:00에 Daum이 주는 랭킹은 12-31(수)의 것입니다. 주말만 건너뛰면
-    이 데이터가 01-01로 쌓여 하루가 복제됩니다.
+    2026-01-01(목) 10:00에 Daum이 주는 랭킹은 12-30(화)의 것입니다(12-31(수)은 KRX 연말 휴장, QA-081).
+    주말만 건너뛰면 이 데이터가 01-01로 쌓여 하루가 복제됩니다.
     """
-    assert krcalendar.latest_completed_session(datetime(2026, 1, 1, 10, 0, tzinfo=KST)) == "20251231"
+    assert krcalendar.latest_completed_session(datetime(2026, 1, 1, 10, 0, tzinfo=KST)) == "20251230"
 
 
 def test_연휴_뒤_장_시작_전에는_연휴_전_거래일이다():
@@ -55,7 +55,6 @@ def test_공휴일_목록이_비어_있으면_주말만_건너뛴다():
     assert krcalendar.latest_completed_session(datetime(2026, 1, 1, 10, 0, tzinfo=KST)) == "20260101"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-081: 수정 전 재현 — 수집기 달력이 KRX 연말 휴장일(12-31)을 모름")
 def test_QA081_평일인_12월_31일은_KRX_연말_휴장이다():
     """
     KRX는 12-31(평일이면)에 열지 않습니다(화면 marketCalendar.ts와 같은 규칙). 수집기 달력이 그날을 거래일로 보면
