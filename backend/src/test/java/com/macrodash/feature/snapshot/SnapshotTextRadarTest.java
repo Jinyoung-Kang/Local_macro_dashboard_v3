@@ -8,10 +8,12 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,6 +54,31 @@ class SnapshotTextRadarTest {
         assertThat(text).doesNotContain("가격모름 (000001): 0.00");
         // 값이 있는 행은 예전과 같은 모양입니다.
         assertThat(text).contains("- 삼성전자 (005930): 1,234.50억원 · 현재가 70,000.00 (-1.25%)");
+    }
+
+    @Test
+    @Disabled("QA-096: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-096: 조합마다 수집 시각을 적고, 오래된 저장본이면 경고한다 — 머리말은 '당일'로 단정하지 않는다")
+    void radarCarriesCollectionTimeAndStaleWarning() throws Exception {
+        // 수집기가 멈춰 같은 날 10:05 저장본이 14:00 리포트에 들어가는 경우. 출처의 기준일은 오늘이라 날짜만으로는 모릅니다.
+        RadarService radar = mock(RadarService.class);
+        Map<String, Object> stale = new LinkedHashMap<>();
+        stale.put("available", true);
+        stale.put("collectedAtKst", "2026-10-17 10:05 KST");
+        stale.put("ageSeconds", 14_100L);
+        stale.put("stale", true);
+        stale.put("source", "Daum API (외국인, 당일, 2026-10-17)");
+        stale.put("isHistorical", false);
+        stale.put("rows", MAPPER.readTree("""
+                [{"name": "삼성전자", "code": "005930", "netAmountEok": 1234.5, "price": 70000, "changePct": -1.25}]
+                """));
+        when(radar.ranking(eq("KOSPI"), any(), any(), anyInt(), any(), any())).thenReturn(stale);
+
+        String text = service(radar).fullText();
+
+        assertThat(text).contains("(출처: Daum API (외국인, 당일, 2026-10-17) · 수집 시각 2026-10-17 10:05 KST)");
+        assertThat(text).contains("- ⚠️ 오래된 저장본 — 수집한 지 235분이 지났습니다. 지금의 수급이 아닐 수 있습니다");
+        assertThat(text).doesNotContain("당일 잠정치");
     }
 
     /** 레이더 외의 구간은 빈 응답(데이터 없음)으로 둡니다. */
