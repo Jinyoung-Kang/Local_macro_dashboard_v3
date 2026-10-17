@@ -122,3 +122,58 @@ describe("숫자 열 판정", () => {
     expect(numericColumns(["지표", "값"], [["A", "1.0"], ["B", "데이터 없음"]])).toEqual([false, false]);
   });
 });
+
+describe("QA-100 제목·표 구분선 해석은 줄 길이에 선형", () => {
+  // 바꾼 해석기가 예전 정규식과 같은 결과를 내는지 — 경계(꼬리의 #·공백, 공백만 남은 제목, # 다섯 개)까지 고정합니다.
+  it("제목 판정은 예전과 같다", () => {
+    const cases: [string, unknown][] = [
+      ["### 제목 ###", { type: "heading", level: 3, text: "제목" }],
+      ["## C#", { type: "heading", level: 2, text: "C" }],
+      ["## 제목#", { type: "heading", level: 2, text: "제목" }],
+      ["## a # b ##  ", { type: "heading", level: 2, text: "a # b" }],
+      ["#### 넷 ####", { type: "heading", level: 4, text: "넷" }],
+      ["#\t탭 제목\t#", { type: "heading", level: 1, text: "탭 제목" }],
+      ["#\u3000전각 공백", { type: "heading", level: 1, text: "전각 공백" }],
+      ["# #", { type: "heading", level: 1, text: "#" }],
+      ["# ###", { type: "heading", level: 1, text: "#" }],
+      ["#  ", { type: "heading", level: 1, text: "" }],
+      ["# ", { type: "paragraph", text: "#" }],
+      ["#nospace", { type: "paragraph", text: "#nospace" }],
+      ["##### 다섯", { type: "paragraph", text: "##### 다섯" }],
+      ["  ## 앞에 공백", { type: "paragraph", text: "## 앞에 공백" }],
+    ];
+    for (const [line, block] of cases) {
+      expect(parseMarkdown(line), JSON.stringify(line)).toEqual([block]);
+    }
+  });
+
+  it("표 구분선 판정은 예전과 같다", () => {
+    const table = (divider: string) => parseMarkdown(`| a | b |\n${divider}\n| 1 | 2 |`)[0].type;
+    expect(table("|---|---|")).toBe("table");
+    expect(table("| :-- | --: |")).toBe("table");
+    expect(table("  |:--:|  ")).toBe("table");
+    expect(table("--- | ---")).toBe("table");
+    expect(table("|--|")).toBe("table");
+    expect(table("| - | - |")).toBe("paragraph");
+    expect(table("|---|x|")).toBe("paragraph");
+    expect(table("||")).toBe("paragraph");
+  });
+
+  // 수정 전에는 게으른 `.+?` 뒤의 `\s*#*\s*`가 3제곱으로 역추적해, 공백 1,500칸 제목 줄 하나에 약 2초가 걸렸다
+  // (4,000칸이면 수십 초). 생성 중에는 경과 초 표시 때문에 1초마다 다시 해석해 탭이 멈췄다.
+  it.fails("공백이 길게 이어진 제목 줄도 바로 해석한다", () => {
+    const text = "1. 핵심 요약" + " ".repeat(1500) + "x";
+    const started = performance.now();
+    const blocks = parseMarkdown(`## ${text}`);
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(blocks).toEqual([{ type: "heading", level: 2, text }]);
+  });
+
+  // 수정 전에는 구분선 정규식의 이웃한 `\s*\|?\s*`가 2제곱으로 역추적해, 표 머리 다음 줄의 공백 20,000칸에 1초 가까이 걸렸다.
+  it.fails("공백이 길게 이어진 표 구분선 후보 줄도 바로 판정한다", () => {
+    const started = performance.now();
+    const blocks = parseMarkdown("| a | b |\n|--" + " ".repeat(20000) + "x|");
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(blocks.map((block) => block.type)).toEqual(["paragraph"]);
+  });
+});
