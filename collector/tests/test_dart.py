@@ -219,7 +219,6 @@ def _two_company_store(stored):
     )
 
 
-@pytest.mark.xfail(strict=True, reason="QA-077: 수정 전 재현 — 실패한 묶음이 전년도 재조회 대상이 됨")
 def test_QA077_최신_연도_묶음_호출이_실패하면_전년도로_다시_받지_않고_저장본을_유지한다(monkeypatch):
     """
     '한 해 전으로'는 최신 연도 호출이 **성공했는데** 그 회사 행이 없을 때만입니다. 호출 자체가 실패한 묶음
@@ -254,7 +253,6 @@ def test_QA077_최신_연도_묶음_호출이_실패하면_전년도로_다시_�
     assert f"{latest - 1}년" in result
 
 
-@pytest.mark.xfail(strict=True, reason="QA-077: 수정 전 재현 — 저장본보다 이른 연도로 덮음")
 def test_QA077_저장본보다_이른_사업연도로는_덮지_않는다(monkeypatch):
     """최신 연도 응답에 그 회사 행이 빠진 날(정정·철회 공시 등)에도 저장된 최신 연도 재무를 한 해 전 자료로 바꾸지 않습니다."""
     from app import catalog, tasks

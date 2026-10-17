@@ -208,7 +208,10 @@ def task_dart_fundamentals() -> str:
     📑 DART 사업보고서 주요계정 — 수급 레이더에 오른 국내 종목.
 
     규칙
-      - 최신 사업연도로 받고, 보고서가 없는 회사만 한 해 전으로 다시 받습니다.
+      - 최신 사업연도로 받고, 보고서가 없는 회사만 한 해 전으로 다시 받습니다. '보고서가 없다'는 최신 연도 호출이
+        **성공했는데** 그 회사 행이 없는 경우입니다. 호출이 실패한 묶음(시간 초과·5xx)은 전년도로 다시 받지 않고
+        이번 주기에서 뺍니다 — 예전에는 그 묶음 20개 회사의 저장된 최신 연도 재무를 한 해 전 자료로 덮었습니다(QA-077).
+      - 저장본보다 이른 사업연도로는 덮지 않습니다(최신 연도 응답에서 행이 빠진 날에도 후퇴하지 않게).
       - 호출 예산(DART_CALL_BUDGET) 안에서만 진행합니다. 남은 종목은 다음 주기.
       - 이번에 받지 못한 종목은 이전 저장본을 유지합니다(부분 실패로 지우지 않음).
     """
@@ -230,9 +233,12 @@ def task_dart_fundamentals() -> str:
     year = _latest_annual_year(datetime.now(KST).date())
     fetched: dict[str, dict] = {}
     reasons: list[str] = []
+    # 직전 연도 호출이 성공한 회사. 다음(한 해 전) 연도는 이 안에서 행이 없던 회사만 봅니다.
+    answered: list[str] = list(targets)
 
     for attempt_year in (year, year - 1):
-        pending = [code for code in targets if code not in fetched]
+        pending = [code for code in answered if code not in fetched]
+        answered = []
         for start in range(0, len(pending), dart_service.BATCH):
             if not budget.take():
                 reasons.append("호출 예산 소진 — 나머지는 다음 주기")
@@ -243,6 +249,7 @@ def task_dart_fundamentals() -> str:
             except publicapi.PublicApiError as exc:
                 reasons.append(str(exc))
                 continue
+            answered += chunk
             for code, company in dart_service.group_by_company(rows).items():
                 if code in targets and code not in fetched:
                     company["name"] = targets[code]["name"]
@@ -254,6 +261,11 @@ def task_dart_fundamentals() -> str:
 
     previous = store.read_snapshot(catalog.SNAP_DART_FUNDAMENTALS)
     companies = dict(((previous.payload or {}).get("companies") or {}) if previous else {})
+    kept_newer = [code for code, company in fetched.items() if _older_year(company, companies.get(code))]
+    for code in kept_newer:
+        del fetched[code]
+    if not fetched:
+        raise EmptyResult(f"0/{len(targets)} 종목 — 저장본이 더 최신이라 유지 {len(kept_newer)}" + _reason_suffix(reasons))
     companies.update(fetched)
     store.put_snapshot(catalog.SNAP_DART_FUNDAMENTALS, {
         "source": "금융감독원 Open DART 다중회사 주요계정 (사업보고서)",
@@ -261,7 +273,32 @@ def task_dart_fundamentals() -> str:
         "universe": len(universe),
         "unmapped": unmapped[:50],
     })
-    return (f"{len(fetched)}/{len(targets)} 종목 ({year}년 기준, 호출 {budget.used}회)"
+    return (f"{len(fetched)}/{len(targets)} 종목 ({_years_text(fetched, year)}, 호출 {budget.used}회)"
+            + (f" · 저장본이 더 최신이라 유지 {len(kept_newer)}" if kept_newer else "")
             + (f" · DART 대상 아님 {len(unmapped)}" if unmapped else "") + _reason_suffix(reasons))
+
+
+def _year_of(company: dict | None) -> int | None:
+    try:
+        return int(str((company or {}).get("bsnsYear") or ""))
+    except ValueError:
+        return None
+
+
+def _older_year(new: dict, stored: dict | None) -> bool:
+    """새로 받은 것이 저장본보다 이른 사업연도인가. 어느 한쪽 연도를 모르면 덮습니다(지금까지와 같음)."""
+    new_year, stored_year = _year_of(new), _year_of(stored)
+    return new_year is not None and stored_year is not None and new_year < stored_year
+
+
+def _years_text(fetched: dict[str, dict], year: int) -> str:
+    """결과 문구의 기준 연도 — 실제로 받은 연도별 종목 수. 전부 최신 연도면 예전 문구 그대로."""
+    counts: dict[str, int] = {}
+    for company in fetched.values():
+        label = f"{company['bsnsYear']}년" if company.get("bsnsYear") else "연도 모름"
+        counts[label] = counts.get(label, 0) + 1
+    if set(counts) == {f"{year}년"}:
+        return f"{year}년 기준"
+    return " · ".join(f"{label} {n}" for label, n in sorted(counts.items(), key=lambda kv: (kv[0] != "연도 모름", kv[0]), reverse=True)) + " 기준"
 
 
