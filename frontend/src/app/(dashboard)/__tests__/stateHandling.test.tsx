@@ -100,7 +100,7 @@ describe("QA-105 사용자 관리 — 회원 만들기", () => {
   }
 
   // 수정 전에는 결과와 상관없이 비밀번호 칸을 비워, 메일 중복·형식 오류·연결 실패를 고쳐 다시 보내려면 처음부터 다시 쳐야 했다.
-  it.fails("실패하면 처음 비밀번호 입력을 남긴다", async () => {
+  it("실패하면 처음 비밀번호 입력을 남긴다", async () => {
     api.apiPost.mockRejectedValue(new Error("이미 있는 메일 주소입니다."));
     await submitNewMember();
 

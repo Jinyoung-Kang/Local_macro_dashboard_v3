@@ -48,8 +48,9 @@ export default function AdminUsersPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    await create.run(email, password, tier);
-    setPassword("");
+    // 성공했을 때만 비밀번호 칸을 비웁니다. 실패(메일 중복·형식 오류·연결 끊김)에도 지워 고쳐 다시 보내려면 처음부터
+    // 다시 쳐야 했습니다(QA-105, 내 계정의 QA-051과 같음).
+    if (await create.run(email, password, tier)) setPassword("");
     void users.reload();
     void audit.reload();
   };
