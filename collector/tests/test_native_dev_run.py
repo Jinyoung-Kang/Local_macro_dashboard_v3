@@ -55,14 +55,12 @@ def _run(tmp_path: Path, target: str, extra_env: dict[str, str] | None = None) -
     return dict(re.findall(r"^(TOKEN|URL)=(.*)$", result.stdout, re.M))
 
 
-@pytest.mark.xfail(strict=True, reason="QA-106: 수정 전 재현 — dev-collector가 .env의 토큰·포트를 넘기지 않음")
 def test_QA106_dev_collector는_env_파일의_토큰과_DB_포트로_띄운다(tmp_path):
     seen = _run(tmp_path, "dev-collector")
     assert seen["TOKEN"] == FAKE_TOKEN
     assert "@localhost:5433/" in seen["URL"]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-106: 수정 전 재현 — dev-backend가 .env의 토큰을 넘기지 않음")
 def test_QA106_dev_backend는_수집기와_같은_토큰을_보낸다(tmp_path):
     seen = _run(tmp_path, "dev-backend")
     assert seen["TOKEN"] == FAKE_TOKEN
@@ -76,7 +74,6 @@ def test_셸에서_준_값이_env_파일보다_앞선다(tmp_path):
     assert seen == {"TOKEN": "from-shell", "URL": explicit}
 
 
-@pytest.mark.xfail(strict=True, reason="QA-106: 수정 전 재현 — launchd plist·문서가 토큰을 빠뜨리거나 '비면 인증 끔'으로 적음")
 def test_QA106_문서가_빈_토큰을_인증_끔으로_적지_않고_launchd에_토큰을_넘긴다():
     api = (ROOT / "docs/API.md").read_text(encoding="utf-8")
     principles = (ROOT / "docs/PRINCIPLES.md").read_text(encoding="utf-8")

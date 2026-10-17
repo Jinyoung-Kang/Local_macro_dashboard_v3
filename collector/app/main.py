@@ -173,7 +173,8 @@ def _run_group_job(group: str) -> None:
 
 def _check_token(token: str | None) -> None:
     """
-    서비스 토큰을 검사합니다. 토큰을 설정하지 않았으면(로컬 기본값) 통과시킵니다.
+    서비스 토큰을 검사합니다. 토큰이 비어 있으면 통과시킵니다 — 빈 토큰으로는 기동하지 않으므로
+    (check_token_configured), COLLECTOR_ALLOW_NO_TOKEN=1을 명시해 띄운 경우뿐입니다.
 
     주의사항 — 비교는 hmac.compare_digest로 합니다. ``!=``는 앞에서부터 비교하다
     다른 글자에서 멈추므로 응답 시간 차이로 토큰을 한 글자씩 맞혀 볼 수 있습니다.

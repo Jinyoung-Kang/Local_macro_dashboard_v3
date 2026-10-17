@@ -222,8 +222,9 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 `make status`·`scripts/doctor.sh`가 헤더 없이 부르고, 비밀값을 담지 않기
 때문입니다(키는 설정 여부만 `true/false`로 알립니다).
 
-토큰은 `make setup`이 무작위 값으로 `.env`에 채웁니다. 비워 두면 토큰 검사는 하지
-않습니다. 수집기 포트는 `127.0.0.1`에만 열립니다([PRINCIPLES.md](PRINCIPLES.md)).
+토큰은 `make setup`이 무작위 값으로 `.env`에 채웁니다. 비어 있으면 수집기가 기동하지
+않습니다 — `COLLECTOR_ALLOW_NO_TOKEN=1`을 명시했을 때만 경고를 남기고 토큰 검사 없이 뜹니다(로컬 개발용).
+수집기 포트는 `127.0.0.1`에만 열립니다([PRINCIPLES.md](PRINCIPLES.md)).
 
 **브라우저가 보낸 다른 출처의 요청은 토큰과 상관없이 403입니다** — `Sec-Fetch-Site`가
 `none`·`same-origin`이 아니거나, 그 헤더 없이 `Origin`이 수집기 자신이 아닌 경우.

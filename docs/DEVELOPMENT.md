@@ -10,6 +10,7 @@
 ### Docker 없이 (권장 — 고치면서 바로 확인)
 
 ```bash
+make setup            # .env가 없을 때 한 번 — 수집기 토큰을 만듭니다(비면 수집기가 기동하지 않음)
 make infra            # PostgreSQL만 컨테이너로 띄웁니다
 
 make dev-collector    # 터미널 1 — 자동 리로드 (collector/.venv 필요)

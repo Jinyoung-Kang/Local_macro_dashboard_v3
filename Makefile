@@ -29,6 +29,8 @@ DATABASE_PORT := $(if $(DATABASE_PORT),$(DATABASE_PORT),5432)
 # 이 명령들이 401로 죽었습니다.
 COLLECTOR_API_TOKEN ?= $(shell grep -s '^COLLECTOR_API_TOKEN=' .env | cut -d= -f2-)
 TOKEN_HEADER := $(if $(COLLECTOR_API_TOKEN),-H "X-Service-Token: $(COLLECTOR_API_TOKEN)",)
+# 토큰 없이 띄우겠다는 명시(로컬 개발용, .env.example 참고). make dev-collector가 수집기에 넘깁니다.
+COLLECTOR_ALLOW_NO_TOKEN ?= $(shell grep -s '^COLLECTOR_ALLOW_NO_TOKEN=' .env | cut -d= -f2-)
 
 .DEFAULT_GOAL := help
 .PHONY: help setup update version up migrate down restart logs ps collect collect-all status verify \
@@ -181,14 +183,24 @@ test-frontend: ## 화면 자가검증 + 훅 테스트 + 린트 + 빌드(타입 �
 	cd frontend && npm run check && npm test && npm run lint && npm run build
 
 # ------------------------------------------------------------- 네이티브 개발
+# 수집기는 토큰이 비면 기동을 거부하고(COLLECTOR_ALLOW_NO_TOKEN=1일 때만 경고 후 기동), 백엔드는 같은 토큰을
+# 보내야 수집기를 부를 수 있습니다. 그래서 이 두 레시피에만 .env의 값을 환경으로 넘깁니다(셸에 export한 값이
+# 있으면 그것이 먼저). 전역 export는 다른 타깃 환경까지 들어가므로 쓰지 않고, 명령 줄에 값을 적지 않아 make가
+# 찍는 명령에도 토큰이 보이지 않습니다. 예전에는 넘기지 않아 make dev-collector가 뜨지 않았습니다(QA-106).
+dev-collector dev-backend: export COLLECTOR_API_TOKEN := $(COLLECTOR_API_TOKEN)
+dev-collector: export COLLECTOR_ALLOW_NO_TOKEN := $(COLLECTOR_ALLOW_NO_TOKEN)
+
 dev-collector: ## 수집기 개발 서버 (자동 리로드 · collector/.venv 필요)
 	@test -x $(VENV_PY) || (echo "⚠️  collector/.venv가 없습니다. 먼저:" && \
 		echo "    python3 -m venv collector/.venv && collector/.venv/bin/pip install -r collector/requirements-dev.txt -c collector/constraints.txt" && exit 1)
-	cd collector && DATABASE_URL=postgresql://macro:macro@localhost:5432/macrodash \
+	@# DB 포트는 .env의 DATABASE_PORT(make infra가 여는 포트)를 따릅니다. 예전에는 5432로 박혀 있었습니다.
+	cd collector && DATABASE_URL=postgresql://$${DATABASE_USER:-macro}:$${DATABASE_PASSWORD:-macro}@localhost:$(DATABASE_PORT)/$${DATABASE_NAME:-macrodash} \
 		.venv/bin/python -m uvicorn app.main:app --reload --port $(COLLECTOR_PORT)
 
 dev-backend: ## 백엔드 개발 서버
-	cd backend && mvn spring-boot:run
+	@# DATABASE_URL을 직접 주지 않았으면 .env의 DATABASE_PORT로 붙습니다(수집기와 같은 DB).
+	cd backend && DATABASE_URL=$${DATABASE_URL:-jdbc:postgresql://localhost:$(DATABASE_PORT)/$${DATABASE_NAME:-macrodash}} \
+		mvn spring-boot:run
 
 dev-frontend: ## 화면 개발 서버 (핫 리로드)
 	cd frontend && NEXT_PUBLIC_BACKEND_PORT=$(BACKEND_PORT) npm run dev

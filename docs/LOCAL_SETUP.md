@@ -313,6 +313,10 @@ collector/.venv/bin/pip install -r collector/requirements-dev.txt -c collector/c
 make dev-collector      # 내부적으로 collector/.venv/bin/python -m uvicorn 실행
 ```
 
+> `make dev-collector`·`make dev-backend`는 `.env`의 `COLLECTOR_API_TOKEN`(`make setup`이 만듦)을 둘 다에
+> 넘기고, DB는 `.env`의 `DATABASE_PORT`로 붙습니다. 토큰이 비어 있으면 수집기는 기동하지 않습니다
+> (`COLLECTOR_API_TOKEN이 비어 있습니다`) — `make setup`을 먼저 실행하세요.
+
 > `source .venv/bin/activate` 후 `uvicorn ...`을 직접 치지 마세요. conda나
 > pyenv가 PATH 앞에 있으면 **다른 파이썬의 uvicorn**이 잡혀
 > `ModuleNotFoundError: No module named 'apscheduler'`가 납니다.
@@ -323,7 +327,7 @@ make dev-collector      # 내부적으로 collector/.venv/bin/python -m uvicorn 
 cd ~/Projects/Local_macro_dashboard_v3
 java -version           # 21 이상인지 먼저 확인하세요
 
-DATABASE_URL="jdbc:postgresql://localhost:5432/macrodash" \
+# DB 주소(.env의 DATABASE_PORT)와 수집기 토큰(.env의 COLLECTOR_API_TOKEN)은 make가 넘깁니다.
 DATABASE_USER="macro" DATABASE_PASSWORD="macro" \
 OWNER_EMAIL="로그인용_이메일" APP_PASSWORD="원하는_비밀번호" \
 COLLECTOR_URL="http://localhost:8000" \
@@ -380,6 +384,9 @@ Docker 없이 쓸 때, 맥이 켜져 있는 동안 수집기가 계속 돌게 �
     <string>postgresql://jinyoung@localhost:5432/macrodash</string>
     <key>COLLECTOR_SCHEDULER</key>
     <string>true</string>
+    <!-- 비어 있으면 수집기가 기동하지 않습니다. .env의 같은 값을 넣으세요(백엔드와 같아야 함) -->
+    <key>COLLECTOR_API_TOKEN</key>
+    <string>.env의_COLLECTOR_API_TOKEN_값</string>
   </dict>
 
   <key>RunAtLoad</key><true/>
