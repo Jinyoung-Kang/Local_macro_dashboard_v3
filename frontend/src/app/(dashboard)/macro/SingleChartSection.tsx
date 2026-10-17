@@ -35,6 +35,8 @@ export function SingleChartSection() {
     available: boolean;
     isProxy?: boolean;
     sourceLabel?: string | null;
+    /** available=false일 때의 이유 — store_only라 조회하지 않음, 수집기에서 받지 못함 등. */
+    message?: string;
     points: { date: string; close: number | null; value?: number | null }[];
   }>(endpoints.macro.ticker(symbol, period));
 
@@ -61,7 +63,12 @@ export function SingleChartSection() {
 
       {loading && <Loading />}
       {error && <ErrorState message={error} />}
-      {!loading && !error && (
+      {/* 받지 못한 이유를 그대로 보입니다. 빈 차트만 그리면 공개 데모(store_only)에서 원래 안 되는 지표인지 일시
+          오류인지 알 수 없었습니다(QA-099). 이유가 없으면 차트의 빈 문구와 같은 말을 씁니다. */}
+      {!loading && !error && data && !data.available && (
+        <Banner tone="warn">{data.message ?? "표시할 시계열이 없습니다."}</Banner>
+      )}
+      {!loading && !error && data?.available !== false && (
         <LineSeries
           data={(data?.points ?? []).map((point) => ({
             date: point.date.slice(0, 10),
