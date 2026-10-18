@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -48,11 +49,17 @@ import java.util.function.Supplier;
  * <ul>
  *   <li><b>같은 키는 한 번만 계산</b>합니다. 같은 키·같은 저장본 버전을 놓친 요청이 겹치면 먼저 온 하나(앞선 계산)만
  *       자리를 잡아 계산하고, 나머지는 자리도 대기열 자리도 잡지 않고 그 결과를 {@value #FOLLOW_TIMEOUT_SECONDS}초까지
- *       기다려 같은 객체를 받습니다. 앞선 계산이 던진 예외(자리를 얻지 못한 429 포함)도 그대로 받고, 아무것도 저장하지
- *       않았으니 다음 요청은 다시 계산합니다. 그 안에 끝나지 않으면 429입니다. 따르는 요청은 모든 키를 합쳐
- *       {@value #MAX_FOLLOWERS}건까지만 기다리고, 넘으면 바로 429입니다. 이것이 없을 때 QA 스택에서 재기동 직후
- *       5명이 무거운 화면을 한꺼번에 열자(요청 45건, 키 9개) 같은 키 요청이 각자 줄을 서 14–37건이 429였습니다.
+ *       기다려 같은 객체를 받습니다. 앞선 계산이 던진 예외도 그대로 받고, 아무것도 저장하지 않았으니 다음 요청은 다시
+ *       계산합니다. 그 안에 끝나지 않으면 429입니다. 따르는 요청은 모든 키를 합쳐 {@value #MAX_FOLLOWERS}건까지만
+ *       기다리고, 넘으면 바로 429입니다. 이것이 없을 때 QA 스택에서 재기동 직후 5명이 무거운 화면을 한꺼번에 열자
+ *       (요청 45건, 키 9개) 같은 키 요청이 각자 줄을 서 14–37건이 429였습니다.
  *       버전이 다르면 따로 계산합니다 — 새 저장본을 본 요청이 옛 버전 계산의 결과를 받지 않습니다.</li>
+ *   <li>앞선 계산이 자리를 얻지 못해 429가 되면, 자기 자리 대기 한도(도착 뒤 {@value #WAIT_SECONDS}초)가 남은 따르는
+ *       요청은 그 429를 받지 않고 다시 시도합니다 — 계산을 새로 맡아 남은 시간만 자리를 기다리거나(대기열 끝에 서므로
+ *       도착 순서보다 뒤로 밀림) 그사이 다른 요청이 맡은 계산을 따릅니다. 한도가 끝났으면 같은 429를 받습니다. 그래서
+ *       따르는 요청이 앞선 계산의 자리 대기 때문에 자기 한도보다 먼저 거절되지는 않지만, 한도는 요청마다
+ *       {@value #WAIT_SECONDS}초 그대로라 재기동 직후처럼 키가 그 안에 끝낼 수 있는 계산 수(상한 × {@value #WAIT_SECONDS}초
+ *       ÷ 계산 시간)보다 많으면 남는 키의 요청은 여전히 429입니다.</li>
  *   <li>캐시 적중은 자리를 잡지 않고 앞선 계산도 기다리지 않습니다 — 계산이 몰려도 이미 계산한 화면은 그대로 빠릅니다.</li>
  *   <li>버전이 없는 경로(DB 장애·저장본 0개)도 상한 밖입니다. DB가 죽었을 때 이 계산은 첫 DB 접근에서 실패하는데,
  *       자리를 쥐고 연결 대기(5초)를 하면 다른 요청이 503 'DB 연결 불가'(QA-009) 대신 429 '몰려 있음'을 받아 원인을
@@ -98,7 +105,8 @@ public class ComputedCache {
     static final int MAX_FOLLOWERS = 64;
     /**
      * 같은 키를 계산 중인 앞선 요청의 결과를 기다리는 시간. 자리 대기({@value #WAIT_SECONDS}초)와 무거운 계산(수 초)은
-     * 넉넉히 덮고, 수집기를 기다리는 계산(최대 90초)에 요청 스레드를 끝까지 묶지는 않습니다.
+     * 넉넉히 덮고, 수집기를 기다리는 계산(최대 90초)에 요청 스레드를 끝까지 묶지는 않습니다. 앞선 계산이 자리를 얻지
+     * 못하면 그때 끝나고, 따르던 요청은 자기 자리 대기 한도 안에서 다시 시도합니다.
      */
     static final long FOLLOW_TIMEOUT_SECONDS = 30;
     static final Duration RETRY_AFTER = Duration.ofSeconds(2);
@@ -112,15 +120,22 @@ public class ComputedCache {
     /**
      * 앞선 계산의 결과 — 값 또는 예외. 예외도 future를 예외로 끝내지 않고 값으로 넘깁니다: {@link CompletableFuture#get}은
      * {@code CompletionException}을 벗겨 원인을 던지므로, 그러면 앞선 요청과 따르는 요청이 다른 예외를 받습니다.
+     *
+     * @param noSlot 앞선 계산이 자리를 얻지 못해 계산하지 않았음({@code error}는 그 429). 따르는 요청은 자기 자리 대기
+     *               한도가 남았으면 이 429를 받지 않고 다시 시도합니다
      */
-    private record Outcome(Object value, Throwable error) {
+    private record Outcome(Object value, Throwable error, boolean noSlot) {
 
         static Outcome of(Object value) {
-            return new Outcome(value, null);
+            return new Outcome(value, null, false);
         }
 
         static Outcome failed(Throwable error) {
-            return new Outcome(null, error);
+            return new Outcome(null, error, false);
+        }
+
+        static Outcome rejected(ComputeBusyException busy) {
+            return new Outcome(null, busy, true);
         }
     }
 
@@ -131,6 +146,11 @@ public class ComputedCache {
     private final Duration wait;
     private final int maxWaiting;
     private final Duration followTimeout;
+    /**
+     * 자리 대기 시한을 재는 시계(나노초). 테스트가 시간을 움직여, 따르던 계산이 거절됐을 때 남은 한도에 따른 동작을 실제로
+     * 기다리지 않고 확인할 때 바꿔 끼웁니다. 세마포어에서 기다리는 시간 자체는 실제 시간입니다.
+     */
+    LongSupplier nanoTime = System::nanoTime;
     /**
      * 지금 도는 계산 — 키+버전마다 하나. 같은 키·같은 버전을 놓친 요청은 새로 계산하지 않고 이 결과를 기다립니다.
      * 계산을 맡은 요청이 끝날 때(값·예외 모두) 지웁니다.
@@ -208,9 +228,9 @@ public class ComputedCache {
      * 새로 계산해 저장한 값을 돌려줍니다. 같은 키·같은 버전을 이미 계산 중이면 자리 없이 그 결과를 기다려 받습니다.
      * 저장본이 하나도 없거나 버전 조회에 실패하면 캐시도 상한도 거치지 않고 계산만 합니다.
      *
-     * @throws ComputeBusyException 계산 자리가 {@value #WAIT_SECONDS}초 안에 나지 않았거나 대기열이 가득 참, 따르는 요청이
-     *         이미 {@value #MAX_FOLLOWERS}건임, 또는 따르던 앞선 계산이 그렇게 거절됐거나 {@value #FOLLOW_TIMEOUT_SECONDS}초
-     *         안에 끝나지 않음(→ 429)
+     * @throws ComputeBusyException 도착 뒤 {@value #WAIT_SECONDS}초 안에 계산 자리가 나지 않았거나(따르던 앞선 계산이 자리를
+     *         얻지 못해 다시 시도한 경우 포함) 대기열이 가득 참, 따르는 요청이 이미 {@value #MAX_FOLLOWERS}건임, 또는 따르던
+     *         앞선 계산이 {@value #FOLLOW_TIMEOUT_SECONDS}초 안에 끝나지 않음(→ 429)
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key, Supplier<T> compute) {
@@ -225,21 +245,31 @@ public class ComputedCache {
         // 키에 버전을 붙여, 새 저장본을 본 요청이 옛 버전 계산을 따르지 않게 합니다. Instant 문자열에는 '@'가 없어
         // 마지막 '@'로 둘이 갈리므로 서로 다른 (키, 버전)이 같은 문자열이 되지 않습니다.
         String flightKey = key + '@' + version;
-        CompletableFuture<Outcome> flight = new CompletableFuture<>();
-        CompletableFuture<Outcome> ahead = inflight.putIfAbsent(flightKey, flight);
-        if (ahead == null) {
-            return (T) unwrap(lead(key, version, flightKey, flight, compute));
+        // 이 요청이 자리를 기다릴 수 있는 시한(도착 뒤 wait). 따르던 앞선 계산이 자리를 얻지 못해 다시 시도할 때도 이 안에서만.
+        long deadline = nanoTime.getAsLong() + wait.toNanos();
+        while (true) {
+            CompletableFuture<Outcome> flight = new CompletableFuture<>();
+            CompletableFuture<Outcome> ahead = inflight.putIfAbsent(flightKey, flight);
+            if (ahead == null) {
+                return (T) unwrap(lead(key, version, flightKey, flight, compute, deadline));
+            }
+            Outcome outcome = follow(ahead);
+            if (outcome.noSlot() && nanoTime.getAsLong() - deadline < 0) {
+                // 앞선 계산은 자리를 얻지 못했지만 이 요청의 한도는 남음 — 그 429를 받지 않고 계산을 새로 맡거나(대기열 끝에
+                // 서서 남은 시간만 기다림) 그사이 다른 요청이 맡은 계산을 따릅니다. 앞선 계산은 결과를 넘기기 전에 맵에서
+                // 지우므로, 다시 찾을 때 이미 끝난 계산을 또 따르지 않습니다.
+                continue;
+            }
+            if (outcome.error() instanceof ComputeBusyException) {
+                countRejection(); // 앞선 계산이 429 — 이 요청도 429로 돌아가므로 같이 셉니다
+            }
+            return (T) unwrap(outcome);
         }
-        Outcome outcome = follow(ahead);
-        if (outcome.error() instanceof ComputeBusyException) {
-            countRejection(); // 앞선 계산이 자리를 얻지 못함 — 이 요청도 429로 돌아가므로 같이 셉니다
-        }
-        return (T) unwrap(outcome);
     }
 
     /** 이 키·버전의 계산을 맡습니다. 결과(값·예외)는 {@code flight}로 따르는 요청에게도 같은 것을 넘깁니다. */
     private Outcome lead(String key, Instant version, String flightKey, CompletableFuture<Outcome> flight,
-                         Supplier<?> compute) {
+                         Supplier<?> compute, long deadline) {
         Outcome outcome;
         boolean acquired = false;
         try {
@@ -248,18 +278,19 @@ public class ComputedCache {
             Cached filled = fresh(key, version, clock.instant());
             if (filled != null) {
                 outcome = Outcome.of(filled.value());
-            } else {
-                acquire();
+            } else if (acquire(deadline)) {
                 acquired = true;
                 // 기다린 만큼 항목 수명이 줄지 않게, 저장 시각은 자리를 얻은 뒤로 잡습니다.
                 Instant now = clock.instant();
                 Object value = compute.get();
                 entries.put(key, new Cached(version, now, value));
                 outcome = Outcome.of(value);
+            } else {
+                outcome = Outcome.rejected(reject());
             }
         } catch (Throwable e) {
-            // 따르는 요청도 같은 예외를 받습니다(자리 거절 429, 계산의 400·500 그대로). 아무것도 저장하지 않았으므로
-            // 다음 요청은 다시 계산합니다. Error도 넘겨, 따르는 요청이 대기 시간(30초)을 헛기다리다 429를 받지 않게 합니다.
+            // 따르는 요청도 같은 예외를 받습니다(계산의 400·500 그대로). 아무것도 저장하지 않았으므로 다음 요청은 다시
+            // 계산합니다. Error도 넘겨, 따르는 요청이 대기 시간(30초)을 헛기다리다 429를 받지 않게 합니다.
             outcome = Outcome.failed(e);
         } finally {
             if (acquired) {
@@ -356,19 +387,19 @@ public class ComputedCache {
         return null;
     }
 
-    private void acquire() {
+    /**
+     * 계산 자리를 얻으면 true. 대기열이 이미 가득 찼거나, {@code deadline}(나노초)까지 자리가 나지 않았거나, 기다리다
+     * interrupt되면(표시는 되살림) false입니다.
+     */
+    private boolean acquire(long deadline) {
         if (slots.getQueueLength() >= maxWaiting) {
-            throw reject();
+            return false;
         }
-        boolean acquired;
         try {
-            acquired = slots.tryAcquire(wait.toMillis(), TimeUnit.MILLISECONDS);
+            return slots.tryAcquire(Math.max(0, deadline - nanoTime.getAsLong()), TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            acquired = false;
-        }
-        if (!acquired) {
-            throw reject();
+            return false;
         }
     }
 

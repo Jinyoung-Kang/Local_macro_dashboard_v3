@@ -5,7 +5,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -31,6 +30,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
@@ -673,10 +673,12 @@ class ComputedCacheTest {
     }
 
     @Test
-    @DisplayName("QA-131 앞선 계산이 자리를 얻지 못해 429면 따르는 요청도 429 — 거절은 돌려보낸 요청마다 세고, 얻지 못한 자리는 돌려주지 않는다")
+    @DisplayName("QA-131 앞선 계산이 자리를 얻지 못해 429일 때 자기 대기 한도도 끝난 따르는 요청은 같은 429 — 거절은 돌려보낸 요청마다 세고, 얻지 못한 자리는 돌려주지 않는다")
     void followersShareLeadersRejection() throws Exception {
         when(repository.latestCollectedAt()).thenReturn(t0);
         ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        AtomicLong nanos = new AtomicLong();
+        cache.nanoTime = nanos::get; // 자리 대기 시한만 이 시계로 잽니다(세마포어 대기는 실제 시간)
         ExecutorService pool = Executors.newSingleThreadExecutor();
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -691,7 +693,9 @@ class ComputedCacheTest {
             for (int i = 0; i < 3; i++) {
                 followers.add(call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone());
             }
-            // 2초 대기가 끝나기를 시간으로 맞추지 않으려고, 자리를 기다리는 앞선 계산을 interrupt해 같은 거절 경로로 보냅니다.
+            // 모두 같은 시각에 도착했으니, 시계를 대기 시간만큼 옮기면 따르는 요청의 한도도 끝납니다. 대기가 실제로 끝나기를
+            // 시간으로 맞추지 않으려고, 자리를 기다리는 앞선 계산은 interrupt해 같은 거절 경로로 보냅니다.
+            nanos.set(Duration.ofSeconds(60).toNanos());
             leader.thread().interrupt();
 
             Throwable busy = leader.failure();
@@ -721,7 +725,6 @@ class ComputedCacheTest {
     }
 
     @Test
-    @Disabled("QA-131 리뷰: 앞선 계산이 자리를 얻지 못하면 늦게 합류한 요청도 자기 대기 한도와 상관없이 함께 429")
     @DisplayName("QA-131 앞선 계산이 자리를 얻지 못해도, 자기 자리 대기 한도가 남은 따르는 요청은 429를 받지 않고 다시 시도한다")
     void followerRetriesWhenLeaderGetsNoSlot() throws Exception {
         // 리뷰 탐침: 앞선 계산이 자리를 300ms까지 기다리는 동안 250ms에 합류한 요청은, 자리가 400ms에 났는데도 앞선 계산과
@@ -753,6 +756,43 @@ class ComputedCacheTest {
             assertThat(computed.get()).isEqualTo(1);
             assertThat(cache.rejectedCount()).as("앞선 계산 1건만 429").isEqualTo(1);
             assertThat(cache.inflight()).isZero();
+        } finally {
+            release.countDown();
+            pool.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("QA-131 따르던 앞선 계산이 자리를 얻지 못해 다시 맡은 요청은 자기 대기 한도에서 남은 시간만 자리를 기다린다")
+    void retryingFollowerWaitsOnlyItsRemainingTime() throws Exception {
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        AtomicLong nanos = new AtomicLong();
+        cache.nanoTime = nanos::get; // 자리 대기 시한만 이 시계로 잽니다(세마포어 대기는 실제 시간)
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            Future<Object> holder = holdSlot(pool, cache, "x", entered, release);
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            Caller leader = call(cache, "k", MUST_NOT_COMPUTE);
+            awaitWaiting(cache, 1);
+            Caller follower = call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone();
+            // 따르는 요청의 한도(60초)에서 50ms만 남깁니다. 다시 맡아 60초를 새로 기다린다면 아래 10초 안에 끝나지 않습니다.
+            nanos.set(Duration.ofSeconds(60).minusMillis(50).toNanos());
+            leader.thread().interrupt();
+            Throwable leaderBusy = leader.failure();
+            assertThat(leaderBusy).isInstanceOf(ComputeBusyException.class);
+
+            Throwable followerBusy = assertTimeoutPreemptively(Duration.ofSeconds(10), follower::failure);
+            assertThat(followerBusy).as("다시 맡아 자기 자리 대기가 끝난 429 — 앞선 계산의 것을 받지 않음")
+                    .isInstanceOf(ComputeBusyException.class).isNotSameAs(leaderBusy);
+            assertThat(cache.rejectedCount()).isEqualTo(2);
+            assertThat(cache.waiting()).isZero();
+            assertThat(cache.inflight()).as("자리를 쥔 x만 남음").isEqualTo(1);
+
+            release.countDown();
+            assertThat(holder.get(GENEROUS_SECONDS, TimeUnit.SECONDS)).isEqualTo("x");
         } finally {
             release.countDown();
             pool.shutdown();
