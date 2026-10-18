@@ -5,6 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -715,6 +716,45 @@ class ComputedCacheTest {
         } finally {
             release.countDown();
             releaseAgain.countDown();
+            pool.shutdown();
+        }
+    }
+
+    @Test
+    @Disabled("QA-131 리뷰: 앞선 계산이 자리를 얻지 못하면 늦게 합류한 요청도 자기 대기 한도와 상관없이 함께 429")
+    @DisplayName("QA-131 앞선 계산이 자리를 얻지 못해도, 자기 자리 대기 한도가 남은 따르는 요청은 429를 받지 않고 다시 시도한다")
+    void followerRetriesWhenLeaderGetsNoSlot() throws Exception {
+        // 리뷰 탐침: 앞선 계산이 자리를 300ms까지 기다리는 동안 250ms에 합류한 요청은, 자리가 400ms에 났는데도 앞선 계산과
+        // 함께 429를 받았습니다(53ms만 기다림). 같은 키를 한 번만 계산하기 전에는 자기 대기(300ms) 안에 자리를 얻어 값을
+        // 받았습니다. 따르는 요청의 실제 한도가 30초가 아니라 앞선 계산에 남은 자리 대기 시간이 됩니다.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        AtomicInteger computed = new AtomicInteger();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            Future<Object> holder = holdSlot(pool, cache, "x", entered, release);
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            Caller leader = call(cache, "k", MUST_NOT_COMPUTE);
+            awaitWaiting(cache, 1);
+            Caller follower = call(cache, "k", () -> {
+                computed.incrementAndGet();
+                return "k";
+            }).awaitParkedOrDone();
+            // 앞선 계산의 대기가 끝나기를 시간으로 맞추지 않으려고, interrupt해 같은 '자리 없음' 거절 경로로 보냅니다.
+            leader.thread().interrupt();
+            assertThat(leader.failure()).isInstanceOf(ComputeBusyException.class);
+
+            release.countDown();
+            assertThat(holder.get(GENEROUS_SECONDS, TimeUnit.SECONDS)).isEqualTo("x");
+            assertThat(follower.result()).as("자기 한도(60초) 안에 자리가 나 값을 받음")
+                    .succeedsWithin(Duration.ofSeconds(GENEROUS_SECONDS)).isEqualTo("k");
+            assertThat(computed.get()).isEqualTo(1);
+            assertThat(cache.rejectedCount()).as("앞선 계산 1건만 429").isEqualTo(1);
+            assertThat(cache.inflight()).isZero();
+        } finally {
+            release.countDown();
             pool.shutdown();
         }
     }
