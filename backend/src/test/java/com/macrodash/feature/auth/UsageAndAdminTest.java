@@ -1,18 +1,24 @@
 package com.macrodash.feature.auth;
 
+import com.macrodash.store.AuditLogStore;
 import com.macrodash.store.UsageStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 하루 사용량 한도(AI 리포트)와 운영자의 사용자 관리 — 실제 테스트 DB.
@@ -102,5 +108,35 @@ class UsageAndAdminTest {
         assertThat(admin.update(owner, memberId, "MEMBER", "FREE")).isNull();
         assertThat(db.jdbc.queryForObject(lastDisabled, String.class, String.valueOf(memberId)))
                 .as("다시 저장하면 이미 꺼져 있어 0").isEqualTo("0");
+    }
+
+    @Test
+    @Disabled("QA-134: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-134 역할·등급 변경 중 감사 기록 쓰기가 실패하면 등급도, 알림 규칙 끄기도 되돌아간다")
+    void updateIsAllOrNothing() {
+        long ownerId = db.user("admin", "owner passphrase", "OWNER", "PRO");
+        CurrentUser owner = new CurrentUser(ownerId, db.email("admin"), "OWNER", "PRO", null);
+        AuditLogStore failingAudit = new AuditLogStore(db.jdbc, new ObjectMapper()) {
+            @Override
+            public void append(Long userId, String action, Map<String, Object> detail) {
+                if ("user.updated".equals(action)) {   // 마지막 문장에서 DB 오류
+                    throw new DataAccessResourceFailureException("감사 기록 쓰기 실패(테스트)");
+                }
+                super.append(userId, action, detail);
+            }
+        };
+        AdminService admin = new AdminService(db.users, failingAudit, db.hasher, new com.macrodash.store.AlertStore(
+                db.jdbc, new ObjectMapper(), new com.macrodash.store.SchemaCheck(db.jdbc)));
+        long memberId = db.user("m3", "member passphrase", "MEMBER", "PRO");
+        db.jdbc.update("INSERT INTO alert_rules (user_id, kind, params) VALUES (?, 'INSTITUTION_NEW', "
+                + "'{\"cik\":\"0001067983\"}'::jsonb)", memberId);
+
+        assertThatThrownBy(() -> admin.update(owner, memberId, "MEMBER", "FREE"))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+
+        // 수정 전: 문장마다 자동 커밋이라 등급은 무료로 내려가고 유료 규칙도 꺼졌는데, 화면은 500(실패한 줄 앎)이고 감사 기록도 없었습니다.
+        assertThat(db.users.findById(memberId).orElseThrow().tier()).as("등급 그대로").isEqualTo("PRO");
+        assertThat(db.jdbc.queryForObject("SELECT enabled FROM alert_rules WHERE user_id = ?", Boolean.class, memberId))
+                .as("유료 규칙도 켜진 채").isTrue();
     }
 }
