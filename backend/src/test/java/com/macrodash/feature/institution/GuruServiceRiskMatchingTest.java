@@ -4,6 +4,7 @@ import com.macrodash.Kst;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -34,7 +35,7 @@ import static org.mockito.Mockito.when;
  * 매칭(펀드·채권 제외)으로 티커를 붙이고, 백엔드는 그 티커를 먼저 씁니다. 티커 필드가 없는 옛 저장본은 지금처럼
  * 이름을 정확히 비교합니다. 수집기가 모른다고 정한 보유(티커 null — 펀드·채권 등)는 이름으로 다시 찾지 않습니다.
  * 회사 이름은 매핑표에 있는데 일부러 뺀 보유(채권, 우선주·워런트·유닛)는 수집기가 적은 종류({@code tickerNote})를
- * 미커버 이유로 씁니다(QA-127).
+ * 미커버 이유로 씁니다(QA-127). 티커는 붙었는데 가격 시계열이 없는 보유는 '매핑표에 없음'이 아니라 '가격 없음'입니다(QA-130).
  */
 class GuruServiceRiskMatchingTest {
 
@@ -167,6 +168,64 @@ class GuruServiceRiskMatchingTest {
         assertThat(reasons).containsExactly(
                 Map.entry("BOEING CO", "보통주가 아닌 증권(우선주·워런트·유닛) — 보통주 가격으로 대신하지 않음"),
                 Map.entry("FORD MTR CO", "채권·사채 — 주가로 계산하지 않음"),
+                Map.entry("SOME OBSCURE HOLDINGS LLC", "매핑표에 없음"));
+    }
+
+    @Test
+    @Disabled("QA-130: 티커는 붙었는데 가격 시계열만 없는 보유도 미커버 이유가 '매핑표에 없음'입니다")
+    @DisplayName("QA-130 매핑표에는 있는데 가격 시계열이 없는 보유는 '가격 없음'으로 적는다 — '매핑표에 없음'·'가격 수집 실패'와 구분")
+    void uncoveredReasonSaysNoPriceWhenTickerIsMapped() {
+        String cik = Institutions.ciks().get(0);
+        ObjectNode prices = MAPPER.createObjectNode();
+        ObjectNode tickers = prices.putObject("tickers");
+        tickers.set("BA", series(60, 200));
+        tickers.set("SPY", series(60, 500));
+        // 수집 실패로 이어받은 가격 — 이유는 예전처럼 '가격 수집 실패'입니다.
+        tickers.set("NVDA", series(60, 100).put("isStale", true));
+        ObjectNode nameMap = prices.putObject("nameMap");
+        nameMap.putObject("BOEING CO").put("ticker", "BA").put("sector", "산업재");
+        nameMap.putObject("MARSH & MCLENNAN COS INC").put("ticker", "MRSH").put("sector", "금융");
+        nameMap.putObject("APPLE INC").put("ticker", "AAPL").put("sector", "정보기술");
+        nameMap.putObject("NVIDIA CORP").put("ticker", "NVDA").put("sector", "정보기술");
+
+        ObjectNode filings = MAPPER.createObjectNode();
+        ArrayNode holdings = filings.putArray("quarters").addObject()
+                .put("reportDate", "2026-06-30").put("filingDate", "2026-08-14")
+                .putArray("holdings");
+        holdings.addObject().put("name", "BOEING CO").put("cusip", "097023105")
+                .put("weight", 86.0).put("value", 86.0).put("ticker", "BA");
+        // 매핑표에 막 더해 equity_history가 아직 돌지 않았거나, 야후가 처음부터 주지 않는 티커 — 가격 시계열이 없습니다.
+        holdings.addObject().put("name", "MARSH & MCLENNAN COS INC").put("cusip", "571748102")
+                .put("weight", 6.0).put("value", 6.0).put("ticker", "MRSH");
+        holdings.addObject().put("name", "NVIDIA CORPORATION").put("cusip", "67066G104")
+                .put("weight", 4.0).put("value", 4.0).put("ticker", "NVDA");
+        // 티커 필드가 없는 옛 저장본 — 이름으로 매핑표에서 찾았지만 가격이 없습니다.
+        holdings.addObject().put("name", "APPLE INC").put("cusip", "037833100")
+                .put("weight", 3.0).put("value", 3.0);
+        holdings.addObject().put("name", "SOME OBSCURE HOLDINGS LLC").put("cusip", "000000000")
+                .put("weight", 1.0).put("value", 1.0).putNull("ticker");
+
+        StoreReader store = mock(StoreReader.class);
+        when(store.read(anyString(), anyLong(), anyString())).thenReturn(Optional.empty());
+        when(store.read(eq(Datasets.SNAP_EQUITY_HISTORY), anyLong(), anyString()))
+                .thenReturn(Optional.of(snapshot(Datasets.SNAP_EQUITY_HISTORY, prices)));
+        String filingName = Datasets.sec13f(cik, Datasets.MAX_TRACKED_QUARTERS);
+        when(store.read(eq(filingName), anyLong(), anyString()))
+                .thenReturn(Optional.of(snapshot(filingName, filings)));
+
+        Map<String, Object> risk = new GuruService(store).risk(cik, "SPY", 1);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> coverage = (Map<String, Object>) risk.get("coverage");
+        assertThat((double) coverage.get("weight")).isEqualTo(86.0);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> uncovered = (List<Map<String, Object>>) coverage.get("uncovered");
+        Map<Object, Object> reasons = new LinkedHashMap<>();
+        uncovered.forEach(row -> reasons.put(row.get("name"), row.get("reason")));
+        assertThat(reasons).containsExactly(
+                Map.entry("MARSH & MCLENNAN COS INC", "가격 없음 — 매핑표에는 있으나 가격 시계열을 받지 못함"),
+                Map.entry("NVIDIA CORPORATION", "가격 수집 실패(이전 값이라 제외)"),
+                Map.entry("APPLE INC", "가격 없음 — 매핑표에는 있으나 가격 시계열을 받지 못함"),
                 Map.entry("SOME OBSCURE HOLDINGS LLC", "매핑표에 없음"));
     }
 }
