@@ -1,6 +1,5 @@
 package com.macrodash.feature.ai;
 
-import com.macrodash.read.ComputedCache;
 import com.macrodash.support.CurrentUser;
 
 import org.springframework.http.HttpStatus;
@@ -25,12 +24,10 @@ public class AiController {
 
     private final AiService ai;
     private final AiReportService reports;
-    private final ComputedCache cache;
 
-    public AiController(AiService ai, AiReportService reports, ComputedCache cache) {
+    public AiController(AiService ai, AiReportService reports) {
         this.ai = ai;
         this.reports = reports;
-        this.cache = cache;
     }
 
     /** 엔진 목록. 데모 열람이면 공용 하루 한도의 오늘 사용량({@code quota})을 함께 줍니다(ADR 0014). */
@@ -47,18 +44,6 @@ public class AiController {
     @GetMapping("/report-types")
     public Map<String, Object> reportTypes() {
         return Map.of("types", reports.reportTypes());
-    }
-
-    /**
-     * 수집 데이터 원본 텍스트 (AI 입력 · 복사용). 응답 모양은 {@code {text}}.
-     *
-     * <p>본문은 {@code /api/snapshot/text}와 같고 <b>같은 응답 캐시 항목</b>을 씁니다 — 예전에는 캐시 없이 요청마다
-     * 전 화면 집계를 다시 돌았습니다(QA-097). 캐시가 공유하는 객체는 고치지 않고 본문만 꺼냅니다.
-     */
-    @GetMapping("/snapshot-text")
-    public Map<String, Object> snapshotText() {
-        Map<String, Object> payload = cache.get(AiReportService.SNAPSHOT_TEXT_CACHE_KEY, reports::inputPayload);
-        return Map.of("text", payload.get("text"));
     }
 
     public record ReportRequest(String engineId, String reportType, String extraInstruction) {

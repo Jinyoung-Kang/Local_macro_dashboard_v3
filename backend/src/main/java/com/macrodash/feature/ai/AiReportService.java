@@ -34,14 +34,6 @@ public class AiReportService {
         return snapshotText.reportPrompts().keySet();
     }
 
-    /** 원본 텍스트 응답의 캐시 키 — 화면의 원본 보기({@code /api/snapshot/text})와 같은 항목(QA-097). */
-    public static final String SNAPSHOT_TEXT_CACHE_KEY = SnapshotTextService.CACHE_KEY;
-
-    /** AI에 넣는 것과 같은 원본 텍스트 + 생성 시각·분량({@link SnapshotTextService#payload()}). */
-    public Map<String, Object> inputPayload() {
-        return snapshotText.payload();
-    }
-
     /**
      * 리포트를 만듭니다.
      *

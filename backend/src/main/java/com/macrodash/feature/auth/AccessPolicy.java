@@ -69,7 +69,7 @@ public final class AccessPolicy {
         member("GET /api/analytics/series", "GET /api/analytics/correlation", "GET /api/analytics/regime",
                 "GET /api/analytics/regime/log", "GET /api/analytics/regime/track-record", "GET /api/snapshot/text");
         // 🤖 AI (조회) · 🔌 토스 공개 시세
-        member("GET /api/ai/engines", "GET /api/ai/report-types", "GET /api/ai/snapshot-text",
+        member("GET /api/ai/engines", "GET /api/ai/report-types",
                 "GET /api/ai/toss/exchange-rate", "GET /api/ai/toss/indices");
         // 💎 유료 — 종목별 투자자 매매 이력, AI 리포트(유료 API, 하루 한도는 UsageService)
         pro("GET /api/kr/stock-flows", "POST /api/ai/report");

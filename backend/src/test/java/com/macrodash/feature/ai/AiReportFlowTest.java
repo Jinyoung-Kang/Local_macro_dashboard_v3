@@ -1,8 +1,6 @@
 package com.macrodash.feature.ai;
 
 import com.macrodash.feature.snapshot.SnapshotTextService;
-import com.macrodash.read.ComputedCache;
-import com.macrodash.store.StoreRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -37,7 +35,6 @@ class AiReportFlowTest {
         prompts.put("리스크 점검", "SYSTEM-B");
         when(snapshotText.reportPrompts()).thenReturn(prompts);
         when(snapshotText.fullText()).thenReturn("DATA");
-        when(snapshotText.payload()).thenReturn(Map.of("text", "DATA", "chars", 4));
         when(ai.generate(anyString(), anyString(), anyString()))
                 .thenReturn(Map.of("text", "결과", "engine", "cerebras_llama"));
     }
@@ -80,20 +77,14 @@ class AiReportFlowTest {
     }
 
     @Test
-    @DisplayName("리포트 종류 목록과 원본 텍스트 응답 모양")
-    void typesAndText() {
+    @DisplayName("리포트 종류 목록")
+    void reportTypes() {
         assertThat(controller().reportTypes().get("types").toString()).isEqualTo("[종합 매크로 브리핑, 리스크 점검]");
-        assertThat(controller().snapshotText()).isEqualTo(Map.of("text", "DATA"));
     }
 
     private AiController controller() {
         return new AiController(ai, new AiReportService(ai, snapshotText,
-                org.mockito.Mockito.mock(com.macrodash.feature.auth.UsageService.class)), noCache());
-    }
-
-    /** 저장본이 없는 응답 캐시 — 버전을 몰라 늘 새로 계산합니다(ComputedCache 규칙). */
-    private static ComputedCache noCache() {
-        return new ComputedCache(mock(StoreRepository.class));
+                org.mockito.Mockito.mock(com.macrodash.feature.auth.UsageService.class)));
     }
 
     /** 데모 열람(ADR 0013) 요청 — 세션 필터가 넣는 사용자 속성을 흉내 냅니다. */
@@ -106,7 +97,7 @@ class AiReportFlowTest {
     /** 실제 사용량 서비스(데모 공용 한도 = demoLimit) — 저장소는 흉내이고, 데모는 저장소를 쓰지 않아야 합니다. */
     private AiController controllerWithDemoLimit(com.macrodash.store.UsageStore store, int demoLimit) {
         return new AiController(ai, new AiReportService(ai, snapshotText,
-                new com.macrodash.feature.auth.UsageService(store, 20, demoLimit)), noCache());
+                new com.macrodash.feature.auth.UsageService(store, 20, demoLimit)));
     }
 
     @Test
@@ -166,7 +157,7 @@ class AiReportFlowTest {
         com.macrodash.store.UsageStore store = mock(com.macrodash.store.UsageStore.class);
         when(snapshotText.fullText()).thenThrow(new IllegalStateException("DB 일시 장애"));
         com.macrodash.feature.auth.UsageService usage = new com.macrodash.feature.auth.UsageService(store, 20, 1);
-        AiController controller = new AiController(ai, new AiReportService(ai, snapshotText, usage), noCache());
+        AiController controller = new AiController(ai, new AiReportService(ai, snapshotText, usage));
 
         assertThatThrownBy(() -> controller.report(new AiController.ReportRequest("anthropic_haiku", null, null),
                 demoRequest())).isInstanceOf(IllegalStateException.class);

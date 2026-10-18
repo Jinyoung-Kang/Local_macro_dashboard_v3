@@ -361,10 +361,6 @@
       "p": "/api/ai/report-types"
     },
     {
-      "m": "GET",
-      "p": "/api/ai/snapshot-text"
-    },
-    {
       "m": "POST",
       "p": "/api/ai/report",
       "body": {

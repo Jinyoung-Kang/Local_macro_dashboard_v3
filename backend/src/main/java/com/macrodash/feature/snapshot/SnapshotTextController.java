@@ -24,9 +24,9 @@ public class SnapshotTextController {
     /**
      * 수집한 전체 대시보드 원본 텍스트 (AI 분석 없음 · 화면 표시/복사용).
      *
-     * <p>AI 메뉴의 {@code /api/ai/snapshot-text}와 같은 텍스트지만 경로를 나눠
-     * 둡니다. 원본 데이터를 보는 일은 AI 키가 없어도 되는 기능인데, AI 경로
-     * 아래에 두면 "AI 기능"으로 읽히기 때문입니다. 응답 캐시 항목은 같습니다(QA-097).
+     * <p>AI 리포트에 들어가는 것과 같은 텍스트지만 AI 경로 아래에 두지 않습니다. 원본
+     * 데이터를 보는 일은 AI 키가 없어도 되는 기능인데, AI 경로 아래에 두면 "AI 기능"으로
+     * 읽히기 때문입니다. 응답 캐시 항목은 {@link SnapshotTextService#CACHE_KEY}입니다.
      */
     @GetMapping("/snapshot/text")
     public Map<String, Object> snapshotText() {

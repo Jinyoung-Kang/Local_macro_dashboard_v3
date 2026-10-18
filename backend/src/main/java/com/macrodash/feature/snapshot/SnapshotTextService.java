@@ -32,10 +32,7 @@ import java.util.Map;
 @Service
 public class SnapshotTextService {
 
-    /**
-     * {@link #payload()}의 응답 캐시(ComputedCache) 키. 같은 원본을 내보내는 두 경로({@code /api/snapshot/text},
-     * {@code /api/ai/snapshot-text})가 같은 항목을 쓰도록 한 곳에 둡니다(QA-097).
-     */
+    /** {@link #payload()}의 응답 캐시(ComputedCache) 키 — {@code /api/snapshot/text}가 씁니다. */
     public static final String CACHE_KEY = "snapshot.text";
 
     /** 원본 텍스트가 담는 영역 (화면 안내 문구가 실제 내용과 어긋나지 않도록 여기서 정의합니다). */

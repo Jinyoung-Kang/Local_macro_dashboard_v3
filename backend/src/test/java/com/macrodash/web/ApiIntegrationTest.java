@@ -624,8 +624,8 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("QA-097: /api/ai/snapshot-text도 /api/snapshot/text와 같은 응답 캐시를 거친다 — 같은 저장본이면 다시 만들지 않음")
-    void aiSnapshotTextSharesTheSnapshotTextCache() {
+    @DisplayName("원본 데이터 텍스트는 응답 캐시를 거친다 — 같은 저장본이면 다시 만들지 않음")
+    void snapshotTextIsServedFromTheResponseCache() {
         insertSnapshot(Datasets.SNAP_MACRO_COLLECTED, """
                 {"categories": [{"id": "fx", "title": "💵 통화 및 환율", "items": [{
                   "key": "usdkrw", "name": "원/달러 (USD/KRW)", "status": "ok", "price": 1389.5, "priceStr": "1,389.50",
@@ -634,14 +634,12 @@ class ApiIntegrationTest {
         String cached = authorizedGet("/api/snapshot/text").path("text").asString();
         assertThat(cached).contains("1,389.50");
         // 수집 시각(= 캐시의 저장본 버전)은 그대로 두고 값만 바꿉니다. 같은 캐시를 거치면 다시 만들지 않으므로 앞의 텍스트가
-        // 그대로 나오고, 캐시 없이 매번 만들면 바뀐 값이 나옵니다.
+        // 그대로 나오고, 캐시 없이 매번 만들면 바뀐 값이 나옵니다. 예전에 이 텍스트를 내던 쌍둥이 경로
+        // /api/ai/snapshot-text(QA-097)는 지웠고, 남은 이 경로의 캐시를 지킵니다.
         jdbc.update("UPDATE snapshots SET payload = replace(payload::text, '1,389.50', '1,400.00')::jsonb WHERE name = ?",
                 Datasets.SNAP_MACRO_COLLECTED);
 
-        JsonNode body = authorizedGet("/api/ai/snapshot-text");
-
-        assertThat(body.path("text").asString()).isEqualTo(cached);
-        assertThat(body.size()).as("응답 모양은 지금과 같은 {text}").isEqualTo(1);
+        assertThat(authorizedGet("/api/snapshot/text").path("text").asString()).isEqualTo(cached);
     }
 
     @Test
