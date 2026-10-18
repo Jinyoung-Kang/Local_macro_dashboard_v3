@@ -5,6 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -516,6 +517,53 @@ class ComputedCacheTest {
         assertThat(values).hasSize(callers).allSatisfy(value -> assertThat(value).isSameAs(values.get(0)));
         assertThat(cache.rejectedCount()).isZero();
         assertThat(cache.inflight()).as("계산을 맡은 요청이 끝나면 비움").isZero();
+    }
+
+    @Test
+    @Disabled("QA-131 리뷰: 앞선 계산을 따르는 요청 수에 상한이 없어, 같은 키를 겹쳐 보내면 요청 스레드를 모두 묶습니다")
+    @DisplayName("QA-131 앞선 계산을 따르는 요청 수에도 상한이 있다 — 넘친 같은 키 요청은 기다리지 않고 바로 429")
+    void followersAreBounded() throws Exception {
+        // 리뷰 탐침: 따르는 요청은 자리도 대기열 자리도 잡지 않아, 자리 1·대기열 32에서 캐시에 없는 키 33개에 6건씩(198건)
+        // 겹쳐 보내자 198개가 캐시 안에서 멈추고 바로 429는 0건이었습니다(같은 키를 한 번만 계산하기 전에는 33개만 멈추고
+        // 165건은 바로 429). Tomcat 요청 스레드는 기본 200개라 health·로그인·캐시 적중까지 밀립니다.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        int bound = 64; // 상한 — Tomcat 기본 200개에서 상한+대기열 32를 빼고도 health·적중 몫이 넉넉히 남게
+        int extra = 3;
+        AtomicInteger computed = new AtomicInteger();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        List<Caller> followers = new ArrayList<>();
+        Caller leader;
+        try {
+            leader = call(cache, "k", () -> {
+                computed.incrementAndGet();
+                entered.countDown();
+                awaitQuietly(release);
+                return new Object();
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            // 하나씩 보내 앞 요청이 캐시 안에서 멈추거나 끝난 뒤 다음을 보냅니다 — 상한까지 멈추고 그 뒤는 바로 끝나야 합니다.
+            for (int i = 0; i < bound + extra; i++) {
+                followers.add(call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone());
+            }
+            assertThat(followers.subList(0, bound)).as("상한까지는 앞선 계산을 기다림")
+                    .allSatisfy(follower -> assertThat(follower.result()).isNotDone());
+            for (Caller turnedAway : followers.subList(bound, bound + extra)) {
+                assertThat(turnedAway.result()).as("상한을 넘은 요청은 기다리지 않고 바로 끝남").isDone();
+                assertThat(turnedAway.failure()).isInstanceOf(ComputeBusyException.class);
+            }
+        } finally {
+            release.countDown();
+        }
+
+        Object value = leader.value();
+        for (Caller follower : followers.subList(0, bound)) {
+            assertThat(follower.value()).isSameAs(value);
+        }
+        assertThat(computed.get()).isEqualTo(1);
+        assertThat(cache.rejectedCount()).isEqualTo(extra);
+        assertThat(cache.inflight()).isZero();
     }
 
     /** 불리면 안 되는 계산 — 앞선 계산을 따라야 할 요청이나 자리를 얻지 못한 요청이 계산하면 드러납니다. */
