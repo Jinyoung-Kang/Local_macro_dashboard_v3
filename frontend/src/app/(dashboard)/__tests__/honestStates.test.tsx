@@ -15,6 +15,7 @@ vi.mock("@/lib/api", () => api);
 const signal = vi.hoisted(() => ({ token: 0, reloadAll: () => {}, notifyUnauthorized: () => {} }));
 vi.mock("@/hooks/useRefreshSignal", () => ({ useRefreshSignal: () => signal }));
 
+import AiReportPage from "../ai/report/page";
 import AlertsPage from "../alerts/page";
 import { AiEngineSection } from "../connections/AiEngineSection";
 import { TossSection } from "../connections/TossSection";
@@ -170,5 +171,19 @@ describe("QA-103 첫 조회·버튼 동작이 실패하면 이유를 보인다",
 
     const inbox = (await screen.findByRole("heading", { name: "알림함" })).closest("section") as HTMLElement;
     expect(await within(inbox).findByText("요청 실패 (HTTP 500)")).toBeTruthy();
+  });
+});
+
+describe("QA-132 AI 리포트 — 원본 텍스트를 받지 못하면 이유를 보인다", () => {
+  // 수정 전에는 snapshot.error를 그리지 않아, 원본 데이터 카드를 펼치면 이유 없이 빈 상자만 보였다.
+  it.fails("원본 데이터 카드에 오류와 다시 시도", async () => {
+    reads["/api/snapshot/text"] = () => Promise.reject(new Error("요청 실패 (HTTP 503)"));
+    render(<AiReportPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "AI에 전달되는 원본 데이터 보기" }));
+
+    const card = (await screen.findByRole("heading", { name: "수집 데이터 원본 (AI 입력)" })).closest("section") as HTMLElement;
+    expect(await within(card).findByText("요청 실패 (HTTP 503)")).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "다시 시도" })).toBeTruthy();
   });
 });
