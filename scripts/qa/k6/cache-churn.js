@@ -20,6 +20,8 @@
 //   shed_ms입니다(대기열이 가득해 바로 거절되면 수 ms, 자리를 기다리다 거절되면 그 대기 시간만큼). 200도 429도 아닌 응답(5xx·
 //   시간 초과·연결 실패·다른 4xx)은 non429_fail(Counter, 임계값 count<1)이고, 요약이 시나리오·종류별로 나눠 보여 줍니다.
 //   health는 상한 밖 경로라 429도 실패로 셉니다. login의 실패에는 뒤따르는 로그아웃 요청의 실패도 들어갑니다.
+//   DURATION이 끝날 때 아직 진행 중인 요청도 답(또는 시간 초과)까지 기다려 셉니다 — gracefulStop을 요청 시간 초과보다 길게
+//   둡니다(scenarios 위 설명).
 //   hot·rare의 지연(hot_*·rare_*)과 실패(miss_*) 판정은 예전처럼 200 응답만 봅니다. churn_req는 예전처럼 모든 응답의 지연이고,
 //   churn_ok_ms는 200 응답만의 지연입니다.
 //
@@ -90,6 +92,7 @@ const CAL_N = Number(__ENV.CAL_N || 7);       // 보정: 첫 요청 뒤 적중 �
 const MISS_K = Number(__ENV.MISS_K || 3);     // 보정: 문턱 = max(MISS_K × 적중 중앙값, 적중 중앙값 + MISS_D)
 const MISS_D = Number(__ENV.MISS_D || 20);    // ms
 const TTL_SECONDS = 60;                       // ComputedCache.MAX_AGE_SECONDS
+const REQ_TIMEOUT_S = 60;                     // hot·rare·churn·login(로그아웃 포함) 요청의 시간 초과
 const HEALTH_TIMEOUT = '5s';                  // docker-compose.yml backend healthcheck timeout
 const LOGIN_EVERY_S = 20;
 if (!(CAL_N >= 1) || !(MISS_K >= 1) || !(MISS_D >= 0)) throw new Error('CAL_N≥1 · MISS_K≥1 · MISS_D≥0 이어야 합니다');
@@ -136,22 +139,28 @@ http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 429));
 const SCENARIOS = ['hot', 'rare', 'churn', 'health', 'login'];
 const FAIL_KINDS = [['timeout', '시간 초과'], ['network', '연결 실패'], ['5xx', '5xx'], ['4xx', '4xx(429 외)'], ['other', '기타']];
 
+// gracefulStop: DURATION이 끝날 때 진행 중인 반복은 이 시간까지 기다렸다가 끊기고, 끊긴 반복의 요청은 응답 분포에도
+// non429_fail에도(http_reqs에도) 남지 않습니다(k6 v2.3.0에서 확인). 기본값 30초는 요청 시간 초과(60초)보다 짧아, 서버가
+// 느린 회차에서 끝 무렵 보낸 요청이 조용히 빠졌습니다. 그래서 시간 초과보다 5초 길게 줘 늦은 200·429·시간 초과도 끝까지
+// 셉니다. login은 한 반복에 로그인·로그아웃 두 요청이라 두 배입니다. health는 시간 초과 5초라 기본값으로 충분합니다.
+// 정상 회차에서는 반복이 먼저 끝나 실행 시간이 늘지 않고, 서버가 매달리면 회차가 DURATION보다 최대 이 시간만큼 더 걸립니다.
+const GRACEFUL_STOP = `${REQ_TIMEOUT_S + 5}s`;
 const scenarios = {
-  hot: { executor: 'constant-vus', exec: 'hot', vus: HOT_VUS, duration: DURATION },
-  rare: { executor: 'constant-vus', exec: 'rare', vus: 1, duration: DURATION },
+  hot: { executor: 'constant-vus', exec: 'hot', vus: HOT_VUS, duration: DURATION, gracefulStop: GRACEFUL_STOP },
+  rare: { executor: 'constant-vus', exec: 'rare', vus: 1, duration: DURATION, gracefulStop: GRACEFUL_STOP },
   // 답이 시간 초과(5초)까지 늦어도 1초 간격을 지키도록 VU를 넉넉히 둡니다.
   health: {
     executor: 'constant-arrival-rate', exec: 'health', rate: 1, timeUnit: '1s', duration: DURATION, preAllocatedVUs: 6, maxVUs: 12,
   },
   login: {
     executor: 'constant-arrival-rate', exec: 'login', rate: 1, timeUnit: `${LOGIN_EVERY_S}s`, duration: DURATION,
-    preAllocatedVUs: 1, maxVUs: 4,
+    preAllocatedVUs: 1, maxVUs: 4, gracefulStop: `${2 * REQ_TIMEOUT_S + 5}s`,
   },
 };
 if (RATE > 0) {
   scenarios.churn = {
     executor: 'constant-arrival-rate', exec: 'churn', rate: RATE, timeUnit: '1s', duration: DURATION,
-    preAllocatedVUs: Math.max(5, RATE * 2), maxVUs: Math.max(20, RATE * 10),
+    preAllocatedVUs: Math.max(5, RATE * 2), maxVUs: Math.max(20, RATE * 10), gracefulStop: GRACEFUL_STOP,
   };
 }
 
@@ -169,7 +178,7 @@ export const options = {
 
 function get(data, path, name) {
   // 경로마다 시계열이 생기지 않게 name 태그로 묶습니다(churn 키는 수천 개).
-  return http.get(`${BASE}${path}`, { cookies: { macro_session: data.cookie }, tags: { name }, timeout: '60s' });
+  return http.get(`${BASE}${path}`, { cookies: { macro_session: data.cookie }, tags: { name }, timeout: `${REQ_TIMEOUT_S}s` });
 }
 
 // 실패 종류: 응답이 없으면(status 0) k6 오류 코드로 시간 초과(1050)와 그 밖의 연결 실패를 나눕니다.
@@ -323,14 +332,14 @@ export function health() {
 
 export function login() {
   const startedAt = Date.now();
-  const res = postLogin({ tags: { name: 'login' }, timeout: '60s' });
+  const res = postLogin({ tags: { name: 'login' }, timeout: `${REQ_TIMEOUT_S}s` });
   loginMs.add(elapsedMs(res, startedAt));
   const ok = tally(res, shed.login);
   loginOk.add(ok);
   const cookie = ok ? sessionCookie(res) : null;
   if (cookie) {
     tally(http.post(`${BASE}/api/auth/logout`, null,
-      { headers: { Origin: ORIGIN }, cookies: { macro_session: cookie }, tags: { name: 'logout' }, timeout: '60s' }), null);
+      { headers: { Origin: ORIGIN }, cookies: { macro_session: cookie }, tags: { name: 'logout' }, timeout: `${REQ_TIMEOUT_S}s` }), null);
   }
 }
 
