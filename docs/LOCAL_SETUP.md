@@ -89,7 +89,8 @@ brew install --cask temurin@21          # Java 21 (JDK)
 brew services start postgresql@16
 ```
 
-Python은 **3.11 또는 3.12**를 권합니다. 3.13에서는 `pandas`/`pykrx` 계열
+Python은 **3.11(3.11.5 이상) 또는 3.12**를 권합니다. 고정판 soupsieve 3.0.3이 3.11.5 이상을
+요구해, 3.11.0~3.11.4에서는 `-c constraints.txt` 설치가 실패합니다. 3.13에서는 `pandas`/`pykrx` 계열
 휠이 아직 준비되지 않아 소스 빌드로 넘어가는 경우가 있습니다.
 (확인하지 못한 조합이라 단정하지는 않겠습니다 — 3.11에서 검증했습니다.)
 
