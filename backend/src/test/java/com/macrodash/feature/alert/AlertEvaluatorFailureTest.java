@@ -3,6 +3,7 @@ package com.macrodash.feature.alert;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.AlertStore;
@@ -174,6 +175,7 @@ class AlertEvaluatorFailureTest {
         assertThat(appender.list).singleElement().satisfies(event -> {
             assertThat(event.getLevel()).isEqualTo(Level.WARN);
             assertThat(event.getFormattedMessage()).contains("REGIME_CHANGE 사건", "BadSqlGrammarException");
+            assertThat(event.getThrowableProxy()).as("DB 오류는 한 줄만 — 5분마다 스택을 쌓지 않음").isNull();
         });
     }
 
@@ -196,6 +198,32 @@ class AlertEvaluatorFailureTest {
         assertThat(appender.list).singleElement().satisfies(event -> {
             assertThat(event.getLevel()).isEqualTo(Level.WARN);
             assertThat(event.getFormattedMessage()).contains("REGIME_CHANGE 배달", "DataIntegrityViolationException");
+            assertThat(event.getThrowableProxy()).as("DB 오류는 한 줄만 — 5분마다 스택을 쌓지 않음").isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("코드 결함(NPE 등)은 스택 트레이스를 함께 남긴다 — 경고 한 줄로는 어느 파일·줄인지 알 수 없음")
+    void codeDefectWarningCarriesTheStackTrace() {
+        AlertStore alerts = alertsWithOneEventPerKind();
+        // 사건 키가 빈 사건 — 규칙과 맞춰 보는 코드(matches)에서 NPE가 납니다(아직 모르는 코드 결함의 자리).
+        when(alerts.recentEvents("FOREIGN_STREAK", AlertEvaluator.REFAN_DAYS)).thenReturn(List.of(new AlertStore.Event(
+                11L, "FOREIGN_STREAK", null, LocalDate.of(2026, 8, 19), "t", "b")));
+        appender.start();
+        logger.addAppender(appender);
+
+        int delivered = evaluator(alerts, mock(RegimeLogStore.class)).evaluate();
+
+        assertThat(delivered).as("연속 배달만 건너뛰고 국면·13F는 배달").isEqualTo(2);
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("FOREIGN_STREAK 배달", "NullPointerException");
+            IThrowableProxy thrown = event.getThrowableProxy();
+            assertThat(thrown).as("스택 트레이스가 붙음").isNotNull();
+            assertThat(thrown.getClassName()).isEqualTo(NullPointerException.class.getName());
+            StackTraceElement top = thrown.getStackTraceElementProxyArray()[0].getStackTraceElement();
+            assertThat(top.getClassName() + "." + top.getMethodName()).as("결함이 난 곳")
+                    .isEqualTo(AlertEvaluator.class.getName() + ".matches");
         });
     }
 

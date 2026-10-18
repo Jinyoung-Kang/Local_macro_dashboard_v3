@@ -17,6 +17,7 @@ import com.macrodash.support.Json;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -58,6 +59,7 @@ public class AlertEvaluator {
 
     private static final Logger log = LoggerFactory.getLogger(AlertEvaluator.class);
     private static final ZoneId KST = Kst.ZONE;
+    private static final String STEP_FAILED = "알림 평가 '{}' 단계 실패 — 다른 단계는 계속하고 다음 주기에 다시 시도합니다: {}";
 
     private final AlertStore alerts;
     private final RegimeLogStore regimeLog;
@@ -132,14 +134,21 @@ public class AlertEvaluator {
      * <p>DB에 닿지 못하는 실패({@link DataAccessResourceFailureException}, 연결을 얻지 못함 등)는 그대로 던집니다 —
      * 나머지 단계도 같은 이유로 실패하므로, 단계마다 연결을 기다리며 같은 경고를 되풀이하지 않고 그 주기를 한 번에
      * 멈춥니다(바깥 {@link #scheduledEvaluate}가 한 줄 남김).
+     *
+     * <p>경고에 스택 트레이스는 코드 결함(NPE 등)일 때만 붙입니다 — 단계 하나가 여러 클래스를 거쳐 한 줄로는 어느
+     * 파일·줄인지 알 수 없습니다. 다른 DB 오류(SQL 문법·제약 위반 등)는 원인이 메시지에 있고 고칠 때까지 5분마다
+     * 되풀이되므로 한 줄만 남깁니다.
      */
     private static <T> T guarded(String step, Supplier<T> work, T fallback) {
         try {
             return work.get();
         } catch (DataAccessResourceFailureException e) {
             throw e;
+        } catch (DataAccessException e) {
+            log.warn(STEP_FAILED, step, e.toString());
+            return fallback;
         } catch (RuntimeException e) {
-            log.warn("알림 평가 '{}' 단계 실패 — 다른 단계는 계속하고 다음 주기에 다시 시도합니다: {}", step, e.toString());
+            log.warn(STEP_FAILED, step, e.toString(), e);   // 마지막 인자가 예외라 스택 트레이스가 붙습니다
             return fallback;
         }
     }
