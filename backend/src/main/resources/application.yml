@@ -72,6 +72,11 @@ dashboard:
   #   live_only  신선해도 읽을 때마다 수집 요청(비동기, 태스크별 30초 쿨다운) — 저장본이 있으면 그대로 보여 줌 (디버깅용)
   read-mode: ${DASHBOARD_READ_MODE:auto}
 
+  # 캐시를 놓친 비싼 계산(전체 요약 텍스트·기관·13F 조합·국면·스코어카드)을 동시에 몇 개까지 돌릴지(QA-131, read.ComputedCache).
+  # 0이면 자동 = 코어 수의 절반, 최소 1(AWS 2 vCPU면 1). 넘친 요청은 2초 기다린 뒤 429. 음수면 기동하지 않습니다.
+  compute:
+    max-concurrent: ${COMPUTE_MAX_CONCURRENT:0}
+
   collector-url: ${COLLECTOR_URL:http://localhost:8000}
   collector-token: ${COLLECTOR_API_TOKEN:}
   collector-timeout-seconds: ${COLLECTOR_TIMEOUT_SECONDS:90}

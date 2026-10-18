@@ -280,6 +280,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | `COOKIE_SECURE` | HTTPS로만 접속할 때 `true` (http://에서 켜면 로그인이 안 됨) |
 | `AI_TIMEOUT_SECONDS` | 엔진을 직접 고른 경우의 대기 한도 (기본 240초) |
 | `AI_AUTO_ATTEMPT_SECONDS` / `AI_AUTO_BUDGET_SECONDS` | `⚡ 자동 탐색`의 엔진별·전체 시간 예산 (기본 60초 / 180초) |
+| `COMPUTE_MAX_CONCURRENT` | 캐시에 없는 비싼 계산(스코어카드·기관 위험·13F 조합 등)의 동시 실행 상한. 비우거나 0이면 자동(코어 수의 절반, 최소 1). 넘친 요청은 2초 기다린 뒤 429 |
 
 > **`SEC_USER_AGENT`는 영문 이메일이어야 합니다.** HTTP 헤더는 latin-1만 담을 수
 > 있어 한글이 섞이면 요청 자체가 불가능합니다. 예시 값을 그대로 두는 것도

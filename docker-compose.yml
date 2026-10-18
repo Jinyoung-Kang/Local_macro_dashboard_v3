@@ -136,6 +136,8 @@ services:
       COLLECTOR_URL: http://collector:8000
       COLLECTOR_API_TOKEN: "${COLLECTOR_API_TOKEN:-}"
       DASHBOARD_READ_MODE: "${DASHBOARD_READ_MODE:-auto}"
+      # 비싼 계산 동시 실행 상한(QA-131). 0(기본)이면 자동 = 컨테이너가 보는 코어 수의 절반, 최소 1
+      COMPUTE_MAX_CONCURRENT: "${COMPUTE_MAX_CONCURRENT:-0}"
       # 기본값을 두지 않습니다. 비었거나 옛 공개 기본값이면 백엔드가 로그인을 받지 않습니다.
       APP_PASSWORD: "${APP_PASSWORD:-}"
       OWNER_EMAIL: "${OWNER_EMAIL:-}"
