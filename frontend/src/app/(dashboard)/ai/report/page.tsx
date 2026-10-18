@@ -157,9 +157,13 @@ export default function AiReportPage() {
           }
         >
           {snapshot.loading && !snapshot.data && <Loading />}
-          <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap rounded-sm border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
-            {snapshot.data?.text ?? ""}
-          </pre>
+          {/* 받지 못하면 이유 없이 빈 상자만 남았습니다(QA-132). */}
+          {snapshot.error && <ErrorState message={snapshot.error} onRetry={snapshot.reload} />}
+          {snapshot.data && (
+            <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap rounded-sm border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
+              {snapshot.data.text}
+            </pre>
+          )}
         </Card>
       )}
 

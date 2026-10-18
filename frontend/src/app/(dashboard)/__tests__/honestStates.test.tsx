@@ -176,7 +176,7 @@ describe("QA-103 첫 조회·버튼 동작이 실패하면 이유를 보인다",
 
 describe("QA-132 AI 리포트 — 원본 텍스트를 받지 못하면 이유를 보인다", () => {
   // 수정 전에는 snapshot.error를 그리지 않아, 원본 데이터 카드를 펼치면 이유 없이 빈 상자만 보였다.
-  it.fails("원본 데이터 카드에 오류와 다시 시도", async () => {
+  it("원본 데이터 카드에 오류와 다시 시도", async () => {
     reads["/api/snapshot/text"] = () => Promise.reject(new Error("요청 실패 (HTTP 503)"));
     render(<AiReportPage />);
 
