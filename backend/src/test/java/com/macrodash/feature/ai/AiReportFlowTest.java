@@ -244,4 +244,24 @@ class AiReportFlowTest {
         verify(store, never()).decrement(anyLong(), any(), anyString());
         assertThat(usage.demoQuota().used()).isZero();
     }
+
+    @Test
+    @DisplayName("QA-133 오늘 한도를 다 쓴 회원이 못 쓰는 엔진을 고르면 한도 문구가 아니라 엔진 실패를 받고, 한도는 건드리지 않는다")
+    void unusableEngineWinsOverExhaustedQuota() {
+        // 엔진 판정이 한도 확인보다 먼저입니다 — 한도가 남아 있어도 이 엔진으로는 만들 수 없다는 쪽이 고칠 것을 알려 줍니다.
+        UsageStore store = mock(UsageStore.class);
+        when(store.count(anyLong(), any(), anyString())).thenReturn(20);
+        UsageService usage = new UsageService(store, 20, 20);
+        CurrentUser pro = new CurrentUser(7, "pro@test.local", "MEMBER", "PRO", null);
+        AiService unusableAi = realAi("anthropic_haiku", "test-key");
+
+        Map<String, Object> out = new AiController(unusableAi, new AiReportService(unusableAi, snapshotText, usage))
+                .report(new AiController.ReportRequest("cerebras_llama", "리스크 점검", null), requestAs(pro));
+
+        assertThat(out).containsEntry("status", false).containsEntry("quota", Map.of("used", 20, "limit", 20));
+        assertThat(String.valueOf(out.get("error"))).contains("이 배포에서는 쓸 수 없는 엔진입니다")
+                .doesNotContain("모두 썼습니다");
+        verify(store, never()).tryIncrement(anyLong(), any(), anyString(), anyInt());
+        verify(snapshotText, never()).fullText();
+    }
 }

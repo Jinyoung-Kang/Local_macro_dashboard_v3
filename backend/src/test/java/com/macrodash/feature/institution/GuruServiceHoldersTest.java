@@ -100,6 +100,23 @@ class GuruServiceHoldersTest {
     }
 
     @Test
+    @DisplayName("QA-133 경계 — 일치 정확히 200행이면 잘리지 않고, 201행이면 200행과 잘렸다는 표시")
+    void boundaryAtTheRowLimit() {
+        // 첫 기관에만 'ALPHA CORP' n개(BETA 1행은 걸리지 않음). 둘째 기관은 걸리지 않는 이름만.
+        Map<String, Object> exact = new GuruService(store(filing("ALPHA CORP", 200, 0), filing("GAMMA", 1, 0)))
+                .holders("ALPHA");
+        assertThat(((List<?>) exact.get("rows")).size()).isEqualTo(200);
+        assertThat(exact.get("totalMatches")).isEqualTo(200);
+        assertThat(exact.get("truncated")).as("정확히 상한이면 잘리지 않음").isEqualTo(false);
+
+        Map<String, Object> over = new GuruService(store(filing("ALPHA CORP", 201, 0), filing("GAMMA", 1, 0)))
+                .holders("ALPHA");
+        assertThat(((List<?>) over.get("rows")).size()).isEqualTo(200);
+        assertThat(over.get("totalMatches")).isEqualTo(201);
+        assertThat(over.get("truncated")).as("한 행이라도 넘치면 잘림").isEqualTo(true);
+    }
+
+    @Test
     @DisplayName("QA-133 응답 캐시가 요청끼리 나눠 쓰는 보유 목록은 바꿀 수 없고, 검색은 그 목록을 그대로 둔 채 행을 새로 만든다")
     void indexIsReadOnlyAndSharedAcrossQueries() {
         GuruService guru = new GuruService(store(filing("ALPHA CORP", 150, 0), filing("ALPHA CORP", 100, 1000)));

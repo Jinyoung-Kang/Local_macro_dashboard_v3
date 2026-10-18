@@ -724,8 +724,12 @@ class ApiIntegrationTest {
         assertThat(chosen.path("obsDate").asString()).isEqualTo("2026-09-23");
         assertThat(chosen.path("rows")).hasSize(1);
 
-        // latest 없이 부르면 예전처럼 전 기간 (하위 호환)
-        assertThat(authorizedGet(base).path("rows")).hasSize(3);
+        // latest 없이 부르면 전 기간 — 최신 5,000행까지이고 상한과 잘렸는지가 응답에 실립니다(QA-133)
+        JsonNode all = authorizedGet(base);
+        assertThat(all.path("rows")).hasSize(3);
+        assertThat(all.path("rowLimit").asInt()).isEqualTo(5_000);
+        assertThat(all.path("truncated").isBoolean()).isTrue();
+        assertThat(all.path("truncated").asBoolean()).isFalse();
         jdbc.update("DELETE FROM observations WHERE dataset = ?", Datasets.OBS_RADAR);
     }
 

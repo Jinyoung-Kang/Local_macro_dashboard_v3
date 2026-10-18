@@ -68,6 +68,9 @@ class CorrelationLimitsTest {
         assertThat(response.path("available").asBoolean()).isTrue();
         assertThat(response.path("window").asInt()).as("응답 window는 접은 값").isEqualTo(250);
         assertThat(LocalDate.parse(response.path("firstDate").asString()))
-                .as("조회 기간은 최근 10년까지").isAfterOrEqualTo(tenYearsAgo);
+                .as("조회 기간은 최근 10년까지").isAfterOrEqualTo(tenYearsAgo)
+                // 반대쪽도 고정합니다 — 상한이 10년보다 줄면 화면의 '최근 10년'이 말없이 짧아집니다. 7일은 기준일 뒤 주말,
+                // 변화 계열이 첫 날을 버리는 것, 호출 중 날짜가 바뀌는 것을 덮는 여유입니다.
+                .as("화면의 최근 10년은 다 들어감").isBefore(tenYearsAgo.plusDays(7));
     }
 }
