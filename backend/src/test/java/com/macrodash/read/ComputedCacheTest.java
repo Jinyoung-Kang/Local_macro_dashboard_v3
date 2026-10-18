@@ -5,7 +5,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -520,7 +519,6 @@ class ComputedCacheTest {
     }
 
     @Test
-    @Disabled("QA-131 리뷰: 앞선 계산을 따르는 요청 수에 상한이 없어, 같은 키를 겹쳐 보내면 요청 스레드를 모두 묶습니다")
     @DisplayName("QA-131 앞선 계산을 따르는 요청 수에도 상한이 있다 — 넘친 같은 키 요청은 기다리지 않고 바로 429")
     void followersAreBounded() throws Exception {
         // 리뷰 탐침: 따르는 요청은 자리도 대기열 자리도 잡지 않아, 자리 1·대기열 32에서 캐시에 없는 키 33개에 6건씩(198건)
@@ -528,7 +526,7 @@ class ComputedCacheTest {
         // 165건은 바로 429). Tomcat 요청 스레드는 기본 200개라 health·로그인·캐시 적중까지 밀립니다.
         when(repository.latestCollectedAt()).thenReturn(t0);
         ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
-        int bound = 64; // 상한 — Tomcat 기본 200개에서 상한+대기열 32를 빼고도 health·적중 몫이 넉넉히 남게
+        int bound = ComputedCache.MAX_FOLLOWERS;
         int extra = 3;
         AtomicInteger computed = new AtomicInteger();
         CountDownLatch entered = new CountDownLatch(1);
@@ -549,6 +547,7 @@ class ComputedCacheTest {
             }
             assertThat(followers.subList(0, bound)).as("상한까지는 앞선 계산을 기다림")
                     .allSatisfy(follower -> assertThat(follower.result()).isNotDone());
+            assertThat(cache.followers()).isEqualTo(bound);
             for (Caller turnedAway : followers.subList(bound, bound + extra)) {
                 assertThat(turnedAway.result()).as("상한을 넘은 요청은 기다리지 않고 바로 끝남").isDone();
                 assertThat(turnedAway.failure()).isInstanceOf(ComputeBusyException.class);
@@ -564,6 +563,7 @@ class ComputedCacheTest {
         assertThat(computed.get()).isEqualTo(1);
         assertThat(cache.rejectedCount()).isEqualTo(extra);
         assertThat(cache.inflight()).isZero();
+        assertThat(cache.followers()).as("거절된 요청과 다 기다린 요청 모두 셈에서 빠짐").isZero();
     }
 
     /** 불리면 안 되는 계산 — 앞선 계산을 따라야 할 요청이나 자리를 얻지 못한 요청이 계산하면 드러납니다. */

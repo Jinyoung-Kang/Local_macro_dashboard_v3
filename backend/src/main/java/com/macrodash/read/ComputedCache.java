@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
@@ -48,7 +49,8 @@ import java.util.function.Supplier;
  *   <li><b>같은 키는 한 번만 계산</b>합니다. 같은 키·같은 저장본 버전을 놓친 요청이 겹치면 먼저 온 하나(앞선 계산)만
  *       자리를 잡아 계산하고, 나머지는 자리도 대기열 자리도 잡지 않고 그 결과를 {@value #FOLLOW_TIMEOUT_SECONDS}초까지
  *       기다려 같은 객체를 받습니다. 앞선 계산이 던진 예외(자리를 얻지 못한 429 포함)도 그대로 받고, 아무것도 저장하지
- *       않았으니 다음 요청은 다시 계산합니다. 그 안에 끝나지 않으면 429입니다. 이것이 없을 때 QA 스택에서 재기동 직후
+ *       않았으니 다음 요청은 다시 계산합니다. 그 안에 끝나지 않으면 429입니다. 따르는 요청은 모든 키를 합쳐
+ *       {@value #MAX_FOLLOWERS}건까지만 기다리고, 넘으면 바로 429입니다. 이것이 없을 때 QA 스택에서 재기동 직후
  *       5명이 무거운 화면을 한꺼번에 열자(요청 45건, 키 9개) 같은 키 요청이 각자 줄을 서 14–37건이 429였습니다.
  *       버전이 다르면 따로 계산합니다 — 새 저장본을 본 요청이 옛 버전 계산의 결과를 받지 않습니다.</li>
  *   <li>캐시 적중은 자리를 잡지 않고 앞선 계산도 기다리지 않습니다 — 계산이 몰려도 이미 계산한 화면은 그대로 빠릅니다.</li>
@@ -82,9 +84,18 @@ public class ComputedCache {
     static final long WAIT_SECONDS = 2;
     /**
      * 이만큼 기다리고 있으면 새 요청은 기다리지 않고 바로 거절 — 자리를 기다리거나 계산하는 요청 스레드를 상한+이 수로
-     * 묶습니다. 앞선 계산을 따르는 같은 키 요청은 여기에 들지 않고, 그 계산이 끝나면 함께 풀립니다.
+     * 묶습니다. 앞선 계산을 따르는 같은 키 요청은 여기에 들지 않고 따로 {@value #MAX_FOLLOWERS}건까지라, 계산 경로가 쥐는
+     * 요청 스레드는 모두 상한+{@value #MAX_WAITING}+{@value #MAX_FOLLOWERS}개 안팎입니다.
      */
     static final int MAX_WAITING = 32;
+    /**
+     * 앞선 계산을 따르며 기다리는 요청 수(모든 키 합계)의 상한 — 넘으면 기다리지 않고 바로 거절. 따르는 요청은 자리도
+     * 대기열 자리도 잡지 않으므로, 이것이 없으면 캐시에 없는 키마다 같은 요청을 몇 건씩 겹쳐 보내 요청 스레드(Tomcat
+     * 기본 200개)를 모두 묶을 수 있습니다. 재기동 직후 묶음(요청 45건·키 9개 → 따르는 요청 36건)과 항목이 만료되는 순간의
+     * 자주 읽는 키는 넉넉히 들어가고, 계산 경로 전체(상한+{@value #MAX_WAITING}+이 수)를 빼도 200개의 절반가량이
+     * 캐시 적중·health·로그인 몫으로 남습니다.
+     */
+    static final int MAX_FOLLOWERS = 64;
     /**
      * 같은 키를 계산 중인 앞선 요청의 결과를 기다리는 시간. 자리 대기({@value #WAIT_SECONDS}초)와 무거운 계산(수 초)은
      * 넉넉히 덮고, 수집기를 기다리는 계산(최대 90초)에 요청 스레드를 끝까지 묶지는 않습니다.
@@ -125,6 +136,8 @@ public class ComputedCache {
      * 계산을 맡은 요청이 끝날 때(값·예외 모두) 지웁니다.
      */
     private final ConcurrentHashMap<String, CompletableFuture<Outcome>> inflight = new ConcurrentHashMap<>();
+    /** 지금 앞선 계산을 따르며 기다리는 요청 수(모든 키 합계). */
+    private final AtomicInteger followers = new AtomicInteger();
     private final AtomicLong rejected = new AtomicLong();
     private final AtomicLong rejectedAtLastWarn = new AtomicLong();
     private final AtomicLong lastWarnNanos = new AtomicLong(System.nanoTime() - WARN_INTERVAL_NANOS);
@@ -144,9 +157,11 @@ public class ComputedCache {
     public ComputedCache(StoreRepository repository,
                          @Value("${dashboard.compute.max-concurrent:0}") int maxConcurrent) {
         this(repository, Clock.systemUTC(), resolveSlots(maxConcurrent), Duration.ofSeconds(WAIT_SECONDS), MAX_WAITING);
-        log.info("비싼 계산 동시 실행 상한 {}개({}, 코어 {}개, 대기 {}초, 대기열 {}건, 같은 키는 앞선 계산을 {}초까지 기다림)",
+        log.info("비싼 계산 동시 실행 상한 {}개({}, 코어 {}개, 대기 {}초, 대기열 {}건, 같은 키는 앞선 계산을 {}초까지 기다림 · "
+                        + "따르는 요청 {}건까지)",
                 this.maxConcurrent, maxConcurrent == 0 ? "자동" : "COMPUTE_MAX_CONCURRENT",
-                Runtime.getRuntime().availableProcessors(), WAIT_SECONDS, MAX_WAITING, FOLLOW_TIMEOUT_SECONDS);
+                Runtime.getRuntime().availableProcessors(), WAIT_SECONDS, MAX_WAITING, FOLLOW_TIMEOUT_SECONDS,
+                MAX_FOLLOWERS);
     }
 
     /** 상한은 자동(코어 수의 절반, 최소 1). */
@@ -193,8 +208,9 @@ public class ComputedCache {
      * 새로 계산해 저장한 값을 돌려줍니다. 같은 키·같은 버전을 이미 계산 중이면 자리 없이 그 결과를 기다려 받습니다.
      * 저장본이 하나도 없거나 버전 조회에 실패하면 캐시도 상한도 거치지 않고 계산만 합니다.
      *
-     * @throws ComputeBusyException 계산 자리가 {@value #WAIT_SECONDS}초 안에 나지 않았거나 대기열이 가득 참, 또는 따르던
-     *         앞선 계산이 그렇게 거절됐거나 {@value #FOLLOW_TIMEOUT_SECONDS}초 안에 끝나지 않음(→ 429)
+     * @throws ComputeBusyException 계산 자리가 {@value #WAIT_SECONDS}초 안에 나지 않았거나 대기열이 가득 참, 따르는 요청이
+     *         이미 {@value #MAX_FOLLOWERS}건임, 또는 따르던 앞선 계산이 그렇게 거절됐거나 {@value #FOLLOW_TIMEOUT_SECONDS}초
+     *         안에 끝나지 않음(→ 429)
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key, Supplier<T> compute) {
@@ -256,8 +272,15 @@ public class ComputedCache {
         return outcome;
     }
 
-    /** 같은 키·같은 버전을 계산 중인 앞선 요청의 결과를 기다립니다 — 자리도 대기열 자리도 잡지 않습니다. */
+    /**
+     * 같은 키·같은 버전을 계산 중인 앞선 요청의 결과를 기다립니다 — 자리도 대기열 자리도 잡지 않습니다. 이미
+     * {@value #MAX_FOLLOWERS}건이 따르고 있으면 기다리지 않고 거절합니다.
+     */
     private Outcome follow(CompletableFuture<Outcome> ahead) {
+        if (followers.incrementAndGet() > MAX_FOLLOWERS) {
+            followers.decrementAndGet();
+            throw reject();
+        }
         try {
             return ahead.get(followTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
@@ -268,6 +291,8 @@ public class ComputedCache {
         } catch (ExecutionException e) {
             // 일어나지 않음: 앞선 계산은 예외도 Outcome 값으로 넘깁니다.
             throw new IllegalStateException("앞선 계산이 결과 없이 끝났습니다", e);
+        } finally {
+            followers.decrementAndGet();
         }
     }
 
@@ -317,6 +342,11 @@ public class ComputedCache {
         return inflight.size();
     }
 
+    /** 앞선 계산을 따르며 기다리는 요청 수(관측·테스트용). */
+    int followers() {
+        return followers.get();
+    }
+
     private Cached fresh(String key, Instant version, Instant now) {
         Cached hit = entries.get(key);
         if (hit != null && version.equals(hit.version())
@@ -354,8 +384,8 @@ public class ComputedCache {
         if (now - last >= WARN_INTERVAL_NANOS && lastWarnNanos.compareAndSet(last, now)) {
             long since = total - rejectedAtLastWarn.getAndSet(total);
             log.warn("비싼 계산 자리가 없거나 앞선 계산이 늦어 {}건을 429로 돌려보냈습니다(직전 경고 뒤로, 누적 {}건 · 상한 {}개 · "
-                    + "대기 {}건 · 계산 중인 키 {}개). 이 경고는 60초에 한 번만 남깁니다",
-                    since, total, maxConcurrent, slots.getQueueLength(), inflight.size());
+                    + "대기 {}건 · 계산 중인 키 {}개 · 따르는 요청 {}건). 이 경고는 60초에 한 번만 남깁니다",
+                    since, total, maxConcurrent, slots.getQueueLength(), inflight.size(), followers.get());
         }
     }
 
