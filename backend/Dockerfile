@@ -24,4 +24,7 @@ USER app
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70", "-jar", "app.jar"]
+# 힙이 모자라면(OutOfMemoryError) 프로세스를 끝냅니다. 플래그가 없으면 OOM을 낸 스레드(톰캣 작업자·스케줄러)만 죽고
+# JVM은 반쯤 망가진 채 남는데, /api/health가 계속 200이라 Docker가 다시 띄우지 않습니다. 끝나면(종료 코드 3)
+# restart: unless-stopped가 새로 띄웁니다. 대가로 메모리 상태(데모 AI 공용 한도·로그인 제한·응답 캐시)가 비워집니다(ADR 0014).
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70", "-XX:+ExitOnOutOfMemoryError", "-jar", "app.jar"]
