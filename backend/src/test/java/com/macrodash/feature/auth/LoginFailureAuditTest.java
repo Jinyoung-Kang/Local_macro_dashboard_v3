@@ -1,6 +1,5 @@
 package com.macrodash.feature.auth;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -40,11 +39,13 @@ class LoginFailureAuditTest {
     }
 
     @Test
-    @DisplayName("마지막 실패에서 15분 조용하면 묶음이 끝나 다음 실패가 다시 첫 번째로 남는다")
+    @DisplayName("지연 기록이 잊히는 15분으로는 묶음이 끝나지 않고, 마지막 실패에서 하루 조용해야 다음 실패가 다시 첫 번째로 남는다")
     void quietPeriodStartsNewWindow() {
         knownFailures(42, 3, Duration.ofSeconds(1));
         clock.advance(LoginThrottle.FORGET_AFTER.plusSeconds(1));
+        assertThat(audit.knownFailure(42)).as("15분 뒤 — 같은 묶음의 4번째(남길 차례 아님)").isNull();
 
+        clock.advance(LoginFailureAudit.STREAK_QUIET.plusSeconds(1));
         assertThat(audit.knownFailure(42)).containsEntry("failures", 1);
     }
 
@@ -57,7 +58,6 @@ class LoginFailureAuditTest {
     }
 
     @Test
-    @Disabled("QA-125: 수정 전에는 감사 묶음이 지연 기록과 같은 15분에 끝나, 끊어 시도하면 묶음마다 첫 실패만 남음")
     @DisplayName("QA-125 4번 실패하고 15분 넘게 쉬기를 하루 되풀이해도(지연 없음) 묶음이 이어져 실제 누적 실패 수가 남고, "
             + "성공 때 직전 실패 수는 전체 개수")
     void pacedAttackKeepsRunningCount() {
@@ -102,8 +102,8 @@ class LoginFailureAuditTest {
         assertThat(audit.closeWindow(42)).as("이미 닫음").isZero();
         assertThat(audit.knownFailure(42)).containsEntry("failures", 1);
 
-        clock.advance(LoginThrottle.FORGET_AFTER.plusSeconds(1));
-        assertThat(audit.closeWindow(42)).as("15분 지나 끝난 묶음").isZero();
+        clock.advance(LoginFailureAudit.STREAK_QUIET.plusSeconds(1));
+        assertThat(audit.closeWindow(42)).as("하루 지나 끝난 묶음").isZero();
         assertThat(audit.closeWindow(7)).as("실패가 없던 계정").isZero();
     }
 
@@ -184,7 +184,7 @@ class LoginFailureAuditTest {
         for (long id = 0; id < LoginFailureAudit.MAX_TRACKED; id++) {
             audit.knownFailure(id);
         }
-        clock.advance(LoginThrottle.FORGET_AFTER.plusSeconds(1));
+        clock.advance(LoginFailureAudit.STREAK_QUIET.plusSeconds(1));
 
         audit.knownFailure(-1);
 

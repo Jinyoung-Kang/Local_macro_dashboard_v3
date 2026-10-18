@@ -6,7 +6,6 @@ import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.SmartLifecycle;
@@ -139,23 +138,6 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("QA-125 인증 전 계정이 연속 실패 뒤 맞는 비밀번호를 내면 login.unverified에 그 실패 수가 남는다(한 번만)")
-    void unverifiedLoginRecordsPriorFailures() {
-        long id = db.users.insert(db.email("unverified"), db.hasher.hash("correct horse battery"), "MEMBER", "FREE",
-                false);
-        AuthService auth = db.service(properties);
-        auth.recordFailure(db.email("unverified"));
-        auth.recordFailure(db.email("unverified"));
-
-        assertThat(auth.login(db.email("unverified"), "correct horse battery", null).unverified()).isTrue();
-        assertThat(auth.login(db.email("unverified"), "correct horse battery", null).unverified()).isTrue();
-
-        assertThat(db.jdbc.queryForList("SELECT detail->>'priorFailures' FROM audit_log WHERE user_id = ? "
-                + "AND action = 'login.unverified'", String.class, id)).as("직전 실패가 있던 첫 성공만").containsExactly("2");
-    }
-
-    @Test
-    @Disabled("QA-125: 수정 전에는 메일 인증 전 계정도 계정마다 표본을 남겨, 가입으로 만든 계정에서 행이 계속 늘어남")
     @DisplayName("QA-125 메일 인증 전 계정의 로그인 실패는 계정마다 세지 않고 없는 계정과 같은 한 시간 몫에 든다(사용자 번호는 남김) "
             + "— 틀림·맞음을 번갈아 보내도 행이 늘지 않는다")
     void unverifiedAccountFailuresShareUnknownCap() {
@@ -195,7 +177,6 @@ class AuthServiceTest {
     }
 
     @Test
-    @Disabled("QA-125: 수정 전에는 종료 요약을 종료 이벤트(ContextClosedEvent)에서 써서, 웹 서버가 멈추며 마무리한 요청의 넘친 개수를 잃음")
     @DisplayName("QA-125 종료 요약은 웹 서버가 멈춘 뒤(빈 정리 때) 쓴다 — 종료 중 마무리된 요청의 넘친 개수도 한 줄에 든다")
     void shutdownSummaryIsWrittenAfterWebServerStops() {
         LoginThrottleTest.MutableClock clock = new LoginThrottleTest.MutableClock();

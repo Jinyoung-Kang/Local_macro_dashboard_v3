@@ -5,11 +5,11 @@ import com.macrodash.store.AuditLogStore;
 import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -150,11 +150,11 @@ public class AuthService {
         }
     }
 
-    /** 로그인 실패 요약 행의 action — 한 시간 상한을 넘겨 개수만 센 없는 계정 실패(QA-125). */
+    /** 로그인 실패 요약 행의 action — 한 시간 상한을 넘겨 개수만 센 없는 계정·메일 인증 전 계정 실패(QA-125). */
     static final String LOGIN_FAILURE_SUPPRESSED = "login.failure.suppressed";
 
     /**
-     * 끝난 시간에 상한을 넘겨 개수만 센 없는 계정 로그인 실패를 요약 한 줄로 남깁니다(QA-125). 쓰지 못하면 개수를 메모리에
+     * 끝난 시간에 상한을 넘겨 개수만 센 없는 계정·메일 인증 전 계정 로그인 실패를 요약 한 줄로 남깁니다(QA-125). 쓰지 못하면 개수를 메모리에
      * 돌려놓고 다음 주기에 다시 합니다.
      */
     @Scheduled(initialDelayString = "${dashboard.scheduler.login-audit-flush-ms:300000}",
@@ -163,8 +163,12 @@ public class AuthService {
         writeSuppressed(false);
     }
 
-    /** 종료할 때는 아직 끝나지 않은 시간의 넘친 개수도 씁니다 — 재시작으로 잃지 않게. */
-    @EventListener(ContextClosedEvent.class)
+    /**
+     * 종료할 때는 아직 끝나지 않은 시간의 넘친 개수도 씁니다 — 재시작으로 잃지 않게. 빈을 정리할 때 쓰므로 웹 서버·스케줄러가
+     * 멈춘 뒤이고, DB 연결 풀은 이 빈이 쓰는 저장소보다 늦게 닫혀 아직 살아 있습니다. 예전의 종료 이벤트(ContextClosedEvent)는
+     * 웹 서버가 멈추기 전에 발행돼, 종료 중 마무리된 요청의 넘친 개수를 잃었습니다(QA-125).
+     */
+    @PreDestroy
     public void flushLoginFailureSummaryOnShutdown() {
         writeSuppressed(true);
     }
@@ -276,7 +280,8 @@ public class AuthService {
     /**
      * 로그인 결과. 비밀번호가 맞아도 메일 인증 전이면 세션을 열지 않습니다({@code unverified}).
      * 비밀번호가 틀리면 둘 다 비어 있습니다 — 인증 여부는 비밀번호를 아는 사람에게만 알려 줍니다.
-     * 인증 전 계정이 연속 실패 뒤 맞으면 {@code login.unverified}에 그 실패 수를 남깁니다(맞힌 대입을 숨기지 않게, QA-125).
+     * 인증 전 계정의 맞는 비밀번호는 감사 기록에 따로 남기지 않습니다. 계정마다 실패를 세지 않으므로(QA-125) 붙일 직전 실패 수가
+     * 없고, 실패 수 없이 매번 남기면 자기 인증 전 계정으로 틀림·맞음을 번갈아 보내 행을 끝없이 늘릴 수 있습니다.
      */
     public record LoginResult(Issued issued, boolean unverified) {
     }
@@ -287,10 +292,6 @@ public class AuthService {
             return new LoginResult(null, false);
         }
         if (user.get().emailVerifiedAt() == null) {
-            int prior = loginAudit.closeWindow(user.get().id());
-            if (prior > 0) {
-                audit.append(user.get().id(), "login.unverified", priorFailures(prior));
-            }
             return new LoginResult(null, true);
         }
         return new LoginResult(openSession(user.get(), userAgent), false);
@@ -298,20 +299,31 @@ public class AuthService {
 
     /**
      * 로그인 실패를 감사 기록에 남깁니다 — 실패마다가 아니라 표본만(QA-125, 규칙은 {@link LoginFailureAudit}).
-     * 있는 계정은 사용자 번호와 그 묶음의 실패 수({@code failures}), 없는 계정은 이메일(형식이 맞을 때)만 남깁니다.
-     * 비밀번호·접속 주소는 남기지 않습니다.
+     * 메일 인증을 마친 계정은 사용자 번호와 그 묶음의 실패 수({@code failures}), 없는 계정은 이메일(형식이 맞을 때)을 남깁니다.
+     * 메일 인증 전 계정은 가입으로 누구나 만들 수 있어 계정마다 세지 않고 없는 계정과 같은 한 시간 몫에 넣습니다 — 사용자 번호와
+     * {@code unverified}만 남기고 이메일은 넣지 않습니다(탈퇴하면 번호만 비워져 이메일이 남지 않게). 비밀번호·접속 주소는 남기지 않습니다.
      */
     public void recordFailure(String email) {
         if (!users.ready()) {
             return;
         }
         String normalized = normalizeEmail(email);
-        Long userId = normalized == null ? null : users.findByEmail(normalized).map(UserStore.User::id).orElse(null);
-        Map<String, Object> detail = userId == null ? loginAudit.unknownFailure(normalized)
-                : loginAudit.knownFailure(userId);
-        if (detail != null) {
-            audit.append(userId, "login.failure", detail);
+        UserStore.User user = normalized == null ? null : users.findByEmail(normalized).orElse(null);
+        if (user != null && user.emailVerifiedAt() != null) {
+            Map<String, Object> detail = loginAudit.knownFailure(user.id());
+            if (detail != null) {
+                audit.append(user.id(), "login.failure", detail);
+            }
+            return;
         }
+        Map<String, Object> detail = loginAudit.unknownFailure(user == null ? normalized : null);
+        if (detail == null) {
+            return;
+        }
+        if (user != null) {
+            detail.put("unverified", true);
+        }
+        audit.append(user == null ? null : user.id(), "login.failure", detail);
     }
 
     /** 성공 기록 detail — 직전 연속 실패가 있었을 때만 {@code priorFailures}. */
