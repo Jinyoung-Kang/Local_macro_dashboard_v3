@@ -4,7 +4,6 @@ import com.macrodash.Kst;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -51,7 +50,6 @@ class CorrelationLimitsTest {
     }
 
     @Test
-    @Disabled("QA-133: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-133 롤링 창은 250, 조회 기간은 10년으로 접고 응답 window는 접은 값을 돌려준다")
     void windowAndYearsAreFoldedToScreenMaximum() {
         StoreReader store = mock(StoreReader.class);

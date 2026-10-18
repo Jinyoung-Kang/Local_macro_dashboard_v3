@@ -8,6 +8,7 @@ import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.support.Json;
+import com.macrodash.support.Params;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -91,20 +92,34 @@ public class AnalyticsService {
     }
 
     // ====================================================== 🔗 상관관계
+    /** 롤링 창(관측 수) 하한 — 예전부터 5 미만은 5로 올렸습니다. */
+    private static final int MIN_WINDOW = 5;
+
+    /**
+     * 롤링 창·조회 기간 상한 — 화면(correlation/page.tsx)이 고를 수 있는 최대(창 250 · 10년)입니다.
+     * 이 경로는 응답 캐시를 거치지 않고 롤링 상관을 (표본 수 × 창)만큼 계산하는데, 예전에는 상한이 없어
+     * URL만으로 수십 년 저장본(FRED CSV 대체 수집) × 큰 창을 요청마다 계산시킬 수 있었습니다(QA-133).
+     */
+    private static final int MAX_WINDOW = 250;
+    private static final int MAX_YEARS = 10;
+
     /**
      * 두 계열의 상관관계.
      *
-     * @param mode "change"(기본, 변화끼리) 또는 "level"(수준끼리 — 허위 상관 주의)
+     * @param window 롤링 창. {@value #MIN_WINDOW}~{@value #MAX_WINDOW}로 접고, 응답 {@code window}는 접은 값입니다
+     * @param years  최근 N년. 1~{@value #MAX_YEARS}로 접습니다
+     * @param mode   "change"(기본, 변화끼리) 또는 "level"(수준끼리 — 허위 상관 주의)
      */
     public Map<String, Object> correlation(String xId, String yId, int window, int years,
                                            String mode) {
         Map<String, Object> out = new LinkedHashMap<>();
         SeriesRef x = find(xId);
         SeriesRef y = find(yId);
+        int windowSize = Params.clamp(window, MIN_WINDOW, MAX_WINDOW);
         out.put("x", x);
         out.put("y", y);
         out.put("mode", "level".equals(mode) ? "level" : "change");
-        out.put("window", Math.max(5, window));
+        out.put("window", windowSize);
 
         if (x == null || y == null) {
             out.put("available", false);
@@ -117,7 +132,7 @@ public class AnalyticsService {
             return out;
         }
 
-        LocalDate cutoff = Kst.yearsAgo(Math.max(1, years));
+        LocalDate cutoff = Kst.yearsAgo(Params.clamp(years, 1, MAX_YEARS));
         Loaded xSeries = load(xId);
         Loaded ySeries = load(yId);
         // 계열마다 추정치인지 함께 내립니다. 추정치면 출처도 바꿉니다 — 화면은 출처 문구를 그대로 그립니다.
@@ -137,7 +152,6 @@ public class AnalyticsService {
         boolean asChange = !"level".equals(mode);
         Correlation.Aligned used = asChange ? Correlation.toChanges(aligned) : aligned;
 
-        int windowSize = Math.max(5, window);
         Double overall = Correlation.pearson(used.x(), used.y());
         List<Double> rolling = Correlation.rolling(used.x(), used.y(), windowSize);
 
