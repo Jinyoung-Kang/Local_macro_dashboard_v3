@@ -238,9 +238,25 @@ _FUND_TOKENS = {
     "PORTFOLIO", "INDEX", "UNIT", "UNITS", "BEN",
 }
 # 채무증권(노트·전환사채·채권)을 뜻하는 클래스(titleOfClass) 토큰. 회사 이름이 같아도 주가로 덮지 않습니다.
-# 우선주·워런트 토큰(PFD·CONV·W 등)은 일부러 넣지 않습니다 — 같은 회사 보통주 티커로 근사합니다(lookup_holding).
 _DEBT_TOKENS = {"NOTE", "NOTES", "DEBT", "DEB", "DBCV", "SDCV", "BOND", "BONDS"}
+# 보통주가 아닌 지분형 증권(우선주·의무전환 우선주·워런트·권리·지분 유닛)을 뜻하는 클래스 토큰. 같은 회사 보통주 가격으로
+# 대신하지 않습니다 — 영구 우선주는 채권처럼, 워런트는 레버리지로 움직여 보통주 가격과 다릅니다(QA-127).
+# 'RT'는 금리(RATE) 약자로도 쓰여('FLT RT') 넣지 않습니다.
+_NON_COMMON_TOKENS = {
+    "PFD", "PREF", "PREFERRED", "PRF", "PERP", "CONV", "CNV", "CV", "MAND", "CUM",
+    "WT", "WTS", "WARRANT", "WARRANTS", "RIGHT", "RIGHTS", "UNIT", "UNITS",
+}
+# 'UNIT'은 조합(MLP)의 보통 단위('COM UNIT'·'LP INT UNIT', 이름이 '… LP'인 'DEPOSITARY UNIT')나 단위를 담은 ADR
+# ('SPON ADR UNITS')이기도 합니다. 이런 표기가 함께 있으면 'UNIT'만으로는 거르지 않습니다.
+_COMMON_UNIT_CLASS_TOKENS = {"COM", "COMMON", "LP", "LTD", "PARTN", "PARTNR", "PARTNERSHIP", "PTN", "ADR", "ADS"}
+_PARTNERSHIP_NAME_TOKENS = {"LP", "PARTNERS", "PARTNERSHIP"}
+# 워런트 표기 '*W EXP 08/03/202'·'W EXP …'. 'COM W/I'(발행일 거래 보통주)의 W와 이름 표기('BERKLEY W R CORP')는 아닙니다.
+_WARRANT_CLASS = re.compile(r"(^|\s)(\*W|W EXP)\b")
 FUND_SECTOR = "ETF·펀드"
+
+# 수집기가 일부러 티커를 붙이지 않은 보유의 종류(저장본 ``tickerNote``). 백엔드 미커버 목록이 이유로 옮겨 적습니다.
+NOTE_DEBT = "debt"
+NOTE_NON_COMMON = "non_common"
 
 
 def normalize(name: str) -> str:
@@ -290,23 +306,55 @@ def lookup(name: str, title_class: str = "") -> tuple[str, str] | None:
 
 
 def lookup_holding(holding: dict) -> tuple[str, str] | None:
-    """
-    13F 보유 한 줄(sec13f 저장 형태) → (티커, 섹터). 모르면 None.
+    """13F 보유 한 줄(sec13f 저장 형태) → (티커, 섹터). 모르면 None. 규칙은 classify_holding입니다."""
+    return classify_holding(holding)[0]
 
-    lookup()에 클래스(titleOfClass)를 함께 넘기고, 채권(PRN)·노트·전환사채 행은 처음부터 덮지 않습니다 —
-    채권 원금(PRN, 저장본의 shares가 None)이거나 클래스에 _DEBT_TOKENS가 있거나 CUSIP 발행 번호가 지분 증권이 아닌
-    (_is_equity_cusip) 행은 회사 이름이 같아도 주가와 다른 증권입니다. 마지막 검사는 사채를 클래스 'COM'·주식 수로 공시한
-    행(피셔의 FORD MTR CO 345370CZ1) 때문입니다 — 클래스·PRN만 보면 포드 주가로 계산됐습니다(QA-123).
-    우선주(의무전환 우선주 '… MAND CONV' 포함)·워런트는 거르지 않아 같은 회사 보통주의 티커에 붙습니다 —
-    보통주 가격으로 근사한 것입니다(같은 회사의 주식형 증권이라 '엉뚱한 회사의 가격'은 아님).
+
+def classify_holding(holding: dict) -> tuple[tuple[str, str] | None, str | None]:
     """
+    13F 보유 한 줄 → ((티커, 섹터) 또는 None, 일부러 뺀 종류 또는 None).
+
+    lookup()에 클래스(titleOfClass)를 함께 넘기고, 회사 이름이 같아도 주가와 다른 증권은 처음부터 덮지 않습니다.
+      - 채권(NOTE_DEBT): 원금(PRN, 저장본의 shares가 None)이거나 클래스에 _DEBT_TOKENS가 있거나 CUSIP 발행 번호가 지분
+        증권이 아닌(_is_equity_cusip) 행. 마지막 검사는 사채를 클래스 'COM'·주식 수로 공시한 행(피셔의 FORD MTR CO
+        345370CZ1) 때문입니다 — 클래스·PRN만 보면 포드 주가로 계산됐습니다(QA-123).
+      - 보통주가 아닌 증권(NOTE_NON_COMMON): 우선주(의무전환 우선주 '… MAND CONV' 포함)·워런트·권리·지분 유닛
+        (_is_non_common_class). 예전에는 같은 회사 보통주 티커에 붙여 보통주 가격으로 근사했는데, 근사라는 표시도 없었습니다
+        (QA-127). 펀드 이름('SPDR S&P 500 ETF TR' 'TR UNIT')은 ETF 그대로 찾습니다.
+    종류는 회사 이름이 매핑표(펀드 제외)에 있는데 뺀 행에만 붙입니다 — 이름을 모르는 행은 어차피 '매핑표에 없음'이라,
+    매핑표에 회사를 더해도 덮이지 않는다는 것을 미커버 이유로 구분해 보여 주려는 것입니다.
+    """
+    name = holding.get("name") or ""
+    cls = holding.get("class") or ""
+    company = lookup(name)   # 클래스 없이 — 이름이 매핑표의 회사(펀드 제외)를 가리키는지
+    known = company is not None and company[1] != FUND_SECTOR
+    if _is_debt(holding):
+        return None, NOTE_DEBT if known else None
+    if known and _is_non_common_class(name, cls):
+        return None, NOTE_NON_COMMON
+    return lookup(name, cls), None
+
+
+def _is_debt(holding: dict) -> bool:
+    """채권 원금(PRN)·채무증권 클래스·지분 증권이 아닌 CUSIP 중 하나면 True."""
     if "shares" in holding and holding["shares"] is None:
-        return None
+        return True
     if _tokens(holding.get("class")) & _DEBT_TOKENS:
-        return None
-    if not _is_equity_cusip(holding.get("cusip")):
-        return None
-    return lookup(holding.get("name") or "", holding.get("class") or "")
+        return True
+    return not _is_equity_cusip(holding.get("cusip"))
+
+
+def _is_non_common_class(name: str, cls: str) -> bool:
+    """
+    클래스 표기가 우선주·워런트·권리·지분 유닛이면 True. 숫자에 붙은 표기('7.25%CNV')도 보도록 영숫자 밖에서 끊습니다.
+    'UNIT'은 조합 단위·단위 ADR 표기(_COMMON_UNIT_CLASS_TOKENS)가 함께 있거나 이름이 조합이면 보통주로 봅니다.
+    """
+    text = cls.upper()
+    words = set(re.split(r"[^A-Z0-9]+", text)) - {""}
+    found = words & _NON_COMMON_TOKENS
+    if words & _COMMON_UNIT_CLASS_TOKENS or _tokens(name) & _PARTNERSHIP_NAME_TOKENS:
+        found -= {"UNIT", "UNITS"}
+    return bool(found) or _WARRANT_CLASS.search(text) is not None
 
 
 def _is_equity_cusip(cusip: object) -> bool:
@@ -329,15 +377,21 @@ def attach_tickers(quarters: list[dict]) -> int:
     백엔드 위험 분석은 이 값을 먼저 씁니다. 예전에는 백엔드가 이름을 매핑표 키와 정확히 비교만 해서
     'NVIDIA CORPORATION'처럼 표기가 다른 최대 보유 종목이 '매핑표에 없음'으로 빠졌습니다(QA-087).
     매칭 규칙을 수집기 한 곳(이 모듈)에만 두려고 저장할 때 붙입니다. None도 적어 두는 이유: 백엔드가 '수집기가
-    모른다고 정한 것'(펀드·채권)과 '티커를 붙이기 전 옛 저장본'을 구분해, 옛 저장본만 이름으로 다시 찾습니다.
+    모른다고 정한 것'(펀드·채권·우선주 등)과 '티커를 붙이기 전 옛 저장본'을 구분해, 옛 저장본만 이름으로 다시 찾습니다.
+    회사 이름은 매핑표에 있는데 일부러 뺀 보유에는 ``tickerNote``(NOTE_DEBT·NOTE_NON_COMMON)를 적어, 백엔드 미커버 목록이
+    '매핑표에 없음' 대신 그 이유를 보이게 합니다(QA-127). 이어받은 분기도 다시 붙이므로, 표시가 없어진 보유에서는 지웁니다.
     """
     found = 0
     for quarter in quarters:
         for holding in quarter.get("holdings") or []:
             if not isinstance(holding, dict):
                 continue
-            hit = lookup_holding(holding)
+            hit, note = classify_holding(holding)
             holding["ticker"] = hit[0] if hit else None
+            if note:
+                holding["tickerNote"] = note
+            else:
+                holding.pop("tickerNote", None)
             found += hit is not None
     return found
 

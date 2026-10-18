@@ -284,9 +284,9 @@ public class GuruService {
             totalCount++;
             totalWeight += weight;
 
-            // 수집기가 13F를 저장할 때 두 단계 매칭(펀드·채권 제외)으로 붙인 티커를 먼저 씁니다(QA-087). 예전처럼 이름을
-            // 매핑표 키와 정확히 비교만 하면 'NVIDIA CORPORATION' 같은 최대 보유 종목이 '매핑표에 없음'으로 빠졌습니다.
-            // ticker 필드가 없는 옛 저장본만 이름으로 찾습니다. null이면 수집기가 모른다고 정한 것(펀드·채권 등)이라
+            // 수집기가 13F를 저장할 때 두 단계 매칭(펀드·채권·우선주 등 제외)으로 붙인 티커를 먼저 씁니다(QA-087). 예전처럼
+            // 이름을 매핑표 키와 정확히 비교만 하면 'NVIDIA CORPORATION' 같은 최대 보유 종목이 '매핑표에 없음'으로 빠졌습니다.
+            // ticker 필드가 없는 옛 저장본만 이름으로 찾습니다. null이면 수집기가 모른다고 정한 것(펀드·채권·우선주 등)이라
             // 이름으로 다시 찾지 않습니다.
             JsonNode mapped;
             String ticker;
@@ -304,7 +304,7 @@ public class GuruService {
                 Map<String, Object> miss = new LinkedHashMap<>();
                 miss.put("name", name);
                 miss.put("weight", weight);
-                miss.put("reason", stale ? "가격 수집 실패(이전 값이라 제외)" : "매핑표에 없음");
+                miss.put("reason", stale ? "가격 수집 실패(이전 값이라 제외)" : uncoveredReason(holding));
                 uncovered.add(miss);
                 continue;
             }
@@ -462,6 +462,20 @@ public class GuruService {
             }
         }
         return out;
+    }
+
+    /**
+     * 가격을 붙이지 못한 보유의 미커버 이유. 수집기는 회사 이름이 매핑표에 있는데 일부러 뺀 보유에 그 종류({@code tickerNote})를
+     * 적어 둡니다 — 채권·사채('debt'), 우선주·워런트·유닛('non_common'). 예전에는 이유를 가리지 않고 '매핑표에 없음'이라,
+     * 매핑표에 회사를 더하면 덮일 것처럼 읽혔습니다(QA-127). 무엇을 뺄지는 수집기(equities.py)만 정하고 여기서는 옮기기만 합니다.
+     */
+    static String uncoveredReason(JsonNode holding) {
+        String note = Json.asText(holding, "tickerNote");
+        return switch (note == null ? "" : note) {
+            case "debt" -> "채권·사채 — 주가로 계산하지 않음";
+            case "non_common" -> "보통주가 아닌 증권(우선주·워런트·유닛) — 보통주 가격으로 대신하지 않음";
+            default -> "매핑표에 없음";
+        };
     }
 
     /** 매핑표의 섹터. 없으면 "미분류" — String.valueOf(null)은 문자열 "null"을 만들어 화면에 그대로 나갔습니다. */

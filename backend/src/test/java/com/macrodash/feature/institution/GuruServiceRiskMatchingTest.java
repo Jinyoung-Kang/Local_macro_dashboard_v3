@@ -4,7 +4,6 @@ import com.macrodash.Kst;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -34,6 +33,8 @@ import static org.mockito.Mockito.when;
  * (국민연금·노르웨이 등 최대 보유)이 '매핑표에 없음'으로 빠졌습니다. 이제 수집기가 13F를 저장할 때 보유마다 두 단계
  * 매칭(펀드·채권 제외)으로 티커를 붙이고, 백엔드는 그 티커를 먼저 씁니다. 티커 필드가 없는 옛 저장본은 지금처럼
  * 이름을 정확히 비교합니다. 수집기가 모른다고 정한 보유(티커 null — 펀드·채권 등)는 이름으로 다시 찾지 않습니다.
+ * 회사 이름은 매핑표에 있는데 일부러 뺀 보유(채권, 우선주·워런트·유닛)는 수집기가 적은 종류({@code tickerNote})를
+ * 미커버 이유로 씁니다(QA-127).
  */
 class GuruServiceRiskMatchingTest {
 
@@ -121,7 +122,6 @@ class GuruServiceRiskMatchingTest {
     }
 
     @Test
-    @Disabled("QA-127: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-127 수집기가 일부러 뺀 보유는 미커버 이유를 tickerNote대로 적는다 — 채권·사채, 보통주가 아닌 증권(우선주·워런트·유닛)")
     void uncoveredReasonFollowsCollectorNote() {
         String cik = Institutions.ciks().get(0);

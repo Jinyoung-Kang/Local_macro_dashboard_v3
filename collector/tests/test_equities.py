@@ -186,7 +186,6 @@ _NON_COMMON_ROWS = [
 ]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-127: 우선주·워런트·유닛이 같은 회사 보통주 티커에 붙습니다")
 @pytest.mark.parametrize(("name", "cls", "cusip"), _NON_COMMON_ROWS)
 def test_QA127_우선주_워런트_유닛은_보통주_티커로_근사하지_않는다(name, cls, cusip):
     """
@@ -236,11 +235,11 @@ def test_QA127_조합의_보통_단위와_단위_ADR은_보통주로_본다(monk
     assert equities.lookup_holding(holding) == mapped
 
 
-@pytest.mark.xfail(strict=True, reason="QA-127: 일부러 뺀 보유에 이유(tickerNote)를 적지 않습니다")
 def test_QA127_저장할_때_일부러_뺀_보유에는_이유를_적는다():
     """
     백엔드 미커버 목록은 티커가 없으면 이유를 가리지 않고 '매핑표에 없음'이라고 적었습니다. 채권과 우선주는 매핑표에 회사가
     있어도 일부러 뺀 것이라, 수집기가 그 종류(``tickerNote``: 'debt'·'non_common')를 적고 백엔드는 옮기기만 합니다.
+    이름을 모르는 행(펀드 포함)은 종류 없이 둡니다 — 이유는 그대로 '매핑표에 없음'입니다.
     이전 실행이 적은 표시는 규칙이 바뀌어 티커가 붙으면 지웁니다(이어받은 분기도 다시 붙이기 때문).
     """
     def row(name, cls, cusip, shares=100.0, **extra):
@@ -251,6 +250,7 @@ def test_QA127_저장할_때_일부러_뺀_보유에는_이유를_적는다():
         row("BOEING CO", "DEP CONV PFD A", "097023204"),
         row("FORD MTR CO", "COM", "345370CZ1"),                         # 'COM'으로 공시된 사채(QA-123)
         row("FORD MTR CO", "NOTE 3/1", "345370CZ1", shares=None),        # 원금(PRN)
+        row("SOME OBSCURE HOLDINGS LLC", "NOTE 1/1", "000000AA0", shares=None),  # 이름을 모르는 채권 — 종류 없이 '매핑표에 없음'
         row("GOLDMAN SACHS ETF TR", "ACCES TREASURY", "381430529"),      # 펀드 — 매핑표에 없는 것으로 둠
         row("SOME OBSCURE HOLDINGS LLC", "COM", "000000000"),
         row("APPLE INC", "COM", "037833100", tickerNote="debt"),        # 예전 실행이 남긴 표시
@@ -264,6 +264,7 @@ def test_QA127_저장할_때_일부러_뺀_보유에는_이유를_적는다():
         ("BOEING CO", "DEP CONV PFD A", None, "non_common"),
         ("FORD MTR CO", "COM", None, "debt"),
         ("FORD MTR CO", "NOTE 3/1", None, "debt"),
+        ("SOME OBSCURE HOLDINGS LLC", "NOTE 1/1", None, None),
         ("GOLDMAN SACHS ETF TR", "ACCES TREASURY", None, None),
         ("SOME OBSCURE HOLDINGS LLC", "COM", None, None),
         ("APPLE INC", "COM", "AAPL", None),
