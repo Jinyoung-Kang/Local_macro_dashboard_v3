@@ -14,3 +14,9 @@
 방법: `pip-audit -r collector/requirements.txt`, `npm audit`(frontend), `scripts/qa/dep-advisories.sh`(Maven 60개 ×
 GitHub Advisory `affects=` 조회). 결과 파일: maven-advisories.txt. 지원 기간은 각 프로젝트의 공개 일정 기준이며
 2026-10 시점의 추정입니다.
+
+**추가(2026-10-18)**: OSV.dev 조회 기준으로 Jackson 3.1.5·2.21.5(jackson-core·jackson-databind 권고 여러 건)와 Tomcat 11.0.24
+(11.0.25·26 보안 수정분, tomcat.apache.org/security-11.html)에 공개 권고가 생겼습니다. `068c7e3`에서 3.1.7·2.21.7·11.0.27로 덮어썼고
+(Spring Boot 4.1.2가 나오면 지움 — [decisions.md](../../decisions.md) 2026-10-18), 그 뒤 해석된 아티팩트에서 권고가 있는 것은 0개였습니다.
+같은 날 수집기는 fastapi 0.143.5·uvicorn 0.54.0·pandas 2.3.3·numpy 2.4.6·pykrx 1.2.9로, 화면은 ESLint 10·TypeScript 6·Tailwind 4·vitest 5로
+올렸습니다(REPORT §8).

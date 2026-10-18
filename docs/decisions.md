@@ -31,3 +31,39 @@
 - 원인: React Compiler용 새 규칙. 걸린 곳은 마운트 뒤에 시계·세션·주소를 읽는 자리로, 서버 렌더와 첫 화면이 같아야 하는(하이드레이션) 의도된 패턴.
 - 선택: 이 규칙만 `off`(eslint.config.mjs에 이유). React는 19로 올려 테스트 런타임을 운영(Next 내장 React 19)과 맞춤.
 - 이유: React Compiler를 켜지 않으므로 규칙이 막는 위험(자동 메모이제이션과의 충돌)이 없음. 따를지는 React Compiler 도입과 함께 정함.
+
+## 2026-10-18 · ESLint 10으로 올리고 플러그인 피어 경고 3건을 받아들임
+
+- 문제: ESLint 9는 2026-08-06에 지원이 끝남. 10.13.0으로 올리면 npm 설치 때 eslint-plugin-react 7.37.5·import 2.32.0·jsx-a11y 6.10.2가 ESLint 10을 피어로 선언하지 않아 ERESOLVE 경고 3건이 남음.
+- 원인: 세 플러그인의 최신판이 아직 `^9`까지만 선언. eslint-config-next 16.4부터 react·import를 ESLint 10 호환 shim(fixupPluginRules)으로 감싸 쓰고(Next 문서: ESLint 9·10 지원), jsx-a11y는 ESLint 10에서 없어진 context API를 쓰지 않음.
+- 선택: 경고를 받아들이고 strict-peer-deps는 쓰지 않음. 이유는 eslint.config.mjs 주석에도 적음(`2d3698a`).
+- 이유: 켜진 규칙 67개와 lint 결과(오류 0·경고 0·억제 1)가 ESLint 9와 같음. 플러그인이 10을 선언하면 경고는 lockfile 갱신만으로 사라짐.
+
+## 2026-10-18 · TypeScript는 6.0.3까지만 올리고 7은 보류
+
+- 문제: TypeScript 최신은 7.0.2지만 7.0에는 컴파일러 API가 없고(exports가 version.cjs만 가리킴), typescript-eslint 8.71의 피어가 `typescript <6.1.0`이라 ESLint의 TS 파싱이 막힘.
+- 원인: 7.x는 Go 네이티브 컴파일러로 바뀌는 중이고 API는 7.1 이후 예정. 공식 우회(typescript6 별칭 + @typescript/native 이중 설치)는 tsc bin이 겹치고 next build 타입 검사가 결국 TS 6으로 돎.
+- 선택: 6.0.3으로 올림(`ac8e42c`, tsconfig 변경 없음). 7은 하지 않음.
+- 다시 볼 조건: TS 7.1에 API가 들어오고 typescript-eslint가 7을 피어 범위에 넣을 때. 132개 파일 규모라 7의 속도 이득은 작음.
+
+## 2026-10-18 · Tailwind 4로 옮김 — 받아들인 화면 차이
+
+- 문제: Tailwind 3.4는 LTS 유지만 되고, postcss-selector-parser 6(위 2026-10-08 항목)이 Tailwind 3에 묶여 있었음.
+- 선택: 4.3.3 + @tailwindcss/postcss, 설정은 globals.css의 `@theme`, autoprefixer 제거(`cf2c67a`). 이름이 바뀐 클래스 42곳 수정(`0bec4cc`). 버튼 커서(pointer)·입력칸 안내 문구 색은 v3대로 되돌림.
+- 받아들인 v4 기본값: hover는 `(hover:hover)` 기기에서만(휴대폰에서 탭 뒤 hover 모양이 남지 않음 — v3 쪽이 오히려 결함에 가까움), space-y 셀렉터 변경, 기본 팔레트(애프터마켓 보라 배지)의 oklch 미세 차이, 브라우저 하한 Safari 16.4·Chrome 111·Firefox 128(Next 16 빌드 대상과 같음). v3처럼 hover를 되돌리려면 globals.css에 `@custom-variant hover (&:hover);` 한 줄.
+- 확인: QA 스택에서 v3·v4 화면의 계산 스타일을 요소마다 비교해, v4 기본 줄 높이(비율)가 작은 글씨에 물려 표 행이 4~9px 낮아지는 것을 찾아 `@theme`의 줄 높이를 v3 값(rem)으로 둠(`3854f1e`). 그 뒤 남은 차이는 보이지 않는 것뿐([비교](qa/evidence/2026-10-18/tailwind4-compare.md)).
+- 결과: postcss-selector-parser·postcss-nested·chokidar 경로가 사라져 npm audit(dev) 9건 → 5건. braces는 예상대로 eslint-config-next의 fast-glob 3.3.1로 남음.
+
+## 2026-10-18 · 수집기 pandas 3·numpy 2.5는 올리지 않음(막힘)
+
+- 문제: pandas 3과 numpy 2.5가 나왔지만 수집기는 pandas 2.3.3·numpy 2.4.6까지만 올림(`f875263`).
+- 원인: pykrx 1.2.9(최신)와 upstream이 `pandas<3.0`을 요구해 설치가 풀리지 않음. numpy 2.5.x는 `requires_python>=3.12`인데 이미지(python:3.11-slim)와 CI는 3.11.
+- 선택: Python 3.11에서 쓸 수 있는 최신까지만 올림. pykrx는 빼지 않음 — 과거 날짜 수급 레이더 조회는 PyKrx 단계만 지원.
+- 다시 볼 조건: pandas 3은 pykrx가 상한을 풀 때(yfinance의 pandas 3 지원도 그때 확인), numpy 2.5는 Python 3.12 전환과 함께. pandas 2.3에서 FutureWarning을 오류로 바꾸고 `future.infer_string=True`를 켜도 수집기 테스트가 통과함.
+
+## 2026-10-18 · Spring Boot 4.1.2 전까지 BOM의 Jackson·Tomcat 판을 덮어씀
+
+- 문제: Spring Boot 4.1.1 BOM의 Jackson 3.1.5·2.21.5와 Tomcat 11.0.24에 공개 보안 권고가 있음(OSV.dev·tomcat.apache.org). CI에 Maven 취약점 점검이 없어 드러나지 않았음.
+- 원인: 이 판들을 고친 4.1.2(마일스톤 due 2026-10-22)가 아직 Maven Central에 없음(2026-10-18 기준).
+- 선택: parent는 그대로 두고 `backend/pom.xml`의 `jackson-bom.version` 3.1.7, `jackson-2-bom.version` 2.21.7, `tomcat.version` 11.0.27만 덮어씀(`068c7e3`). 4.1.2 마일스톤이 채택한 판과 같게 맞춤.
+- 해제 조건: 4.1.2로 올릴 때 세 속성을 지움(pom 주석에도 적음). 지우지 않으면 낮은 판에 묶임.
