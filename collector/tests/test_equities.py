@@ -170,3 +170,102 @@ def test_QA123_COM으로_공시된_사채는_CUSIP_발행_번호로_걸러_보�
     assert equities.lookup_holding(common) == ("F", "임의소비재"), "같은 회사의 보통주는 그대로 찾습니다"
     assert equities.lookup_holding({**common, "cusip": None}) == ("F", "임의소비재"), "CUSIP을 모르면 예전처럼 이름으로 찾습니다"
 
+
+
+# ---- QA-127: 우선주·워런트·유닛이 같은 회사 보통주 티커로 근사되던 문제 ------------------------------------------------
+# 백업(2026-10-12)의 실제 행입니다(블랙록·국민연금 최신 분기). 회사 이름은 매핑표에 있고, 클래스 표기가 보통주가 아님을 말합니다.
+_NON_COMMON_ROWS = [
+    ("BOEING CO", "DEP CONV PFD A", "097023204"),                     # 예탁 전환 우선주
+    ("WELLS FARGO & CO", "PERP PFD CNV A", "949746804"),              # 영구 전환 우선주
+    ("ORACLE CORP", "6.5 DEP CUM SR D", "68389X204"),                 # 누적 우선주(예탁)
+    ("HEWLETT PACKARD ENTERPRISE C", "7.625 MAND CONV", "42824C208"),  # 의무전환 우선주
+    ("NEXTERA ENERGY INC", "UNIT 02/15/2029", "65339F655"),           # 지분 유닛(주식 매수 계약 + 사채)
+    ("SOUTHERN CO", "UNIT 12/15/2028", "842587842"),
+    ("OCCIDENTAL PETE CORP", "*W EXP 08/03/202", "674599162"),        # 워런트
+    ("OCCIDENTAL PETE CORP", "W EXP 08/03/202", "674599162"),         # 같은 워런트의 별표 없는 표기(국민연금)
+]
+
+
+@pytest.mark.xfail(strict=True, reason="QA-127: 우선주·워런트·유닛이 같은 회사 보통주 티커에 붙습니다")
+@pytest.mark.parametrize(("name", "cls", "cusip"), _NON_COMMON_ROWS)
+def test_QA127_우선주_워런트_유닛은_보통주_티커로_근사하지_않는다(name, cls, cusip):
+    """
+    보통주가 아닌 증권을 같은 회사 보통주 가격으로 계산하면서 근사라는 표시(isProxy)도 없었습니다. 영구 우선주는 채권처럼,
+    워런트는 레버리지로 움직여 보통주 가격과 다릅니다. 채권(QA-123)처럼 티커를 붙이지 않고 미커버로 둡니다.
+    """
+    holding = {"name": name, "class": cls, "cusip": cusip, "value": 1.0, "shares": 100.0, "weight": 0.01}
+    assert equities.lookup(name) is not None, "회사 이름은 매핑표에 있습니다 — 클래스 표기 때문에 빠져야 합니다"
+    assert equities.lookup_holding(holding) is None
+
+
+# 보통주(ADR·클래스·새 표기)와 ETF 신탁 단위는 그대로 찾아야 합니다. 'COM W/I'(발행일 거래 보통주) 표기만 백업에 없는 예시입니다.
+_COMMON_ROWS = [
+    ("SPDR S&P 500 ETF TR", "TR UNIT", "78462F103", "SPY"),              # ETF 신탁 단위 — 'UNIT'이어도 펀드
+    ("INVESCO QQQ TR", "UNIT SER 1", "46090E103", "QQQ"),
+    ("TAIWAN SEMICONDUCTOR MFG LTD", "SPONSORED ADS", "874039100", "TSM"),  # 보통주 예탁증서
+    ("BERKSHIRE HATHAWAY INC DEL", "CL B NEW", "084670702", "BRK-B"),
+    ("CITIGROUP INC", "COM NEW", "172967424", "C"),
+    ("ALPHABET INC", "CAP STK CL C", "02079K107", "GOOGL"),
+    ("BOEING CO", "COM", "097023105", "BA"),                              # 우선주를 낸 회사의 보통주
+    ("NEXTERA ENERGY INC", "COM", "65339F101", "NEE"),
+    ("OCCIDENTAL PETE CORP", "COM", "674599105", "OXY"),
+    ("DOW INC", "COM W/I", "260557103", "DOW"),                          # 'W/I'의 W는 워런트가 아님
+]
+
+
+@pytest.mark.parametrize(("name", "cls", "cusip", "ticker"), _COMMON_ROWS)
+def test_QA127_보통주_ADR_ETF_단위는_그대로_티커를_찾는다(name, cls, cusip, ticker):
+    holding = {"name": name, "class": cls, "cusip": cusip, "value": 1.0, "shares": 100.0, "weight": 1.0}
+    hit = equities.lookup_holding(holding)
+    assert hit is not None and hit[0] == ticker
+
+
+# 조합(MLP)의 보통 단위와 '단위'로 공시되는 ADR. 지금 매핑표에는 없어 이 테스트에서만 매핑표에 넣습니다(백업의 실제 행).
+_COMMON_UNIT_ROWS = [
+    ("MPLX LP", "COM UNIT REP LTD", "55336V100", ("MPLX", "에너지")),
+    ("KIMBELL RTY PARTNERS LP", "UNIT", "49435R102", ("KRP", "에너지")),
+    ("ICAHN ENTERPRISES LP", "DEPOSITARY UNIT", "451100101", ("IEP", "산업재")),
+    ("FOMENTO ECONOMICO MEXICANO S", "SPON ADR UNITS", "344419106", ("FMX", "필수소비재")),
+]
+
+
+@pytest.mark.parametrize(("name", "cls", "cusip", "mapped"), _COMMON_UNIT_ROWS)
+def test_QA127_조합의_보통_단위와_단위_ADR은_보통주로_본다(monkeypatch, name, cls, cusip, mapped):
+    monkeypatch.setitem(equities._BY_NORMALIZED, equities.normalize(name), mapped)
+    holding = {"name": name, "class": cls, "cusip": cusip, "value": 1.0, "shares": 100.0, "weight": 1.0}
+    assert equities.lookup_holding(holding) == mapped
+
+
+@pytest.mark.xfail(strict=True, reason="QA-127: 일부러 뺀 보유에 이유(tickerNote)를 적지 않습니다")
+def test_QA127_저장할_때_일부러_뺀_보유에는_이유를_적는다():
+    """
+    백엔드 미커버 목록은 티커가 없으면 이유를 가리지 않고 '매핑표에 없음'이라고 적었습니다. 채권과 우선주는 매핑표에 회사가
+    있어도 일부러 뺀 것이라, 수집기가 그 종류(``tickerNote``: 'debt'·'non_common')를 적고 백엔드는 옮기기만 합니다.
+    이전 실행이 적은 표시는 규칙이 바뀌어 티커가 붙으면 지웁니다(이어받은 분기도 다시 붙이기 때문).
+    """
+    def row(name, cls, cusip, shares=100.0, **extra):
+        return {"name": name, "class": cls, "cusip": cusip, "value": 1.0, "shares": shares, "weight": 1.0, **extra}
+
+    quarters = [{"holdings": [
+        row("BOEING CO", "COM", "097023105"),
+        row("BOEING CO", "DEP CONV PFD A", "097023204"),
+        row("FORD MTR CO", "COM", "345370CZ1"),                         # 'COM'으로 공시된 사채(QA-123)
+        row("FORD MTR CO", "NOTE 3/1", "345370CZ1", shares=None),        # 원금(PRN)
+        row("GOLDMAN SACHS ETF TR", "ACCES TREASURY", "381430529"),      # 펀드 — 매핑표에 없는 것으로 둠
+        row("SOME OBSCURE HOLDINGS LLC", "COM", "000000000"),
+        row("APPLE INC", "COM", "037833100", tickerNote="debt"),        # 예전 실행이 남긴 표시
+    ]}]
+
+    equities.attach_tickers(quarters)
+
+    saved = [(h["name"], h["class"], h["ticker"], h.get("tickerNote")) for h in quarters[0]["holdings"]]
+    assert saved == [
+        ("BOEING CO", "COM", "BA", None),
+        ("BOEING CO", "DEP CONV PFD A", None, "non_common"),
+        ("FORD MTR CO", "COM", None, "debt"),
+        ("FORD MTR CO", "NOTE 3/1", None, "debt"),
+        ("GOLDMAN SACHS ETF TR", "ACCES TREASURY", None, None),
+        ("SOME OBSCURE HOLDINGS LLC", "COM", None, None),
+        ("APPLE INC", "COM", "AAPL", None),
+    ]
+    assert "tickerNote" not in quarters[0]["holdings"][0], "표시가 없는 보유에는 필드를 두지 않습니다"

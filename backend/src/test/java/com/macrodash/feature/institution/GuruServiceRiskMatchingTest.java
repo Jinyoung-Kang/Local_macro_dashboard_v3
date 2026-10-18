@@ -4,6 +4,7 @@ import com.macrodash.Kst;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -14,6 +15,7 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -116,5 +118,55 @@ class GuruServiceRiskMatchingTest {
                     assertThat(row.get("sector")).isEqualTo("정보기술");
                     assertThat(row.get("name")).isEqualTo("NVIDIA CORPORATION");
                 });
+    }
+
+    @Test
+    @Disabled("QA-127: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-127 수집기가 일부러 뺀 보유는 미커버 이유를 tickerNote대로 적는다 — 채권·사채, 보통주가 아닌 증권(우선주·워런트·유닛)")
+    void uncoveredReasonFollowsCollectorNote() {
+        String cik = Institutions.ciks().get(0);
+        ObjectNode prices = MAPPER.createObjectNode();
+        ObjectNode tickers = prices.putObject("tickers");
+        tickers.set("BA", series(60, 200));
+        tickers.set("SPY", series(60, 500));
+        prices.putObject("nameMap").putObject("BOEING CO").put("ticker", "BA").put("sector", "산업재");
+
+        ObjectNode filings = MAPPER.createObjectNode();
+        ArrayNode holdings = filings.putArray("quarters").addObject()
+                .put("reportDate", "2026-06-30").put("filingDate", "2026-08-14")
+                .putArray("holdings");
+        holdings.addObject().put("name", "BOEING CO").put("class", "COM").put("cusip", "097023105")
+                .put("weight", 90.0).put("value", 90.0).put("ticker", "BA");
+        // 수집기(equities.attach_tickers)가 일부러 뺀 행 — 회사 이름이 매핑표에 있어도 주가로 덮지 않은 이유를 적어 둡니다.
+        // 같은 회사의 보통주는 위에서 덮이고, 우선주는 미커버로 남습니다.
+        holdings.addObject().put("name", "BOEING CO").put("class", "DEP CONV PFD A").put("cusip", "097023204")
+                .put("weight", 5.0).put("value", 5.0).putNull("ticker").put("tickerNote", "non_common");
+        holdings.addObject().put("name", "FORD MTR CO").put("class", "NOTE 3/1").put("cusip", "345370CZ1")
+                .put("weight", 3.0).put("value", 3.0).putNull("ticker").put("tickerNote", "debt");
+        // 표시가 없는 null — 매핑표에 없는 이름(펀드 포함)입니다.
+        holdings.addObject().put("name", "SOME OBSCURE HOLDINGS LLC").put("class", "COM").put("cusip", "000000000")
+                .put("weight", 2.0).put("value", 2.0).putNull("ticker");
+
+        StoreReader store = mock(StoreReader.class);
+        when(store.read(anyString(), anyLong(), anyString())).thenReturn(Optional.empty());
+        when(store.read(eq(Datasets.SNAP_EQUITY_HISTORY), anyLong(), anyString()))
+                .thenReturn(Optional.of(snapshot(Datasets.SNAP_EQUITY_HISTORY, prices)));
+        String filingName = Datasets.sec13f(cik, Datasets.MAX_TRACKED_QUARTERS);
+        when(store.read(eq(filingName), anyLong(), anyString()))
+                .thenReturn(Optional.of(snapshot(filingName, filings)));
+
+        Map<String, Object> risk = new GuruService(store).risk(cik, "SPY", 1);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> coverage = (Map<String, Object>) risk.get("coverage");
+        assertThat((double) coverage.get("weight")).isEqualTo(90.0);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> uncovered = (List<Map<String, Object>>) coverage.get("uncovered");
+        Map<Object, Object> reasons = new LinkedHashMap<>();
+        uncovered.forEach(row -> reasons.put(row.get("name"), row.get("reason")));
+        assertThat(reasons).containsExactly(
+                Map.entry("BOEING CO", "보통주가 아닌 증권(우선주·워런트·유닛) — 보통주 가격으로 대신하지 않음"),
+                Map.entry("FORD MTR CO", "채권·사채 — 주가로 계산하지 않음"),
+                Map.entry("SOME OBSCURE HOLDINGS LLC", "매핑표에 없음"));
     }
 }
