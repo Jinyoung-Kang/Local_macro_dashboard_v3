@@ -18,7 +18,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -276,9 +278,10 @@ class ComputedCacheTest {
         }
     }
 
-    /** 테스트가 시각을 옮길 수 있는 시계. */
+    /** 테스트가 시각을 옮길 수 있는 시계. 다음 몇 번의 시각을 차례로 정해 둘 수도 있습니다({@link #next}). */
     private static final class MovableClock extends Clock {
         private volatile Instant now;
+        private final Queue<Instant> upcoming = new ConcurrentLinkedQueue<>();
 
         MovableClock(Instant now) {
             this.now = now;
@@ -286,6 +289,11 @@ class ComputedCacheTest {
 
         void set(Instant instant) {
             now = instant;
+        }
+
+        /** 다음 호출들에 이 시각을 차례로 돌려주고, 다 쓰면 {@link #set}한 시각으로 돌아갑니다. */
+        void next(Instant... instants) {
+            upcoming.addAll(List.of(instants));
         }
 
         @Override
@@ -300,7 +308,8 @@ class ComputedCacheTest {
 
         @Override
         public Instant instant() {
-            return now;
+            Instant queued = upcoming.poll();
+            return queued != null ? queued : now;
         }
     }
 
@@ -753,6 +762,37 @@ class ComputedCacheTest {
             release.countDown();
         }
         assertThat(follower.value()).isSameAs(leader.value());
+    }
+
+    @Test
+    @DisplayName("QA-131 놓친 뒤 앞선 계산이 막 끝나 값이 채워졌으면 자리를 잡지 않고 그 값을 쓴다 — 자리가 다 차 있어도 429가 아니다")
+    void valueFilledAfterMissIsUsedWithoutSlot() throws Exception {
+        // 첫 확인에서 놓친 뒤 계산을 맡기 전에, 같은 키·같은 버전을 계산하던 앞선 요청이 끝나 저장하는 틈이 있습니다.
+        // 그 틈을 시각을 차례로 돌려주는 시계로 만듭니다: 첫 확인은 항목이 만료된 시각, 맡은 뒤 다시 볼 때는 살아 있는 시각.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        MovableClock clock = new MovableClock(t0);
+        ComputedCache cache = new ComputedCache(repository, clock, 1, Duration.ofMillis(50), 32);
+        Object stored = cache.get("k", Object::new);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            Future<Object> holder = holdSlot(pool, cache, "x", entered, release);
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+            clock.next(t0.plusSeconds(ComputedCache.MAX_AGE_SECONDS + 1), t0.plusSeconds(1));
+            // 자리를 기다렸다면 50ms 뒤 ComputeBusyException, 다시 계산했다면 AssertionError입니다.
+            assertThat(cache.get("k", MUST_NOT_COMPUTE)).isSameAs(stored);
+            assertThat(cache.rejectedCount()).isZero();
+            assertThat(cache.waiting()).isZero();
+            assertThat(cache.inflight()).as("자리를 쥔 x만 남음").isEqualTo(1);
+
+            release.countDown();
+            assertThat(holder.get(GENEROUS_SECONDS, TimeUnit.SECONDS)).isEqualTo("x");
+        } finally {
+            release.countDown();
+            pool.shutdown();
+        }
     }
 
     @Test
