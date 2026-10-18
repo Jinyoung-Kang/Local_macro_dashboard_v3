@@ -23,6 +23,16 @@
 
   --font-sans: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* 글자 크기별 줄 높이를 v3처럼 rem(절대값)으로 둡니다. v4 기본값은 비율(text-sm이면 1.43)이라, 그 안의 작은 글씨
+     (text-[11px])가 부모의 20px 대신 비율을 물려받아 15.7px가 되고 표 행·배지가 v3보다 4~9px 낮아졌습니다
+     (QA 스택에서 v3·v4 화면의 계산 스타일을 요소마다 비교해 확인). */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
 }
 
 @layer base {
