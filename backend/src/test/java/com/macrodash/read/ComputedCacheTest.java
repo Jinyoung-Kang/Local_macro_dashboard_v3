@@ -5,7 +5,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -26,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -213,19 +213,24 @@ class ComputedCacheTest {
     /** 새 스레드에서 {@code cache.get(key, compute)}를 부릅니다. 돌려준 값이나 던진 예외는 {@code result}에 담깁니다. */
     private static Caller call(ComputedCache cache, String key, Supplier<Object> compute) {
         CompletableFuture<Object> result = new CompletableFuture<>();
+        AtomicBoolean interruptedAfter = new AtomicBoolean();
         Thread thread = new Thread(() -> {
             try {
-                result.complete(cache.get(key, compute));
+                Object value = cache.get(key, compute);
+                interruptedAfter.set(Thread.currentThread().isInterrupted());
+                result.complete(value);
             } catch (Throwable e) {
+                interruptedAfter.set(Thread.currentThread().isInterrupted());
                 result.completeExceptionally(e);
             }
         }, "cache-caller-" + key);
         thread.setDaemon(true); // 실패한 테스트가 래치를 못 열어도 JVM 종료를 막지 않게
         thread.start();
-        return new Caller(thread, result);
+        return new Caller(thread, result, interruptedAfter);
     }
 
-    private record Caller(Thread thread, CompletableFuture<Object> result) {
+    /** @param interruptedAfter 호출이 끝난 뒤 그 스레드의 interrupt 표시가 남아 있었는지 */
+    private record Caller(Thread thread, CompletableFuture<Object> result, AtomicBoolean interruptedAfter) {
 
         /**
          * 호출이 끝났거나 캐시 안에서 멈춰(자리나 앞선 계산을 기다림) 있을 때까지 기다립니다. 어느 쪽에서 기다리는지는
@@ -410,36 +415,40 @@ class ComputedCacheTest {
     }
 
     @Test
-    @DisplayName("QA-131 같은 키를 기다리던 요청은 자리를 얻은 뒤 그사이 채워진 값을 쓴다 — 다시 계산하지 않는다")
-    void waiterReusesValueComputedWhileWaiting() throws Exception {
+    @DisplayName("QA-131 같은 키를 놓친 요청은 앞선 계산이 자리를 기다리는 동안에도 대기열 자리를 잡지 않고, 그 계산이 끝나면 같은 값을 받는다")
+    void followerDoesNotQueueWhileLeaderWaitsForSlot() throws Exception {
         when(repository.latestCollectedAt()).thenReturn(t0);
         ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
         AtomicInteger computed = new AtomicInteger();
+        Supplier<Object> compute = () -> {
+            computed.incrementAndGet();
+            return new Object();
+        };
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Future<Object> first = pool.submit(() -> cache.get("k", () -> {
-            computed.incrementAndGet();
-            entered.countDown();
-            awaitQuietly(release);
-            return new Object();
-        }));
-        assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
-        Future<Object> second = pool.submit(() -> cache.get("k", () -> {
-            computed.incrementAndGet();
-            return new Object();
-        }));
-        awaitWaiting(cache, 1);
+        try {
+            Future<Object> holder = holdSlot(pool, cache, "x", entered, release);
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            Caller leader = call(cache, "k", compute);
+            awaitWaiting(cache, 1); // 앞선 계산이 자리를 기다림
+            Caller follower = call(cache, "k", compute).awaitParkedOrDone();
+            assertThat(cache.waiting()).as("자리를 기다리는 것은 앞선 계산 하나뿐").isEqualTo(1);
+            assertThat(cache.inflight()).as("자리를 쥔 x와 자리를 기다리는 k").isEqualTo(2);
 
-        release.countDown();
-        Object firstValue = first.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
-        assertThat(second.get(GENEROUS_SECONDS, TimeUnit.SECONDS)).isSameAs(firstValue);
-        assertThat(computed.get()).isEqualTo(1);
-        pool.shutdown();
+            release.countDown();
+            holder.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
+            Object value = leader.value();
+            assertThat(follower.value()).isSameAs(value);
+            assertThat(computed.get()).isEqualTo(1);
+            assertThat(cache.inflight()).isZero();
+        } finally {
+            release.countDown();
+            pool.shutdown();
+        }
     }
 
     @Test
-    @Disabled("QA-131: 같은 키를 놓친 요청이 각자 자리 대기열에 서서, 계산 하나면 될 일에 대기열이 차 429가 납니다")
     @DisplayName("QA-131 같은 키를 동시에 놓친 요청은 계산 하나를 함께 기다려 같은 값을 받는다 — 대기열을 채워 429가 되지 않는다")
     void sameKeyMissesShareOneComputation() throws Exception {
         // QA 스택 측정: 백엔드 재기동 직후 5명이 무거운 화면을 한꺼번에 열자(요청 45건, 서로 다른 키 9개) 14–37건이
@@ -464,6 +473,8 @@ class ComputedCacheTest {
             for (int i = 1; i < callers; i++) {
                 calls.add(call(cache, "k", heavy).awaitParkedOrDone());
             }
+            assertThat(cache.waiting()).as("따르는 요청은 자리 대기열에 서지 않음").isZero();
+            assertThat(cache.inflight()).as("계산 중인 키+버전").isEqualTo(1);
         } finally {
             release.countDown();
         }
@@ -484,6 +495,228 @@ class ComputedCacheTest {
         assertThat(computed.get()).as("계산 횟수").isEqualTo(1);
         assertThat(values).hasSize(callers).allSatisfy(value -> assertThat(value).isSameAs(values.get(0)));
         assertThat(cache.rejectedCount()).isZero();
+        assertThat(cache.inflight()).as("계산을 맡은 요청이 끝나면 비움").isZero();
+    }
+
+    /** 불리면 안 되는 계산 — 앞선 계산을 따라야 할 요청이나 자리를 얻지 못한 요청이 계산하면 드러납니다. */
+    private static final Supplier<Object> MUST_NOT_COMPUTE = () -> {
+        throw new AssertionError("불리면 안 되는 계산이 불림");
+    };
+
+    @Test
+    @DisplayName("QA-131 앞선 계산이 예외를 던지면 따르는 요청도 같은 예외를 받고, 저장하지 않았으니 다음 요청은 다시 계산한다")
+    void followersShareLeadersException() throws Exception {
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        RuntimeException failure = new IllegalArgumentException("계산 실패"); // 계산이 낸 예외는 무엇이든(400·500) 그대로
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        List<Caller> followers = new ArrayList<>();
+        Caller leader;
+        try {
+            leader = call(cache, "k", () -> {
+                entered.countDown();
+                awaitQuietly(release);
+                throw failure;
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            for (int i = 0; i < 3; i++) {
+                followers.add(call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone());
+            }
+        } finally {
+            release.countDown();
+        }
+
+        assertThat(leader.failure()).isSameAs(failure);
+        for (Caller follower : followers) {
+            assertThat(follower.failure()).isSameAs(failure);
+        }
+        assertThat(cache.inflight()).isZero();
+        assertThat(cache.size()).isZero();
+        assertThat(cache.<String>get("k", () -> "다시 계산")).isEqualTo("다시 계산");
+        assertThat(cache.rejectedCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("QA-131 앞선 계산이 자리를 얻지 못해 429면 따르는 요청도 429 — 거절은 돌려보낸 요청마다 세고, 얻지 못한 자리는 돌려주지 않는다")
+    void followersShareLeadersRejection() throws Exception {
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch enteredAgain = new CountDownLatch(1);
+        CountDownLatch releaseAgain = new CountDownLatch(1);
+        try {
+            Future<Object> holder = holdSlot(pool, cache, "x", entered, release);
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            Caller leader = call(cache, "k", MUST_NOT_COMPUTE);
+            awaitWaiting(cache, 1);
+            List<Caller> followers = new ArrayList<>();
+            for (int i = 0; i < 3; i++) {
+                followers.add(call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone());
+            }
+            // 2초 대기가 끝나기를 시간으로 맞추지 않으려고, 자리를 기다리는 앞선 계산을 interrupt해 같은 거절 경로로 보냅니다.
+            leader.thread().interrupt();
+
+            Throwable busy = leader.failure();
+            assertThat(busy).isInstanceOf(ComputeBusyException.class);
+            for (Caller follower : followers) {
+                assertThat(follower.failure()).isSameAs(busy);
+            }
+            assertThat(cache.rejectedCount()).as("앞선 계산 1건 + 따르는 요청 3건").isEqualTo(4);
+            assertThat(cache.inflight()).as("자리를 쥔 x만 남음").isEqualTo(1);
+            release.countDown();
+            holder.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
+
+            // 자리를 얻지 못한 앞선 계산이 자리를 '돌려줬다면' 상한이 2가 되어, 아래 z는 기다리지 않고 바로 계산합니다.
+            Future<Object> holderAgain = holdSlot(pool, cache, "y", enteredAgain, releaseAgain);
+            assertThat(enteredAgain.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            Caller next = call(cache, "z", () -> "z").awaitParkedOrDone();
+            assertThat(next.result()).as("자리가 하나뿐이라 z는 기다림").isNotDone();
+            assertThat(cache.waiting()).isEqualTo(1);
+            releaseAgain.countDown();
+            holderAgain.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
+            assertThat(next.value()).isEqualTo("z");
+        } finally {
+            release.countDown();
+            releaseAgain.countDown();
+            pool.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("QA-131 앞선 계산이 대기 시간 안에 끝나지 않으면 따르는 요청은 429로 거절로 세고, 앞선 계산은 끝까지 돌아 저장한다")
+    void followerTimesOutWith429() throws Exception {
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32,
+                Duration.ofMillis(100));
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Caller leader;
+        try {
+            leader = call(cache, "k", () -> {
+                entered.countDown();
+                awaitQuietly(release);
+                return "k";
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> cache.get("k", MUST_NOT_COMPUTE))
+                    .isInstanceOfSatisfying(ComputeBusyException.class,
+                            busy -> assertThat(busy.retryAfter()).isEqualTo(Duration.ofSeconds(2)));
+            assertThat(cache.rejectedCount()).isEqualTo(1);
+            assertThat(cache.inflight()).as("앞선 계산은 아직 도는 중").isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+        assertThat(leader.value()).isEqualTo("k");
+        assertThat(cache.inflight()).isZero();
+        assertThat(cache.size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("QA-131 앞선 계산을 기다리다 interrupt되면 429로 끝내고 interrupt 표시는 남긴다")
+    void interruptedFollowerEndsIn429() throws Exception {
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Caller leader;
+        Caller follower;
+        try {
+            leader = call(cache, "k", () -> {
+                entered.countDown();
+                awaitQuietly(release);
+                return "k";
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            follower = call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone();
+            follower.thread().interrupt();
+
+            assertThat(follower.failure()).isInstanceOf(ComputeBusyException.class);
+            assertThat(follower.interruptedAfter()).as("interrupt 표시를 되살림").isTrue();
+            assertThat(cache.rejectedCount()).isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+        assertThat(leader.value()).isEqualTo("k");
+        assertThat(cache.inflight()).isZero();
+    }
+
+    @Test
+    @DisplayName("QA-131 새 저장본 버전을 본 요청은 옛 버전 계산을 따르지 않고 새로 계산한다")
+    void newerVersionDoesNotFollowOlderComputation() throws Exception {
+        Instant t1 = t0.plusSeconds(300);
+        when(repository.latestCollectedAt()).thenReturn(t0, t1);
+        // 자리 2개: 새 버전 계산이 자리를 기다리지 않게. 따르기 대기는 짧게 둬, 잘못 따르면 바로 429로 드러나게 합니다.
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 2, Duration.ofSeconds(60), 32,
+                Duration.ofMillis(100));
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Caller older;
+        try {
+            older = call(cache, "k", () -> {
+                entered.countDown();
+                awaitQuietly(release);
+                return "옛 버전";
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+            assertThat(cache.<String>get("k", () -> "새 버전")).isEqualTo("새 버전");
+            assertThat(cache.inflight()).as("옛 버전 계산은 아직 도는 중").isEqualTo(1);
+        } finally {
+            release.countDown();
+        }
+        assertThat(older.value()).isEqualTo("옛 버전");
+        assertThat(cache.inflight()).isZero();
+        assertThat(cache.rejectedCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("QA-131 계산 안에서 같은 키를 다시 부르면 자기 계산을 따르다 대기 시간 뒤 429로 끝난다 — 영원히 멈추지 않는다")
+    void reentrantSameKeyEndsIn429() {
+        // 서비스(계산 안)에서 이 캐시를 부르면 안 되지만(javadoc), 그래도 요청 스레드를 영원히 묶지 않는지 봅니다.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofMillis(50), 32,
+                Duration.ofMillis(100));
+
+        assertTimeoutPreemptively(Duration.ofSeconds(GENEROUS_SECONDS), () ->
+                assertThatThrownBy(() -> cache.get("k", () -> cache.get("k", () -> "안쪽")))
+                        .isInstanceOf(ComputeBusyException.class));
+        assertThat(cache.inflight()).isZero();
+        assertThat(cache.rejectedCount()).as("안쪽 호출의 대기 초과 1건").isEqualTo(1);
+        assertThat(cache.<String>get("k", () -> "다시")).as("자리도 돌려줌 — 아니면 50ms 뒤 429").isEqualTo("다시");
+    }
+
+    @Test
+    @DisplayName("QA-131 캐시 적중은 계산 중인 키가 있어도 기다리지 않는다 — 자리도 앞선 계산도 거치지 않는다")
+    void hitsNeverWaitForInflightComputation() throws Exception {
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        Object cached = cache.get("h", Object::new);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Caller leader;
+        Caller follower;
+        try {
+            leader = call(cache, "k", () -> {
+                entered.countDown();
+                awaitQuietly(release);
+                return "k";
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            follower = call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone();
+
+            // 자리(60초)나 앞선 계산(30초)을 기다렸다면 시간 안에 끝나지 않습니다. 적중이면 수 ms입니다.
+            Object hit = assertTimeoutPreemptively(Duration.ofSeconds(10), () -> cache.get("h", MUST_NOT_COMPUTE));
+            assertThat(hit).isSameAs(cached);
+            assertThat(cache.inflight()).isEqualTo(1);
+            assertThat(cache.rejectedCount()).isZero();
+        } finally {
+            release.countDown();
+        }
+        assertThat(follower.value()).isSameAs(leader.value());
     }
 
     @Test
