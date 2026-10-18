@@ -5,6 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -580,6 +582,37 @@ class ComputedCacheTest {
         assertThat(cache.rejectedCount()).isZero();
         assertThat(cache.inflight()).isZero();
         assertThat(cache.<String>get("k", () -> "다시 계산")).as("자리도 돌려줌 — 아니면 60초 기다림").isEqualTo("다시 계산");
+    }
+
+    @Test
+    @Disabled("QA-131 리뷰: 앞선 계산이 던진 CompletionException을 따르는 요청은 원인으로 벗겨 받습니다")
+    @DisplayName("QA-131 앞선 계산이 CompletionException을 던져도 따르는 요청은 벗기지 않은 같은 예외를 받는다")
+    void followersShareLeadersCompletionException() throws Exception {
+        // 따르는 요청은 CompletableFuture.get으로 결과를 받는데, get은 CompletionException을 벗겨 원인을 줍니다.
+        // 예를 들어 CompletionException(InvalidRequestException)이면 앞선 요청은 500, 따르는 요청은 400이 됩니다.
+        // 지금 계산 경로에서 CompletionException을 던지는 곳은 없지만, javadoc은 '같은 예외를 받는다'고 약속합니다.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32);
+        RuntimeException failure = new CompletionException(new IllegalArgumentException("원인"));
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Caller leader;
+        Caller follower;
+        try {
+            leader = call(cache, "k", () -> {
+                entered.countDown();
+                awaitQuietly(release);
+                throw failure;
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            follower = call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone();
+        } finally {
+            release.countDown();
+        }
+
+        assertThat(leader.failure()).isSameAs(failure);
+        assertThat(follower.failure()).isSameAs(failure);
+        assertThat(cache.inflight()).isZero();
     }
 
     @Test
