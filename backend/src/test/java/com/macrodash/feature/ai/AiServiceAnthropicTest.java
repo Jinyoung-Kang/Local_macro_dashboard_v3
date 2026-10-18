@@ -25,6 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>요청 모양(모델·한도·effort·temperature 없음·키 헤더), 사고 블록이 앞에 오는 응답, 안전 분류기 거절,
  * 인증 실패, 호출 한도(재시도 없이 한 번만), 키 없음을 고정합니다.
+ *
+ * <p>402·529·400은 SDK가 상태 코드를 예외로 바꾸는 표(ErrorHandler)에 기대는 갈래라, SDK를 올릴 때 그 표가
+ * 바뀌면 안내 문구와 과금 표시(QA-021)가 조용히 틀어집니다. 그래서 이 셋도 응답 본문까지 실제 모양으로 고정합니다.
  */
 class AiServiceAnthropicTest {
 
@@ -173,6 +176,45 @@ class AiServiceAnthropicTest {
         assertThat(result.get("status")).isEqualTo(false);
         assertThat(String.valueOf(result.get("error"))).contains("429");
         assertThat(hits.get()).as("SDK 자동 재시도가 꺼져 있어야 합니다").isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("402(billing_error)면 크레딧 부족을 알려 주고, 과금되지 않은 실패로 표시한다")
+    void billingErrorPointsToCredits() throws Exception {
+        String base = startServer(402,
+                "{\"type\":\"error\",\"error\":{\"type\":\"billing_error\",\"message\":\"credit balance is too low\"}}");
+
+        Map<String, Object> result = service(base, "test-key").generate("anthropic_haiku", "질문", null);
+
+        assertThat(result).containsEntry("status", false).containsEntry("charged", false);
+        assertThat(String.valueOf(result.get("error"))).contains("402", "billing_error", "크레딧");
+        assertThat(hits.get()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("529(overloaded_error)면 과부하를 알려 주고, SDK가 다시 보내지 않으며, 과금되지 않은 실패로 표시한다")
+    void overloadedIsReportedOnceWithoutRetry() throws Exception {
+        String base = startServer(529,
+                "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}");
+
+        Map<String, Object> result = service(base, "test-key").generate("anthropic_haiku", "질문", null);
+
+        assertThat(result).containsEntry("status", false).containsEntry("charged", false);
+        assertThat(String.valueOf(result.get("error"))).contains("529", "overloaded_error", "과부하");
+        assertThat(hits.get()).as("5xx도 SDK 재시도 없이 한 번 — 다음 엔진으로 넘기는 것은 자동 탐색").isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("400(invalid_request_error)은 상태 코드와 오류 종류를 남기고, 과금되지 않은 실패로 표시한다")
+    void badRequestIsUnchargedHttpFailure() throws Exception {
+        String base = startServer(400,
+                "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"temperature: unsupported\"}}");
+
+        Map<String, Object> result = service(base, "test-key").generate("anthropic_haiku", "질문", null);
+
+        assertThat(result).containsEntry("status", false).containsEntry("charged", false);
+        assertThat(String.valueOf(result.get("error"))).contains("HTTP 400", "invalid_request_error")
+                .doesNotContain("크레딧", "과부하");
     }
 
     @Test
