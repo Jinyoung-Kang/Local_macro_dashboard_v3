@@ -1,8 +1,13 @@
 package com.macrodash.read;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -253,6 +258,42 @@ class ComputedCacheTest {
         assertThat(cache.rejectedCount()).isEqualTo(1);
         assertThat(cache.size()).isEqualTo(2);
         pool.shutdown();
+    }
+
+    @Test
+    @DisplayName("QA-131 거절 경고는 60초에 한 번으로 묶는다 — 거절이 몰려도 요청마다 WARN을 찍지 않는다")
+    void rejectionWarningIsBatched() throws Exception {
+        // 부하 중 거절마다 WARN을 찍으면 로그(json-file 10m×3)가 넘쳐 그 앞의 원인 로그가 밀려납니다.
+        Logger logger = (Logger) LoggerFactory.getLogger(ComputedCache.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            when(repository.latestCollectedAt()).thenReturn(t0);
+            ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofMillis(50), 32);
+            CountDownLatch entered = new CountDownLatch(1);
+            Future<Object> holder = holdSlot(pool, cache, "a", entered, release);
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+            for (String key : List.of("b", "c", "d")) {
+                assertThatThrownBy(() -> cache.get(key, () -> key)).isInstanceOf(ComputeBusyException.class);
+            }
+            release.countDown();
+            holder.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
+
+            assertThat(cache.rejectedCount()).isEqualTo(3);
+            assertThat(appender.list.stream().filter(event -> event.getLevel() == Level.WARN))
+                    .as("거절 3건에 경고는 첫 거절의 한 줄뿐")
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage())
+                            .contains("1건을 429로", "누적 1건", "상한 1개", "60초에 한 번"));
+        } finally {
+            release.countDown();
+            logger.detachAppender(appender);
+            pool.shutdown();
+        }
     }
 
     @Test
