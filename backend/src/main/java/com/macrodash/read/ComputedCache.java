@@ -98,6 +98,21 @@ public class ComputedCache {
     private record Cached(Instant version, Instant storedAt, Object value) {
     }
 
+    /**
+     * 앞선 계산의 결과 — 값 또는 예외. 예외도 future를 예외로 끝내지 않고 값으로 넘깁니다: {@link CompletableFuture#get}은
+     * {@code CompletionException}을 벗겨 원인을 던지므로, 그러면 앞선 요청과 따르는 요청이 다른 예외를 받습니다.
+     */
+    private record Outcome(Object value, Throwable error) {
+
+        static Outcome of(Object value) {
+            return new Outcome(value, null);
+        }
+
+        static Outcome failed(Throwable error) {
+            return new Outcome(null, error);
+        }
+    }
+
     private final StoreRepository repository;
     private final Clock clock;
     private final int maxConcurrent;
@@ -109,7 +124,7 @@ public class ComputedCache {
      * 지금 도는 계산 — 키+버전마다 하나. 같은 키·같은 버전을 놓친 요청은 새로 계산하지 않고 이 결과를 기다립니다.
      * 계산을 맡은 요청이 끝날 때(값·예외 모두) 지웁니다.
      */
-    private final ConcurrentHashMap<String, CompletableFuture<Object>> inflight = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CompletableFuture<Outcome>> inflight = new ConcurrentHashMap<>();
     private final AtomicLong rejected = new AtomicLong();
     private final AtomicLong rejectedAtLastWarn = new AtomicLong();
     private final AtomicLong lastWarnNanos = new AtomicLong(System.nanoTime() - WARN_INTERVAL_NANOS);
@@ -194,72 +209,83 @@ public class ComputedCache {
         // 키에 버전을 붙여, 새 저장본을 본 요청이 옛 버전 계산을 따르지 않게 합니다. Instant 문자열에는 '@'가 없어
         // 마지막 '@'로 둘이 갈리므로 서로 다른 (키, 버전)이 같은 문자열이 되지 않습니다.
         String flightKey = key + '@' + version;
-        CompletableFuture<Object> flight = new CompletableFuture<>();
-        CompletableFuture<Object> ahead = inflight.putIfAbsent(flightKey, flight);
-        if (ahead != null) {
-            return (T) follow(ahead);
+        CompletableFuture<Outcome> flight = new CompletableFuture<>();
+        CompletableFuture<Outcome> ahead = inflight.putIfAbsent(flightKey, flight);
+        if (ahead == null) {
+            return (T) unwrap(lead(key, version, flightKey, flight, compute));
         }
-        return lead(key, version, flightKey, flight, compute);
+        Outcome outcome = follow(ahead);
+        if (outcome.error() instanceof ComputeBusyException) {
+            countRejection(); // 앞선 계산이 자리를 얻지 못함 — 이 요청도 429로 돌아가므로 같이 셉니다
+        }
+        return (T) unwrap(outcome);
     }
 
-    /** 이 키·버전의 계산을 맡습니다. 결과(값·예외)는 {@code flight}로 따르는 요청에게도 넘깁니다. */
-    @SuppressWarnings("unchecked")
-    private <T> T lead(String key, Instant version, String flightKey, CompletableFuture<Object> flight,
-                       Supplier<T> compute) {
+    /** 이 키·버전의 계산을 맡습니다. 결과(값·예외)는 {@code flight}로 따르는 요청에게도 같은 것을 넘깁니다. */
+    private Outcome lead(String key, Instant version, String flightKey, CompletableFuture<Outcome> flight,
+                         Supplier<?> compute) {
+        Outcome outcome;
         boolean acquired = false;
         try {
-            T value;
             // 놓친 뒤 여기까지 오는 사이 앞선 계산이 끝나 채워 두었으면 자리 없이 그 값을 씁니다. 자리를 얻은 뒤에는 다시
             // 볼 필요가 없습니다 — 같은 키·같은 버전은 이 요청만 계산하고, 다른 요청은 이 결과를 기다립니다.
             Cached filled = fresh(key, version, clock.instant());
             if (filled != null) {
-                value = (T) filled.value();
+                outcome = Outcome.of(filled.value());
             } else {
                 acquire();
                 acquired = true;
                 // 기다린 만큼 항목 수명이 줄지 않게, 저장 시각은 자리를 얻은 뒤로 잡습니다.
                 Instant now = clock.instant();
-                value = compute.get();
+                Object value = compute.get();
                 entries.put(key, new Cached(version, now, value));
+                outcome = Outcome.of(value);
             }
-            flight.complete(value);
-            return value;
         } catch (Throwable e) {
             // 따르는 요청도 같은 예외를 받습니다(자리 거절 429, 계산의 400·500 그대로). 아무것도 저장하지 않았으므로
             // 다음 요청은 다시 계산합니다. Error도 넘겨, 따르는 요청이 대기 시간(30초)을 헛기다리다 429를 받지 않게 합니다.
-            flight.completeExceptionally(e);
-            throw e;
+            outcome = Outcome.failed(e);
         } finally {
             if (acquired) {
                 slots.release();
             }
+            // 결과를 넘기기 전에 지웁니다 — 그사이 온 요청이 이미 끝난 계산을 따라 지난 예외를 받지 않고 새로 맡게.
             inflight.remove(flightKey, flight);
         }
+        flight.complete(outcome);
+        return outcome;
     }
 
     /** 같은 키·같은 버전을 계산 중인 앞선 요청의 결과를 기다립니다 — 자리도 대기열 자리도 잡지 않습니다. */
-    private Object follow(CompletableFuture<Object> ahead) {
+    private Outcome follow(CompletableFuture<Outcome> ahead) {
         try {
             return ahead.get(followTimeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof ComputeBusyException busy) {
-                countRejection(); // 앞선 계산이 자리를 얻지 못함 — 이 요청도 429로 돌아가므로 같이 셉니다
-                throw busy;
-            }
-            if (cause instanceof RuntimeException runtime) {
-                throw runtime;
-            }
-            if (cause instanceof Error error) {
-                throw error;
-            }
-            throw new IllegalStateException("앞선 계산이 실패했습니다", cause);
         } catch (TimeoutException e) {
             throw reject();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw reject();
+        } catch (ExecutionException e) {
+            // 일어나지 않음: 앞선 계산은 예외도 Outcome 값으로 넘깁니다.
+            throw new IllegalStateException("앞선 계산이 결과 없이 끝났습니다", e);
         }
+    }
+
+    /** 결과의 값을 돌려주거나, 예외를 감싸지 않고 같은 인스턴스로 던집니다 — 앞선 요청과 따르는 요청이 같은 것을 받게. */
+    private static Object unwrap(Outcome outcome) {
+        if (outcome.error() != null) {
+            throw ComputedCache.<RuntimeException>sneakyThrow(outcome.error());
+        }
+        return outcome.value();
+    }
+
+    /**
+     * 검사 예외도 감싸지 않고 던집니다. {@code Supplier}는 검사 예외를 선언하지 않지만 몰래 던질 수는 있어서, 앞선
+     * 요청이 그런 예외를 그대로 다시 던지던 것과 따르는 요청을 맞춥니다.
+     */
+    @SuppressWarnings("unchecked")
+    private static <E extends Throwable> E sneakyThrow(Throwable e) throws E {
+        throw (E) e;
     }
 
     /** 저장된 항목 수(관측·테스트용). */
