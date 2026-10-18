@@ -16,7 +16,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import org.junit.jupiter.api.Disabled;
 import tools.jackson.databind.ObjectMapper;
 
 /** 공개 데모의 읽기 모드 store_only — 화면 조회가 외부 호출을 일으키지 않는다(ADR 0012). */
@@ -37,7 +36,6 @@ class MacroStoreOnlyTest {
     }
 
     @Test
-    @Disabled("QA-124: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-124 auto 모드에서 수집기가 빈 시계열과 사유를 주면 차트 응답에 그 사유를 싣는다")
     void tickerSeriesCarriesCollectorFailureReason() throws Exception {
         StoreReader store = mock(StoreReader.class);

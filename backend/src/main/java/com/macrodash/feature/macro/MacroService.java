@@ -11,6 +11,7 @@ import com.macrodash.store.Snapshot;
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.Json;
 import com.macrodash.support.Params;
+import com.macrodash.support.SecretRedactor;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -626,12 +627,20 @@ public class MacroService {
             return out;
         }
         JsonNode payload = live.get();
-        out.put("available", !Json.array(payload, "points").isEmpty());
+        boolean available = !Json.array(payload, "points").isEmpty();
+        out.put("available", available);
         out.put("symbol", symbol);
         out.put("period", period);
         out.put("isProxy", Json.asBoolean(payload, "isProxy"));
         out.put("sourceLabel", Json.asText(payload, "sourceLabel"));
         out.put("points", payload.get("points"));
+        if (!available) {
+            // 수집기는 받았지만 외부 소스가 실패한 경우 — 수집기가 적은 사유를 화면에 넘깁니다(QA-124). 사유가 없으면 화면이 기본 문구를 씁니다.
+            String reason = Json.asText(payload, "error");
+            if (reason != null && !reason.isBlank()) {
+                out.put("message", "외부 소스에서 시계열을 받지 못했습니다: " + SecretRedactor.redact(reason));
+            }
+        }
         return out;
     }
 
