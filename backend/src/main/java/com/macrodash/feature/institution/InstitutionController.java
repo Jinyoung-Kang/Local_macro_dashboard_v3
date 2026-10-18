@@ -87,7 +87,13 @@ public class InstitutionController {
     /** 이 종목을 누가 들고 있나 (13F 공시 이름 일부로 검색). */
     @GetMapping("/guru/holders")
     public Map<String, Object> guruHolders(@RequestParam(required = false) String q) {
-        return guru.holders(q);
+        // 응답은 검색어마다 달라 캐시하지 않고, 검색어와 상관없는 보유 목록만 캐시합니다. 예전에는 요청마다 13F 저장본
+        // (약 17.7MB)을 다시 풀어, 재기동 직후 서로 다른 검색어가 몰리면 각자 같은 계산을 했습니다(QA-133). 빈 검색어는
+        // 안내 문구만 내므로 목록을 만들지 않습니다.
+        List<GuruService.HoldingRow> index = q == null || q.isBlank()
+                ? List.of()
+                : cache.get("guru.holders.index", guru::holdersIndex);
+        return guru.holders(index, q);
     }
 
     /**

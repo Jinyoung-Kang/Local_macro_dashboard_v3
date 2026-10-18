@@ -114,6 +114,10 @@ export interface GuruHoldersResponse {
     value: number;
     reportDate: string;
   }[];
+  /** 자르기 전 일치 건수. 백엔드는 비중 상위 200행까지만 rows에 담습니다(QA-133). 빈 검색어 응답에는 없습니다. */
+  totalMatches?: number;
+  /** rows가 일치 행 일부(비중 상위)뿐이면 true. */
+  truncated?: boolean;
 }
 
 /** 🛡️ 구루 포트폴리오 위험. */

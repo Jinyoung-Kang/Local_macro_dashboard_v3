@@ -5,7 +5,6 @@ import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
 import com.macrodash.store.StoreRepository;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -59,7 +58,6 @@ class InstitutionControllerCacheTest {
     }
 
     @Test
-    @Disabled("QA-133: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-133 보유 기관 검색은 검색어가 달라도 13F 저장본을 한 번만 읽는다 — 빈 검색어는 아예 읽지 않는다")
     void holdersReadFilingsOncePerSnapshotVersion() {
         StoreRepository repository = mock(StoreRepository.class);

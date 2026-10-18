@@ -37,7 +37,7 @@ function search(response: object, query: string) {
 
 describe("QA-133 보유 기관 검색 — 잘린 결과", () => {
   // 수정 전에는 truncated·totalMatches를 읽지 않아, 받은 행만 그리고 몇 건이 빠졌는지 말하지 않았다.
-  it.fails("잘렸으면 일치 건수와 보이는 건수를 함께 알린다", async () => {
+  it("잘렸으면 일치 건수와 보이는 건수를 함께 알린다", async () => {
     search({ available: true, query: "C", rows: ROWS, totalMatches: 14748, truncated: true }, "C");
 
     await screen.findByText("CITIGROUP INC");

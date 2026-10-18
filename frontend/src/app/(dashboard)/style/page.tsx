@@ -552,6 +552,13 @@ function HoldersCard() {
 
       {(data?.rows?.length ?? 0) > 0 && (
         <div className="mt-4">
+          {/* 백엔드는 비중 상위 200행까지만 보냅니다(QA-133). 말하지 않으면 잘린 목록이 전부처럼 읽힙니다. */}
+          {data!.truncated && (
+            <p className="mb-2 text-[11px] leading-relaxed text-muted">
+              일치 {formatNumber(data!.totalMatches, 0)}건 중 비중 상위 {data!.rows.length}건만 보입니다 — 종목명을
+              더 길게 적어 좁히세요.
+            </p>
+          )}
           <Table
             rows={data!.rows}
             rowKey={(row, index) => `${row.cik}-${row.cusip}-${index}`}

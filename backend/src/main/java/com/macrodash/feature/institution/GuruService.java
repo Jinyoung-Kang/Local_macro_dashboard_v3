@@ -177,8 +177,59 @@ public class GuruService {
     }
 
     // ==================================================== 🔍 역방향 조회
-    /** 이 종목을 누가 들고 있나. 종목명 일부로 찾습니다. */
+    /**
+     * 보유 기관 검색이 돌려주는 최대 행 수(QA-133). 예전에는 일치하는 행을 모두 돌려줘, 한 글자 검색(q=C)이 12개 기관 최신
+     * 분기 보유 약 1만 6천 행 가운데 1만 4,748행(JSON 3MB)이 되고 화면은 그 행을 전부 그렸습니다. 비중 상위 200행이면
+     * 실제로 읽는 범위를 넉넉히 덮고, 잘린 사실과 원래 일치 건수는 {@code truncated}·{@code totalMatches}로 함께 알립니다.
+     */
+    static final int HOLDERS_MAX_ROWS = 200;
+
+    /**
+     * 보유 기관 검색의 색인 한 줄 — 기관 하나의 최신 분기 13F 보유 하나. 검색어와 상관없고 바뀌지 않는 값이라 응답 캐시에
+     * 두고 요청끼리 나눠 씁니다(QA-133).
+     */
+    public record HoldingRow(String institution, String cik, String name, String cusip,
+                             Double weight, Double value, String reportDate) {
+    }
+
+    /**
+     * 모든 기관의 최신 분기 보유 목록(검색어와 상관없음). 저장본을 풀어 만드는 비싼 쪽이라, 컨트롤러가 응답 캐시에 넣어
+     * 저장본 버전마다 한 번만 만듭니다 — 예전에는 검색할 때마다 13F 저장본(약 17.7MB)을 다시 풀었습니다(QA-133).
+     * 돌려주는 목록은 바꿀 수 없습니다(캐시가 요청끼리 나눠 씀).
+     */
+    public List<HoldingRow> holdersIndex() {
+        List<HoldingRow> index = new ArrayList<>();
+        for (Map<String, String> institution : Institutions.ALL) {
+            List<JsonNode> quarters = quartersOf(institution.get("cik"));
+            if (quarters.isEmpty()) {
+                continue;
+            }
+            JsonNode latest = quarters.get(0);
+            String reportDate = Json.asText(latest, "reportDate");
+            for (JsonNode holding : Json.array(latest, "holdings")) {
+                String name = Json.asText(holding, "name");
+                if (name == null) {
+                    continue;
+                }
+                index.add(new HoldingRow(institution.get("name"), institution.get("cik"), name,
+                        Json.asText(holding, "cusip"), Json.asDouble(holding, "weight"),
+                        Json.asDouble(holding, "value"), reportDate));
+            }
+        }
+        return List.copyOf(index);
+    }
+
+    /** 이 종목을 누가 들고 있나. 종목명 일부로 찾습니다. 저장본을 직접 읽어 색인을 만듭니다(테스트·단독 호출용). */
     public Map<String, Object> holders(String query) {
+        return holders(holdersIndex(), query);
+    }
+
+    /**
+     * 이 종목을 누가 들고 있나 — {@link #holdersIndex()}에서 이름에 검색어가 들어간 행을 비중 순으로 찾습니다.
+     * 비중 상위 {@value #HOLDERS_MAX_ROWS}행까지만 돌려주고 원래 일치 건수와 잘렸는지를 함께 적습니다(QA-133).
+     * {@code index}는 캐시가 나눠 쓰는 목록이라 바꾸지 않고, 응답 행은 요청마다 새로 만듭니다.
+     */
+    public Map<String, Object> holders(List<HoldingRow> index, String query) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("query", query);
 
@@ -190,34 +241,32 @@ public class GuruService {
         }
         String needle = query.trim().toUpperCase();
 
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map<String, String> institution : Institutions.ALL) {
-            List<JsonNode> quarters = quartersOf(institution.get("cik"));
-            if (quarters.isEmpty()) {
-                continue;
-            }
-            JsonNode latest = quarters.get(0);
-            for (JsonNode holding : Json.array(latest, "holdings")) {
-                String name = Json.asText(holding, "name");
-                if (name == null || !name.toUpperCase().contains(needle)) {
-                    continue;
-                }
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("institution", institution.get("name"));
-                row.put("cik", institution.get("cik"));
-                row.put("name", name);
-                row.put("cusip", Json.asText(holding, "cusip"));
-                row.put("weight", Json.asDouble(holding, "weight"));
-                row.put("value", Json.asDouble(holding, "value"));
-                row.put("reportDate", Json.asText(latest, "reportDate"));
-                rows.add(row);
+        List<HoldingRow> matches = new ArrayList<>();
+        for (HoldingRow holding : index) {
+            if (holding.name().toUpperCase().contains(needle)) {
+                matches.add(holding);
             }
         }
-        rows.sort(Comparator.comparingDouble(
-                row -> -(row.get("weight") instanceof Number n ? n.doubleValue() : 0.0)));
+        matches.sort(Comparator.comparingDouble(
+                holding -> -(holding.weight() == null ? 0.0 : holding.weight())));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (HoldingRow holding : matches.subList(0, Math.min(matches.size(), HOLDERS_MAX_ROWS))) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("institution", holding.institution());
+            row.put("cik", holding.cik());
+            row.put("name", holding.name());
+            row.put("cusip", holding.cusip());
+            row.put("weight", holding.weight());
+            row.put("value", holding.value());
+            row.put("reportDate", holding.reportDate());
+            rows.add(row);
+        }
 
         out.put("available", !rows.isEmpty());
         out.put("rows", rows);
+        out.put("totalMatches", matches.size());
+        out.put("truncated", matches.size() > rows.size());
         if (rows.isEmpty()) {
             out.put("message", "그 이름을 포함한 보유 종목이 없습니다. "
                     + "13F 공시 이름은 대문자 영문입니다(예: APPLE, NVIDIA).");

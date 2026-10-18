@@ -3,7 +3,6 @@ package com.macrodash.feature.institution;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -16,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -63,7 +63,6 @@ class GuruServiceHoldersTest {
     }
 
     @Test
-    @Disabled("QA-133: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-133 일치 행이 200개를 넘으면 비중 상위 200행만 돌려주고, 원래 일치 건수와 잘렸다는 표시를 함께 준다")
     void cutsToTopRowsByWeight() {
         // 두 기관 합쳐 'ALPHA CORP'가 들어간 행 250개(150 + 100) — 비중은 첫 기관 0~149, 둘째 기관 1000~1099.
@@ -84,7 +83,6 @@ class GuruServiceHoldersTest {
     }
 
     @Test
-    @Disabled("QA-133: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-133 일치 행이 200개 이하면 모두 돌려주고 잘리지 않았다고 적는다 — 없을 때도 일치 0건")
     void smallResultIsNotTruncated() {
         GuruService guru = new GuruService(store(filing("ALPHA CORP", 150, 0), filing("ALPHA CORP", 100, 1000)));
@@ -99,5 +97,20 @@ class GuruServiceHoldersTest {
         assertThat(none.get("totalMatches")).as("totalMatches").isEqualTo(0);
         assertThat(none.get("truncated")).as("truncated").isEqualTo(false);
         assertThat(none.get("available")).isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("QA-133 응답 캐시가 요청끼리 나눠 쓰는 보유 목록은 바꿀 수 없고, 검색은 그 목록을 그대로 둔 채 행을 새로 만든다")
+    void indexIsReadOnlyAndSharedAcrossQueries() {
+        GuruService guru = new GuruService(store(filing("ALPHA CORP", 150, 0), filing("ALPHA CORP", 100, 1000)));
+        List<GuruService.HoldingRow> index = guru.holdersIndex();
+
+        assertThat(index).hasSize(252);
+        assertThatThrownBy(() -> index.add(index.get(0))).isInstanceOf(UnsupportedOperationException.class);
+        // 같은 목록으로 서로 다른 검색어를 찾아도 서로 영향을 주지 않습니다(목록을 제자리에서 정렬하거나 걸러 내지 않음).
+        assertThat(guru.holders(index, "BETA").get("totalMatches")).isEqualTo(2);
+        assertThat(guru.holders(index, "ALPHA").get("totalMatches")).isEqualTo(250);
+        assertThat(guru.holders(index, "BETA").get("totalMatches")).isEqualTo(2);
+        assertThat(index).hasSize(252);
     }
 }
