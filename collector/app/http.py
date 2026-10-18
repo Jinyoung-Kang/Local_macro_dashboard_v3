@@ -274,13 +274,6 @@ def brief_error(exc: BaseException, *, limit: int = 110) -> str:
     return f"{type(exc).__name__}: {collapsed}" if collapsed else type(exc).__name__
 
 
-def close_all() -> None:
-    with _lock:
-        for session in _sessions.values():
-            session.close()
-        _sessions.clear()
-
-
 # ==============================================================================
 # SEC 레이트 리미터 (초당 요청 한도 준수 + 병렬 수집 허용)
 # ==============================================================================

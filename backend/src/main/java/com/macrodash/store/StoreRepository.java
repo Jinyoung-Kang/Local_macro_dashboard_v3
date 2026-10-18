@@ -127,19 +127,6 @@ public class StoreRepository {
         }
     }
 
-    public List<Snapshot> readSnapshots(List<String> names) {
-        if (names.isEmpty()) {
-            return List.of();
-        }
-        String placeholders = String.join(",", names.stream().map(n -> "?").toList());
-        return jdbc.query(
-                "SELECT name, payload, kind, status, error, collected_at "
-                        + "FROM snapshots WHERE name IN (" + placeholders + ")",
-                snapshotMapper(),
-                names.toArray()
-        );
-    }
-
     public List<Map<String, Object>> listSnapshotMeta() {
         return jdbc.query(
                 "SELECT name, status, error, collected_at FROM snapshots ORDER BY name",

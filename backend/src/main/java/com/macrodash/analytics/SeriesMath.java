@@ -262,19 +262,4 @@ public final class SeriesMath {
         out.addAll(recent);
         return out;
     }
-
-    public static <T> List<T> tailByDays(List<LocalDate> dates, List<T> values, Integer days) {
-        if (days == null || dates == null || values == null
-                || dates.size() != values.size() || dates.isEmpty()) {
-            return values;
-        }
-        LocalDate cutoff = dates.get(dates.size() - 1).minusDays(days);
-        List<T> out = new ArrayList<>();
-        for (int i = 0; i < dates.size(); i++) {
-            if (!dates.get(i).isBefore(cutoff)) {
-                out.add(values.get(i));
-            }
-        }
-        return out.size() >= 2 ? out : values;
-    }
 }
