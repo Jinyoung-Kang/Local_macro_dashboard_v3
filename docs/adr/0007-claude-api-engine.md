@@ -34,3 +34,6 @@ HTTP 200에 `stop_reason: refusal`로 거절할 수 있습니다.
 
 OkHttp·Kotlin 런타임이 함께 들어와 백엔드 이미지가 수 MB 커집니다. Kotlin·Jackson 2 버전은 Spring Boot가 관리하는
 판으로 맞춰지고(`mvn dependency:tree`), OkHttp는 SDK가 고른 4.12를 씁니다.
+SDK 2.72부터 OpenTelemetry API(api·context·common, Spring Boot 관리판 1.62)도 함께 들어옵니다. 앱이 전역 tracer를 등록하지 않으므로
+아무 일도 하지 않습니다(no-op — span도 `traceparent` 헤더도 없음). 나중에 OTel·Micrometer Tracing을 들이면 Claude 호출마다
+span이 생기니, 원치 않으면 클라이언트 빌더(`newAnthropicClient`)에 `.openTelemetry(false)`를 겁니다.
