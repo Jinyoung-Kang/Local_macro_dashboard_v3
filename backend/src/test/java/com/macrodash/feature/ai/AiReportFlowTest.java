@@ -1,16 +1,27 @@
 package com.macrodash.feature.ai;
 
+import com.macrodash.feature.auth.DemoViewer;
+import com.macrodash.feature.auth.UsageService;
 import com.macrodash.feature.snapshot.SnapshotTextService;
+import com.macrodash.store.UsageStore;
+import com.macrodash.support.CurrentUser;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -174,5 +185,65 @@ class AiReportFlowTest {
         assertThat(controller.engines(demoRequest()))
                 .containsEntry("quota", Map.of("used", 0, "limit", 20, "shared", true));
         assertThat(controller.engines(new org.springframework.mock.web.MockHttpServletRequest())).doesNotContainKey("quota");
+    }
+
+    /**
+     * 실제 AiService — 허용 목록과 Claude 키만 정하고 나머지 키는 비웁니다(단위 테스트에는 @Value 주입이 없어 null).
+     * 엔진을 못 쓰는 경로만 부르므로 네트워크에 나가지 않습니다.
+     */
+    private static AiService realAi(String allowList, String anthropicKey) {
+        AiService service = new AiService(240, 60, 180, allowList);
+        ReflectionTestUtils.setField(service, "anthropicKey", anthropicKey);
+        for (String field : List.of("nvidiaKey", "cerebrasKey", "cloudflareAccountId", "cloudflareToken")) {
+            ReflectionTestUtils.setField(service, field, "");
+        }
+        return service;
+    }
+
+    private static MockHttpServletRequest requestAs(CurrentUser user) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(CurrentUser.ATTRIBUTE, user);
+        return request;
+    }
+
+    @Test
+    @Disabled("QA-133: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-133 엔진을 못 쓰면(AI 꺼짐·모르는 엔진·허용 목록 밖·못 쓰는 auto·키 없음) 한도를 쓰지 않고 원본 텍스트도 만들지 않는다")
+    void unusableEngineConsumesNothing() {
+        UsageStore store = mock(UsageStore.class);
+        when(store.tryIncrement(anyLong(), any(), anyString(), anyInt())).thenReturn(true);
+        UsageService usage = new UsageService(store, 20, 20);
+        CurrentUser pro = new CurrentUser(7, "pro@test.local", "MEMBER", "PRO", null);
+
+        record Case(String name, AiService ai, String engineId, String error) {
+        }
+        List<Case> cases = List.of(
+                new Case("AI 꺼짐", realAi("", ""), "anthropic_haiku", "AI 키가 하나도 설정되지 않았습니다"),
+                new Case("모르는 엔진", realAi("", "test-key"), "claude_opus", "지원하지 않는 AI 엔진입니다: claude_opus"),
+                new Case("허용 목록 밖", realAi("anthropic_haiku", "test-key"), "cerebras_llama", "이 배포에서는 쓸 수 없는 엔진입니다"),
+                new Case("못 쓰는 auto", realAi("anthropic_haiku", "test-key"), "auto", "엔진을 직접 고르세요"),
+                new Case("허용됐지만 키 없음", realAi("", "test-key"), "cerebras_llama", "Llama 3.3 70B API Key 누락"));
+
+        for (Case c : cases) {
+            AiController controller = new AiController(c.ai(), new AiReportService(c.ai(), snapshotText, usage));
+            for (CurrentUser user : List.of(DemoViewer.user(), pro)) {
+                String what = c.name() + (user.demo() ? " · 데모" : " · 유료 회원");
+                Map<String, Object> out = controller.report(
+                        new AiController.ReportRequest(c.engineId(), "리스크 점검", null), requestAs(user));
+
+                // 대시보드 전체 원본 텍스트(스냅샷 수십 개를 읽음)는 엔진을 부를 때만 만듭니다.
+                verify(snapshotText, never()).fullText();
+                verify(store, never()).tryIncrement(anyLong(), any(), anyString(), anyInt());
+                assertThat(out).as(what).containsEntry("status", false).containsEntry("charged", false)
+                        .containsEntry("reportType", "리스크 점검")
+                        .containsEntry("quota", user.demo()
+                                ? Map.of("used", 0, "limit", 20, "shared", true)
+                                : Map.of("used", 0, "limit", 20))
+                        .doesNotContainKey("promptChars");
+                assertThat(String.valueOf(out.get("error"))).as(what).contains(c.error());
+            }
+        }
+        verify(store, never()).decrement(anyLong(), any(), anyString());
+        assertThat(usage.demoQuota().used()).isZero();
     }
 }

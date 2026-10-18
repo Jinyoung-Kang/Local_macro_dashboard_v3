@@ -276,4 +276,25 @@ class AiServiceAllowListTest {
         assertThat(String.valueOf(result.get("translationInfo"))).contains("번역 건너뜀", "cloudflare");
         assertThat(result).doesNotContainKey("translationError");
     }
+
+    @Test
+    @DisplayName("허용됐지만 키가 없는 엔진을 직접 고르면 네트워크 없이 제공자별 '키 누락' 문구로 실패한다(charged: false)")
+    void allowedEngineWithoutKeyFailsWithProviderMessage() throws Exception {
+        String base = startServer(200);
+        // 키가 있는 엔진(NVIDIA)이 하나는 있어야 메뉴가 켜지고 엔진별 판정까지 갑니다.
+        AiService service = service("", base, "", "nv-key", "", "");
+        Map<String, String> expected = new java.util.LinkedHashMap<>();
+        expected.put("anthropic_haiku", "🟣 Anthropic — Claude Haiku 5.5 API Key 누락 — .env에 ANTHROPIC_API_KEY를 넣고 make up 하세요.");
+        expected.put("cerebras_llama", "🔵 Cerebras — Llama 3.3 70B API Key 누락");
+        expected.put("cloudflare_llama", "Cloudflare 인증 정보 누락");
+
+        for (Map.Entry<String, String> engine : expected.entrySet()) {
+            Map<String, Object> result = service.generate(engine.getKey(), "질문", null);
+            assertThat(result).as(engine.getKey())
+                    .containsEntry("status", false).containsEntry("charged", false)
+                    .containsEntry("error", engine.getValue()).containsEntry("latencyMs", 0L)
+                    .doesNotContainKey("failoverPath");
+        }
+        assertThat(anthropicHits.get() + cerebrasHits.get() + nvidiaHits.get()).isZero();
+    }
 }
