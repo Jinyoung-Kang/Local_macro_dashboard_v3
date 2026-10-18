@@ -5,6 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.macrodash.store.StoreRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -18,12 +19,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -206,6 +210,67 @@ class ComputedCacheTest {
         }
     }
 
+    /** 새 스레드에서 {@code cache.get(key, compute)}를 부릅니다. 돌려준 값이나 던진 예외는 {@code result}에 담깁니다. */
+    private static Caller call(ComputedCache cache, String key, Supplier<Object> compute) {
+        CompletableFuture<Object> result = new CompletableFuture<>();
+        Thread thread = new Thread(() -> {
+            try {
+                result.complete(cache.get(key, compute));
+            } catch (Throwable e) {
+                result.completeExceptionally(e);
+            }
+        }, "cache-caller-" + key);
+        thread.setDaemon(true); // 실패한 테스트가 래치를 못 열어도 JVM 종료를 막지 않게
+        thread.start();
+        return new Caller(thread, result);
+    }
+
+    private record Caller(Thread thread, CompletableFuture<Object> result) {
+
+        /**
+         * 호출이 끝났거나 캐시 안에서 멈춰(자리나 앞선 계산을 기다림) 있을 때까지 기다립니다. 어느 쪽에서 기다리는지는
+         * 묻지 않아, 고치기 전(자리 대기열)과 고친 뒤(앞선 계산)를 같은 방법으로 셉니다.
+         */
+        Caller awaitParkedOrDone() throws InterruptedException {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(GENEROUS_SECONDS);
+            while (!result.isDone() && !parkedInCache()) {
+                if (System.nanoTime() > deadline) {
+                    throw new AssertionError("호출(" + thread.getName() + ")이 캐시 안에서 멈추지도 끝나지도 않았습니다: "
+                            + thread.getState());
+                }
+                Thread.sleep(1);
+            }
+            return this;
+        }
+
+        private boolean parkedInCache() {
+            Thread.State state = thread.getState();
+            if (state != Thread.State.WAITING && state != Thread.State.TIMED_WAITING) {
+                return false;
+            }
+            for (StackTraceElement frame : thread.getStackTrace()) {
+                if (frame.getClassName().equals(ComputedCache.class.getName()) && frame.getMethodName().equals("get")) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        Object value() throws Exception {
+            return result.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
+        }
+
+        /** 호출이 던진 예외. 값을 돌려줬으면 실패합니다. */
+        Throwable failure() throws Exception {
+            try {
+                Object value = result.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
+                throw new AssertionError("예외 대신 값을 돌려줬습니다: " + value);
+            } catch (ExecutionException e) {
+                return e.getCause();
+            }
+        }
+    }
+
     /** 테스트가 시각을 옮길 수 있는 시계. */
     private static final class MovableClock extends Clock {
         private volatile Instant now;
@@ -371,6 +436,54 @@ class ComputedCacheTest {
         assertThat(second.get(GENEROUS_SECONDS, TimeUnit.SECONDS)).isSameAs(firstValue);
         assertThat(computed.get()).isEqualTo(1);
         pool.shutdown();
+    }
+
+    @Test
+    @Disabled("QA-131: 같은 키를 놓친 요청이 각자 자리 대기열에 서서, 계산 하나면 될 일에 대기열이 차 429가 납니다")
+    @DisplayName("QA-131 같은 키를 동시에 놓친 요청은 계산 하나를 함께 기다려 같은 값을 받는다 — 대기열을 채워 429가 되지 않는다")
+    void sameKeyMissesShareOneComputation() throws Exception {
+        // QA 스택 측정: 백엔드 재기동 직후 5명이 무거운 화면을 한꺼번에 열자(요청 45건, 서로 다른 키 9개) 14–37건이
+        // 429였습니다. 같은 키를 놓친 요청도 각자 자리 대기열에 서서, 계산은 9번이면 되는데 대기열 상한(32건)·2초 대기를 넘깁니다.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(2), 2);
+        int callers = 20;
+        AtomicInteger computed = new AtomicInteger();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Supplier<Object> heavy = () -> {
+            computed.incrementAndGet();
+            entered.countDown();
+            awaitQuietly(release);
+            return new Object();
+        };
+        List<Caller> calls = new ArrayList<>();
+        try {
+            calls.add(call(cache, "k", heavy));
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            // 계산이 도는 동안 같은 키 요청이 하나씩 도착 — 앞 요청이 캐시 안에서 멈춘 뒤에 다음을 보내 순서를 고정합니다.
+            for (int i = 1; i < callers; i++) {
+                calls.add(call(cache, "k", heavy).awaitParkedOrDone());
+            }
+        } finally {
+            release.countDown();
+        }
+
+        List<Object> values = new ArrayList<>();
+        int busy = 0;
+        for (Caller caller : calls) {
+            try {
+                values.add(caller.value());
+            } catch (ExecutionException e) {
+                if (!(e.getCause() instanceof ComputeBusyException)) {
+                    throw e;
+                }
+                busy++;
+            }
+        }
+        assertThat(busy).as("429로 거절된 같은 키 요청 수").isZero();
+        assertThat(computed.get()).as("계산 횟수").isEqualTo(1);
+        assertThat(values).hasSize(callers).allSatisfy(value -> assertThat(value).isSameAs(values.get(0)));
+        assertThat(cache.rejectedCount()).isZero();
     }
 
     @Test
