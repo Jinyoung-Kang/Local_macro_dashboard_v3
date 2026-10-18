@@ -6,7 +6,6 @@ import com.macrodash.store.Datasets;
 import com.macrodash.store.StoreRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -84,7 +83,6 @@ class RadarHistoryLimitDbTest {
     }
 
     @Test
-    @Disabled("QA-133: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("전 기간 모드는 최신 5,000행까지만 주고, 잘렸는지(truncated)와 상한(rowLimit)을 함께 알린다")
     void fullHistoryIsCappedAtNewestRows() {
         Map<String, Object> capped = radar.history(MARKET, null, null, null, null, false);

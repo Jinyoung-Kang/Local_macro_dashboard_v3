@@ -188,6 +188,35 @@ public class StoreRepository {
                                            LocalDate obsDate,
                                            LocalDate startDate,
                                            Map<String, String> filters) {
+        return queryObservations(dataset, obsDate, startDate, filters, null);
+    }
+
+    /**
+     * {@link #readObservations}와 같은 조건·순서로 <b>최신부터 {@code limit}행까지만</b> 읽습니다 (QA-133).
+     *
+     * <p>잘렸는지 알려면 행 수를 따로 세야 하는데, 그 대신 {@code limit + 1}행을 읽어 넘치는 한 행은 버리고
+     * {@link ObservationPage#truncated()}로 알립니다(같은 쿼리 한 번).
+     */
+    public ObservationPage readNewestObservations(String dataset,
+                                                  LocalDate obsDate,
+                                                  LocalDate startDate,
+                                                  Map<String, String> filters,
+                                                  int limit) {
+        if (limit < 1) {
+            throw new IllegalArgumentException("limit은 1 이상이어야 합니다: " + limit);
+        }
+        List<JsonNode> rows = queryObservations(dataset, obsDate, startDate, filters, limit + 1);
+        if (rows.size() <= limit) {
+            return new ObservationPage(rows, false);
+        }
+        return new ObservationPage(new ArrayList<>(rows.subList(0, limit)), true);
+    }
+
+    private List<JsonNode> queryObservations(String dataset,
+                                             LocalDate obsDate,
+                                             LocalDate startDate,
+                                             Map<String, String> filters,
+                                             Integer limit) {
         StringBuilder sql = new StringBuilder(
                 "SELECT obs_date, payload FROM observations WHERE dataset = ?");
         List<Object> params = new ArrayList<>(List.of(dataset));
@@ -204,7 +233,12 @@ public class StoreRepository {
             sql.append(" AND payload @> ?::jsonb");
             params.add(writeJson(filters));
         }
+        // dataset이 하나로 정해져 (obs_date, entity)가 기본키처럼 유일하니 LIMIT로 자르는 경계가 호출마다 같습니다.
         sql.append(" ORDER BY obs_date DESC, entity");
+        if (limit != null) {
+            sql.append(" LIMIT ?");
+            params.add(limit);
+        }
 
         return jdbc.query(sql.toString(), (rs, rowNum) -> {
             JsonNode node = parseJson(rs.getString("payload"));
@@ -396,5 +430,9 @@ public class StoreRepository {
 
     /** 시계열 1점. */
     public record TimeseriesPoint(LocalDate date, Double value) {
+    }
+
+    /** 상한까지 읽은 관측 레코드. {@code truncated}면 조건에 맞는 더 오래된 행이 남아 있습니다 (QA-133). */
+    public record ObservationPage(List<JsonNode> rows, boolean truncated) {
     }
 }

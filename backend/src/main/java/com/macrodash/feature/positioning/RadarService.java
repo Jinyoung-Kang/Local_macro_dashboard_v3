@@ -64,6 +64,14 @@ public class RadarService {
     static final long TOSS_UNIVERSE_MAX_AGE_SECONDS = 26 * 60 * 60L;
     public static final List<String> TRADE_TYPES = List.of("순매수", "순매도");
     public static final List<String> INTERVALS = List.of("TODAY", "DAYS_5", "DAYS_20");
+    /**
+     * 누적 이력 전 기간 모드(latest=false)가 한 번에 주는 최대 행 수 (QA-133).
+     *
+     * <p>이력은 거래일마다 약 100행씩 끝없이 늘어, 상한이 없으면 응답도 저장된 기간만큼 커집니다
+     * (지금 1,350행·492KB). 화면은 latest=true만 쓰고 전 기간은 내려받아 살펴보는 용도라 최신 5,000행
+     * (약 50거래일)이면 됩니다. 더 오래된 날은 {@code obsDate}(또는 {@code latest=true&obsDate=})로 하루씩 받습니다.
+     */
+    static final int HISTORY_ROW_LIMIT = 5_000;
 
     private final StoreReader store;
     private final StoreRepository repository;
@@ -355,7 +363,8 @@ public class RadarService {
      *               거래일. 거래일 목록({@code dates})도 이 조건의 기록이 있는 날만 담고,
      *               실제로 고른 날은 {@code obsDate}로 알려 줍니다. 화면은 하루치 30행만
      *               보여 주는데 예전에는 전 기간을 받아 걸렀습니다(1년치: 7,800행·2.3MB).
-     *               false면 예전과 같습니다(하위 호환).
+     *               false면 전 기간이되 최신 {@link #HISTORY_ROW_LIMIT}행까지만 주고, 늘 {@code rowLimit}과
+     *               잘렸는지({@code truncated})를 함께 줍니다 (QA-133).
      */
     public Map<String, Object> history(String market, String investor, String tradeType,
                                        String obsDate, String startDate, boolean latest) {
@@ -387,7 +396,13 @@ public class RadarService {
                     : repository.readObservations(Datasets.OBS_RADAR, day, null, filters));
         } else {
             out.put("dates", repository.listObservationDates(Datasets.OBS_RADAR));
-            out.put("rows", repository.readObservations(Datasets.OBS_RADAR, day, since, filters));
+            // 상한 없이 모두 보내면 응답이 쌓인 기간만큼 끝없이 커집니다(QA-133). 잘려도 오래된 날은
+            // obsDate로 하루씩 다시 받을 수 있어 truncated로 알리기만 합니다.
+            StoreRepository.ObservationPage page = repository.readNewestObservations(
+                    Datasets.OBS_RADAR, day, since, filters, HISTORY_ROW_LIMIT);
+            out.put("rows", page.rows());
+            out.put("rowLimit", HISTORY_ROW_LIMIT);
+            out.put("truncated", page.truncated());
         }
         out.put("note",
                 "Naver·Daum·KRX는 과거 날짜 조회를 지원하지 않습니다. 이 이력은 수집기가 "
