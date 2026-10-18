@@ -239,19 +239,29 @@ _FUND_TOKENS = {
 }
 # 채무증권(노트·전환사채·채권)을 뜻하는 클래스(titleOfClass) 토큰. 회사 이름이 같아도 주가로 덮지 않습니다.
 _DEBT_TOKENS = {"NOTE", "NOTES", "DEBT", "DEB", "DBCV", "SDCV", "BOND", "BONDS"}
-# 보통주가 아닌 지분형 증권(우선주·의무전환 우선주·워런트·권리·지분 유닛)을 뜻하는 클래스 토큰. 같은 회사 보통주 가격으로
-# 대신하지 않습니다 — 영구 우선주는 채권처럼, 워런트는 레버리지로 움직여 보통주 가격과 다릅니다(QA-127).
-# 'RT'는 금리(RATE) 약자로도 쓰여('FLT RT') 넣지 않습니다.
+# 보통주가 아닌 지분형 증권(우선주·의무전환 우선주·워런트·권리·지분 유닛)은 같은 회사 보통주 가격으로 대신하지 않습니다 —
+# 영구 우선주는 채권처럼, 워런트는 레버리지로 움직여 보통주 가격과 다릅니다(QA-127). 아래 규칙은 2026-10-12 백업의 모든
+# 클래스 표기에 맞춰 봤습니다.
+# 1) 어디에 있든 보통주가 아닌 토큰. 'RT'는 금리(RATE) 약자로도 쓰여('FLT RT') 넣지 않습니다.
 _NON_COMMON_TOKENS = {
-    "PFD", "PREF", "PREFERRED", "PRF", "PERP", "CONV", "CNV", "CV", "MAND", "CUM",
-    "WT", "WTS", "WARRANT", "WARRANTS", "RIGHT", "RIGHTS", "UNIT", "UNITS",
+    "PFD", "PREF", "PREFERRED", "PRF", "PERP", "MAND", "CUM",
+    "WT", "WTS", "WARRANT", "WARRANTS", "RIGHT", "RIGHTS",
 }
-# 'UNIT'은 조합(MLP)의 보통 단위('COM UNIT'·'LP INT UNIT', 이름이 '… LP'인 'DEPOSITARY UNIT')나 단위를 담은 ADR
-# ('SPON ADR UNITS')이기도 합니다. 이런 표기가 함께 있으면 'UNIT'만으로는 거르지 않습니다.
-_COMMON_UNIT_CLASS_TOKENS = {"COM", "COMMON", "LP", "LTD", "PARTN", "PARTNR", "PARTNERSHIP", "PTN", "ADR", "ADS"}
-_PARTNERSHIP_NAME_TOKENS = {"LP", "PARTNERS", "PARTNERSHIP"}
-# 워런트 표기 '*W EXP 08/03/202'·'W EXP …'. 'COM W/I'(발행일 거래 보통주)의 W와 이름 표기('BERKLEY W R CORP')는 아닙니다.
+# 2) 워런트 표기 '*W EXP 08/03/202'·'W EXP …'. 'COM W/I'(발행일 거래 보통주)의 W와 이름 표기('BERKLEY W R CORP')는 아닙니다.
 _WARRANT_CLASS = re.compile(r"(^|\s)(\*W|W EXP)\b")
+# 3) 지분 유닛(주식 매수 계약 + 사채, 'UNIT 02/15/2029')은 만기일이 있습니다. 날짜가 없거나 만기 없음 자리표시
+#    '99/99/9999'인 'UNIT'은 그 회사의 보통 지분입니다 — 이중 상장·묶음 보통주(Carnival·Granite 'UNIT 99/99/9999'), 조합
+#    단위('COM UNIT'·'DEPOSITARY UNIT'), 신탁 단위('TR UNITS'·'UNIT BEN INT'), 단위 ADR('SPON ADR UNITS').
+_EQUITY_UNIT_CLASS = re.compile(r"\bUNITS?\s*(?!99/99/)\d{1,2}/\d{1,2}/\d{2,4}")
+# 4) 전환 표기와 예탁주 약자. 의무전환 우선주('7.625 MAND CONV')·우선주 예탁주('7.25% DEP SHS A'·'DEP SHS REPSTG')를 뜻하지만,
+#    예탁증서(ADR) 표기나 보통주 클래스(CL)와 함께면 보통주입니다 — 'ADR ECH CNV IN 3'(혼다 ADR 1주 = 보통주 3주),
+#    'AMERICAN DEP'(ADR), 'CL B CONV'(전환권이 붙은 B주).
+_CONVERSION_TOKENS = {"CONV", "CNV", "CV", "DEP"}
+_RECEIPT_OR_CLASS_TOKENS = {"ADR", "ADRS", "ADS", "AMERICAN", "AMERN", "AMER", "GDR", "GDS", "CL", "CLASS"}
+# 5) 'CON'은 'CON NEW'(COM 오타)·'STATE STREET CON'(소비재 ETF)으로도 쓰여, 시리즈나 표면 금리와 함께일 때만
+#    전환 우선주로 봅니다('6.25 CON SER D'). 표면 금리는 '6.25'·'7.25%'이고 액면가('$0.01'·'USD0.001')는 아닙니다.
+_SERIES_TOKENS = {"SER", "SERIES"}
+_COUPON = re.compile(r"(?<![\w$.])\d+(\.\d+|\s*%)")
 FUND_SECTOR = "ETF·펀드"
 
 # 수집기가 일부러 티커를 붙이지 않은 보유의 종류(저장본 ``tickerNote``). 백엔드 미커버 목록이 이유로 옮겨 적습니다.
@@ -318,7 +328,7 @@ def classify_holding(holding: dict) -> tuple[tuple[str, str] | None, str | None]
       - 채권(NOTE_DEBT): 원금(PRN, 저장본의 shares가 None)이거나 클래스에 _DEBT_TOKENS가 있거나 CUSIP 발행 번호가 지분
         증권이 아닌(_is_equity_cusip) 행. 마지막 검사는 사채를 클래스 'COM'·주식 수로 공시한 행(피셔의 FORD MTR CO
         345370CZ1) 때문입니다 — 클래스·PRN만 보면 포드 주가로 계산됐습니다(QA-123).
-      - 보통주가 아닌 증권(NOTE_NON_COMMON): 우선주(의무전환 우선주 '… MAND CONV' 포함)·워런트·권리·지분 유닛
+      - 보통주가 아닌 증권(NOTE_NON_COMMON): 우선주(의무전환 우선주 '… MAND CONV'·예탁주 'DEP SHS' 포함)·워런트·권리·지분 유닛
         (_is_non_common_class). 예전에는 같은 회사 보통주 티커에 붙여 보통주 가격으로 근사했는데, 근사라는 표시도 없었습니다
         (QA-127). 펀드 이름('SPDR S&P 500 ETF TR' 'TR UNIT')은 ETF 그대로 찾습니다.
     종류는 회사 이름이 매핑표(펀드 제외)에 있는데 뺀 행에만 붙입니다 — 이름을 모르는 행은 어차피 '매핑표에 없음'이라,
@@ -330,7 +340,7 @@ def classify_holding(holding: dict) -> tuple[tuple[str, str] | None, str | None]
     known = company is not None and company[1] != FUND_SECTOR
     if _is_debt(holding):
         return None, NOTE_DEBT if known else None
-    if known and _is_non_common_class(name, cls):
+    if known and _is_non_common_class(cls):
         return None, NOTE_NON_COMMON
     return lookup(name, cls), None
 
@@ -344,17 +354,20 @@ def _is_debt(holding: dict) -> bool:
     return not _is_equity_cusip(holding.get("cusip"))
 
 
-def _is_non_common_class(name: str, cls: str) -> bool:
+def _is_non_common_class(cls: str) -> bool:
     """
-    클래스 표기가 우선주·워런트·권리·지분 유닛이면 True. 숫자에 붙은 표기('7.25%CNV')도 보도록 영숫자 밖에서 끊습니다.
-    'UNIT'은 조합 단위·단위 ADR 표기(_COMMON_UNIT_CLASS_TOKENS)가 함께 있거나 이름이 조합이면 보통주로 봅니다.
+    클래스 표기가 우선주·워런트·권리·지분 유닛이면 True(규칙 1~5는 위 토큰 정의의 주석). 숫자에 붙은 표기('7.25%CNV')도
+    보도록 영숫자 밖에서 끊습니다. 전환·예탁 표기(4·5)는 ADR·보통주 클래스 표기가 함께 있으면 보지 않습니다.
     """
     text = cls.upper()
     words = set(re.split(r"[^A-Z0-9]+", text)) - {""}
-    found = words & _NON_COMMON_TOKENS
-    if words & _COMMON_UNIT_CLASS_TOKENS or _tokens(name) & _PARTNERSHIP_NAME_TOKENS:
-        found -= {"UNIT", "UNITS"}
-    return bool(found) or _WARRANT_CLASS.search(text) is not None
+    if words & _NON_COMMON_TOKENS or _WARRANT_CLASS.search(text) or _EQUITY_UNIT_CLASS.search(text):
+        return True
+    if words & _RECEIPT_OR_CLASS_TOKENS:
+        return False
+    if words & _CONVERSION_TOKENS:
+        return True
+    return "CON" in words and bool(words & _SERIES_TOKENS or _COUPON.search(text))
 
 
 def _is_equity_cusip(cusip: object) -> bool:

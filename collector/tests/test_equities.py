@@ -248,7 +248,6 @@ _COMMON_TOKEN_ROWS = [
 ]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-127: 'UNIT'·'CNV'·'CONV' 토큰 하나로 보통주를 비보통주로 가립니다")
 @pytest.mark.parametrize(("name", "cls", "cusip", "mapped"), _COMMON_TOKEN_ROWS)
 def test_QA127_만기_없는_단위와_ADR_전환_비율은_보통주로_본다(monkeypatch, name, cls, cusip, mapped):
     """
@@ -269,7 +268,6 @@ _NON_COMMON_TOKEN_ROWS = [
 ]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-127: 'DEP SHS'·'CON SER' 표기의 우선주 예탁주가 보통주 티커에 붙습니다")
 @pytest.mark.parametrize(("name", "cls", "cusip", "mapped"), _NON_COMMON_TOKEN_ROWS)
 def test_QA127_우선주_예탁주와_CON_SER_표기는_보통주_티커로_근사하지_않는다(monkeypatch, name, cls, cusip, mapped):
     """
