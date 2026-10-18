@@ -15,6 +15,10 @@ QA-118: 그 반복문(`… && break; sleep 3; done`)은 10번 모두 실패해�
 끝났습니다. 문서는 'make migrate와 같다'고 적지만 make migrate는 ⚠️를 찍고 exit 1입니다. SSM이나 `&&`로 이은
 스크립트로 배포하면 스키마가 빠진 배포가 성공으로 보입니다. 문서의 명령을 그대로 셸에 넘겨(docker는 가짜 함수)
 실패 경로를 확인합니다.
+
+QA-126: QA 스택(`scripts/qa/qa-stack.sh up`)의 같은 반복문이 그대로 남아, 10번 모두 실패해도 ⚠️ 없이 0으로
+끝났습니다. 스키마가 빠진 QA 스택이 정상으로 보여 그 위의 시험 결과가 틀어집니다. up 블록의 스키마 적용 부분을
+떼어 같은 방법으로 실패·성공 경로를 확인합니다.
 """
 from __future__ import annotations
 
@@ -115,5 +119,37 @@ def test_QA118_스키마_적용이_10번_모두_실패하면_알리고_0이_아�
 def test_QA118_스키마_적용이_성공하면_한_번으로_끝나고_0이다(where, shell):
     result = _run_schema(shell, where, docker_rc=0)
     assert result.returncode == 0, f"{where}({shell}): {result.stdout!r} {result.stderr!r}"
+    assert "calls=1" in result.stdout
+    assert result.stderr == ""
+
+
+def _qa_stack_schema_snippet() -> str:
+    """qa-stack.sh up 블록에서 `docker compose up -d --build` 다음 줄부터 `docker compose ps` 줄 앞까지(스키마 적용)."""
+    script = (ROOT / "scripts/qa/qa-stack.sh").read_text(encoding="utf-8")
+    up = script[script.index("  up)"):script.index(";;", script.index("  up)"))]
+    lines = up.splitlines()
+    start = next(i for i, line in enumerate(lines) if "docker compose up -d --build" in line) + 1
+    end = next(i for i, line in enumerate(lines) if line.strip() == "docker compose ps")
+    return "\n".join(lines[start:end])
+
+
+def _run_qa_stack_schema(shell: str, docker_rc: int) -> subprocess.CompletedProcess:
+    script = _FAKE.format(rc=docker_rc) + _qa_stack_schema_snippet() + _REPORT
+    return subprocess.run([shell, "-c", script], capture_output=True, text=True, timeout=30)
+
+
+@pytest.mark.xfail(strict=True, reason="QA-126: 수정 전 재현 — fix 커밋에서 켬")
+@pytest.mark.parametrize("shell", _SHELLS)
+def test_QA126_QA_스택_up의_스키마_적용이_10번_모두_실패하면_알리고_0이_아닌_값으로_끝난다(shell):
+    result = _run_qa_stack_schema(shell, docker_rc=1)
+    assert "calls=10" in result.stdout, f"10번 다시 시도해야 합니다 — {result.stdout!r} {result.stderr!r}"
+    assert result.returncode != 0, f"qa-stack.sh({shell}): 10번 모두 실패했는데 종료 코드 0 — 스키마 없는 QA 스택이 정상으로 보입니다"
+    assert "스키마" in result.stderr, "실패를 사람에게도 알려야 합니다(make migrate의 ⚠️처럼)"
+
+
+@pytest.mark.parametrize("shell", _SHELLS)
+def test_QA126_QA_스택_up의_스키마_적용이_성공하면_한_번으로_끝나고_0이다(shell):
+    result = _run_qa_stack_schema(shell, docker_rc=0)
+    assert result.returncode == 0, f"qa-stack.sh({shell}): {result.stdout!r} {result.stderr!r}"
     assert "calls=1" in result.stdout
     assert result.stderr == ""
