@@ -514,7 +514,8 @@ public class AiService {
 
     /**
      * 허용됐지만 키가 없는 엔진의 실패. 예전에는 제공자 호출(callAnthropic·callOpenAiFormat·callCloudflare)이 키를
-     * 확인하며 이 문구로 끝냈습니다 — 화면이 보던 문구를 그대로 둡니다(같은지는 AiServiceAllowListTest가 봅니다, QA-133).
+     * 확인하며 이 문구로 끝냈습니다 — 화면이 보던 문구를 그대로 둡니다(QA-133). 문구는 AiServiceAllowListTest가 고정합니다.
+     * 같은 문구가 제공자 호출(번역 경로에서 아직 씀)에도 남아 있어, 바꿀 때는 두 곳을 함께 고칩니다.
      */
     private Map<String, Object> missingKey(Engine engine) {
         String label = engine.label();

@@ -68,7 +68,7 @@ public class RadarService {
      * 누적 이력 전 기간 모드(latest=false)가 한 번에 주는 최대 행 수 (QA-133).
      *
      * <p>이력은 거래일마다 약 100행씩 끝없이 늘어, 상한이 없으면 응답도 저장된 기간만큼 커집니다
-     * (지금 1,350행·492KB). 화면은 latest=true만 쓰고 전 기간은 내려받아 살펴보는 용도라 최신 5,000행
+     * (2026-10-19 QA 스택: 13거래일 1,350행·492KB). 화면은 latest=true만 쓰고 전 기간은 내려받아 살펴보는 용도라 최신 5,000행
      * (약 50거래일)이면 됩니다. 더 오래된 날은 {@code obsDate}(또는 {@code latest=true&obsDate=})로 하루씩 받습니다.
      */
     static final int HISTORY_ROW_LIMIT = 5_000;
