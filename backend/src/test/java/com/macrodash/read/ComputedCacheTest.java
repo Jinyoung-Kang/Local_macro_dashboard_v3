@@ -1,14 +1,22 @@
 package com.macrodash.read;
 
 import com.macrodash.store.StoreRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -108,5 +116,51 @@ class ComputedCacheTest {
             cache.get("k" + i, () -> 1);
         }
         assertThat(cache.size()).isEqualTo(ComputedCache.MAX_ENTRIES);
+    }
+
+    @Test
+    @Disabled("QA-131: 캐시에 없는 서로 다른 키의 계산이 요청 수만큼 동시에 돕니다 — 상한이 없습니다")
+    @DisplayName("QA-131 서로 다른 키의 다시 계산은 동시에 상한(코어 절반, 최소 1)까지만 돈다 — 넘친 요청은 429")
+    void concurrentMissesAreBounded() throws Exception {
+        // QA 스택 측정(cache-churn.js): 캐시에 없는 서로 다른 조합을 초당 50건 보내자 /api/health도 20초 안에 답하지
+        // 못했습니다. 캐시를 놓친 계산은 요청 스레드에서 상한 없이 바로 돌기 때문입니다.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = cacheAt(t0);
+        int bound = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+        int callers = Math.max(32, bound * 4);
+        AtomicInteger running = new AtomicInteger();
+        AtomicInteger maxRunning = new AtomicInteger();
+
+        ExecutorService pool = Executors.newFixedThreadPool(callers);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < callers; i++) {
+            String key = "scorecard:" + i;
+            futures.add(pool.submit(() -> {
+                start.await();
+                try {
+                    return cache.get(key, () -> {
+                        maxRunning.accumulateAndGet(running.incrementAndGet(), Math::max);
+                        try {
+                            Thread.sleep(100); // 비싼 계산 흉내(저장본 훑기)
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        } finally {
+                            running.decrementAndGet();
+                        }
+                        return key;
+                    });
+                } catch (RuntimeException busy) {
+                    return null; // 넘친 요청은 거절돼도 됨(429)
+                }
+            }));
+        }
+        start.countDown();
+        for (Future<?> future : futures) {
+            future.get(60, TimeUnit.SECONDS);
+        }
+        pool.shutdown();
+
+        assertThat(maxRunning.get()).as("동시에 돈 계산 수").isLessThanOrEqualTo(bound);
     }
 }
