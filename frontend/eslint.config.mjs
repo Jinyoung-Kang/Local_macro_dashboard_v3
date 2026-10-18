@@ -1,6 +1,9 @@
-// ESLint 9 flat config.
+// ESLint 10 flat config.
 // Next.js 16의 eslint-config-next는 flat config를 그대로 내보냅니다(15에서는 eslintrc 형식이라 FlatCompat으로 불렀음).
 // 규칙은 예전과 같습니다: next/core-web-vitals.
+// npm 설치 때 eslint-plugin-react·import·jsx-a11y가 ESLint 10을 피어로 선언하지 않아 경고 3건이 납니다.
+// react·import는 eslint-config-next 16.4부터 ESLint 10 호환 shim으로 감싸 쓰고, jsx-a11y는 ESLint 10에서 없어진
+// context API를 쓰지 않아 동작에는 문제가 없습니다(ESLint 9와 켜진 규칙 67개가 같음).
 import nextVitals from "eslint-config-next/core-web-vitals";
 
 const config = [
