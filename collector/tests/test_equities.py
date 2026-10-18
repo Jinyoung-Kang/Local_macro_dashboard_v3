@@ -235,6 +235,52 @@ def test_QA127_조합의_보통_단위와_단위_ADR은_보통주로_본다(monk
     assert equities.lookup_holding(holding) == mapped
 
 
+# 토큰 하나만 보고 보통주를 비보통주로 잘못 가리던 표기(백업의 실제 행). 지금 매핑표에는 없어 이 테스트에서만 넣습니다.
+# 이 회사들을 매핑표에 더하는 순간 보통주가 조용히 빠지지 않게 고정합니다.
+_COMMON_TOKEN_ROWS = [
+    ("CARNIVAL CORP", "UNIT 99/99/9999", "143658300", ("CCL", "임의소비재")),          # 이중 상장 보통주 — 만기 없는 날짜
+    ("GRANITE REAL ESTATE INVT TR", "UNIT 99/99/9999", "387437114", ("GRP-U", "부동산")),  # 묶음(stapled) 증권
+    ("GRANITE REAL ESTATE INVT TR", "TR UNIT NEW", "387437205", ("GRP-U", "부동산")),
+    ("MV OIL TR", "TR UNITS", "553859109", ("MVO", "에너지")),                       # 로열티 신탁 단위
+    ("SABINE RTY TR", "UNIT BEN INT", "785688102", ("SBR", "에너지")),
+    ("HONDA MOTOR CO LTD", "ADR ECH CNV IN 3", "438128308", ("HMC", "임의소비재")),   # ADR 1주 = 보통주 3주(전환 비율)
+    ("WATSCO INC", "CL B CONV", "942622101", ("WSO", "산업재")),                       # 보통주 B주(전환권이 붙은 클래스)
+]
+
+
+@pytest.mark.xfail(strict=True, reason="QA-127: 'UNIT'·'CNV'·'CONV' 토큰 하나로 보통주를 비보통주로 가립니다")
+@pytest.mark.parametrize(("name", "cls", "cusip", "mapped"), _COMMON_TOKEN_ROWS)
+def test_QA127_만기_없는_단위와_ADR_전환_비율은_보통주로_본다(monkeypatch, name, cls, cusip, mapped):
+    """
+    'UNIT'은 만기일이 있을 때만('UNIT 02/15/2029' 지분 유닛) 보통주가 아닙니다. '99/99/9999'는 만기가 없다는 자리표시이고,
+    날짜 없는 신탁 단위는 그 신탁의 보통 지분입니다. 'CNV'·'CONV'도 ADR 표기나 보통주 클래스(CL)와 함께면 우선주가 아닙니다.
+    """
+    monkeypatch.setitem(equities._BY_NORMALIZED, equities.normalize(name), mapped)
+    holding = {"name": name, "class": cls, "cusip": cusip, "value": 1.0, "shares": 100.0, "weight": 1.0}
+    assert equities.lookup_holding(holding) == mapped
+
+
+# 토큰에 걸리지 않아 보통주 티커에 붙던 우선주 예탁주(백업의 실제 행). 지금 매핑표에는 없어 이 테스트에서만 넣습니다.
+_NON_COMMON_TOKEN_ROWS = [
+    ("ALBEMARLE CORP", "7.25% DEP SHS A", "012653200", ("ALB", "소재")),                  # 의무전환 우선주 예탁주
+    ("MICROCHIP TECHNOLOGY INC", "DEP SHS REPSTG", "595017302", ("MCHP", "정보기술")),
+    ("KKR & CO INC", "6.25 CON SER D", "48251W500", ("KKR", "금융")),                    # 6.25% 시리즈 D 전환 우선주
+    ("SUPER MICRO COMPUTER INC", "7 DEP CM SR A WI", "86800U500", ("SMCI", "정보기술")),  # 7% 시리즈 A 예탁주(발행일 거래)
+]
+
+
+@pytest.mark.xfail(strict=True, reason="QA-127: 'DEP SHS'·'CON SER' 표기의 우선주 예탁주가 보통주 티커에 붙습니다")
+@pytest.mark.parametrize(("name", "cls", "cusip", "mapped"), _NON_COMMON_TOKEN_ROWS)
+def test_QA127_우선주_예탁주와_CON_SER_표기는_보통주_티커로_근사하지_않는다(monkeypatch, name, cls, cusip, mapped):
+    """
+    예탁주(DEP)는 ADR 표기('AMERICAN DEP'·'SPONSORED ADS')가 없으면 우선주를 나눈 증권입니다. 'CON'은 'CON NEW'(COM 오타)·
+    'STATE STREET CON'(소비재 ETF)으로도 쓰여, 시리즈(SER)나 표면 금리와 함께일 때만 전환 우선주로 봅니다.
+    """
+    monkeypatch.setitem(equities._BY_NORMALIZED, equities.normalize(name), mapped)
+    holding = {"name": name, "class": cls, "cusip": cusip, "value": 1.0, "shares": 100.0, "weight": 0.01}
+    assert equities.classify_holding(holding) == (None, equities.NOTE_NON_COMMON)
+
+
 def test_QA127_저장할_때_일부러_뺀_보유에는_이유를_적는다():
     """
     백엔드 미커버 목록은 티커가 없으면 이유를 가리지 않고 '매핑표에 없음'이라고 적었습니다. 채권과 우선주는 매핑표에 회사가
