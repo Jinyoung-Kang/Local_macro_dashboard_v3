@@ -36,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -456,31 +457,14 @@ public class AiService {
 
     /** 엔진 1개 호출 (auto면 폴오버). */
     public Map<String, Object> generate(String engineId, String prompt, String systemPrompt) {
-        if (!enabled()) {
-            return failure("설정 없음", allowed == null
-                    ? "AI 키가 하나도 설정되지 않았습니다. Anthropic / NVIDIA / Cerebras / Cloudflare 중 "
-                            + "하나 이상을 설정하세요."
-                    : "이 배포에서 쓰는 AI 엔진(%s)의 키가 설정되지 않았습니다."
-                            .formatted(String.join(", ", new TreeSet<>(allowed))));
+        Optional<Map<String, Object>> unusable = unusable(engineId);
+        if (unusable.isPresent()) {
+            return unusable.get();
         }
-
-        boolean auto = engineId == null || engineId.isBlank() || "auto".equals(engineId);
-        Engine engine = findEngine(auto ? "auto" : engineId);
-
-        if (engine == null) {
-            return failure(engineId, "지원하지 않는 AI 엔진입니다: " + engineId);
-        }
-        // 허용 목록 밖이면(자동 탐색은 쓸 수 없을 때) 네트워크에 나가지 않고 끝냅니다. 키 없음과 같은 실패 모양입니다.
-        // 허용됐지만 키가 없는 엔진은 아래 호출이 "API Key 누락"으로 끝냅니다(역시 네트워크 없음).
-        String reason = unavailableReason(engine);
-        if (NOT_ALLOWED.equals(reason) || (auto && reason != null)) {
-            return failure(engine.label(), "이 배포에서는 쓸 수 없는 엔진입니다: " + engine.label()
-                    + (auto ? " — 엔진을 직접 고르세요." : ""));
-        }
-
-        if (auto) {
+        if (isAuto(engineId)) {
             return withFailover(prompt, systemPrompt);
         }
+        Engine engine = findEngine(engineId);
         // 사용자가 엔진을 직접 골랐다면 그 엔진을 한도 끝까지 기다립니다.
         // 추론형 모델이 느린 것은 선택의 결과이지 고장이 아닙니다.
         // 한도는 번역까지 포함한 전체입니다 — 번역에는 남은 시간만 줍니다(QA-094). 예전에는 번역이 한도를 처음부터
@@ -489,6 +473,56 @@ public class AiService {
         Map<String, Object> result = call(engine, prompt, systemPrompt, timeoutSeconds);
         return translateIfNeeded(result, engine.provider(), deadline, timeoutSeconds,
                 "대기 한도 %d초".formatted(timeoutSeconds));
+    }
+
+    /**
+     * 네트워크에 나가지 않고 정해지는 "이 엔진은 지금 못 씀" — 못 쓰면 {@link #generate}가 돌려줄 실패({@code charged: false}),
+     * 쓸 수 있으면 비어 있음.
+     *
+     * <p>AI 꺼짐(키 없음)·모르는 엔진 ID·허용 목록 밖·못 쓰는 자동 탐색·허용됐지만 키가 없는 엔진. AI 리포트는 이것을 하루
+     * 한도를 쓰기 전, 대시보드 전체 원본 텍스트를 만들기 전에 봅니다 — 예전에는 둘 다 한 뒤에야 여기서 실패해, 되돌려지는
+     * 실패를 한도 없이 되풀이할 수 있었습니다(QA-133).
+     */
+    Optional<Map<String, Object>> unusable(String engineId) {
+        if (!enabled()) {
+            return Optional.of(failure("설정 없음", allowed == null
+                    ? "AI 키가 하나도 설정되지 않았습니다. Anthropic / NVIDIA / Cerebras / Cloudflare 중 "
+                            + "하나 이상을 설정하세요."
+                    : "이 배포에서 쓰는 AI 엔진(%s)의 키가 설정되지 않았습니다."
+                            .formatted(String.join(", ", new TreeSet<>(allowed)))));
+        }
+
+        boolean auto = isAuto(engineId);
+        Engine engine = findEngine(auto ? "auto" : engineId);
+
+        if (engine == null) {
+            return Optional.of(failure(engineId, "지원하지 않는 AI 엔진입니다: " + engineId));
+        }
+        // 허용 목록 밖이면(자동 탐색은 쓸 수 없을 때) 키 없음과 같은 실패 모양입니다.
+        String reason = unavailableReason(engine);
+        if (NOT_ALLOWED.equals(reason) || (auto && reason != null)) {
+            return Optional.of(failure(engine.label(), "이 배포에서는 쓸 수 없는 엔진입니다: " + engine.label()
+                    + (auto ? " — 엔진을 직접 고르세요." : "")));
+        }
+        return NO_KEY.equals(reason) ? Optional.of(missingKey(engine)) : Optional.empty();
+    }
+
+    /** 엔진을 고르지 않았거나 auto면 자동 탐색. */
+    private static boolean isAuto(String engineId) {
+        return engineId == null || engineId.isBlank() || "auto".equals(engineId);
+    }
+
+    /**
+     * 허용됐지만 키가 없는 엔진의 실패. 예전에는 제공자 호출(callAnthropic·callOpenAiFormat·callCloudflare)이 키를
+     * 확인하며 이 문구로 끝냈습니다 — 화면이 보던 문구를 그대로 둡니다(같은지는 AiServiceAllowListTest가 봅니다, QA-133).
+     */
+    private Map<String, Object> missingKey(Engine engine) {
+        String label = engine.label();
+        return failure(label, switch (engine.provider()) {
+            case "anthropic" -> label + " API Key 누락 — .env에 ANTHROPIC_API_KEY를 넣고 make up 하세요.";
+            case "cloudflare" -> "Cloudflare 인증 정보 누락";
+            default -> label + " API Key 누락";
+        });
     }
 
     private Engine findEngine(String engineId) {

@@ -5,7 +5,6 @@ import com.macrodash.feature.auth.UsageService;
 import com.macrodash.feature.snapshot.SnapshotTextService;
 import com.macrodash.store.UsageStore;
 import com.macrodash.support.CurrentUser;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -207,7 +206,6 @@ class AiReportFlowTest {
     }
 
     @Test
-    @Disabled("QA-133: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-133 엔진을 못 쓰면(AI 꺼짐·모르는 엔진·허용 목록 밖·못 쓰는 auto·키 없음) 한도를 쓰지 않고 원본 텍스트도 만들지 않는다")
     void unusableEngineConsumesNothing() {
         UsageStore store = mock(UsageStore.class);

@@ -500,7 +500,7 @@ class ApiIntegrationTest {
         }
 
         // AI 리포트는 데모의 유일한 쓰기(ADR 0014) — 공용 하루 한도(메모리)로 세고 DB에는 쓰지 않습니다.
-        // 이 테스트에는 AI 키가 없어 엔진 호출이 "키 없음"으로 끝나고(외부 호출 없음), 한도는 되돌려집니다.
+        // 이 테스트에는 AI 키가 없어 엔진을 못 쓰므로 한도를 쓰기 전에 끝납니다(외부 호출 없음, QA-133).
         JsonNode engines = rest.exchange(url("/api/ai/engines"), HttpMethod.GET, new HttpEntity<>(null, demo),
                 JsonNode.class).getBody();
         assertThat(engines.path("quota").path("limit").asInt()).isEqualTo(7);
@@ -509,7 +509,7 @@ class ApiIntegrationTest {
                 new HttpEntity<>(Map.of("engineId", "anthropic_haiku"), demoJson), JsonNode.class);
         assertThat(report.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(report.getBody().path("status").asBoolean()).isFalse();
-        assertThat(report.getBody().path("quota").path("used").asInt()).as("실패는 되돌림").isZero();
+        assertThat(report.getBody().path("quota").path("used").asInt()).as("엔진을 못 쓰면 한도를 쓰지 않음").isZero();
         assertThat(report.getBody().path("quota").path("limit").asInt()).isEqualTo(7);
         assertThat(report.getBody().path("quota").path("shared").asBoolean()).isTrue();
 

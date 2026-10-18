@@ -294,7 +294,11 @@ class AiServiceAllowListTest {
                     .containsEntry("status", false).containsEntry("charged", false)
                     .containsEntry("error", engine.getValue()).containsEntry("latencyMs", 0L)
                     .doesNotContainKey("failoverPath");
+            // 리포트가 한도·원본 텍스트 전에 보는 사전 판정도 같은 실패를 줍니다(QA-133).
+            assertThat(service.unusable(engine.getKey())).as(engine.getKey()).contains(result);
         }
+        assertThat(service.unusable("nvidia_llama_33_70b")).as("키가 있는 엔진은 쓸 수 있음").isEmpty();
+        assertThat(service.unusable("auto")).as("키가 하나라도 있으면 자동 탐색").isEmpty();
         assertThat(anthropicHits.get() + cerebrasHits.get() + nvidiaHits.get()).isZero();
     }
 }

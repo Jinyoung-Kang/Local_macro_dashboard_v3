@@ -64,6 +64,31 @@ class UsageAndAdminTest {
     }
 
     @Test
+    @DisplayName("QA-133 peek은 세지 않고 오늘 사용량만 본다 — consume과 같은 한도·모양(유료·무료·운영자·데모)")
+    void peekDoesNotCount() {
+        UsageService usage = new UsageService(new UsageStore(db.jdbc), 3, 5);
+        long proId = db.user("peekpro", "pro passphrase!!", "MEMBER", "PRO");
+        CurrentUser pro = new CurrentUser(proId, db.email("peekpro"), "MEMBER", "PRO", null);
+
+        assertThat(usage.peek(pro, UsageService.AI_REPORT)).isEqualTo(new UsageService.Quota(true, 0, 3));
+        usage.consume(pro, UsageService.AI_REPORT);
+        usage.consume(pro, UsageService.AI_REPORT);
+        assertThat(usage.peek(pro, UsageService.AI_REPORT)).isEqualTo(new UsageService.Quota(true, 2, 3));
+        assertThat(usage.peek(pro, UsageService.AI_REPORT)).as("여러 번 봐도 그대로").isEqualTo(new UsageService.Quota(true, 2, 3));
+        usage.consume(pro, UsageService.AI_REPORT);
+        assertThat(usage.peek(pro, UsageService.AI_REPORT)).as("다 썼으면 allowed=false").isEqualTo(new UsageService.Quota(false, 3, 3));
+
+        long freeId = db.user("peekfree", "free passphrase!", "MEMBER", "FREE");
+        assertThat(usage.peek(new CurrentUser(freeId, db.email("peekfree"), "MEMBER", "FREE", null), UsageService.AI_REPORT))
+                .isEqualTo(new UsageService.Quota(false, 0, 0));
+        long ownerId = db.user("peekown", "owner passphrase", "OWNER", "FREE");
+        CurrentUser owner = new CurrentUser(ownerId, db.email("peekown"), "OWNER", "FREE", null);
+        usage.consume(owner, UsageService.AI_REPORT);
+        assertThat(usage.peek(owner, UsageService.AI_REPORT)).isEqualTo(new UsageService.Quota(true, 1, null));
+        assertThat(usage.peek(DemoViewer.user(), UsageService.AI_REPORT)).isEqualTo(new UsageService.Quota(true, 0, 5, true));
+    }
+
+    @Test
     @DisplayName("운영자: 회원 만들기·등급 바꾸기, 자기 운영자 역할은 못 내림, 감사 기록이 남는다")
     void adminActions() {
         long ownerId = db.user("admin", "owner passphrase", "OWNER", "PRO");

@@ -92,6 +92,22 @@ public class UsageService {
     }
 
     /**
+     * 오늘 사용량을 쓰지 않고 보기만 합니다({@link #consume}과 같은 한도·모양). 엔진을 못 써 한 건도 쓰지 않고 끝난
+     * AI 리포트 응답에 붙입니다(QA-133).
+     */
+    public Quota peek(CurrentUser user, String kind) {
+        if (user.demo()) {
+            return AI_REPORT.equals(kind) ? demoPool.current() : new Quota(false, 0, 0, true);
+        }
+        int used = usage.count(user.id(), Kst.today(), kind);
+        if (user.isOwner()) {
+            return new Quota(true, used, null);
+        }
+        int limit = user.isPro() ? aiDailyLimit : 0;
+        return new Quota(used < limit, used, limit);
+    }
+
+    /**
      * 여러 방문자가 함께 쓰는 하루(KST) 한도 — 메모리에만 있습니다.
      *
      * <p>한 프로세스 안에서만 맞습니다(백엔드가 한 대인 데모 배포 전제, ADR 0014). 다시 띄우면 그날 쓴 양을 잊고 0부터

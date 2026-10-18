@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -40,10 +41,23 @@ public class AiReportService {
      * @param engineId         엔진 ID ({@code auto}면 자동 선택)
      * @param requestedType    리포트 종류. 없거나 모르는 종류면 첫 번째 종류
      * @param extraInstruction 사용자가 덧붙인 지시(비어 있으면 넣지 않음). 길이 검사는 호출하는 쪽에서
-     * @return 엔진 응답 + {@code reportType}(실제로 쓴 종류) · {@code promptChars}(프롬프트 길이)
+     * @return 엔진 응답 + {@code reportType}(실제로 쓴 종류) · {@code promptChars}(프롬프트 길이). 엔진을 못 써
+     *         프롬프트를 만들지 않았으면 {@code promptChars}는 없습니다
      */
     public Map<String, Object> report(String engineId, String requestedType, String extraInstruction,
                                       CurrentUser user) {
+        // 엔진을 못 쓰는 것이 네트워크 없이 정해지면(AI 꺼짐·모르는 엔진·허용 목록 밖·못 쓰는 auto·키 없음) 한도를 쓰기 전,
+        // 원본 텍스트(스냅샷 수십 개를 읽는 대시보드 전체)를 만들기 전에 끝냅니다. 예전에는 둘 다 한 뒤에야 엔진이 실패를
+        // 알렸고, 되돌려지는 실패라(charged: false) 누구나 비용 없이 되풀이할 수 있었습니다(QA-133).
+        Optional<Map<String, Object>> unusable = ai.unusable(engineId);
+        if (unusable.isPresent()) {
+            Map<String, Object> out = new LinkedHashMap<>(unusable.get());
+            out.put("reportType", reportType(snapshotText.reportPrompts(), requestedType));
+            if (user != null) {
+                out.put("quota", quotaMap(usage.peek(user, UsageService.AI_REPORT)));
+            }
+            return out;
+        }
         // 유료 API 비용 상한 — 사용자별 하루 한도(운영자는 한도 없음), 데모 열람은 방문자 전체의 공용 하루 한도(ADR 0014).
         // 모델에 닿지 않고 끝난 실패만 되돌립니다(QA-021).
         UsageService.Quota quota = user == null ? null : usage.consume(user, UsageService.AI_REPORT);
@@ -72,9 +86,7 @@ public class AiReportService {
     private Map<String, Object> generate(String engineId, String requestedType, String extraInstruction,
                                          CurrentUser user, UsageService.Quota quota) {
         Map<String, String> prompts = snapshotText.reportPrompts();
-        String reportType = (requestedType == null || !prompts.containsKey(requestedType))
-                ? prompts.keySet().iterator().next()
-                : requestedType;
+        String reportType = reportType(prompts, requestedType);
 
         String systemPrompt = prompts.get(reportType);
         String data = snapshotText.fullText();
@@ -104,6 +116,13 @@ public class AiReportService {
             out.put("quota", quotaMap(quota));
         }
         return out;
+    }
+
+    /** 실제로 쓸 리포트 종류 — 없거나 모르는 종류면 첫 번째 종류. */
+    private static String reportType(Map<String, String> prompts, String requestedType) {
+        return (requestedType == null || !prompts.containsKey(requestedType))
+                ? prompts.keySet().iterator().next()
+                : requestedType;
     }
 
     /**
