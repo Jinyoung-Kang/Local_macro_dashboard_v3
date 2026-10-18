@@ -52,5 +52,7 @@ final class AuthTestDatabase {
 
     void cleanUp() {
         jdbc.update("DELETE FROM users WHERE email LIKE ?", prefix + "-%");
+        // 없는 계정의 로그인 실패 기록은 사용자 번호가 없어 위에서 지워지지 않습니다 — 이메일 접두사로 지웁니다.
+        jdbc.update("DELETE FROM audit_log WHERE user_id IS NULL AND detail->>'email' LIKE ?", prefix + "-%");
     }
 }

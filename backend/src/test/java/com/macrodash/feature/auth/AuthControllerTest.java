@@ -3,6 +3,7 @@ package com.macrodash.feature.auth;
 import com.macrodash.config.AppProperties;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -12,6 +13,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -77,6 +79,42 @@ class AuthControllerTest {
         assertThat(login(email, "right-password-1", "10.0.0.2").getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(login(email, "right-password-1", "10.0.0.3").getStatusCode())
                 .as("다른 주소는 영향 없음").isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @Disabled("QA-125: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-125 없는 이메일을 바꿔 가며 실패해도 감사 기록은 한 시간 상한(30건)까지만 쌓인다")
+    void loginFailureAuditIsBoundedUnderEmailRotation() {
+        // 이메일이 다르면 지연 키(주소|이메일)도 달라 모두 무료 시도 — 로그인 없이 실패마다 한 행이 1년 동안 남았습니다.
+        for (int i = 0; i < 30 + 10; i++) {
+            assertThat(login(db.email("nobody" + i), "wrong-password", "10.0.2.1").getStatusCode())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        Integer rows = db.jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = 'login.failure' "
+                + "AND detail->>'email' LIKE ?", Integer.class, db.prefix + "-nobody%");
+        assertThat(rows).as("없는 계정 실패 기록").isLessThanOrEqualTo(30);
+    }
+
+    @Test
+    @Disabled("QA-125: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-125 같은 계정 대입은 주소를 바꿔도 한 묶음으로 세어 1·5·8번째 실패만 남고, 성공 기록에 그동안의 실패 수가 남는다")
+    void bruteForceAcrossAddressesIsOneWindowAndSuccessShowsPriorFailures() {
+        String email = db.email("owner");
+        long ownerId = db.users.findByEmail(email).orElseThrow().id();
+        for (String ip : List.of("10.0.1.1", "10.0.1.2", "10.0.1.3")) {
+            for (int i = 0; i < 3; i++) {   // 주소마다 3번 — 무료 시도(5) 안이라 모두 바로 401
+                assertThat(login(email, "wrong", ip).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            }
+        }
+
+        assertThat(db.jdbc.queryForList("SELECT detail->>'failures' FROM audit_log WHERE user_id = ? "
+                + "AND action = 'login.failure' ORDER BY id", String.class, ownerId))
+                .as("남은 실패 기록의 실패 수").containsExactly("1", "5", "8");
+        assertThat(login(email, "right-password-1", "10.0.1.4").getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(db.jdbc.queryForObject("SELECT detail->>'priorFailures' FROM audit_log WHERE user_id = ? "
+                + "AND action = 'login.success' ORDER BY id DESC LIMIT 1", String.class, ownerId))
+                .as("성공 직전 실패 수(모든 주소 합)").isEqualTo("9");
     }
 
     @Test
