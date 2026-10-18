@@ -26,7 +26,6 @@ import os
 import re
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Any
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -36,7 +35,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import catalog, indicators, krcalendar, logredact, settings, store, tasks, verification, webguard
+from . import catalog, krcalendar, logredact, settings, store, tasks, verification, webguard
 from .services import (
     kis as kis_service,
     krx as krx_service,
@@ -452,42 +451,6 @@ def live_daum_intraday(
     return krx_service.collect_daum_intraday_acceleration(minutes)
 
 
-@app.get("/live/radar-history-dates")
-def radar_history_dates(
-    x_service_token: str | None = Header(default=None),
-) -> dict:
-    _check_token(x_service_token)
-    return {"dates": store.list_observation_dates(catalog.OBS_RADAR)}
-
-
-@app.get("/live/radar-history")
-def radar_history(
-    market: str | None = None,
-    investor: str | None = None,
-    tradeType: str | None = None,
-    obsDate: str | None = None,
-    startDate: str | None = None,
-    x_service_token: str | None = Header(default=None),
-) -> dict:
-    _check_token(x_service_token)
-    filters: dict[str, str] = {}
-    if market:
-        filters["market"] = market
-    if investor:
-        filters["investor"] = investor
-    if tradeType:
-        filters["tradeType"] = tradeType
-
-    return {
-        "rows": store.read_observations(
-            catalog.OBS_RADAR,
-            obs_date=obsDate,
-            start_date=startDate,
-            filters=filters or None,
-        )
-    }
-
-
 # ==============================================================================
 # 교차 검증용 읽기 (판정은 백엔드가 합니다) — 읽는 코드는 verification.py
 # ==============================================================================
@@ -569,29 +532,3 @@ def toss_indices(
 ) -> dict:
     _check_token(x_service_token)
     return toss_service.get_index_prices([s.strip() for s in symbols.split(",") if s.strip()])
-
-
-# ==============================================================================
-# 카탈로그 (백엔드/프런트가 같은 정의를 쓰도록 노출)
-# ==============================================================================
-@app.get("/catalog")
-def catalog_info() -> dict[str, Any]:
-    return {
-        "macroCategories": indicators.MACRO_CATEGORIES,
-        "institutions": indicators.INSTITUTIONS,
-        "sectorEtfs": indicators.SECTOR_ETFS,
-        "assetClassEtfs": indicators.ASSET_CLASS_ETFS,
-        "cotAssets": indicators.COT_ASSETS,
-        "fredSeries": {
-            "base": list(indicators.FRED_BASE_SERIES),
-            "advanced": list(indicators.FRED_ADVANCED_SERIES),
-        },
-        "snapshots": {
-            "macro": catalog.SNAP_MACRO_COLLECTED,
-            "scraper": catalog.SNAP_SCRAPER_MARKETS,
-            "liquidity": catalog.SNAP_FED_LIQUIDITY,
-            "krxFutures": catalog.SNAP_KRX_FUTURES,
-            "sector": catalog.SNAP_SECTOR_HISTORY,
-            "cot": catalog.SNAP_COT_HISTORY,
-        },
-    }

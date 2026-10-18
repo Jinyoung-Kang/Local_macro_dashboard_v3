@@ -23,8 +23,6 @@ from app import main
 PROTECTED = [
     ("get", "/live/ticker/^VIX"),
     ("get", "/live/daum-intraday"),
-    ("get", "/live/radar-history-dates"),
-    ("get", "/live/radar-history"),
     ("get", "/verify/readings"),
     ("get", "/diagnostics/connections"),
     ("get", "/diagnostics/toss"),

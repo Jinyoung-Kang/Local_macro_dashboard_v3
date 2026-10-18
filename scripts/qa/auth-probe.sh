@@ -100,9 +100,9 @@ if printf '%s' "$fh" | grep -qi '^x-powered-by:'; then echo "  ! 화면 X-Powere
 
 echo "## 8. 수집기 — 호스트에서 토큰 없이"
 CPORT="$(grep -s '^COLLECTOR_PORT=' "$ROOT/.env.qa" | cut -d= -f2)"; CPORT="${CPORT:-18000}"
-# 읽기 전용 진단 경로(/status·/tasks·/catalog·/task-history)는 설계상 토큰 없이 열려 있습니다(doctor·make status가
+# 읽기 전용 진단 경로(/status·/tasks·/task-history)는 설계상 토큰 없이 열려 있습니다(doctor·make status가
 # 씁니다). 127.0.0.1에만 열려 있고 Host 검증이 있어 외부에서는 닿지 않습니다 — 결함이 아니라 설계로 기록합니다.
-for p in /status /tasks /catalog /task-history; do
+for p in /status /tasks /task-history; do
   check "GET $p 토큰 없음 (읽기 전용 진단 — 설계상 공개)" "200" "$(code "http://127.0.0.1:$CPORT$p")"
 done
 for p in "/live/radar" "/live/ticker/AAPL" "/diagnostics/connections"; do

@@ -81,7 +81,7 @@ def test_Origin이_null이면_막는다(client, spies):
 
 def test_img_태그로_부르는_GET도_막는다(client, spies):
     # <img src>·<script src>는 Origin을 보내지 않지만 Sec-Fetch-Site는 보냅니다.
-    response = client.get("/live/radar-history", headers={"Sec-Fetch-Site": "cross-site"})
+    response = client.get("/live/daum-intraday", headers={"Sec-Fetch-Site": "cross-site"})
     assert response.status_code == 403
 
 
