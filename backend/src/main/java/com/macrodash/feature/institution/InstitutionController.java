@@ -43,7 +43,10 @@ public class InstitutionController {
     public Map<String, Object> portfolio(@RequestParam String cik,
                                          @RequestParam(defaultValue = "8") int quarters,
                                          @RequestParam(defaultValue = "30") int topN) {
-        return sec13f.portfolio(cik, quarters, topN);
+        // 비중 추이가 8분기 전체 보유를 증권 단위로 묶어(QA-112·121) 요청마다 계산이 커서, 같은 저장본이면 다시 계산하지 않습니다.
+        // 추적하지 않는 CIK는 예외(400)라 캐시에 남지 않습니다.
+        return cache.get("sec13f.portfolio:" + cik + ":" + quarters + ":" + topN,
+                () -> sec13f.portfolio(cik, quarters, topN));
     }
 
     @GetMapping("/sec13f/consensus")
