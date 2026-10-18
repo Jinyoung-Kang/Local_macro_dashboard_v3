@@ -76,4 +76,13 @@
 4. 쓰지 않는 경로 삭제(`/maintenance/purge`, `/api/ai/snapshot-text`, `/live/radar-history*`, `/catalog`)
 5. 메이저·확인 필요 업그레이드(PLAN §6)
 6. KIS 레이더 실제 응답 1회 확인(QA-074)
-7. AWS 반영 여부
+7. AWS 반영 여부 → 정해 주심(2026-10-18): 반영함(6단계)
+
+## 6단계 — AWS 데모 반영 (끝, 2026-10-18 14:11–14:20 KST)
+- 인스턴스 `portfolio-app`의 macro를 `097d98d` → `488a63a`로 fast-forward하고 세 이미지를 다시 빌드했습니다. 컨테이너 교체는
+  14:16:19에 시작해 기동 로그로 보아 1분 안에 끝났습니다. 스키마는 V7 그대로이고 `.env`·앞단(aws-deploy)은 바꾸지 않았습니다.
+- 되돌릴 이미지: 세 서비스 모두 `local_macro_dashboard_v3-<서비스>:rollback-097d98d`(기존 `:prev`는 그대로).
+- 확인: 세 컨테이너 healthy, `/api/health` 200, 백엔드 `DASHBOARD_SCHEDULER_REGIMERECORDHOURKST=17`, 화면 번들에 `main@488a63a`,
+  기동 로그에 오류 없음, 공개 주소 잠금 화면 200. 13F 저장본 11개를 기동 때 새로 받아 보유마다 `ticker` 필드가 붙음.
+  느린 그룹 `partial`은 일요일 `fsc_prices` 빈 결과로, 배포 전과 같음.
+- 켜기·끄기 일정(EventBridge)은 꺼 둔 것이 맞다고 정해 주셔서 운영 시간 문구(README·ADR 0008·0012·`compose.aws.yml` 주석)를 고쳤습니다.

@@ -200,8 +200,8 @@
 4. **쓰지 않는 경로 지우기** — `/maintenance/purge`(이번엔 범위만 좁힘), `GET /api/ai/snapshot-text`(이번엔 캐시만), 수집기 `/live/radar-history*`·`/catalog`.
 5. **메이저·확인 필요 업그레이드** — pandas 3·numpy 2.5·eslint 10·TypeScript 7·Tailwind 4·vitest 5·jsdom 29 / anthropic-java 2.73·fastapi 0.143·uvicorn 0.54·bs4 4.15·pykrx 1.2.9.
 6. **KIS 실제 응답 1회 확인(QA-074)** — 키와 호출 한도를 씁니다.
-7. **AWS 반영** — QA-069·093·094·119 등 공개 데모에 나가는 변경입니다. 반영하면 수집기·백엔드·화면을 다시 빌드하고 `init_schema`를
-   돌립니다(스키마 변경은 없음).
+7. ~~**AWS 반영**~~ → **정해 주심(2026-10-18): 반영함.** 인스턴스 코드 `097d98d` → `488a63a`, 세 이미지를 다시 빌드하고
+   `init_schema`(스키마 V7 그대로)를 돌렸습니다. 되돌릴 이미지는 `:rollback-097d98d`로 남겼습니다. 켜기·끄기 일정은 꺼 둔 채로 둡니다.
 8. **로컬 반영** — 돌고 있는 코드가 바뀌므로 병합 뒤 `make up`이 필요합니다. 13F 매칭(QA-087)은 그 뒤 `sec_13f`를 한 번 돌려야
    나타납니다.
 
