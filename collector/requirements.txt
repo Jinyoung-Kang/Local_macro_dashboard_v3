@@ -5,11 +5,11 @@ psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
 APScheduler==3.11.3
 requests==2.34.2
-beautifulsoup4==4.12.3
+beautifulsoup4==4.15.0
 lxml==6.1.3
 pandas==2.2.3
 numpy==2.2.1
 yfinance==1.7.0
-pykrx==1.2.8
+pykrx==1.2.9
 
 # 테스트·린트 도구는 requirements-dev.txt에 있습니다(운영 이미지에 넣지 않음).

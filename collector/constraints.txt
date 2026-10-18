@@ -4,7 +4,7 @@ annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
 APScheduler==3.11.3
-beautifulsoup4==4.12.3
+beautifulsoup4==4.15.0
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.2
@@ -37,7 +37,7 @@ psycopg-pool==3.3.3
 pycparser==3.11
 pydantic==2.14.1
 pydantic_core==2.50.1
-pykrx==1.2.8
+pykrx==1.2.9
 pyparsing==3.3.3
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.4
