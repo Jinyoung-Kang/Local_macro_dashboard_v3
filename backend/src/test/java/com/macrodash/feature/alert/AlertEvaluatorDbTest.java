@@ -9,6 +9,7 @@ import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -250,6 +251,47 @@ class AlertEvaluatorDbTest {
                 .extracting(AlertStore.InboxItem::kind).containsExactly("FOREIGN_STREAK");
         assertThat(alerts.inbox(freeId, 10)).as("무료 회원은 국면 전환만 — 켜져 있어도 유료 종류는 배달하지 않음")
                 .extracting(AlertStore.InboxItem::kind).containsExactly("REGIME_CHANGE");
+    }
+
+    @Test
+    @Disabled("QA-129: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-129 국면 평가가 예외를 던져도 외국인 연속 순매수 사건은 만들어지고 알림함에 들어간다")
+    @SuppressWarnings("unchecked")
+    void oneTriggerFailureDoesNotStopTheOthers() throws Exception {
+        CurrentUser user = new CurrentUser(userId, EMAIL, "MEMBER", "PRO", null);
+        AlertService service = new AlertService(alerts, MAPPER);
+        service.create(user, "REGIME_CHANGE", MAPPER.createObjectNode());
+        service.create(user, "FOREIGN_STREAK", MAPPER.readTree("{\"target\":\"KOSPI\",\"n\":3}"));
+        // 판정 기록 테이블은 있는데 읽기가 실패합니다(DB 오류나 아직 모르는 코드 결함의 자리).
+        RegimeLogStore broken = mock(RegimeLogStore.class);
+        when(broken.ready()).thenReturn(true);
+        when(broken.recent(org.mockito.ArgumentMatchers.anyInt()))
+                .thenThrow(new IllegalStateException("판정 기록 읽기 실패(시험)"));
+        // 코스피 03-09~03-11 외국인 순매수 3일 — 자정을 넘겨(03-12 00:30 KST) 받아 모두 확정.
+        tools.jackson.databind.JsonNode payload = MAPPER.readTree("""
+                {"markets":{"KOSPI":{"fetchedAt":"2099-03-11T15:30:00+00:00","records":[
+                  {"date":"2099-03-11","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-10","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-09","investors":{"foreigner":{"net":100}}},
+                  {"date":"2099-03-06","investors":{"foreigner":{"net":-100}}}]}}}
+                """);
+        com.macrodash.store.Snapshot snapshot = new com.macrodash.store.Snapshot(
+                com.macrodash.store.Datasets.SNAP_TOSS_MARKET_FLOWS, payload, "json", "ok", null,
+                Instant.parse("2099-03-11T15:30:00Z"));
+        StoreReader store = mock(StoreReader.class);
+        when(store.quietly(any())).thenAnswer(call -> ((Supplier<Object>) call.getArgument(0)).get());
+        when(store.read(org.mockito.ArgumentMatchers.eq(com.macrodash.store.Datasets.SNAP_TOSS_MARKET_FLOWS),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(java.util.Optional.of(snapshot));
+        Clock clock = Clock.fixed(Instant.parse("2099-03-12T03:00:00Z"), ZoneOffset.UTC);   // 03-12 12시 KST
+        AlertEvaluator evaluator = new AlertEvaluator(alerts, broken, store, mock(StoreRepository.class), MAPPER, clock);
+
+        assertThat(evaluator.evaluate()).as("국면 단계만 건너뛰고 연속 사건은 배달").isEqualTo(1);
+
+        assertThat(alerts.inbox(userId, 10)).singleElement().satisfies(item -> {
+            assertThat(item.kind()).isEqualTo("FOREIGN_STREAK");
+            assertThat(item.occurredOn()).isEqualTo(LocalDate.of(2099, 3, 11));
+        });
     }
 
     @Test
