@@ -38,7 +38,12 @@ def client(monkeypatch):
 
 @pytest.fixture()
 def spies(monkeypatch):
-    """막혀야 하는 요청이 저장 계층까지 가면 실패로 드러나게 합니다."""
+    """
+    막혀야 하는 요청이 수집·저장·외부 호출까지 가면 실패로 드러나게 합니다.
+
+    실제 함수 대신 기록만 하므로, 가드가 뚫리는 회귀가 생겨도 테스트가 외부 API(Daum 등)를
+    부르거나 DB에 쓰지 않습니다.
+    """
     called: list[str] = []
 
     def run_group(group=None, task_name=None):
@@ -49,9 +54,14 @@ def spies(monkeypatch):
         called.append(f"refresh:{scope}")
         return datetime.now(timezone.utc)
 
+    def daum_intraday(lookback_minutes=30):
+        called.append(f"live:daum-intraday:{lookback_minutes}")
+        return {}
+
     monkeypatch.setattr(main.tasks, "run_group", run_group)
     monkeypatch.setattr(main.store, "request_refresh", refresh)
-    monkeypatch.setattr(main.store, "read_observations", lambda *a, **k: [])
+    # /live/daum-intraday는 Daum으로 바로 요청합니다(저장 없음). 핸들러가 호출 시점에 찾으므로 여기서 바꿔 둡니다.
+    monkeypatch.setattr(main.krx_service, "collect_daum_intraday_acceleration", daum_intraday)
     return called
 
 
@@ -84,6 +94,7 @@ def test_img_태그로_부르는_GET도_막는다(client, spies):
     # <img src>·<script src>는 Origin을 보내지 않지만 Sec-Fetch-Site는 보냅니다.
     response = client.get("/live/daum-intraday", headers={"Sec-Fetch-Site": "cross-site"})
     assert response.status_code == 403
+    assert spies == []
 
 
 def test_거부_응답은_이유를_알려준다(client, spies):
