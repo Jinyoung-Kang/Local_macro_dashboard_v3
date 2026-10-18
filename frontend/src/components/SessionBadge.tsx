@@ -44,7 +44,7 @@ export function SessionBadge({
   if (!status) return null;
   return (
     <span
-      className={`rounded border px-2 py-0.5 text-[11px] ${STYLES[status.state]}`}
+      className={`rounded-sm border px-2 py-0.5 text-[11px] ${STYLES[status.state]}`}
       title={status.detail}
     >
       {status.label}

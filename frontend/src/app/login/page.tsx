@@ -78,7 +78,7 @@ export default function LoginPage() {
             onChange={(event) => setEmail(event.target.value)}
             autoComplete="username"
             autoFocus
-            className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+            className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent"
           />
         </label>
 
@@ -90,12 +90,12 @@ export default function LoginPage() {
             onChange={(event) => setPassword(event.target.value)}
             placeholder="Enter Password..."
             autoComplete="current-password"
-            className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+            className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent"
           />
         </label>
 
         {error && (
-          <p className="mt-3 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          <p className="mt-3 rounded-sm border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
             {error}
           </p>
         )}

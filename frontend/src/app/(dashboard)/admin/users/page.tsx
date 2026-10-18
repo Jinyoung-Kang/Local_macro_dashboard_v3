@@ -110,12 +110,12 @@ export default function AdminUsersPage() {
           <label className="text-xs text-muted">
             이메일
             <input type="email" value={email} onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent" />
+              className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent" />
           </label>
           <label className="text-xs text-muted">
             처음 비밀번호(10자 이상)
             <input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent" />
+              className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent" />
           </label>
           <Select label="등급" value={tier} onChange={setTier}
             options={[{ value: "FREE", label: "무료" }, { value: "PRO", label: "유료" }]} />

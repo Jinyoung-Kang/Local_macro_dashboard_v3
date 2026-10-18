@@ -223,9 +223,9 @@ function SimilarityCard() {
                   <td className="whitespace-nowrap px-2 py-1.5 text-body">{pair.right}</td>
                   <td className="px-2 py-1.5">
                     <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded bg-canvas">
+                      <div className="h-2 flex-1 rounded-sm bg-canvas">
                         <div
-                          className="h-2 rounded bg-accent/70"
+                          className="h-2 rounded-sm bg-accent/70"
                           style={{ width: `${Math.min(100, (pair.value / max) * 100)}%` }}
                         />
                       </div>
@@ -538,7 +538,7 @@ function HoldersCard() {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="NVIDIA"
-            className="rounded-md border border-border bg-surface-hover px-3 py-1.5 text-xs text-bright outline-none focus:border-accent"
+            className="rounded-md border border-border bg-surface-hover px-3 py-1.5 text-xs text-bright outline-hidden focus:border-accent"
           />
         </label>
         <Button type="submit">찾기</Button>

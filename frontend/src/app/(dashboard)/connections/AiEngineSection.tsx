@@ -95,7 +95,7 @@ export function AiEngineSection() {
           onChange={(event) => setPrompt(event.target.value)}
           rows={3}
           maxLength={2000}
-          className="mt-3 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+          className="mt-3 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent"
         />
 
         <div className="mt-3">

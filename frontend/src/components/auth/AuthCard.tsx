@@ -36,7 +36,7 @@ export function AuthField({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+        className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent"
       />
     </label>
   );
@@ -46,7 +46,7 @@ export function AuthMessage({ tone, children }: { tone: "error" | "ok"; children
   const style = tone === "error"
     ? "border-danger/40 bg-danger/10 text-danger"
     : "border-ok/40 bg-ok/10 text-ok";
-  return <p className={`mt-3 rounded border px-3 py-2 text-xs ${style}`}>{children}</p>;
+  return <p className={`mt-3 rounded-sm border px-3 py-2 text-xs ${style}`}>{children}</p>;
 }
 
 export function AuthSubmit({ busy, disabled, children }: { busy: boolean; disabled?: boolean; children: ReactNode }) {

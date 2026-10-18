@@ -113,7 +113,7 @@ export default function AiReportPage() {
             rows={3}
             maxLength={2000}
             placeholder="예: 향후 2주 관점에서 코스피200 선물 포지션에 집중해 주세요."
-            className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+            className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent"
           />
         </label>
 
@@ -157,7 +157,7 @@ export default function AiReportPage() {
           }
         >
           {snapshot.loading && !snapshot.data && <Loading />}
-          <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap rounded border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
+          <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap rounded-sm border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
             {snapshot.data?.text ?? ""}
           </pre>
         </Card>
@@ -227,7 +227,7 @@ export default function AiReportPage() {
               {showRaw ? (
                 <pre
                   tabIndex={0}
-                  className="max-h-[640px] overflow-auto whitespace-pre-wrap rounded border border-border bg-canvas p-3 text-[12px] leading-relaxed text-body"
+                  className="max-h-[640px] overflow-auto whitespace-pre-wrap rounded-sm border border-border bg-canvas p-3 text-[12px] leading-relaxed text-body"
                 >
                   {result.response}
                 </pre>

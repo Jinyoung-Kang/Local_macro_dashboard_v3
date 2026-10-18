@@ -171,7 +171,7 @@ export default function AlertsPage() {
                 <label className="text-xs text-muted">
                   종목코드(6자리)
                   <input value={code} onChange={(event) => setCode(event.target.value.trim())} placeholder="005930"
-                    className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent" />
+                    className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent" />
                 </label>
               )}
               <Select label="연속 일수" value={days} onChange={setDays}

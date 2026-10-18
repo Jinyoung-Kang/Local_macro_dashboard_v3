@@ -188,7 +188,7 @@ export default function RegimePage() {
           title="국면 이력" source={SOURCES.regime}
           subtitle="같은 규칙을 과거 날짜에 그대로 적용한 재현입니다(매주 목요일). 회색은 판정 불가 — 하이일드 스프레드 이력이 2023-09부터라 그 이전은 판정할 수 없습니다."
         >
-          <div className="flex h-8 w-full overflow-hidden rounded border border-border">
+          <div className="flex h-8 w-full overflow-hidden rounded-sm border border-border">
             {(data?.timeline ?? []).map((point) => (
               <span
                 key={point.date}
@@ -200,12 +200,12 @@ export default function RegimePage() {
           <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted">
             {QUADRANTS.map((quadrant) => (
               <span key={quadrant.code} className="flex items-center gap-1">
-                <span className={`h-2 w-4 rounded-sm ${TIMELINE_COLOR[quadrant.code]}`} />
+                <span className={`h-2 w-4 rounded-xs ${TIMELINE_COLOR[quadrant.code]}`} />
                 {quadrant.label}
               </span>
             ))}
             <span className="flex items-center gap-1">
-              <span className="h-2 w-4 rounded-sm bg-border" />
+              <span className="h-2 w-4 rounded-xs bg-border" />
               판정 불가
             </span>
           </div>
@@ -222,7 +222,7 @@ export default function RegimePage() {
                   header: "국면",
                   render: (row) => (
                     <span className="flex items-center gap-2">
-                      <span className={`h-2 w-4 rounded-sm ${TIMELINE_COLOR[row.code] ?? "bg-border"}`} />
+                      <span className={`h-2 w-4 rounded-xs ${TIMELINE_COLOR[row.code] ?? "bg-border"}`} />
                       {row.label}
                     </span>
                   ),
@@ -241,7 +241,7 @@ export default function RegimePage() {
         </Card>
 
         {data?.note && (
-          <p className="rounded border border-border bg-canvas px-3 py-2 text-xs text-muted">
+          <p className="rounded-sm border border-border bg-canvas px-3 py-2 text-xs text-muted">
             ⚠️ {data.note}
           </p>
         )}

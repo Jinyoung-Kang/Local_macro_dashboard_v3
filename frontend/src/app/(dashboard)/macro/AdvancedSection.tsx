@@ -124,7 +124,7 @@ export function AdvancedSection({
       </div>
 
       {data?.derived?.decomposition && (
-        <p className="mt-4 rounded border border-border bg-canvas px-3 py-2 text-xs text-muted">
+        <p className="mt-4 rounded-sm border border-border bg-canvas px-3 py-2 text-xs text-muted">
           {data.derived.decomposition}
           <span className="ml-2">
             (세 값의 기준 시점이 다르면 오차가 생기므로 참고용입니다.)

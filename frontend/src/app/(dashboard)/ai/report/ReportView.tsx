@@ -149,7 +149,7 @@ function renderInline(text: string): ReactNode {
         {part.text}
       </strong>
     ) : part.code ? (
-      <code key={index} className="rounded bg-canvas px-1 py-0.5 text-[12px]">
+      <code key={index} className="rounded-sm bg-canvas px-1 py-0.5 text-[12px]">
         {part.text}
       </code>
     ) : (

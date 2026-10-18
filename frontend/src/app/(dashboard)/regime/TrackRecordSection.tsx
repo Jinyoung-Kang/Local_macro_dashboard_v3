@@ -82,7 +82,7 @@ export function TrackRecordSection({ tone }: { tone: Record<string, string> }) {
             {regimes.map((regime) => (
               <div key={regime.code} className="rounded-lg border border-border bg-canvas p-3">
                 <p className="flex items-center gap-2 text-sm font-semibold text-bright">
-                  <span className={`h-2 w-4 rounded-sm ${tone[regime.code] ?? "bg-border"}`} />
+                  <span className={`h-2 w-4 rounded-xs ${tone[regime.code] ?? "bg-border"}`} />
                   {regime.label}
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted">

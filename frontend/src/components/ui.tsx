@@ -94,7 +94,7 @@ export function Metric({
 export function SourceLine({ children }: { children: ReactNode }) {
   return (
     <p className="mt-1 text-[11px] text-muted">
-      <span className="mr-1 rounded border border-border px-1 py-px text-[10px]">출처</span>
+      <span className="mr-1 rounded-sm border border-border px-1 py-px text-[10px]">출처</span>
       {children}
     </p>
   );
@@ -134,7 +134,7 @@ export function Freshness({
     <span className="inline-flex flex-wrap items-center gap-1">
       {refreshError && (
         <span
-          className="inline-flex items-center rounded border border-warn/40 bg-warn/10 px-2 py-0.5 text-[11px] text-warn"
+          className="inline-flex items-center rounded-sm border border-warn/40 bg-warn/10 px-2 py-0.5 text-[11px] text-warn"
           title={`${refreshError} — 앞서 받은 값을 보여 줍니다`}
           role="status"
         >
@@ -151,7 +151,7 @@ export function Freshness({
 function FreshnessBadge({ collectedAt, age, stale }: { collectedAt?: string | null; age: string; stale?: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] ${
+      className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-[11px] ${
         stale
           ? "border-warn/40 bg-warn/10 text-warn"
           : "border-border bg-surface-hover text-muted"
@@ -213,7 +213,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
         <button
           type="button"
           onClick={onRetry}
-          className="mt-2 rounded border border-danger/40 px-3 py-1 text-xs hover:bg-danger/20"
+          className="mt-2 rounded-sm border border-danger/40 px-3 py-1 text-xs hover:bg-danger/20"
         >
           다시 시도
         </button>
@@ -254,7 +254,7 @@ export function Button({
       disabled={disabled}
       // focus-visible 링 — 키보드로 조작할 때 지금 어디에 있는지 보여 줍니다.
       // 브라우저 기본 외곽선은 이 어두운 배경에서 거의 보이지 않았습니다.
-      className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-canvas ${palette} ${className}`}
+      className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-canvas ${palette} ${className}`}
     >
       {children}
     </button>
@@ -295,7 +295,7 @@ export function Select({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full max-w-full disabled:opacity-60 rounded-md border border-border bg-surface-hover px-2 py-1.5 text-sm text-body outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent sm:max-w-[22rem]"
+        className="w-full max-w-full disabled:opacity-60 rounded-md border border-border bg-surface-hover px-2 py-1.5 text-sm text-body outline-hidden focus:border-accent focus-visible:ring-2 focus-visible:ring-accent sm:max-w-[22rem]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value} disabled={option.disabled}>
@@ -379,7 +379,7 @@ export function Table<T>({
 
 export function SourceBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded border border-border bg-surface-hover px-2 py-0.5 text-[11px] text-muted">
+    <span className="rounded-sm border border-border bg-surface-hover px-2 py-0.5 text-[11px] text-muted">
       {children}
     </span>
   );

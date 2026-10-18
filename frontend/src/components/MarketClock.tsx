@@ -197,7 +197,7 @@ function ClockEntry({
         {date} {time}
       </span>
       <span
-        className={`shrink-0 whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold ${status.className}`}
+        className={`shrink-0 whitespace-nowrap rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${status.className}`}
         title={note}
       >
         {status.text}

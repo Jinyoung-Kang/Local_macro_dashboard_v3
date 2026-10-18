@@ -45,7 +45,7 @@ export function RegimeLogSection({ tone }: { tone: Record<string, string> }) {
                 header: "판정",
                 render: (row) => (
                   <span className="flex items-center gap-2">
-                    <span className={`h-2 w-4 rounded-sm ${tone[row.code] ?? "bg-border"}`} />
+                    <span className={`h-2 w-4 rounded-xs ${tone[row.code] ?? "bg-border"}`} />
                     {row.label}
                   </span>
                 ),

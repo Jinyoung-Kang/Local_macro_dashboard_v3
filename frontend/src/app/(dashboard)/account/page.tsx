@@ -78,7 +78,7 @@ export default function AccountPage() {
                 value={field.value}
                 autoComplete={field.auto}
                 onChange={(event) => field.set(event.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+                className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent"
               />
             </label>
           ))}
@@ -114,7 +114,7 @@ export default function AccountPage() {
                   value={deletePassword}
                   autoComplete="current-password"
                   onChange={(event) => setDeletePassword(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-none focus:border-accent"
+                  className="mt-1 w-full rounded-md border border-border bg-canvas px-3 py-2 text-sm text-body outline-hidden focus:border-accent"
                 />
               </label>
               {remove.error && <Banner tone="warn">{remove.error}</Banner>}
