@@ -6,8 +6,11 @@ import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.SmartLifecycle;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.dao.DataAccessResourceFailureException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -149,6 +152,97 @@ class AuthServiceTest {
 
         assertThat(db.jdbc.queryForList("SELECT detail->>'priorFailures' FROM audit_log WHERE user_id = ? "
                 + "AND action = 'login.unverified'", String.class, id)).as("직전 실패가 있던 첫 성공만").containsExactly("2");
+    }
+
+    @Test
+    @Disabled("QA-125: 수정 전에는 메일 인증 전 계정도 계정마다 표본을 남겨, 가입으로 만든 계정에서 행이 계속 늘어남")
+    @DisplayName("QA-125 메일 인증 전 계정의 로그인 실패는 계정마다 세지 않고 없는 계정과 같은 한 시간 몫에 든다(사용자 번호는 남김) "
+            + "— 틀림·맞음을 번갈아 보내도 행이 늘지 않는다")
+    void unverifiedAccountFailuresShareUnknownCap() {
+        LoginThrottleTest.MutableClock clock = new LoginThrottleTest.MutableClock();
+        clock.now = Instant.now();   // 실행마다 다른 시작 시각 — 이 테스트가 쓴 요약 행만 찾고 지웁니다
+        String from = clock.now.toString();
+        long id = db.users.insert(db.email("unverified"), db.hasher.hash("correct horse battery"), "MEMBER", "FREE",
+                false);
+        AuthService auth = new AuthService(properties, db.users, db.sessions, db.audit, db.hasher, clock);
+        try {
+            // 메일 인증 전 계정은 가입으로 누구나 만듭니다. 계정마다 묶음을 두면 맞는 비밀번호로 묶음을 닫고 다시 틀리기를
+            // 되풀이해 한 번에 두 행(login.failure 첫 행 + login.unverified)씩 끝없이 쌓였습니다.
+            int rounds = LoginFailureAudit.UNKNOWN_PER_WINDOW + 10;
+            for (int i = 0; i < rounds; i++) {
+                auth.recordFailure(db.email("unverified"));
+                assertThat(auth.login(db.email("unverified"), "correct horse battery", null).unverified()).isTrue();
+            }
+
+            assertThat(db.jdbc.queryForList("SELECT detail::text FROM audit_log WHERE user_id = ? "
+                    + "AND action = 'login.failure'", String.class, id))
+                    .as("없는 계정과 같은 한 시간 상한까지, 사용자 번호와 함께(이메일·계정별 실패 수 없음)")
+                    .hasSize(LoginFailureAudit.UNKNOWN_PER_WINDOW).containsOnly("{\"unverified\": true}");
+            assertThat(db.jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE user_id = ? "
+                    + "AND action = 'login.unverified'", Integer.class, id))
+                    .as("인증 전 계정의 맞는 비밀번호는 따로 남기지 않음").isZero();
+
+            clock.advance(LoginFailureAudit.WINDOW);
+            auth.flushLoginFailureSummary();
+            assertThat(db.jdbc.queryForList("SELECT detail->>'count' FROM audit_log WHERE action = ? AND user_id IS NULL "
+                    + "AND detail->>'from' = ?", String.class, AuthService.LOGIN_FAILURE_SUPPRESSED, from))
+                    .as("넘친 것은 요약 개수로").containsExactly("10");
+        } finally {
+            db.jdbc.update("DELETE FROM audit_log WHERE user_id = ?", id);
+            db.jdbc.update("DELETE FROM audit_log WHERE action = ? AND detail->>'from' = ?",
+                    AuthService.LOGIN_FAILURE_SUPPRESSED, from);
+        }
+    }
+
+    @Test
+    @Disabled("QA-125: 수정 전에는 종료 요약을 종료 이벤트(ContextClosedEvent)에서 써서, 웹 서버가 멈추며 마무리한 요청의 넘친 개수를 잃음")
+    @DisplayName("QA-125 종료 요약은 웹 서버가 멈춘 뒤(빈 정리 때) 쓴다 — 종료 중 마무리된 요청의 넘친 개수도 한 줄에 든다")
+    void shutdownSummaryIsWrittenAfterWebServerStops() {
+        LoginThrottleTest.MutableClock clock = new LoginThrottleTest.MutableClock();
+        clock.now = Instant.now();
+        String from = clock.now.toString();
+        AuthService auth = new AuthService(properties, db.users, db.sessions, db.audit, db.hasher, clock);
+        int late = LoginFailureAudit.UNKNOWN_PER_WINDOW + 5;
+        try {
+            try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+                context.registerBean(AuthService.class, () -> auth);
+                // 웹 서버 자리 — Spring Boot의 웹 서버 정지(graceful shutdown 포함)도 SmartLifecycle이라, 종료 이벤트 뒤·빈 정리 앞에
+                // 멈춥니다. 멈추는 동안 마무리되는 요청이 로그인 실패를 더합니다.
+                context.registerBean("webServer", SmartLifecycle.class, () -> new SmartLifecycle() {
+                    private boolean running;
+
+                    @Override
+                    public void start() {
+                        running = true;
+                    }
+
+                    @Override
+                    public void stop() {
+                        for (int i = 0; i < late; i++) {
+                            auth.recordFailure(db.email("late" + i));
+                        }
+                        running = false;
+                    }
+
+                    @Override
+                    public boolean isRunning() {
+                        return running;
+                    }
+                });
+                context.refresh();
+                for (int i = 0; i < LoginFailureAudit.UNKNOWN_PER_WINDOW + 5; i++) {
+                    auth.recordFailure(db.email("nobody" + i));
+                }
+            }
+
+            // 수정 전: 종료 이벤트 때 5만 쓰고, 그 뒤 새 시간으로 센 넘친 5는 쓸 기회 없이 사라졌습니다.
+            assertThat(db.jdbc.queryForList("SELECT detail->>'count' FROM audit_log WHERE action = ? AND user_id IS NULL "
+                    + "AND detail->>'from' = ?", String.class, AuthService.LOGIN_FAILURE_SUPPRESSED, from))
+                    .containsExactly(String.valueOf(5 + late));
+        } finally {
+            db.jdbc.update("DELETE FROM audit_log WHERE action = ? AND detail->>'from' = ?",
+                    AuthService.LOGIN_FAILURE_SUPPRESSED, from);
+        }
     }
 
     @Test

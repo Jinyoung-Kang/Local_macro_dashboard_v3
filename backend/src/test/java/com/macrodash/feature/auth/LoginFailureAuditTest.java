@@ -1,5 +1,6 @@
 package com.macrodash.feature.auth;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +54,43 @@ class LoginFailureAuditTest {
         // 10분마다 한 번(15분 안이라 묶음이 이어짐), 10시간 — 61번 중 12번만 남고, 남긴 행 사이는 한 시간을 넘지 않는다.
         assertThat(knownFailures(42, 61, Duration.ofMinutes(10)))
                 .containsExactly(1, 5, 8, 14, 16, 22, 28, 32, 38, 44, 50, 56);
+    }
+
+    @Test
+    @Disabled("QA-125: 수정 전에는 감사 묶음이 지연 기록과 같은 15분에 끝나, 끊어 시도하면 묶음마다 첫 실패만 남음")
+    @DisplayName("QA-125 4번 실패하고 15분 넘게 쉬기를 하루 되풀이해도(지연 없음) 묶음이 이어져 실제 누적 실패 수가 남고, "
+            + "성공 때 직전 실패 수는 전체 개수")
+    void pacedAttackKeepsRunningCount() {
+        // 리뷰 실험 그대로 — 지연 기록은 15분 1초 쉴 때마다 잊혀 느린 차선에 한 번도 들어가지 않습니다.
+        List<Long> sleeps = new ArrayList<>();
+        LoginThrottle throttle = new LoginThrottle(clock, sleeps::add);
+        List<Object> written = new ArrayList<>();
+        int guesses = 0;
+        for (int round = 0; round <= 96; round++) {
+            if (round > 0) {
+                clock.advance(LoginThrottle.FORGET_AFTER.plusSeconds(1));
+            }
+            int attempts = round < 96 ? 4 : 3;   // 96번 × 4회, 마지막에 3회 뒤 맞힘
+            for (int i = 0; i < attempts; i++) {
+                if (i > 0) {
+                    clock.advance(Duration.ofSeconds(1));
+                }
+                assertThat(throttle.attempt("10.0.9.9|victim@test.local", () -> false).busy()).isFalse();
+                guesses++;
+                Map<String, Object> detail = audit.knownFailure(42);
+                if (detail != null) {
+                    written.add(detail.get("failures"));
+                }
+            }
+        }
+
+        assertThat(sleeps).as("지연에 한 번도 걸리지 않음").isEmpty();
+        assertThat(guesses).isEqualTo(387);
+        // 수정 전: 'failures: 1' 97행, 성공 때 직전 실패 수 3(마지막 묶음뿐)
+        assertThat(written).as("1·5·2^k번째와 한 시간(16번)에 한 번 — 모두 그때까지의 누적 수")
+                .containsExactly(1, 5, 8, 16, 29, 32, 45, 61, 64, 77, 93, 109, 125, 128, 141, 157, 173, 189, 205,
+                        221, 237, 253, 256, 269, 285, 301, 317, 333, 349, 365, 381);
+        assertThat(audit.closeWindow(42)).as("성공 기록의 priorFailures").isEqualTo(387);
     }
 
     @Test
