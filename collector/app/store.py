@@ -929,43 +929,6 @@ def missing_datasets() -> list[dict]:
     ]
 
 
-def purge_older_than(days: int) -> dict[str, Any]:
-    """
-    수동 정리(POST /maintenance/purge) — 허용 목록 데이터셋의 오래된 누적 행과 옛 실행 기록을 지웁니다.
-
-    지우는 것은 catalog.PURGEABLE_DATASETS(태스크가 스스로 보존 기한을 두고, 원천이 다시 주는 것)뿐입니다.
-    예전에는 데이터셋을 가리지 않고 지워, 다시 받을 수 없는 레이더 이력과 증분 적재라 다시 채워지지 않는
-    FRED 누적(판정 성과의 입력)까지 사라졌습니다(QA-070). 허용 목록 밖에서 기간이 지난 행이 있던 데이터셋은
-    남기고 이름을 `excluded`로 알립니다.
-
-    :returns: {"timeseries", "observations", "collectorRuns": 지운 행 수,
-               "purgeable": 정리 대상 데이터셋, "excluded": 오래된 행이 있었지만 남긴 데이터셋}
-    """
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date()
-    purgeable = list(catalog.PURGEABLE_DATASETS)
-    with connection() as conn:
-        excluded = sorted(row["dataset"] for row in conn.execute(
-            "SELECT dataset FROM timeseries WHERE obs_date < %s AND dataset <> ALL(%s) "
-            "UNION SELECT dataset FROM observations WHERE obs_date < %s AND dataset <> ALL(%s)",
-            (cutoff, purgeable, cutoff, purgeable),
-        ).fetchall())
-        ts = conn.execute(
-            "DELETE FROM timeseries WHERE obs_date < %s AND dataset = ANY(%s)", (cutoff, purgeable)
-        ).rowcount
-        ob = conn.execute(
-            "DELETE FROM observations WHERE obs_date < %s AND dataset = ANY(%s)", (cutoff, purgeable)
-        ).rowcount
-        runs = conn.execute(
-            "DELETE FROM collector_runs WHERE started_at < %s "
-            "AND id NOT IN (SELECT id FROM collector_runs ORDER BY id DESC LIMIT 50)",
-            (cutoff,),
-        ).rowcount
-    return {
-        "timeseries": ts, "observations": ob, "collectorRuns": runs,
-        "purgeable": purgeable, "excluded": excluded,
-    }
-
-
 def purge_run_logs(days: int) -> dict[str, int]:
     """
     보존 기간이 지난 수집 실행 기록(collector_task_runs · collector_runs)을 지웁니다.
@@ -976,7 +939,7 @@ def purge_run_logs(days: int) -> dict[str, int]:
 
     기간과 무관하게 남기는 것
       - 태스크마다 가장 최근 1건: 오래 돌지 않은 태스크도 상태 화면이 "마지막 실행"을 보여 줍니다.
-      - 최근 실행 50건: purge_older_than과 같은 규칙.
+      - 최근 실행 50건(collector_runs).
 
     :param days: 보존 기간(일). 이보다 먼저 시작한 기록이 대상입니다
     :returns: {"taskRuns": 지운 태스크 기록 수, "collectorRuns": 지운 실행 기록 수}

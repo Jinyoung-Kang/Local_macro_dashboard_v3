@@ -108,7 +108,7 @@ done
 for p in "/live/radar" "/live/ticker/AAPL" "/diagnostics/connections"; do
   check "GET $p 토큰 없음" "401|403" "$(code "http://127.0.0.1:$CPORT$p")"
 done
-for p in /collect "/collect/task/fred_series" /refresh /maintenance/purge; do
+for p in /collect "/collect/task/fred_series" /refresh; do
   check "POST $p 토큰 없음" "401|403" "$(code -X POST "http://127.0.0.1:$CPORT$p")"
 done
 check "GET /health 토큰 없음(공개)" "200" "$(code "http://127.0.0.1:$CPORT/health")"

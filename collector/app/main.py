@@ -16,7 +16,7 @@ app/main.py
   --status          → GET  /status
   --history         → GET  /task-history
   --verify          → GET  /verify/* (판정은 백엔드가 합니다)
-  --purge-days      → POST /maintenance/purge?days=400 (허용 목록 데이터셋만 — 백업 먼저)
+  --purge-days      → 없음 (금융위 시세·토스 종목 수급은 태스크가 보존 기한으로, 실행 기록은 run_log_retention이 정리)
 """
 from __future__ import annotations
 
@@ -336,23 +336,6 @@ def refresh(
     _check_token(x_service_token)
     requested_at = store.request_refresh(scope)
     return {"scope": scope, "requestedAt": requested_at.isoformat()}
-
-
-@app.post("/maintenance/purge")
-def purge(
-    days: int = Query(400, ge=30),
-    x_service_token: str | None = Header(default=None),
-) -> dict:
-    """
-    오래된 누적 행 정리(수동 운영 명령) — **실행 전에 `make backup`.**
-
-    지우는 것: 허용 목록(catalog.PURGEABLE_DATASETS — 금융위 시세·토스 종목 수급처럼 태스크가 스스로 보존 기한을 두고
-    원천이 다시 주는 것)에서 `days`일보다 오래된 행, 그리고 옛 수집 실행 기록(최근 50건은 남김).
-    지우지 않는 것: 레이더 이력(다시 받을 수 없음), FRED·순유동성·KRX 선물·금융위 시장 합계 누적(다시 채워지지 않음).
-    오래된 행이 있었지만 남긴 데이터셋은 응답의 `excluded`에 적습니다(QA-070).
-    """
-    _check_token(x_service_token)
-    return store.purge_older_than(days)
 
 
 # ==============================================================================

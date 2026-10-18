@@ -228,7 +228,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 
 **브라우저가 보낸 다른 출처의 요청은 토큰과 상관없이 403입니다** — `Sec-Fetch-Site`가
 `none`·`same-origin`이 아니거나, 그 헤더 없이 `Origin`이 수집기 자신이 아닌 경우.
-대시보드를 켜 둔 채 방문한 다른 사이트가 `/maintenance/purge` 같은 경로를 부를 수
+대시보드를 켜 둔 채 방문한 다른 사이트가 `/collect` 같은 경로를 부를 수
 있었습니다. 백엔드·curl·make는 이 헤더를 보내지 않아 영향이 없습니다.
 
 | 경로 | 설명 |
@@ -240,7 +240,6 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 | 🔒 `POST /collect?group=fast\|slow\|weekly\|all&wait=true` | 작업군 실행 |
 | 🔒 `POST /collect/task/{taskName}` | 태스크 1건 실행 |
 | 🔒 `POST /refresh?scope=global` | 새로고침 기준 시각 갱신 |
-| 🔒 `POST /maintenance/purge?days=400` | 오래된 누적 행 정리 — **실행 전 `make backup`**. 허용 목록(`catalog.PURGEABLE_DATASETS`: 금융위 시세·토스 종목 수급)과 옛 실행 기록만 지움. 레이더 이력·FRED·순유동성·KRX 선물·금융위 시장 합계는 지우지 않고 응답 `excluded`에 적음 |
 | 🔒 `GET /live/radar?...` | 수급 랭킹 즉시 수집 (폴백 체인 전체) |
 | 🔒 `GET /live/ticker/{symbol}?period=` | 티커 시계열 즉시 수집 |
 | 🔒 `GET /live/daum-intraday?minutes=30` | 장중 수급 가속도 |

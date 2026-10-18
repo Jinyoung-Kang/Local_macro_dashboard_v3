@@ -216,48 +216,6 @@ def test_missing_datasets_lists_expected_names(store):
     assert catalog.SNAP_MACRO_COLLECTED not in names_after
 
 
-def test_purge_removes_old_history_only(store):
-    """허용 목록 데이터셋에서도 기간이 지난 행만 지웁니다. 목록 밖 데이터셋은 남기고 알립니다(QA-070)."""
-    recent = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()
-    store.put_observations(catalog.OBS_TOSS_STOCK_FLOW, "2000-01-03", [{"code": "005930"}], entity_key="code")
-    store.put_observations(catalog.OBS_TOSS_STOCK_FLOW, recent, [{"code": "005930"}], entity_key="code")
-    store.put_timeseries("demo", "S", [("2000-01-03", 1.0), (recent, 2.0)])
-    removed = store.purge_older_than(365)
-
-    assert removed["observations"] == 1
-    assert [row["obsDate"] for row in store.read_observations(catalog.OBS_TOSS_STOCK_FLOW)] == [recent]
-    assert removed["timeseries"] == 0
-    assert [row["date"] for row in store.read_timeseries("demo", "S")] == ["2000-01-03", recent]
-    assert removed["excluded"] == ["demo"]
-
-
-def test_qa070_purge_keeps_history_that_cannot_be_refetched(store):
-    """
-    수동 정리(/maintenance/purge)는 스스로 보존 기한을 두는 데이터셋(허용 목록)만 지웁니다(QA-070).
-
-    FRED·순유동성 누적은 증분 적재라 지운 구간이 다시 채워지지 않고(판정 성과가 전 구간을 씀, ADR 0009),
-    레이더 이력은 외부에서 다시 받을 수 없습니다(ADR 0005). 예전에는 둘 다 기간만 보고 지웠습니다.
-    """
-    old = (datetime.now(timezone.utc) - timedelta(days=800)).date().isoformat()
-    recent = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()
-    store.put_timeseries(catalog.TS_FRED, "BAMLH0A0HYM2", [(old, 3.9), (recent, 3.1)])
-    store.put_observations(catalog.OBS_RADAR, old, [{"entity": "KOSPI|외국인|순매수|005930"}], entity_key="entity")
-    store.put_observations(catalog.OBS_FSC_PRICE, old, [{"code": "005930"}], entity_key="code")
-    store.put_observations(catalog.OBS_FSC_PRICE, recent, [{"code": "005930"}], entity_key="code")
-
-    removed = store.purge_older_than(400)
-
-    assert [row["date"] for row in store.read_timeseries(catalog.TS_FRED, "BAMLH0A0HYM2")] == [old, recent]
-    assert len(store.read_observations(catalog.OBS_RADAR, obs_date=old)) == 1
-    # 허용 목록(금융위 시세)은 지금처럼 기간으로 지웁니다.
-    assert store.read_observations(catalog.OBS_FSC_PRICE, obs_date=old) == []
-    assert len(store.read_observations(catalog.OBS_FSC_PRICE, obs_date=recent)) == 1
-    assert removed["timeseries"] == 0
-    assert removed["observations"] == 1
-    # 오래된 행이 있었지만 남긴 데이터셋을 응답으로 알립니다.
-    assert set(removed["excluded"]) == {catalog.TS_FRED, catalog.OBS_RADAR}
-
-
 def test_task_summary_hides_removed_tasks(store):
     """없앤 태스크의 옛 실행 기록이 상태 화면에 남지 않아야 합니다(다시 실행할 수 없는 버튼)."""
     run_id = store.start_run("weekly")
@@ -321,7 +279,7 @@ def test_purge_run_logs_only_touches_old_run_logs(store):
 
     기간과 무관하게 남기는 실행 기록
       - 태스크마다 가장 최근 1건: 오래 돌지 않은 태스크도 상태 화면이 "마지막 실행"을 보여 줍니다.
-      - 최근 실행 50건: 수동 정리(purge_older_than)와 같은 규칙.
+      - 최근 실행 50건(collector_runs).
     """
     long_ago = datetime.now(timezone.utc) - timedelta(days=100)
     with store.connection() as conn:
