@@ -538,6 +538,42 @@ class ComputedCacheTest {
     }
 
     @Test
+    @DisplayName("QA-131 앞선 계산이 Error를 던져도 따르는 요청은 감싸지 않은 같은 Error를 곧바로 받는다 — 대기 시간을 헛기다리다 429가 되지 않는다")
+    void followersShareLeadersError() throws Exception {
+        // 수 MB 저장본을 훑는 계산은 부하 중 OutOfMemoryError를 낼 수 있습니다. 앞선 계산이 Error를 넘기지 않으면 따르는
+        // 요청은 결과 없이 따르기 대기(여기서는 10초)를 다 채운 뒤 429를 받습니다.
+        when(repository.latestCollectedAt()).thenReturn(t0);
+        ComputedCache cache = new ComputedCache(repository, Clock.fixed(t0, ZoneOffset.UTC), 1, Duration.ofSeconds(60), 32,
+                Duration.ofSeconds(10));
+        Error failure = new OutOfMemoryError("테스트: 계산 중 메모리 부족");
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        List<Caller> followers = new ArrayList<>();
+        Caller leader;
+        try {
+            leader = call(cache, "k", () -> {
+                entered.countDown();
+                awaitQuietly(release);
+                throw failure;
+            });
+            assertThat(entered.await(GENEROUS_SECONDS, TimeUnit.SECONDS)).isTrue();
+            for (int i = 0; i < 3; i++) {
+                followers.add(call(cache, "k", MUST_NOT_COMPUTE).awaitParkedOrDone());
+            }
+        } finally {
+            release.countDown();
+        }
+
+        assertThat(leader.failure()).isSameAs(failure);
+        for (Caller follower : followers) {
+            assertThat(follower.failure()).isSameAs(failure);
+        }
+        assertThat(cache.rejectedCount()).isZero();
+        assertThat(cache.inflight()).isZero();
+        assertThat(cache.<String>get("k", () -> "다시 계산")).as("자리도 돌려줌 — 아니면 60초 기다림").isEqualTo("다시 계산");
+    }
+
+    @Test
     @DisplayName("QA-131 앞선 계산이 자리를 얻지 못해 429면 따르는 요청도 429 — 거절은 돌려보낸 요청마다 세고, 얻지 못한 자리는 돌려주지 않는다")
     void followersShareLeadersRejection() throws Exception {
         when(repository.latestCollectedAt()).thenReturn(t0);
