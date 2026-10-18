@@ -31,6 +31,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -214,9 +215,13 @@ class ComputedCacheTest {
         }
     }
 
-    /** 새 스레드에서 {@code cache.get(key, compute)}를 부릅니다. 돌려준 값이나 던진 예외는 {@code result}에 담깁니다. */
+    /**
+     * 새 스레드에서 {@code cache.get(key, compute)}를 부릅니다. 돌려준 값이나 던진 예외는 {@code result}에 담기고, 던진
+     * 예외는 {@code thrown}에도 그대로 남깁니다({@code result.get}은 CompletionException을 벗겨 원인을 주므로).
+     */
     private static Caller call(ComputedCache cache, String key, Supplier<Object> compute) {
         CompletableFuture<Object> result = new CompletableFuture<>();
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
         AtomicBoolean interruptedAfter = new AtomicBoolean();
         Thread thread = new Thread(() -> {
             try {
@@ -225,16 +230,21 @@ class ComputedCacheTest {
                 result.complete(value);
             } catch (Throwable e) {
                 interruptedAfter.set(Thread.currentThread().isInterrupted());
+                thrown.set(e);
                 result.completeExceptionally(e);
             }
         }, "cache-caller-" + key);
         thread.setDaemon(true); // 실패한 테스트가 래치를 못 열어도 JVM 종료를 막지 않게
         thread.start();
-        return new Caller(thread, result, interruptedAfter);
+        return new Caller(thread, result, thrown, interruptedAfter);
     }
 
-    /** @param interruptedAfter 호출이 끝난 뒤 그 스레드의 interrupt 표시가 남아 있었는지 */
-    private record Caller(Thread thread, CompletableFuture<Object> result, AtomicBoolean interruptedAfter) {
+    /**
+     * @param thrown           호출이 던진 예외 그대로(던지지 않았으면 null)
+     * @param interruptedAfter 호출이 끝난 뒤 그 스레드의 interrupt 표시가 남아 있었는지
+     */
+    private record Caller(Thread thread, CompletableFuture<Object> result, AtomicReference<Throwable> thrown,
+                          AtomicBoolean interruptedAfter) {
 
         /**
          * 호출이 끝났거나 캐시 안에서 멈춰(자리나 앞선 계산을 기다림) 있을 때까지 기다립니다. 어느 쪽에서 기다리는지는
@@ -269,13 +279,13 @@ class ComputedCacheTest {
             return result.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
         }
 
-        /** 호출이 던진 예외. 값을 돌려줬으면 실패합니다. */
+        /** 호출이 던진 예외 — 벗기지 않은 그대로. 값을 돌려줬으면 실패합니다. */
         Throwable failure() throws Exception {
             try {
                 Object value = result.get(GENEROUS_SECONDS, TimeUnit.SECONDS);
                 throw new AssertionError("예외 대신 값을 돌려줬습니다: " + value);
             } catch (ExecutionException e) {
-                return e.getCause();
+                return thrown.get();
             }
         }
     }
