@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -102,6 +103,53 @@ class AuthServiceTest {
         assertThat(auth.authenticate(laptop.token())).as("지금 기기").isPresent();
         assertThat(auth.verify(db.email("change"), "new long passphrase")).isPresent();
         assertThat(auth.sessionsOf(me)).hasSize(1).first().satisfies(row -> assertThat(row.get("current")).isEqualTo(true));
+    }
+
+    @Test
+    @DisplayName("QA-125 인증 전 계정이 연속 실패 뒤 맞는 비밀번호를 내면 login.unverified에 그 실패 수가 남는다(한 번만)")
+    void unverifiedLoginRecordsPriorFailures() {
+        long id = db.users.insert(db.email("unverified"), db.hasher.hash("correct horse battery"), "MEMBER", "FREE",
+                false);
+        AuthService auth = db.service(properties);
+        auth.recordFailure(db.email("unverified"));
+        auth.recordFailure(db.email("unverified"));
+
+        assertThat(auth.login(db.email("unverified"), "correct horse battery", null).unverified()).isTrue();
+        assertThat(auth.login(db.email("unverified"), "correct horse battery", null).unverified()).isTrue();
+
+        assertThat(db.jdbc.queryForList("SELECT detail->>'priorFailures' FROM audit_log WHERE user_id = ? "
+                + "AND action = 'login.unverified'", String.class, id)).as("직전 실패가 있던 첫 성공만").containsExactly("2");
+    }
+
+    @Test
+    @DisplayName("QA-125 한 시간 상한을 넘긴 없는 계정 실패는 정기 작업이 시간이 끝난 뒤 요약 한 줄(사용자 번호 없음)로 남긴다")
+    void flushWritesSuppressedSummary() {
+        LoginThrottleTest.MutableClock clock = new LoginThrottleTest.MutableClock();
+        clock.now = Instant.now();   // 실행마다 다른 시작 시각 — 이 테스트가 쓴 요약 행만 찾고 지웁니다
+        String from = clock.now.toString();
+        AuthService auth = new AuthService(properties, db.users, db.sessions, db.audit, db.hasher, clock);
+        try {
+            for (int i = 0; i < LoginFailureAudit.UNKNOWN_PER_WINDOW + 5; i++) {
+                auth.recordFailure(db.email("nobody" + i));
+            }
+            auth.flushLoginFailureSummary();   // 시간이 끝나기 전 — 아직 쓰지 않음
+            assertThat(db.jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = ? "
+                    + "AND detail->>'from' = ?", Integer.class, AuthService.LOGIN_FAILURE_SUPPRESSED, from)).isZero();
+
+            clock.advance(LoginFailureAudit.WINDOW);
+            auth.flushLoginFailureSummary();
+            auth.flushLoginFailureSummary();   // 두 번 불러도 한 줄
+
+            assertThat(db.jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = 'login.failure' "
+                    + "AND detail->>'email' LIKE ?", Integer.class, db.prefix + "-nobody%"))
+                    .isEqualTo(LoginFailureAudit.UNKNOWN_PER_WINDOW);
+            assertThat(db.jdbc.queryForList("SELECT detail->>'count' FROM audit_log WHERE action = ? AND user_id IS NULL "
+                    + "AND detail->>'from' = ?", String.class, AuthService.LOGIN_FAILURE_SUPPRESSED, from))
+                    .containsExactly("5");
+        } finally {
+            db.jdbc.update("DELETE FROM audit_log WHERE action = ? AND detail->>'from' = ?",
+                    AuthService.LOGIN_FAILURE_SUPPRESSED, from);
+        }
     }
 
     @Test

@@ -25,7 +25,7 @@
 | GET | `/api/admin/users` | 운영자. 사용자 목록 `{users:[{id, email, role, tier, verified, createdAt}]}` |
 | POST | `/api/admin/users` | 운영자. 회원 만들기 `{"email","password","tier"}`(인증된 상태, 처음 비밀번호는 운영자가 전달) |
 | POST | `/api/admin/users/{id}` | 운영자. 역할·등급 지정 `{"role":"OWNER"\|"MEMBER","tier":"FREE"\|"PRO"}` — 그 사용자의 다음 요청부터 반영. 자기 운영자 역할은 못 내림. 결과가 무료(MEMBER·FREE)면 전에도 무료였어도 국면 전환 밖의 켜진 알림 규칙을 끔(감사 기록 `disabledAlertRules`에 이번에 끈 개수, 다시 올려도 저절로 켜지지 않음). 정기 평가는 켜진 규칙이라도 지금 유료(운영자·PRO)가 아닌 회원에게는 국면 전환만 배달 |
-| GET | `/api/admin/audit?limit=100` | 운영자. 감사 기록(로그인·비밀번호·역할/등급 변경·삭제) |
+| GET | `/api/admin/audit?limit=100` | 운영자. 감사 기록(로그인·비밀번호·역할/등급 변경·삭제). 로그인 실패 `login.failure`는 표본만(QA-125) — 있는 계정은 `detail.failures`(연속 실패의 1·5·8·16…번째와 한 시간에 한 번), 없는 계정은 `detail.email`(한 시간 30건까지). 넘친 개수는 `login.failure.suppressed` `{count, from, to, limit}`(사용자 번호 없음). 성공 `login.success`와 메일 인증 전 성공 `login.unverified`에는 직전 실패 수 `priorFailures`(있을 때만) |
 | GET | `/api/alerts/rules` | 내 알림 규칙 `{available, limit, rules:[{id, kind, params, enabled, createdAt, description}]}`. 상한: 무료 1개(국면 전환만)·유료 20·운영자 50 |
 | POST | `/api/alerts/rules` | 만들기 `{"kind":"REGIME_CHANGE"\|"FOREIGN_STREAK"\|"INSTITUTION_NEW","params":{…}}` — 연속 순매수 `{target:KOSPI\|KOSDAQ\|STOCK, code(6자리), n:3~20}`, 13F `{cik}`(추적 12곳). 무료가 다른 종류면 403, 관심 종목은 사용자당 20·전체 60종목(수집 범위 초과면 400). 만든 날 이후 사건만 들어옴 |
 | POST | `/api/alerts/rules/{id}` | 켜기·끄기 `{"enabled": bool}`. 켤 때도 만들 때와 같은 검사 — 무료가 국면 전환 밖의 규칙을 켜면 403, 관심 종목 상한 초과면 400 |

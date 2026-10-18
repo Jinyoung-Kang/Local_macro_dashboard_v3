@@ -7,7 +7,9 @@ import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -69,14 +72,24 @@ public class AuthService {
     private final SecureRandom random = new SecureRandom();
     /** 데모 열람(ADR 0013). 토큰이 짧으면 여기서 예외 → 기동이 멈춥니다. */
     private final DemoViewer demo;
+    /** 로그인 실패 중 감사 기록에 남길 표본(QA-125). 메모리에만 있습니다. */
+    private final LoginFailureAudit loginAudit;
 
+    @Autowired
     public AuthService(AppProperties properties, UserStore users, SessionStore sessions, AuditLogStore audit,
                        PasswordHasher hasher) {
+        this(properties, users, sessions, audit, hasher, Clock.systemUTC());
+    }
+
+    /** {@code clock}은 로그인 실패 표본의 시간 — 테스트가 한 시간 묶음을 기다리지 않게 바꿔 끼웁니다. */
+    AuthService(AppProperties properties, UserStore users, SessionStore sessions, AuditLogStore audit,
+                PasswordHasher hasher, Clock clock) {
         this.properties = properties;
         this.users = users;
         this.sessions = sessions;
         this.audit = audit;
         this.hasher = hasher;
+        this.loginAudit = new LoginFailureAudit(clock);
         this.demo = DemoViewer.from(properties.getDemoViewerToken());
         if (demo.enabled()) {
             log.info("데모 열람이 켜져 있습니다(DASHBOARD_DEMO_VIEWER_TOKEN) — 앞단 프록시가 붙인 {} 헤더의 요청은 "
@@ -114,7 +127,10 @@ public class AuthService {
         }
     }
 
-    /** 감사 기록 보존 기한(사용자 결정 2026-10-11) — 계정 사고를 되짚기에 충분하고, 데모 규모에서 용량 부담이 없습니다. */
+    /**
+     * 감사 기록 보존 기한(사용자 결정 2026-10-11) — 계정 사고를 되짚기에 충분합니다. 인증 없이 늘릴 수 있는 로그인 실패는
+     * 표본만 남겨(QA-125, {@link LoginFailureAudit}) 1년치도 용량 부담이 없습니다.
+     */
     static final Duration AUDIT_KEEP = Duration.ofDays(365);
 
     /** 1년 지난 감사 기록 정리. 세션 정리와 같은 주기, 실패하면 다음 주기에 다시 합니다. */
@@ -132,6 +148,44 @@ public class AuthService {
         } catch (RuntimeException e) {
             log.warn("감사 기록 정리 실패 — 다음 주기에 다시 시도합니다: {}", e.toString());
         }
+    }
+
+    /** 로그인 실패 요약 행의 action — 한 시간 상한을 넘겨 개수만 센 없는 계정 실패(QA-125). */
+    static final String LOGIN_FAILURE_SUPPRESSED = "login.failure.suppressed";
+
+    /**
+     * 끝난 시간에 상한을 넘겨 개수만 센 없는 계정 로그인 실패를 요약 한 줄로 남깁니다(QA-125). 쓰지 못하면 개수를 메모리에
+     * 돌려놓고 다음 주기에 다시 합니다.
+     */
+    @Scheduled(initialDelayString = "${dashboard.scheduler.login-audit-flush-ms:300000}",
+            fixedDelayString = "${dashboard.scheduler.login-audit-flush-ms:300000}")
+    public void flushLoginFailureSummary() {
+        writeSuppressed(false);
+    }
+
+    /** 종료할 때는 아직 끝나지 않은 시간의 넘친 개수도 씁니다 — 재시작으로 잃지 않게. */
+    @EventListener(ContextClosedEvent.class)
+    public void flushLoginFailureSummaryOnShutdown() {
+        writeSuppressed(true);
+    }
+
+    private void writeSuppressed(boolean includeOpen) {
+        try {
+            if (!users.ready()) {
+                return;
+            }
+        } catch (RuntimeException e) {
+            log.warn("로그인 실패 요약을 쓰지 못했습니다 — 다음 주기에 다시 시도합니다: {}", e.toString());
+            return;
+        }
+        loginAudit.takeSuppressed(includeOpen).ifPresent(summary -> {
+            try {
+                audit.append(null, LOGIN_FAILURE_SUPPRESSED, summary.detail());
+            } catch (RuntimeException e) {
+                loginAudit.putBack(summary);
+                log.warn("로그인 실패 요약을 쓰지 못했습니다 — 다음 주기에 다시 시도합니다: {}", e.toString());
+            }
+        });
     }
 
     /** 만료·해지 뒤 이만큼 지난 세션은 지웁니다(로그인 기기 목록에도 보이지 않는 행). */
@@ -208,20 +262,21 @@ public class AuthService {
         return hasher.matches(password, user.get().passwordHash()) ? user : Optional.empty();
     }
 
-    /** 확인된 사용자에게 새 세션을 엽니다. */
+    /** 확인된 사용자에게 새 세션을 엽니다. 성공 기록에는 그 직전의 연속 실패 수가 붙습니다(QA-125, 있을 때만). */
     public Issued openSession(UserStore.User user, String userAgent) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         UUID sessionId = sessions.create(user.id(), hash(token), Instant.now().plusSeconds(sessionSeconds()),
                 trimAgent(userAgent));
-        audit.append(user.id(), "login.success", Map.of());
+        audit.append(user.id(), "login.success", priorFailures(loginAudit.closeWindow(user.id())));
         return new Issued(token, new CurrentUser(user.id(), user.email(), user.role(), user.tier(), sessionId));
     }
 
     /**
      * 로그인 결과. 비밀번호가 맞아도 메일 인증 전이면 세션을 열지 않습니다({@code unverified}).
      * 비밀번호가 틀리면 둘 다 비어 있습니다 — 인증 여부는 비밀번호를 아는 사람에게만 알려 줍니다.
+     * 인증 전 계정이 연속 실패 뒤 맞으면 {@code login.unverified}에 그 실패 수를 남깁니다(맞힌 대입을 숨기지 않게, QA-125).
      */
     public record LoginResult(Issued issued, boolean unverified) {
     }
@@ -232,23 +287,40 @@ public class AuthService {
             return new LoginResult(null, false);
         }
         if (user.get().emailVerifiedAt() == null) {
+            int prior = loginAudit.closeWindow(user.get().id());
+            if (prior > 0) {
+                audit.append(user.get().id(), "login.unverified", priorFailures(prior));
+            }
             return new LoginResult(null, true);
         }
         return new LoginResult(openSession(user.get(), userAgent), false);
     }
 
-    /** 로그인 실패를 감사 기록에 남깁니다(이메일만, 비밀번호는 남기지 않음). */
+    /**
+     * 로그인 실패를 감사 기록에 남깁니다 — 실패마다가 아니라 표본만(QA-125, 규칙은 {@link LoginFailureAudit}).
+     * 있는 계정은 사용자 번호와 그 묶음의 실패 수({@code failures}), 없는 계정은 이메일(형식이 맞을 때)만 남깁니다.
+     * 비밀번호·접속 주소는 남기지 않습니다.
+     */
     public void recordFailure(String email) {
         if (!users.ready()) {
             return;
         }
         String normalized = normalizeEmail(email);
         Long userId = normalized == null ? null : users.findByEmail(normalized).map(UserStore.User::id).orElse(null);
-        Map<String, Object> detail = new LinkedHashMap<>();
-        if (userId == null && normalized != null) {
-            detail.put("email", normalized);   // 없는 계정 시도는 이메일로만 남습니다
+        Map<String, Object> detail = userId == null ? loginAudit.unknownFailure(normalized)
+                : loginAudit.knownFailure(userId);
+        if (detail != null) {
+            audit.append(userId, "login.failure", detail);
         }
-        audit.append(userId, "login.failure", detail);
+    }
+
+    /** 성공 기록 detail — 직전 연속 실패가 있었을 때만 {@code priorFailures}. */
+    private static Map<String, Object> priorFailures(int prior) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        if (prior > 0) {
+            detail.put("priorFailures", prior);
+        }
+        return detail;
     }
 
     /** 쿠키 토큰 → 사용자. 해지·만료·없는 토큰이면 비어 있음. */

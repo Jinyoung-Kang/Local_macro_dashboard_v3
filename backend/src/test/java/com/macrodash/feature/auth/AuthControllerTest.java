@@ -3,7 +3,6 @@ package com.macrodash.feature.auth;
 import com.macrodash.config.AppProperties;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -82,22 +81,21 @@ class AuthControllerTest {
     }
 
     @Test
-    @Disabled("QA-125: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-125 없는 이메일을 바꿔 가며 실패해도 감사 기록은 한 시간 상한(30건)까지만 쌓인다")
     void loginFailureAuditIsBoundedUnderEmailRotation() {
         // 이메일이 다르면 지연 키(주소|이메일)도 달라 모두 무료 시도 — 로그인 없이 실패마다 한 행이 1년 동안 남았습니다.
-        for (int i = 0; i < 30 + 10; i++) {
+        for (int i = 0; i < LoginFailureAudit.UNKNOWN_PER_WINDOW + 10; i++) {
             assertThat(login(db.email("nobody" + i), "wrong-password", "10.0.2.1").getStatusCode())
                     .isEqualTo(HttpStatus.UNAUTHORIZED);
         }
 
         Integer rows = db.jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = 'login.failure' "
                 + "AND detail->>'email' LIKE ?", Integer.class, db.prefix + "-nobody%");
-        assertThat(rows).as("없는 계정 실패 기록").isLessThanOrEqualTo(30);
+        assertThat(rows).as("없는 계정 실패 기록 — 상한까지는 이메일과 함께 남김")
+                .isEqualTo(LoginFailureAudit.UNKNOWN_PER_WINDOW);
     }
 
     @Test
-    @Disabled("QA-125: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-125 같은 계정 대입은 주소를 바꿔도 한 묶음으로 세어 1·5·8번째 실패만 남고, 성공 기록에 그동안의 실패 수가 남는다")
     void bruteForceAcrossAddressesIsOneWindowAndSuccessShowsPriorFailures() {
         String email = db.email("owner");
