@@ -52,12 +52,7 @@ class CorrelationLimitsTest {
     @Test
     @DisplayName("QA-133 롤링 창은 250, 조회 기간은 10년으로 접고 응답 window는 접은 값을 돌려준다")
     void windowAndYearsAreFoldedToScreenMaximum() {
-        StoreReader store = mock(StoreReader.class);
-        when(store.read(anyString(), anyLong(), anyString())).thenReturn(Optional.empty());
-        when(store.read(eq(Datasets.fredSeries("DGS10")), anyLong(), anyString()))
-                .thenReturn(fifteenYears(Datasets.fredSeries("DGS10"), 7.0));
-        when(store.read(eq(Datasets.fredSeries("DGS2")), anyLong(), anyString()))
-                .thenReturn(fifteenYears(Datasets.fredSeries("DGS2"), 11.0));
+        StoreReader store = fredStore();
         // 호출 전에 잽니다 — 호출 중에 날짜가 바뀌어도 서비스의 기준일은 이보다 늦을 뿐입니다.
         LocalDate tenYearsAgo = Kst.yearsAgo(10);
 
@@ -72,5 +67,30 @@ class CorrelationLimitsTest {
                 // 반대쪽도 고정합니다 — 상한이 10년보다 줄면 화면의 '최근 10년'이 말없이 짧아집니다. 7일은 기준일 뒤 주말,
                 // 변화 계열이 첫 날을 버리는 것, 호출 중 날짜가 바뀌는 것을 덮는 여유입니다.
                 .as("화면의 최근 10년은 다 들어감").isBefore(tenYearsAgo.plusDays(7));
+    }
+
+    @Test
+    @DisplayName("QA-133 롤링 계산 자체가 접은 창(250)으로 돈다 — 표본보다 작은 큰 창(1000)도, 표본보다 큰 창도")
+    void rollingUsesTheFoldedWindow() {
+        // 응답 window만 보면 계산이 접은 창으로 도는지는 모릅니다. 창 w의 첫 값은 w번째 점(index w-1)에서 나옵니다.
+        // 수정 전: 창 1000은 index 999에서야 값이 나오고(1000 × 표본 계산), 창 100000은 표본보다 커서 값이 하나도 없었습니다.
+        StoreReader store = fredStore();
+        for (int window : new int[] {1_000, 100_000}) {
+            JsonNode rolling = MAPPER.valueToTree(
+                    new AnalyticsService(store).correlation("fred:DGS10", "fred:DGS2", window, 10, "change")).path("rolling");
+            assertThat(rolling.get(248).path("value").isNull()).as("창 %d: 250번째 점 전에는 값 없음", window).isTrue();
+            assertThat(rolling.get(249).path("value").isNumber()).as("창 %d: 250번째 점부터 값", window).isTrue();
+        }
+    }
+
+    /** DGS10·DGS2만 15년치가 있는 저장소. */
+    private static StoreReader fredStore() {
+        StoreReader store = mock(StoreReader.class);
+        when(store.read(anyString(), anyLong(), anyString())).thenReturn(Optional.empty());
+        when(store.read(eq(Datasets.fredSeries("DGS10")), anyLong(), anyString()))
+                .thenReturn(fifteenYears(Datasets.fredSeries("DGS10"), 7.0));
+        when(store.read(eq(Datasets.fredSeries("DGS2")), anyLong(), anyString()))
+                .thenReturn(fifteenYears(Datasets.fredSeries("DGS2"), 11.0));
+        return store;
     }
 }
