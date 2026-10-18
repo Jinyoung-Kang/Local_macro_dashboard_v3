@@ -304,7 +304,7 @@ public class GuruService {
                 Map<String, Object> miss = new LinkedHashMap<>();
                 miss.put("name", name);
                 miss.put("weight", weight);
-                miss.put("reason", stale ? "가격 수집 실패(이전 값이라 제외)" : uncoveredReason(holding));
+                miss.put("reason", stale ? "가격 수집 실패(이전 값이라 제외)" : uncoveredReason(holding, ticker));
                 uncovered.add(miss);
                 continue;
             }
@@ -468,8 +468,13 @@ public class GuruService {
      * 가격을 붙이지 못한 보유의 미커버 이유. 수집기는 회사 이름이 매핑표에 있는데 일부러 뺀 보유에 그 종류({@code tickerNote})를
      * 적어 둡니다 — 채권·사채('debt'), 우선주·워런트·유닛('non_common'). 예전에는 이유를 가리지 않고 '매핑표에 없음'이라,
      * 매핑표에 회사를 더하면 덮일 것처럼 읽혔습니다(QA-127). 무엇을 뺄지는 수집기(equities.py)만 정하고 여기서는 옮기기만 합니다.
+     * 티커는 찾았는데 가격 시계열이 없으면(매핑표에 막 더해 equity_history가 아직 돌지 않았거나, 야후가 주지 않는 티커)
+     * 매핑표가 아니라 가격 쪽 문제라 따로 적습니다(QA-130). 이어받은 가격(isStale)은 부르는 쪽이 먼저 가립니다.
      */
-    static String uncoveredReason(JsonNode holding) {
+    static String uncoveredReason(JsonNode holding, String ticker) {
+        if (ticker != null) {
+            return "가격 없음 — 매핑표에는 있으나 가격 시계열을 받지 못함";
+        }
         String note = Json.asText(holding, "tickerNote");
         return switch (note == null ? "" : note) {
             case "debt" -> "채권·사채 — 주가로 계산하지 않음";

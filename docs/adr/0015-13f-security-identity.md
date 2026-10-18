@@ -11,7 +11,7 @@
   - `test_equities.py`: 펀드·ETF·신탁은 운영회사 티커에 붙지 않음, 발행 번호가 숫자가 아닌 행('COM' 표기 사채)은 티커 없음,
     우선주·우선주 예탁주('DEP SHS'·'CON SER')·워런트·지분 유닛은 티커 없음(ETF 'TR UNIT'·ADR·'COM W/I'·조합 'COM UNIT'·
     만기 없는 'UNIT 99/99/9999'·신탁 단위·ADR 전환 비율 'ADR ECH CNV'은 그대로), 일부러 뺀 행의 `tickerNote`
-  - `GuruServiceRiskMatchingTest`: 보유의 `ticker`를 먼저 씀, 미커버 이유가 `tickerNote`를 따름
+  - `GuruServiceRiskMatchingTest`: 보유의 `ticker`를 먼저 씀, 미커버 이유가 `tickerNote`를 따름, 티커는 있는데 가격이 없으면 '가격 없음'
 
 ## 배경
 
@@ -56,7 +56,8 @@
    W는 워런트가 아닙니다. 'CON'만으로는 가리지 않습니다('CON NEW'는 COM 오타, 'STATE STREET CON'은 ETF).
    회사 이름은 매핑표에 있는데 이렇게 뺀 행에는 수집기가 `tickerNote`('debt'·'non_common')를 적고, 백엔드 미커버 목록은
    그 종류를 이유로 옮깁니다('채권·사채 — 주가로 계산하지 않음', '보통주가 아닌 증권(우선주·워런트·유닛) — 보통주 가격으로
-   대신하지 않음'). 표시가 없으면 '매핑표에 없음'입니다.
+   대신하지 않음'). 티커는 붙었는데 가격 시계열이 없으면 '가격 없음 — 매핑표에는 있으나 가격 시계열을 받지 못함'이고(QA-130),
+   티커도 표시도 없으면 '매핑표에 없음'입니다.
 
 ## 이유
 

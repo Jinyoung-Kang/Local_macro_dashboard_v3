@@ -4,7 +4,6 @@ import com.macrodash.Kst;
 import com.macrodash.read.StoreReader;
 import com.macrodash.store.Datasets;
 import com.macrodash.store.Snapshot;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -172,7 +171,6 @@ class GuruServiceRiskMatchingTest {
     }
 
     @Test
-    @Disabled("QA-130: 티커는 붙었는데 가격 시계열만 없는 보유도 미커버 이유가 '매핑표에 없음'입니다")
     @DisplayName("QA-130 매핑표에는 있는데 가격 시계열이 없는 보유는 '가격 없음'으로 적는다 — '매핑표에 없음'·'가격 수집 실패'와 구분")
     void uncoveredReasonSaysNoPriceWhenTickerIsMapped() {
         String cik = Institutions.ciks().get(0);
