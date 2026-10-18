@@ -138,7 +138,6 @@ def _run_qa_stack_schema(shell: str, docker_rc: int) -> subprocess.CompletedProc
     return subprocess.run([shell, "-c", script], capture_output=True, text=True, timeout=30)
 
 
-@pytest.mark.xfail(strict=True, reason="QA-126: 수정 전 재현 — fix 커밋에서 켬")
 @pytest.mark.parametrize("shell", _SHELLS)
 def test_QA126_QA_스택_up의_스키마_적용이_10번_모두_실패하면_알리고_0이_아닌_값으로_끝난다(shell):
     result = _run_qa_stack_schema(shell, docker_rc=1)
