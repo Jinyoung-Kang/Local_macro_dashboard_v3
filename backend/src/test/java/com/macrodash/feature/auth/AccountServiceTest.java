@@ -6,7 +6,6 @@ import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -118,7 +117,6 @@ class AccountServiceTest {
     }
 
     @Test
-    @Disabled("QA-128: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-128 재설정 중 세션 해지가 실패하면 새 비밀번호도 저장되지 않는다(링크는 이미 썼으므로 다시 요청)")
     void confirmResetIsAllOrNothing() {
         long id = db.user("resetfail", "old passphrase here", "MEMBER", "FREE");
@@ -145,7 +143,6 @@ class AccountServiceTest {
     }
 
     @Test
-    @Disabled("QA-128: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-128 탈퇴 중 계정 삭제가 실패하면 탈퇴 감사 기록도 남지 않는다")
     void deleteAccountIsAllOrNothing() {
         long member = db.user("delfail", "member passphrase", "MEMBER", "FREE");

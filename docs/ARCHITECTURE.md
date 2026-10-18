@@ -206,7 +206,7 @@ k6가 고정된 주소를 반복하므로 "후" 값은 대부분 캐시 적중�
 | 비밀번호 유출 | Argon2id 해시만 저장. 세션 토큰은 SHA-256만 저장(DB가 새어도 쿠키를 만들 수 없음) | `PasswordHasher`, `SessionStore` |
 | 계정 존재 여부 탐색 | 없는 이메일도 가짜 해시와 비교해 같은 시간·같은 401 | `AuthService.verify` |
 | 타이밍 공격 | 수집기 토큰 `hmac.compare_digest` | `collector/app/main.py` |
-| 로그아웃·비밀번호 변경 뒤 토큰 재사용 | DB 세션이라 다음 요청부터 거부, 재시작 후에도 유지(예전 JWT는 메모리 차단 목록이라 재시작 때 사라짐) | `SessionStore` |
+| 로그아웃·비밀번호 변경 뒤 토큰 재사용 | DB 세션이라 다음 요청부터 거부, 재시작 후에도 유지(예전 JWT는 메모리 차단 목록이라 재시작 때 사라짐). 비밀번호 변경·재설정은 저장·다른 세션 해지·감사 기록이 한 트랜잭션이라, 중간에 실패해도 '바뀐 비밀번호 + 살아 있는 옛 세션'이 남지 않음(QA-128) | `SessionStore`, `UserStore.atomically` |
 | 권한 밖 기능 호출 | 경로별 접근 정책(공개·회원·유료·운영자). 미분류 경로는 빌드 실패 | `AccessPolicy`, `AccessPolicyTest` |
 | 다른 출처의 상태 변경 요청 | POST·PUT·DELETE의 `Origin`이 CORS 허용 목록에 없으면 403 | `SessionFilter.foreignOrigin` |
 | 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단). 정규화가 필요한 경로(`.`·`..` 조각, 인코딩된 점·슬래시, `//`, `;`)는 정책 검사 전에 400 — 정책(정규화 경로)과 처리기 매칭(날것 경로)이 다른 경로를 보지 않게 | `WebConfig.SessionFilter` |

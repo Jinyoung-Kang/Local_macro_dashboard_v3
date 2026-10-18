@@ -384,7 +384,8 @@ public class AuthService {
     public static final String WRONG_CURRENT = "지금 비밀번호가 올바르지 않습니다.";
 
     /**
-     * 비밀번호 변경 — 지금 비밀번호를 확인하고, 다른 기기 세션은 모두 끊습니다.
+     * 비밀번호 변경 — 지금 비밀번호를 확인하고, 다른 기기 세션은 모두 끊습니다. 저장·해지·감사 기록은 한 트랜잭션입니다
+     * (QA-128 — 중간에 실패하면 비밀번호도 그대로라 '바뀌었는데 다른 세션이 살아 있음'이 생기지 않습니다).
      *
      * @return 문제가 있으면 사람이 읽는 이유, 성공이면 null
      */
@@ -400,9 +401,13 @@ public class AuthService {
         if (hasher.matches(next, stored.passwordHash())) {
             return "지금과 다른 비밀번호를 쓰세요.";
         }
-        users.updatePassword(user.id(), hasher.hash(next));
-        int others = sessions.revokeAllForUser(user.id(), user.sessionId());
-        audit.append(user.id(), "password.changed", Map.of("otherSessionsRevoked", others));
+        String hash = hasher.hash(next);   // 트랜잭션 밖에서 — Argon2 동안 DB 연결을 쥐지 않게
+        users.atomically(() -> {
+            users.updatePassword(user.id(), hash);
+            int others = sessions.revokeAllForUser(user.id(), user.sessionId());
+            audit.append(user.id(), "password.changed", Map.of("otherSessionsRevoked", others));
+            return others;
+        });
         return null;
     }
 

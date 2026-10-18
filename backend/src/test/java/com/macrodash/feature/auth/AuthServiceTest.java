@@ -6,7 +6,6 @@ import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -111,7 +110,6 @@ class AuthServiceTest {
     }
 
     @Test
-    @Disabled("QA-128: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-128 비밀번호 변경 중 감사 기록 쓰기가 실패하면 비밀번호도, 다른 기기 세션 해지도 되돌아간다")
     void changePasswordIsAllOrNothing() {
         long id = db.user("atomic", "correct horse battery", "MEMBER", "FREE");

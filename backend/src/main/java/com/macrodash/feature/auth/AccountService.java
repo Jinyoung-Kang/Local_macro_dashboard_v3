@@ -167,7 +167,10 @@ public class AccountService {
         return Result.ok(RESET_SENT);
     }
 
-    /** 재설정 링크 + 새 비밀번호. 성공하면 그 계정의 모든 세션을 끊습니다. */
+    /**
+     * 재설정 링크 + 새 비밀번호. 성공하면 그 계정의 모든 세션을 끊습니다. 저장·해지·감사 기록은 한 트랜잭션입니다(QA-128).
+     * 링크는 그 앞에서 이미 썼으므로, 중간에 실패하면 비밀번호는 그대로이고 재설정을 다시 요청해야 합니다.
+     */
     public Result confirmReset(String token, String password) {
         if (token == null || token.isBlank()) {
             return Result.bad("링크가 올바르지 않습니다.");
@@ -185,9 +188,13 @@ public class AccountService {
             // 토큰은 이미 썼으므로 다시 요청해야 합니다 — 규칙을 먼저 화면에서 확인하게 합니다.
             return Result.bad(problem + " 링크는 한 번만 쓸 수 있어, 재설정을 다시 요청해야 합니다.");
         }
-        users.updatePassword(user.id(), hasher.hash(password));
-        int revoked = sessions.revokeAllForUser(user.id(), null);
-        audit.append(user.id(), "password.reset", Map.of("sessionsRevoked", revoked));
+        String hash = hasher.hash(password);   // 트랜잭션 밖에서 — Argon2 동안 DB 연결을 쥐지 않게
+        users.atomically(() -> {
+            users.updatePassword(user.id(), hash);
+            int revoked = sessions.revokeAllForUser(user.id(), null);
+            audit.append(user.id(), "password.reset", Map.of("sessionsRevoked", revoked));
+            return revoked;
+        });
         return Result.ok("비밀번호를 바꿨습니다. 모든 기기에서 로그아웃됐으니 새 비밀번호로 로그인하세요.");
     }
 
@@ -220,8 +227,12 @@ public class AccountService {
         if ("OWNER".equals(stored.role())) {
             return Result.bad("운영자 계정은 지울 수 없습니다.");
         }
-        audit.append(stored.id(), "account.deleted", Map.of());
-        users.delete(stored.id());   // 세션·토큰은 함께 지워지고 감사 기록은 사용자 번호만 비워집니다
+        // 감사 기록과 삭제는 한 트랜잭션(QA-128) — 삭제가 실패하면 '탈퇴' 기록도 남지 않습니다.
+        users.atomically(() -> {
+            audit.append(stored.id(), "account.deleted", Map.of());
+            users.delete(stored.id());   // 세션·토큰은 함께 지워지고 감사 기록은 사용자 번호만 비워집니다
+            return null;
+        });
         return Result.ok("계정과 개인정보(이메일·세션·알림 설정)를 지웠습니다.");
     }
 

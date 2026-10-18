@@ -2,14 +2,17 @@ package com.macrodash.store;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * 계정({@code users}) — 백엔드가 쓰는 테이블(ADR 0008·0010).
@@ -29,10 +32,25 @@ public class UserStore {
 
     private final JdbcTemplate jdbc;
     private final SchemaCheck schema;
+    /** 같은 DataSource의 트랜잭션 — 세션·감사 기록 저장소의 JdbcTemplate도 이 연결에 합류합니다. */
+    private final TransactionTemplate transactions;
 
     public UserStore(JdbcTemplate jdbc, SchemaCheck schema) {
         this.jdbc = jdbc;
         this.schema = schema;
+        this.transactions = new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
+    }
+
+    /**
+     * 계정에 걸친 쓰기 여러 개를 한 트랜잭션으로 묶습니다(QA-128) — 안에서 예외가 나면 모두 되돌리고 그 예외를 그대로 던집니다.
+     * 같은 DataSource를 쓰는 다른 저장소(세션·감사 기록)의 쓰기도 이 스레드의 같은 연결에 합류합니다.
+     *
+     * <p>예전에는 문장마다 자동 커밋이라, 비밀번호 변경 중 DB 오류가 나면 비밀번호는 바뀌었는데 다른 기기 세션은 살아 있거나,
+     * 탈퇴 중 삭제가 실패하면 탈퇴 감사 기록만 남았습니다. Argon2 해시처럼 오래 걸리는 계산은 부르기 전에 끝내 둡니다
+     * (그동안 연결을 쥐지 않게 — AWS 연결 풀은 4개).
+     */
+    public <T> T atomically(Supplier<T> work) {
+        return transactions.execute(status -> work.get());
     }
 
     /** 계정 테이블이 있는가(수집기가 V4를 적용한 뒤). */
