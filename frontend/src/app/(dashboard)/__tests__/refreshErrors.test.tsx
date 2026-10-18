@@ -5,9 +5,9 @@
  * 시각 배지가 있는 9개 화면에만 붙였고, 자동 갱신하는 나머지 패널(상태 화면, 매크로 위험·고급·스크래핑, 수급 패널,
  * 현물·선물 카드, KRX 선물 수급)은 조용했습니다.
  */
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, configure, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => {
   class UnauthorizedError extends Error {}
@@ -68,7 +68,12 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
-describe("QA-067 자동 갱신 실패를 패널에 표시한다", () => {
+// 대기(findBy·waitFor) 한도를 1초 → 5초, 테스트 하나의 한도를 5초 → 20초로. 평소에는 테스트 하나가 30ms 안에 끝나지만,
+// 기계 부하가 높으면(load average 20 이상) 그리는 양이 많은 상태 화면이 1초 대기를 넘겨 세 번에 한 번꼴로 실패했습니다.
+describe("QA-067 자동 갱신 실패를 패널에 표시한다", { timeout: 20_000 }, () => {
+  beforeAll(() => configure({ asyncUtilTimeout: 5_000 }));
+  afterAll(() => configure({ asyncUtilTimeout: 1_000 }));
+
   const panels: { name: string; make: () => ReactElement; bodies: Record<string, unknown>; card: string }[] = [
     { name: "현물·선물 카드", make: () => <SpotFuturesCard />, card: "현물·선물 수급 동조 (외국인·기관·개인)",
       bodies: { "/api/krx/spot-futures": { available: true, rows: [] } } },
