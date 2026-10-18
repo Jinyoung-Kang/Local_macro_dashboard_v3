@@ -20,6 +20,14 @@
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- 임시: Spring Boot 4.1.2가 Maven Central에 나올 때까지 BOM(4.1.1)의 Jackson 3.1.5·2.21.5와 Tomcat 11.0.24를
+             공개 취약점이 고쳐진 판으로 덮어씁니다(Jackson CVE-2026-89407·89425·91776·91777 등은 3.1.7·2.21.7에서,
+             Tomcat 11.0.25·11.0.26 보안 수정분은 11.0.27에 들어 있음). 4.1.2 마일스톤이 같은 판을 채택했으므로
+             parent를 4.1.2로 올릴 때 이 세 줄을 지웁니다 — 남겨 두면 그 뒤 BOM보다 낮은 판에 묶입니다. -->
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <tomcat.version>11.0.27</tomcat.version>
     </properties>
 
     <dependencies>
