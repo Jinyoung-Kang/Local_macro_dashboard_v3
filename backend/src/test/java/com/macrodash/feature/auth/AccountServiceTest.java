@@ -1,15 +1,22 @@
 package com.macrodash.feature.auth;
 
 import com.macrodash.store.EmailTokenStore;
+import com.macrodash.store.SchemaCheck;
+import com.macrodash.store.SessionStore;
+import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.time.Clock;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -108,6 +115,56 @@ class AccountServiceTest {
         assertThat(accounts.confirmReset(token.getValue(), "another new passphrase").status()).isEqualTo(400);
         assertThat(auth.authenticate(session.token())).as("재설정하면 모든 세션 끊김").isEmpty();
         assertThat(auth.verify(db.email("reset"), "brand new passphrase")).isPresent();
+    }
+
+    @Test
+    @Disabled("QA-128: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-128 재설정 중 세션 해지가 실패하면 새 비밀번호도 저장되지 않는다(링크는 이미 썼으므로 다시 요청)")
+    void confirmResetIsAllOrNothing() {
+        long id = db.user("resetfail", "old passphrase here", "MEMBER", "FREE");
+        SessionStore failingSessions = new SessionStore(db.jdbc) {
+            @Override
+            public int revokeAllForUser(long userId, UUID except) {
+                throw new DataAccessResourceFailureException("세션 해지 실패(테스트)");
+            }
+        };
+        AccountService accounts = new AccountService(db.users, failingSessions, tokens, db.audit, db.hasher, mail,
+                Clock.systemUTC());
+        AuthService auth = db.service(new com.macrodash.config.AppProperties());
+        AuthService.Issued session = auth.openSession(db.users.findById(id).orElseThrow(), null);
+        accounts.requestReset(db.email("resetfail"), "10.0.0.6");
+        ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
+        verify(mail).sendReset(eq(db.email("resetfail")), token.capture());
+
+        assertThatThrownBy(() -> accounts.confirmReset(token.getValue(), "brand new passphrase"))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+
+        // 수정 전: 새 비밀번호는 저장됐는데 기존 세션(훔친 세션일 수 있음)은 살아 있었습니다.
+        assertThat(auth.verify(db.email("resetfail"), "old passphrase here")).as("옛 비밀번호 그대로").isPresent();
+        assertThat(auth.authenticate(session.token())).as("세션은 끊지 못했음").isPresent();
+    }
+
+    @Test
+    @Disabled("QA-128: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-128 탈퇴 중 계정 삭제가 실패하면 탈퇴 감사 기록도 남지 않는다")
+    void deleteAccountIsAllOrNothing() {
+        long member = db.user("delfail", "member passphrase", "MEMBER", "FREE");
+        UserStore failingUsers = new UserStore(db.jdbc, new SchemaCheck(db.jdbc)) {
+            @Override
+            public void delete(long id) {
+                throw new DataAccessResourceFailureException("계정 삭제 실패(테스트)");
+            }
+        };
+        AccountService accounts = new AccountService(failingUsers, db.sessions, tokens, db.audit, db.hasher, mail,
+                Clock.systemUTC());
+        CurrentUser me = new CurrentUser(member, db.email("delfail"), "MEMBER", "FREE", null);
+
+        assertThatThrownBy(() -> accounts.deleteAccount(me, "member passphrase"))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+
+        assertThat(db.users.findById(member)).as("계정은 그대로").isPresent();
+        assertThat(db.jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE user_id = ? AND action = 'account.deleted'",
+                Integer.class, member)).as("지워지지 않은 계정의 탈퇴 기록").isZero();
     }
 
     @Test

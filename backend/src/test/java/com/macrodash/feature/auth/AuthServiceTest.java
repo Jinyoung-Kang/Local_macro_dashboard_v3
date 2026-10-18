@@ -6,13 +6,18 @@ import com.macrodash.store.SessionStore;
 import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -103,6 +108,33 @@ class AuthServiceTest {
         assertThat(auth.authenticate(laptop.token())).as("지금 기기").isPresent();
         assertThat(auth.verify(db.email("change"), "new long passphrase")).isPresent();
         assertThat(auth.sessionsOf(me)).hasSize(1).first().satisfies(row -> assertThat(row.get("current")).isEqualTo(true));
+    }
+
+    @Test
+    @Disabled("QA-128: 수정 전 재현 — fix 커밋에서 켬")
+    @DisplayName("QA-128 비밀번호 변경 중 감사 기록 쓰기가 실패하면 비밀번호도, 다른 기기 세션 해지도 되돌아간다")
+    void changePasswordIsAllOrNothing() {
+        long id = db.user("atomic", "correct horse battery", "MEMBER", "FREE");
+        AuditLogStore failingAudit = new AuditLogStore(db.jdbc, new ObjectMapper()) {
+            @Override
+            public void append(Long userId, String action, Map<String, Object> detail) {
+                if ("password.changed".equals(action)) {   // 마지막 문장에서 DB 오류
+                    throw new DataAccessResourceFailureException("감사 기록 쓰기 실패(테스트)");
+                }
+                super.append(userId, action, detail);
+            }
+        };
+        AuthService auth = new AuthService(properties, db.users, db.sessions, failingAudit, db.hasher);
+        UserStore.User user = db.users.findById(id).orElseThrow();
+        AuthService.Issued phone = auth.openSession(user, "phone");
+        CurrentUser laptop = auth.authenticate(auth.openSession(user, "laptop").token()).orElseThrow();
+
+        assertThatThrownBy(() -> auth.changePassword(laptop, "correct horse battery", "new long passphrase"))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+
+        // 수정 전: 문장마다 자동 커밋이라 비밀번호는 바뀌고 다른 기기는 끊겼는데 화면은 500(실패한 줄 앎)이었습니다.
+        assertThat(auth.verify(db.email("atomic"), "correct horse battery")).as("옛 비밀번호 그대로").isPresent();
+        assertThat(auth.authenticate(phone.token())).as("다른 기기 세션도 그대로").isPresent();
     }
 
     @Test
