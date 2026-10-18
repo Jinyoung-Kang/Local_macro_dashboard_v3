@@ -88,7 +88,7 @@ class InstitutionControllerCacheTest {
         assertThat((List<?>) nvidia.get("rows")).singleElement()
                 .satisfies(row -> assertThat(((Map<?, ?>) row).get("name")).isEqualTo("NVIDIA CORP"));
         // 재기동 직후 서로 다른 검색어가 몰려도 수 MB 저장본을 요청마다 다시 풀지 않습니다 — 검색어와 상관없는 보유 목록은
-        // 저장본 버전마다 한 번만 만듭니다.
+        // 같은 저장본 버전·60초 안에서는 한 번만 만듭니다.
         verify(store, times(1)).read(eq(filingName), anyLong(), anyString());
     }
 }

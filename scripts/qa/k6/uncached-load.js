@@ -8,11 +8,13 @@
 //
 // ROUTE(기본 holders-wide):
 //   correlation-ui  화면에서 고를 수 있는 가장 큰 조합(window 250 · years 10, FRED 10년물·2년물)
-//   correlation-max 화면 밖 최악(window 1280 · years 100)
-//   radar-all       레이더 이력 전 기간(파라미터 없음 — 화면은 늘 latest=true)
-//   holders-wide    보유 검색 q=C(한 글자, 13F 최신 분기 대부분이 걸림)
+//   correlation-max 화면 밖 최악(window 1280 · years 100) — QA-133 뒤로는 서버가 250 · 10년으로 접어 correlation-ui와 같은
+//                   계산입니다(수정 전·후 비교용)
+//   radar-all       레이더 이력 전 기간(파라미터 없음 — 화면은 늘 latest=true). QA-133 뒤로는 최신 5,000행까지
+//   holders-wide    보유 검색 q=C(한 글자, 13F 최신 분기 대부분이 걸림). QA-133 뒤로는 비중 상위 200행까지
 //   holders-narrow  보유 검색 q=NVIDIA
-//   ai-report       POST /api/ai/report — QA 스택은 AI 키가 없어 원본 텍스트를 다 만든 뒤 과금 없이 실패(한도를 되돌려받음)
+//   ai-report       POST /api/ai/report — QA 스택은 AI 키가 없어, 수정 전에는 원본 텍스트를 다 만든 뒤 과금 없이 실패(한도를
+//                   되돌려받음). QA-133 뒤로는 한도·원본 텍스트 전에 바로 끝나 그 경로를 재지 않습니다(수정 전·후 비교용)
 //
 // 사용(QA 스택에서만 — 운영 스택 8080에 돌리지 않습니다):
 //   k6 run -e BASE=http://127.0.0.1:18080 -e ORIGIN=http://localhost:13000 \

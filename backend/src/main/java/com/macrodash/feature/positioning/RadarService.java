@@ -70,6 +70,7 @@ public class RadarService {
      * <p>이력은 거래일마다 약 100행씩 끝없이 늘어, 상한이 없으면 응답도 저장된 기간만큼 커집니다
      * (2026-10-19 QA 스택: 13거래일 1,350행·492KB). 화면은 latest=true만 쓰고 전 기간은 내려받아 살펴보는 용도라 최신 5,000행
      * (약 50거래일)이면 됩니다. 더 오래된 날은 {@code obsDate}(또는 {@code latest=true&obsDate=})로 하루씩 받습니다.
+     * 행 단위로 자르므로 잘린 응답({@code truncated})의 가장 오래된 날은 일부 행만 담겼을 수 있습니다 — 그날도 obsDate로 다시 받습니다.
      */
     static final int HISTORY_ROW_LIMIT = 5_000;
 

@@ -98,12 +98,13 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 | 401 | 세션 쿠키가 없거나 만료됨 |
 | 403 | 역할·등급이 모자람(`forbidden`, `required`), 다른 출처의 쓰기(`bad_origin`), 데모 열람의 쓰기(`demo_read_only`) |
 | 404 · 405 | 없는 경로 · 허용되지 않는 메서드 |
-| 429 | 요청이 몰림 — 응답 캐시를 거치는 비싼 계산 10개 경로(전체 요약 텍스트, 기관 프로필·유사도·위험, 13F 포트폴리오·교집합·신규 편입, 국면·판정 성과, 스코어카드)의 동시 실행 상한(QA-131), 비밀번호 해시 상한(QA-019). 표준 모양 + `Retry-After`(초). 잠시 뒤 다시 부르면 됩니다 |
+| 429 | 요청이 몰림 — 응답 캐시를 거치는 비싼 계산 11개 경로(전체 요약 텍스트, 기관 프로필·유사도·위험, 보유 기관 검색(검색어가 있을 때 — 보유 목록, QA-133), 13F 포트폴리오·교집합·신규 편입, 국면·판정 성과, 스코어카드)의 동시 실행 상한(QA-131), 비밀번호 해시 상한(QA-019). 표준 모양 + `Retry-After`(초). 잠시 뒤 다시 부르면 됩니다 |
 | 502 | 수집기에 닿지 못함 (태스크 수동 실행) |
 | 500 | 예상하지 못한 오류. 원인은 백엔드 로그에만 남습니다 |
 
 범위만 벗어난 **숫자**는 오류 대신 허용 범위로 맞춥니다 — `limit`은 1~200, `years`는
-최대 100년(저장본보다 길면 결과가 같기 때문). 로그인 제한(429)만 별도 모양
+최대 100년(저장본보다 길면 결과가 같기 때문). 상관 분석만 `window` 5~250·`years` 1~10(화면 선택지의 최대)으로 접어,
+저장본이 10년보다 길어도 최근 10년까지만 계산합니다(QA-133). 로그인 제한(429)만 별도 모양
 `{"ok": false, "retryAfterSeconds": n, "message": "..."}`에 `Retry-After` 헤더를 씁니다.
 
 ### 📊 매크로
@@ -134,7 +135,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 | `GET /api/sec13f/new-buys?ciks=&reportDate=&minHolders=3` | 이번 분기 공통 신규 매수 |
 | `GET /api/guru/profiles` | 기관별 성격 (집중도·유효 종목 수·회전율) |
 | `GET /api/guru/similarity` | 기관 간 유사도 행렬 (겹침 비중 + 코사인) |
-| `GET /api/guru/holders?q=NVIDIA` | 이 종목을 누가 들고 있나 |
+| `GET /api/guru/holders?q=NVIDIA` | 이 종목을 누가 들고 있나. `rows`는 비중 내림차순 **상위 200행까지**이고 `totalMatches`(자르기 전 일치 건수)·`truncated`(잘렸는지)를 함께 줍니다 — 빈 `q`면 두 필드 없이 안내 문구만. 검색어와 상관없는 보유 목록은 응답 캐시라 몰리면 429(QA-133) |
 | `GET /api/guru/risk?cik=&benchmark=SPY&years=1` | 기관 포트폴리오 위험 (🧬 기관 13F 스타일·위험 화면. API 경로는 호환을 위해 `guru` 유지). 응답의 `coverage`가 **덮은 비중**을 항상 담습니다 |
 | `GET /api/stock/universe` | 스코어카드를 낼 수 있는 종목 목록 |
 | `GET /api/stock/scorecard?symbol=AAPL&benchmark=SPY&years=1` | 종목 스코어카드 (가격 기반 지표만 — `missing`이 빠진 항목을 알려 줍니다) |
@@ -147,7 +148,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 | `GET /api/radar/options` | 선택지 목록 + `supportedInvestors`(토스 폴백 저장본이 있으면 여섯, 없으면 외국인·기관) + `fallbackChain`(수집기 체인 순서) |
 | `GET /api/radar/ranking?market=&investor=&tradeType=&topN=&intervalType=` | 수급 랭킹 |
 | `GET /api/radar/consensus?market=&tradeType=&topN=&intervalType=` | 외국인·기관이 **같은 방향**으로 움직인 종목 (두 상위 N 목록의 교집합) |
-| `GET /api/radar/history?market=&investor=&tradeType=&latest=true&obsDate=` | 누적 이력. `latest=true`면 **한 거래일만** 줍니다 — `dates`(이 조건의 기록이 있는 날, 최신 순), `obsDate`(고른 날, 비우면 가장 최근), `rows`(그날 기록). 빼면 전 기간(`startDate`로 시작일 지정). 날짜는 `YYYY-MM-DD`, 틀리면 400 |
+| `GET /api/radar/history?market=&investor=&tradeType=&latest=true&obsDate=` | 누적 이력. `latest=true`면 **한 거래일만** 줍니다 — `dates`(이 조건의 기록이 있는 날, 최신 순), `obsDate`(고른 날, 비우면 가장 최근), `rows`(그날 기록). 빼면 전 기간(`startDate`로 시작일 지정)이되 **최신 5,000행까지**(최신 날짜 순)만 주고 `rowLimit`(5000)·`truncated`(true면 더 오래된 행이 남음)를 함께 줍니다 — 행 단위로 자르므로 잘렸을 때 `rows`의 가장 오래된 날은 일부만 담겼을 수 있어, 그날부터는 `obsDate`로 하루씩 받습니다. 이때 `dates`는 조건 없는 전체 거래일 목록(QA-133). 날짜는 `YYYY-MM-DD`, 틀리면 400 |
 | `GET /api/radar/diagnostics` | 5개 소스 연결 진단 |
 
 ### 🇰🇷 국내 공공 API 데이터
@@ -178,7 +179,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 | 경로 | 설명 |
 |---|---|
 | `GET /api/analytics/series` | 상관 분석에 쓸 수 있는 계열 목록 (20종) |
-| `GET /api/analytics/correlation?x=&y=&window=60&years=3&mode=change` | 롤링 상관계수 + 산점도. `mode=level`에는 허위 상관 경고가 붙습니다 |
+| `GET /api/analytics/correlation?x=&y=&window=60&years=3&mode=change` | 롤링 상관계수 + 산점도. `mode=level`에는 허위 상관 경고가 붙습니다. `window`는 5~250, `years`는 1~10으로 접고 응답 `window`는 접은 값(QA-133) |
 | `GET /api/analytics/regime?years=5` | 4국면 판정 + 근거 신호 + 주간 이력·구간 |
 | `GET /api/analytics/regime/log?limit=90` | 국면 판정 라이브 기록(하루 한 건, 최근 순) — 판정·입력값·입력별 기준일·판정 불가 사유. 추가만 하는 기록(`regime_log`) |
 | `GET /api/analytics/regime/track-record?asset=SPY` | 국면 판정 성과 — 매주 목요일 시점 기준 재현 판정 → 다음 거래일부터 4·13·26주 수익률. 국면 시작 시점(`start`)·머문 모든 주(`all`)·비교 기준(`baseline`), 표본 부족이면 수익률 대신 표본 수만. 자산: SPY·QQQ·069500.KS·IEF·GLD |
@@ -205,7 +206,7 @@ GET·OPTIONS 밖(쓰기·HEAD)은 경로와 상관없이 403 `{"error":"demo_rea
 |---|---|
 | `GET /api/ai/engines` | `{engines:[{id, label, provider, model, description, speedHint, available, unavailableReason}], keys, enabled, timeoutSeconds, autoAttemptSeconds, autoBudgetSeconds}`. `available`은 이 배포에서 허용됐고(`AI_ENGINES`, ADR 0014) 키도 있는지이고, 못 쓰면 `unavailableReason`이 `not_allowed`(허용 목록 밖 — 키가 있어도)·`no_key`(쓸 수 있으면 null). `auto`는 허용 목록이 없으면 키가 하나라도 있을 때, 있으면 키가 있는 허용 엔진이 둘 이상일 때만 씁니다. `keys`는 제공자별 키 유무(허용 목록과 무관), `enabled`는 키가 있는 허용 엔진이 하나라도 있는지. 데모 열람에게만 `quota: {used, limit, shared: true}`(방문자 공용 하루 한도의 오늘 사용량) |
 | `GET /api/ai/report-types` | 리포트 종류 |
-| `POST /api/ai/report` | `{engineId, reportType, extraInstruction}` → 엔진 응답(`status`·`response`·`error`·`provider`·`model`·`failoverPath` 등) + `reportType`·`promptChars`·`quota: {used, limit}`(운영자는 `limit: null`). 하루(KST) 한도를 다 쓰면 엔진을 부르지 않고 200 `{status: false, error, quota}`입니다. 실패는 **모델에 닿지 않았을 때만**(`charged: false` — 키 없음·허용 목록 밖·제공자의 HTTP 오류·연결 실패) 한 건을 되돌리고, 거절·빈 응답·응답 대기 시간 초과(`charged: true`)는 되돌리지 않습니다. 허용 목록 밖 엔진·못 쓰는 `auto`(엔진 미지정 포함)는 외부 호출 없이 `{status: false, error: "이 배포에서는 쓸 수 없는 엔진입니다: …"}`. **데모 열람**은 방문자 전체가 하루 `AI_DEMO_DAILY_LIMIT`건(기본 20, 백엔드 메모리 — 재시작하면 0부터)을 함께 쓰고 `quota`에 `shared: true`가 붙습니다. 다 쓰면 `error`는 "데모의 오늘 AI 리포트 한도(N건)를 모두 썼습니다. 내일(KST 0시) 다시 시도해 주세요." |
+| `POST /api/ai/report` | `{engineId, reportType, extraInstruction}` → 엔진 응답(`status`·`response`·`error`·`provider`·`model`·`failoverPath` 등) + `reportType`·`promptChars`·`quota: {used, limit}`(운영자는 `limit: null`). 하루(KST) 한도를 다 쓰면 엔진을 부르지 않고 200 `{status: false, error, quota}`입니다. 엔진을 네트워크 없이 못 쓰는 경우(AI 꺼짐·모르는 `engineId`·허용 목록 밖·못 쓰는 `auto`(엔진 미지정 포함)·허용됐지만 키 없음)는 **한도를 쓰지 않고 원본 텍스트도 만들지 않고** 바로 엔진 실패(`status: false`, `charged: false`, `error` — 예: "이 배포에서는 쓸 수 없는 엔진입니다: …", "… API Key 누락")에 `reportType`과 쓰지 않은 오늘 `quota`를 붙여 답합니다(`promptChars` 없음). 한도를 다 썼어도 이 판정이 먼저입니다(QA-133). 그 밖의 실패는 **모델에 닿지 않았을 때만**(`charged: false` — 제공자의 HTTP 오류·연결 실패) 한 건을 되돌리고, 거절·빈 응답·응답 대기 시간 초과(`charged: true`)는 되돌리지 않습니다. **데모 열람**은 방문자 전체가 하루 `AI_DEMO_DAILY_LIMIT`건(기본 20, 백엔드 메모리 — 재시작하면 0부터)을 함께 쓰고 `quota`에 `shared: true`가 붙습니다. 다 쓰면 `error`는 "데모의 오늘 AI 리포트 한도(N건)를 모두 썼습니다. 내일(KST 0시) 다시 시도해 주세요." |
 | `POST /api/ai/test?engineId=&prompt=` | 연결 테스트 |
 | `GET /api/ai/toss/diagnostics` | 토스 연결 진단 |
 | `GET /api/ai/toss/exchange-rate?base=USD&quote=KRW` | 환율 조회 |
