@@ -9,7 +9,6 @@ import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -254,7 +253,6 @@ class AlertEvaluatorDbTest {
     }
 
     @Test
-    @Disabled("QA-129: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-129 국면 평가가 예외를 던져도 외국인 연속 순매수 사건은 만들어지고 알림함에 들어간다")
     @SuppressWarnings("unchecked")
     void oneTriggerFailureDoesNotStopTheOthers() throws Exception {

@@ -17,6 +17,7 @@ import com.macrodash.support.Json;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * 알림 평가 — 5분마다 세 트리거를 <b>전부</b> 평가해 사건을 만들고, 규칙이 맞는 사용자의 알림함에 넣습니다(설계 §4).
@@ -93,21 +95,53 @@ public class AlertEvaluator {
         }
     }
 
-    /** 한 번 평가합니다. @return 이번에 알림함에 새로 넣은 건수 */
+    /**
+     * 한 번 평가합니다. 트리거·종류별 배달·알림함 정리는 단계마다 따로 실패합니다 — 한 단계의 예외가 다른 트리거와
+     * 모든 사용자의 배달을 멈추지 않게(QA-129). 평가가 멱등이라 일부만 된 주기도 다음 주기에 맞춰집니다.
+     *
+     * @return 이번에 알림함에 새로 넣은 건수
+     */
     public int evaluate() {
         if (!alerts.ready()) {
             return 0;
         }
         LocalDate today = LocalDate.now(clock.withZone(KST));
         store.quietly(() -> {
-            regimeEvents();
-            streakEvents(today);
-            institutionEvents();
+            guarded("REGIME_CHANGE 사건", this::regimeEvents);
+            guarded("FOREIGN_STREAK 사건", () -> streakEvents(today));
+            guarded("INSTITUTION_NEW 사건", this::institutionEvents);
             return null;
         });
-        int delivered = fanOut("REGIME_CHANGE", today) + fanOut("FOREIGN_STREAK", today) + fanOut("INSTITUTION_NEW", today);
-        alerts.purgeDeliveries(INBOX_KEEP_DAYS);
+        int delivered = guarded("REGIME_CHANGE 배달", () -> fanOut("REGIME_CHANGE", today), 0)
+                + guarded("FOREIGN_STREAK 배달", () -> fanOut("FOREIGN_STREAK", today), 0)
+                + guarded("INSTITUTION_NEW 배달", () -> fanOut("INSTITUTION_NEW", today), 0);
+        guarded("알림함 정리", () -> alerts.purgeDeliveries(INBOX_KEEP_DAYS));
         return delivered;
+    }
+
+    private static void guarded(String step, Runnable work) {
+        guarded(step, () -> {
+            work.run();
+            return null;
+        }, null);
+    }
+
+    /**
+     * 한 단계를 돌리고, 예외면 단계 이름과 함께 경고를 남긴 뒤 {@code fallback}을 돌려줍니다.
+     *
+     * <p>DB에 닿지 못하는 실패({@link DataAccessResourceFailureException}, 연결을 얻지 못함 등)는 그대로 던집니다 —
+     * 나머지 단계도 같은 이유로 실패하므로, 단계마다 연결을 기다리며 같은 경고를 되풀이하지 않고 그 주기를 한 번에
+     * 멈춥니다(바깥 {@link #scheduledEvaluate}가 한 줄 남김).
+     */
+    private static <T> T guarded(String step, Supplier<T> work, T fallback) {
+        try {
+            return work.get();
+        } catch (DataAccessResourceFailureException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.warn("알림 평가 '{}' 단계 실패 — 다른 단계는 계속하고 다음 주기에 다시 시도합니다: {}", step, e.toString());
+            return fallback;
+        }
     }
 
     // ------------------------------------------------------------------ 국면 전환
