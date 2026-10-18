@@ -4,6 +4,7 @@ import com.macrodash.store.StoreRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -12,6 +13,9 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 /**
@@ -31,6 +35,21 @@ import java.util.function.Supplier;
  * 항목 수는 {@value #MAX_ENTRIES}개까지(가장 오래 안 쓴 것부터 버림) — 스코어카드처럼 파라미터 조합이 많은 경로가
  * 메모리를 끝없이 늘리지 않게 합니다. 계산이 예외를 던지면 아무것도 저장하지 않습니다.
  *
+ * <p><b>동시 실행 상한</b>(QA-131) — 캐시를 놓쳐 다시 계산하는 요청은 동시에 {@code dashboard.compute.max-concurrent}개
+ * (0이면 자동: 코어 수의 절반, 최소 1)까지만 돕니다. 상한이 없을 때 QA 스택에서 캐시에 없는 서로 다른 조합을 초당
+ * 50건 부르자 {@code /api/health}까지 20초 안에 답하지 못했습니다. 자리가 없으면 공정한 순서(먼저 온 요청 먼저)로
+ * {@value #WAIT_SECONDS}초 기다리고, 그래도 없거나 이미 {@value #MAX_WAITING}건이 기다리고 있으면
+ * {@link ComputeBusyException}(→ 429 + {@code Retry-After})을 던집니다. 거절된 요청은 아무것도 저장하지 않습니다.
+ * <ul>
+ *   <li>캐시 적중은 자리를 잡지 않습니다 — 계산이 몰려도 이미 계산한 화면은 그대로 빠릅니다.</li>
+ *   <li>버전이 없는 경로(DB 장애·저장본 0개)도 상한 밖입니다. DB가 죽었을 때 이 계산은 첫 DB 접근에서 실패하는데,
+ *       자리를 쥐고 연결 대기(5초)를 하면 다른 요청이 503 'DB 연결 불가'(QA-009) 대신 429 '몰려 있음'을 받아 원인을
+ *       잘못 알게 됩니다.</li>
+ *   <li>자리를 얻은 뒤 같은 키·같은 버전이 그사이 채워졌으면 다시 계산하지 않고 그 값을 씁니다.</li>
+ * </ul>
+ * 계산 안에서 이 캐시를 다시 부르면 자리를 쥔 채 또 자리를 기다리므로(상한이 1개면 자기 자신을) <b>서비스(계산 안)에서
+ * 부르지 마세요</b>(ADR 0001: 컨트롤러만 씀). 그래도 교착은 아니고 {@value #WAIT_SECONDS}초 뒤 429로 끝납니다.
+ *
  * <p>돌려주는 객체는 캐시가 공유합니다. <b>받은 쪽에서 바꾸지 마세요.</b> 컨트롤러가 그대로 직렬화하는 용도입니다.
  */
 @Component
@@ -41,11 +60,27 @@ public class ComputedCache {
     public static final long MAX_AGE_SECONDS = 60;
     public static final int MAX_ENTRIES = 256;
 
+    /** 자리가 날 때까지 기다리는 시간. 상한이 1개일 때 한 화면의 비싼 요청 2–3개가 줄 서도 거절되지 않을 만큼. */
+    static final long WAIT_SECONDS = 2;
+    /** 이만큼 기다리고 있으면 새 요청은 기다리지 않고 바로 거절 — 계산 경로가 쥐는 요청 스레드를 상한+이 수로 묶습니다. */
+    static final int MAX_WAITING = 32;
+    static final Duration RETRY_AFTER = Duration.ofSeconds(2);
+    static final String BUSY_MESSAGE = "요청이 몰려 지금은 계산하지 못했습니다. 잠시 후 다시 시도하세요.";
+    /** 거절 경고 로그 간격 — 부하 중 요청마다 찍어 로그(json-file 10m×3)를 넘기지 않게 묶습니다. */
+    private static final long WARN_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(60);
+
     private record Cached(Instant version, Instant storedAt, Object value) {
     }
 
     private final StoreRepository repository;
     private final Clock clock;
+    private final int maxConcurrent;
+    private final Semaphore slots;
+    private final Duration wait;
+    private final int maxWaiting;
+    private final AtomicLong rejected = new AtomicLong();
+    private final AtomicLong rejectedAtLastWarn = new AtomicLong();
+    private final AtomicLong lastWarnNanos = new AtomicLong(System.nanoTime() - WARN_INTERVAL_NANOS);
     private final Map<String, Cached> entries = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
@@ -54,19 +89,56 @@ public class ComputedCache {
                 }
             });
 
+    /**
+     * @param maxConcurrent 동시에 돌 수 있는 다시 계산 수({@code COMPUTE_MAX_CONCURRENT}). 0이면 자동(코어 수의 절반, 최소 1)
+     * @throws IllegalStateException 음수일 때 — 기동할 때 멈춥니다
+     */
     @Autowired
+    public ComputedCache(StoreRepository repository,
+                         @Value("${dashboard.compute.max-concurrent:0}") int maxConcurrent) {
+        this(repository, Clock.systemUTC(), resolveSlots(maxConcurrent), Duration.ofSeconds(WAIT_SECONDS), MAX_WAITING);
+        log.info("비싼 계산 동시 실행 상한 {}개({}, 코어 {}개, 대기 {}초, 대기열 {}건)", this.maxConcurrent,
+                maxConcurrent == 0 ? "자동" : "COMPUTE_MAX_CONCURRENT", Runtime.getRuntime().availableProcessors(),
+                WAIT_SECONDS, MAX_WAITING);
+    }
+
+    /** 상한은 자동(코어 수의 절반, 최소 1). */
     public ComputedCache(StoreRepository repository) {
         this(repository, Clock.systemUTC());
     }
 
     ComputedCache(StoreRepository repository, Clock clock) {
+        this(repository, clock, defaultSlots(), Duration.ofSeconds(WAIT_SECONDS), MAX_WAITING);
+    }
+
+    /** 테스트가 자리 수·대기 시간·대기열 상한을 바꿔 끼울 수 있게 합니다. */
+    ComputedCache(StoreRepository repository, Clock clock, int slots, Duration wait, int maxWaiting) {
         this.repository = repository;
         this.clock = clock;
+        this.maxConcurrent = slots;
+        this.slots = new Semaphore(slots, true);
+        this.wait = wait;
+        this.maxWaiting = maxWaiting;
+    }
+
+    /** 자동 상한: 코어 수의 절반, 최소 1. vCPU 2개(AWS)면 1개 — 나머지 코어는 적중·health·GC 몫으로 남깁니다. */
+    static int defaultSlots() {
+        return Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+    }
+
+    static int resolveSlots(int configured) {
+        if (configured < 0) {
+            throw new IllegalStateException(
+                    "dashboard.compute.max-concurrent(COMPUTE_MAX_CONCURRENT)는 0(자동) 이상이어야 합니다: " + configured);
+        }
+        return configured == 0 ? defaultSlots() : configured;
     }
 
     /**
-     * {@code key}의 계산 결과. 저장본 버전과 시간이 유효하면 저장된 값을, 아니면 {@code compute}로 새로 계산해
-     * 저장한 값을 돌려줍니다. 저장본이 하나도 없거나 버전 조회에 실패하면 캐시를 거치지 않고 계산만 합니다.
+     * {@code key}의 계산 결과. 저장본 버전과 시간이 유효하면 저장된 값을, 아니면 계산 자리를 얻어 {@code compute}로
+     * 새로 계산해 저장한 값을 돌려줍니다. 저장본이 하나도 없거나 버전 조회에 실패하면 캐시도 상한도 거치지 않고 계산만 합니다.
+     *
+     * @throws ComputeBusyException 계산 자리가 {@value #WAIT_SECONDS}초 안에 나지 않았거나 대기열이 가득 참(→ 429)
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key, Supplier<T> compute) {
@@ -74,15 +146,24 @@ public class ComputedCache {
         if (version == null) {
             return compute.get();
         }
-        Instant now = clock.instant();
-        Cached hit = entries.get(key);
-        if (hit != null && version.equals(hit.version())
-                && Duration.between(hit.storedAt(), now).getSeconds() < MAX_AGE_SECONDS) {
+        Cached hit = fresh(key, version, clock.instant());
+        if (hit != null) {
             return (T) hit.value();
         }
-        T value = compute.get();
-        entries.put(key, new Cached(version, now, value));
-        return value;
+        acquire();
+        try {
+            // 기다린 만큼 항목 수명이 줄지 않게, 저장 시각은 자리를 얻은 뒤로 잡습니다.
+            Instant now = clock.instant();
+            Cached filled = fresh(key, version, now);
+            if (filled != null) {
+                return (T) filled.value(); // 기다리는 동안 같은 키를 다른 요청이 계산해 둠
+            }
+            T value = compute.get();
+            entries.put(key, new Cached(version, now, value));
+            return value;
+        } finally {
+            slots.release();
+        }
     }
 
     /** 저장된 항목 수(관측·테스트용). */
@@ -92,6 +173,58 @@ public class ComputedCache {
 
     public void clear() {
         entries.clear();
+    }
+
+    /** 동시에 돌 수 있는 다시 계산 수(관측·테스트용). */
+    int maxConcurrent() {
+        return maxConcurrent;
+    }
+
+    /** 자리를 기다리는 요청 수 — 추정치(관측·테스트용). */
+    int waiting() {
+        return slots.getQueueLength();
+    }
+
+    /** 기동 뒤 자리가 없어 거절한 누적 건수(관측·테스트용). */
+    long rejectedCount() {
+        return rejected.get();
+    }
+
+    private Cached fresh(String key, Instant version, Instant now) {
+        Cached hit = entries.get(key);
+        if (hit != null && version.equals(hit.version())
+                && Duration.between(hit.storedAt(), now).getSeconds() < MAX_AGE_SECONDS) {
+            return hit;
+        }
+        return null;
+    }
+
+    private void acquire() {
+        if (slots.getQueueLength() >= maxWaiting) {
+            throw reject();
+        }
+        boolean acquired;
+        try {
+            acquired = slots.tryAcquire(wait.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            acquired = false;
+        }
+        if (!acquired) {
+            throw reject();
+        }
+    }
+
+    private ComputeBusyException reject() {
+        long total = rejected.incrementAndGet();
+        long now = System.nanoTime();
+        long last = lastWarnNanos.get();
+        if (now - last >= WARN_INTERVAL_NANOS && lastWarnNanos.compareAndSet(last, now)) {
+            long since = total - rejectedAtLastWarn.getAndSet(total);
+            log.warn("비싼 계산 자리가 없어 {}건을 429로 돌려보냈습니다(직전 경고 뒤로, 누적 {}건 · 상한 {}개 · 대기 {}건). "
+                    + "이 경고는 60초에 한 번만 남깁니다", since, total, maxConcurrent, slots.getQueueLength());
+        }
+        return new ComputeBusyException(BUSY_MESSAGE, RETRY_AFTER);
     }
 
     private Instant currentVersion() {

@@ -1,5 +1,6 @@
 package com.macrodash.web;
 
+import com.macrodash.read.ComputeBusyException;
 import com.macrodash.support.InvalidRequestException;
 import com.macrodash.support.Params;
 import com.macrodash.support.TooManyRequestsException;
@@ -72,13 +73,25 @@ public class ApiExceptionHandler {
         return respond(HttpStatus.SERVICE_UNAVAILABLE, messageFor(503));
     }
 
-    /** 서버가 지금 처리할 여유가 없음(예: 비밀번호 해시 동시 실행 상한, QA-019). 잠시 뒤 다시 시도하면 됩니다. */
+    /**
+     * 서버가 지금 처리할 여유가 없음(예: 비밀번호 해시 동시 실행 상한 QA-019, 비싼 계산 동시 실행 상한 QA-131).
+     * 잠시 뒤 다시 시도하면 됩니다.
+     */
     @ExceptionHandler(TooManyRequestsException.class)
     ResponseEntity<ApiError> tooManyRequests(TooManyRequestsException e) {
         long seconds = Math.max(1, e.retryAfter().toSeconds());
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
                 .body(new ApiError(errorCode(429), e.getMessage()));
+    }
+
+    /**
+     * 응답 캐시를 거치는 비싼 계산의 자리가 나지 않음(QA-131). 503은 'DB 연결 불가' 전용이라 쓰지 않고, 해시 상한과 같은
+     * 429 모양으로 답합니다. read는 support를 쓰지 않아(ADR 0001) 예외 타입만 따로입니다.
+     */
+    @ExceptionHandler(ComputeBusyException.class)
+    ResponseEntity<ApiError> computeBusy(ComputeBusyException e) {
+        return tooManyRequests(new TooManyRequestsException(e.getMessage(), e.retryAfter()));
     }
 
     /** {@code topN=abc}처럼 숫자·불리언 자리에 다른 값이 온 경우. 자바 타입 이름은 내보내지 않습니다. */

@@ -1,7 +1,9 @@
 package com.macrodash.web;
 
+import com.macrodash.read.ComputeBusyException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.http.ResponseEntity;
@@ -13,9 +15,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import java.time.Duration;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -83,6 +88,38 @@ class ApiExceptionHandlerTest {
         String boom() {
             throw new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection",
                     new java.sql.SQLException("Connection refused"));
+        }
+    }
+
+    private static final String BUSY = "요청이 몰려 지금은 계산하지 못했습니다. 잠시 후 다시 시도하세요.";
+
+    @Test
+    @DisplayName("QA-131: 비싼 계산 자리가 없으면 429 + Retry-After — 503('DB 연결 불가')과 구분되는 표준 모양")
+    void computeBusyIs429WithRetryAfter() throws Exception {
+        ResponseEntity<ApiExceptionHandler.ApiError> response =
+                handler.computeBusy(new ComputeBusyException(BUSY, Duration.ofSeconds(2)));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("2");
+        assertThat(response.getBody().error()).isEqualTo("too_many_requests");
+        assertThat(response.getBody().message()).isEqualTo(BUSY);
+
+        // 처리기 연결: 일반 Exception 처리기(500)가 아니라 이 처리기가 잡는지
+        var mvc = MockMvcBuilders.standaloneSetup(new ComputeBusyEndpoint())
+                .setControllerAdvice(handler).build();
+        mvc.perform(get("/busy"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "2"))
+                .andExpect(jsonPath("$.error").value("too_many_requests"))
+                .andExpect(jsonPath("$.message").value(BUSY));
+    }
+
+    @Controller
+    static class ComputeBusyEndpoint {
+        @GetMapping("/busy")
+        @ResponseBody
+        String busy() {
+            throw new ComputeBusyException(BUSY, Duration.ofSeconds(2));
         }
     }
 
