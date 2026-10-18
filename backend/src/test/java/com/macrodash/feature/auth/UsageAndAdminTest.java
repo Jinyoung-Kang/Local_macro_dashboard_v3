@@ -4,7 +4,6 @@ import com.macrodash.store.AuditLogStore;
 import com.macrodash.store.UsageStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -111,7 +110,6 @@ class UsageAndAdminTest {
     }
 
     @Test
-    @Disabled("QA-134: 수정 전 재현 — fix 커밋에서 켬")
     @DisplayName("QA-134 역할·등급 변경 중 감사 기록 쓰기가 실패하면 등급도, 알림 규칙 끄기도 되돌아간다")
     void updateIsAllOrNothing() {
         long ownerId = db.user("admin", "owner passphrase", "OWNER", "PRO");

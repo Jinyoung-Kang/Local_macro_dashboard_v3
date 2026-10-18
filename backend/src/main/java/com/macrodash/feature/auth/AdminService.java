@@ -64,18 +64,24 @@ public class AdminService {
         if (target.id() == admin.id() && !"OWNER".equals(role)) {
             return "자기 자신의 운영자 역할은 내릴 수 없습니다(운영자가 없어지면 아무도 관리할 수 없습니다).";
         }
-        users.updateRoleAndTier(userId, role, tier);
-        Map<String, Object> detail = new LinkedHashMap<>(Map.of("target", userId, "role", role, "tier", tier,
-                "fromRole", target.role(), "fromTier", target.tier()));
         // 결과가 무료면 국면 전환 밖의 알림 규칙을 끕니다(명세 B5 — 등급 변경은 다음 요청부터 반영). 끄지 않으면
         // 정기 평가가 유료 알림을 계속 넣고, 관심 종목이 종목별 수급 수집 범위(전체 60)를 계속 차지했습니다(QA-091).
         // 전에도 무료였어도 끕니다 — 이 처리가 생기기 전에 내려간 회원이나 내리기와 겹친 켜기 요청으로 켜진 채 남은 규칙을
         // 무료로 다시 저장해 정리할 수 있게(QA-115). 이미 꺼진 규칙은 세지 않아 몇 번 저장해도 결과가 같습니다(끈 수 0).
         // 다시 유료로 올려도 저절로 켜지 않습니다 — 회원이 알림 화면에서 켭니다.
-        if (!paid(role, tier) && alerts.ready()) {
-            detail.put("disabledAlertRules", alerts.disablePaidRules(userId));
-        }
-        audit.append(admin.id(), "user.updated", detail);
+        boolean disableRules = !paid(role, tier) && alerts.ready();
+        // 저장·규칙 끄기·감사 기록은 한 트랜잭션(QA-134, QA-128과 같은 방식) — 중간에 실패하면 등급도 규칙도 그대로라
+        // '응답은 500인데 등급은 내려가 있고 감사 기록은 없음'이 생기지 않습니다.
+        users.atomically(() -> {
+            users.updateRoleAndTier(userId, role, tier);
+            Map<String, Object> detail = new LinkedHashMap<>(Map.of("target", userId, "role", role, "tier", tier,
+                    "fromRole", target.role(), "fromTier", target.tier()));
+            if (disableRules) {
+                detail.put("disabledAlertRules", alerts.disablePaidRules(userId));
+            }
+            audit.append(admin.id(), "user.updated", detail);
+            return null;
+        });
         return null;
     }
 
