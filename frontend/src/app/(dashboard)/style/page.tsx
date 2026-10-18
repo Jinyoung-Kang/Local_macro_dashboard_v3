@@ -387,8 +387,10 @@ function RiskCard() {
                 미커버 {coverage.uncoveredCount}종목 보기
               </summary>
               <ul className="mt-1 space-y-0.5 text-[11px]">
-                {coverage.uncovered.map((row) => (
-                  <li key={row.name}>
+                {/* 같은 회사의 보통주·우선주·사채가 같은 공시 이름으로 여러 줄 옵니다. 응답에 증권을 가르는 필드가 없고
+                    목록은 응답마다 통째로 바뀌므로 순서를 키에 넣습니다(QA-135). */}
+                {coverage.uncovered.map((row, index) => (
+                  <li key={`${index}:${row.name}`}>
                     {row.name} — {formatWithUnit(row.weight, 2, "%")}
                     {row.reason && <span className="text-muted"> · {row.reason}</span>}
                   </li>

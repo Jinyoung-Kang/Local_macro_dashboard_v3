@@ -32,7 +32,7 @@ const RISK = {
 
 describe("QA-135 13F 위험 분석 — 미커버 목록", () => {
   // 수정 전에는 key={row.name}이라 같은 이름의 두 줄이 같은 키를 받았다.
-  it.fails("이름이 같은 두 줄을 중복 키 경고 없이 모두 그린다", async () => {
+  it("이름이 같은 두 줄을 중복 키 경고 없이 모두 그린다", async () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     api.apiGetShared.mockImplementation((path: string) =>
       path.startsWith("/api/guru/risk") ? Promise.resolve(RISK) : new Promise(() => {}));
