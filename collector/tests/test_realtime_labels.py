@@ -223,6 +223,10 @@ def test_QA138_실시간_시세가_있으면_TradingView_값으로_바꾼다(fak
     assert {cards[key]["note"] for key in ("jpykrw", "kospi", "hsi")} == {"실시간"}
 
 
+def _blocked(*_args, **_kw):
+    raise RuntimeError("TradingView 차단")
+
+
 def _old(name: str, payload: dict) -> store.Snapshot:
     from datetime import timedelta
 
@@ -230,11 +234,13 @@ def _old(name: str, payload: dict) -> store.Snapshot:
 
 
 @pytest.mark.parametrize("case", ["저장본 없음", "20분 지난 저장본", "조회 실패", "이어받은 옛 값", "TradingView도 지연"])
-def test_QA138_실시간_값을_못_받으면_Yahoo_카드와_그_지연_배지를_둔다(fake_store, case):
+def test_QA138_실시간_값을_못_받으면_Yahoo_카드와_그_지연_배지를_둔다(fake_store, monkeypatch, case):
     snapshots, _saved = fake_store
     dxy = _streaming("dxy", "TVC:DXY", 101.818, 101.779, "market", "2026-10-19", pricescale=1000)
     if case == "20분 지난 저장본":
         snapshots[catalog.SNAP_SCRAPER_MARKETS] = _old(catalog.SNAP_SCRAPER_MARKETS, _scraped(dxy))
+        # 오래된 저장본이면 실시간 대상만 바로 받아 봅니다 — 그것도 실패한 경우입니다.
+        monkeypatch.setattr(macro_cards.scraper_service, "collect_quotes", _blocked, raising=False)
     elif case != "저장본 없음":
         dxy.update({
             "조회 실패": {"status": "fail", "price": None},
@@ -330,3 +336,33 @@ def test_QA138_거래일을_모르는_장_밖_값은_수집_시각에_장_밖을
     ))
     futures = _by_key(macro_cards.inject_scraped_indices({"categories": [{"id": "asia_equity", "items": []}]}))
     assert futures["hsi_fut_scraped"]["lastTs"] == "2026-10-19 20:35 KST (TradingView 수집 시각 · 장 밖)"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-138 재현: 라이브 갱신(매크로만 1분마다)에서 최대 5분 묵은 TradingView 값을 '실시간'으로 씀")
+def test_QA138_라이브_갱신에서는_묵은_참고_시세_대신_실시간_대상만_바로_받는다(fake_store, monkeypatch):
+    """
+    화면이 1분 이하 자동 갱신을 고르면 백엔드는 매크로 카드(macro_collected)만 1분마다 맡기고(MAX_AGE_LIVE), 참고 시세는
+    5분 스케줄 그대로입니다. 4분 전 참고 시세를 '실시간'으로 쓰면 Yahoo 카드는 1분마다 움직이는데 달러 인덱스만 4분 전
+    값에 머뭅니다.
+    """
+    from datetime import timedelta
+
+    snapshots, _saved = fake_store
+    stale_dxy = _streaming("dxy", "TVC:DXY", 101.70, 101.779, "market", None, pricescale=1000)
+    snapshots[catalog.SNAP_SCRAPER_MARKETS] = store.Snapshot(
+        catalog.SNAP_SCRAPER_MARKETS, _scraped(stale_dxy), "json", "ok", None,
+        datetime.now(timezone.utc) - timedelta(minutes=4))
+    asked: list[set] = []
+
+    def quotes(keys):
+        asked.append(set(keys))
+        return {"dxy": _streaming("dxy", "TVC:DXY", 101.83, 101.779, "market", None, pricescale=1000,
+                                  collectedAt="2026-10-19 21:04 KST")}
+
+    monkeypatch.setattr(macro_cards.scraper_service, "collect_quotes", quotes, raising=False)
+
+    card = _by_key(macro_cards.apply_realtime_quotes(_yahoo_cards("dxy")))["dxy"]
+
+    assert asked == [set(indicators.REALTIME_QUOTES.values())]
+    assert card["price"] == pytest.approx(101.83)
+    assert card["lastTs"] == "2026-10-19 21:04 KST (TradingView 수집 시각)"
