@@ -79,6 +79,7 @@ def task_scraper_markets() -> str:
 def task_macro_collected() -> str:
     payload = market_service.collect_macro_cards(indicators.MACRO_CATEGORIES)
     payload = macro_cards.apply_bond_override(payload)
+    payload = macro_cards.apply_realtime_quotes(payload)
     payload = macro_cards.inject_scraped_indices(payload)
 
     items = [

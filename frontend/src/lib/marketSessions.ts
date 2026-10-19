@@ -284,6 +284,8 @@ const LABELS: Record<SessionState, string> = {
  * @param lastTradeAt  카드의 마지막 **체결** 시각. 수집 시각이면 넘기지 마세요
  * @param collectedAt  그 체결 시각을 받은 수집 시각. 수집기가 멈춘 것을 휴장으로
  *                     오인하지 않도록, 지금이 아니라 수집 시각 기준으로 멈춤을 잽니다
+ * @param lastTradeDay 체결 시각이 없는 카드의 값이 속한 거래일("YYYY-MM-DD", {@link tradeDayFrom}).
+ *                     장 밖에 받은 TradingView 값·일봉 값이 여기에 해당합니다(QA-138)
  * @returns 상태, 없으면 null (배지를 그리지 않음)
  */
 export function sessionStatus(
@@ -292,6 +294,7 @@ export function sessionStatus(
   krOfficial?: readonly string[] | null,
   lastTradeAt?: Date | null,
   collectedAt?: Date | null,
+  lastTradeDay?: string | null,
 ): SessionStatus | null {
   const def = market ? MARKETS[market] : undefined;
   if (!def) return null;
@@ -311,6 +314,19 @@ export function sessionStatus(
     ) {
       state = "idle";
       note = ` · 개장 시간인데 ${Math.round(idleMinutes / 60)}시간 넘게 체결이 없어 현지 휴장일로 추정`;
+    }
+  } else if (state === "open" && !lastTradeAt && lastTradeDay && collectedAt && daySessionOnly(def)) {
+    // 체결 시각이 없는 카드(TradingView 실시간 값·일봉 값)는 거래일로 봅니다. 개장한 지 한 시간이 지난 수집 시각에도
+    // 값의 거래일이 그 시장의 오늘보다 앞이면 오늘 장이 서지 않은 것입니다(QA-138 — 2026-10-19 홍콩 중양절 대체 휴장).
+    // 저녁에 여는 시장은 세션의 거래일이 다음 날로 넘어가 달력 날짜와 비교할 수 없어 뺍니다.
+    const hourBefore = new Date(collectedAt.getTime() - IDLE_MINUTES * 60_000);
+    if (
+      lastTradeDay < localParts(def.timeZone, collectedAt).date
+      && scheduleState(def, collectedAt, krOfficial) === "open"
+      && scheduleState(def, hourBefore, krOfficial) === "open"
+    ) {
+      state = "idle";
+      note = ` · 개장 시간인데 값의 거래일이 ${lastTradeDay}라 현지 휴장일로 추정`;
     }
   }
 
@@ -333,6 +349,22 @@ export function tradeTimeFrom(lastTs: string | null | undefined): Date | null {
   if (!match) return null;
   const [, y, mo, d, hh, mi] = match;
   return new Date(`${y}-${mo}-${d}T${hh}:${mi}:00+09:00`);
+}
+
+/**
+ * 카드의 lastTs에서 값의 거래일을 꺼냅니다(QA-138).
+ *
+ * "YYYY-MM-DD 거래일 기준 …"(장 밖에 받은 TradingView 값)과 "YYYY-MM-DD 일봉 기준"(일봉 값)만 거래일로 봅니다.
+ * 체결 시각·수집 시각 표기는 null입니다.
+ */
+export function tradeDayFrom(lastTs: string | null | undefined): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2}) (?:거래일|일봉) 기준/.exec((lastTs ?? "").trim());
+  return match ? match[1] : null;
+}
+
+/** 세션이 자정 전에 끝나는(밤을 넘기지 않는) 시장인지 — 거래일과 현지 달력 날짜가 같습니다. */
+function daySessionOnly(def: MarketDef): boolean {
+  return def.windows.every((window) => window.tradeDayOffset !== -1 && window.end < h(24));
 }
 
 /** 한국 시간 기준 연도. 브라우저가 어느 시간대에 있든 같은 답입니다. */

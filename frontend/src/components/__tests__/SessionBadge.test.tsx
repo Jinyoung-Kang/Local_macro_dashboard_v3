@@ -20,7 +20,7 @@ function badge(lastTs: string) {
 }
 
 describe("QA-138 장 밖 거래일로 본 휴장 추정", () => {
-  it.fails("개장 시간인데 마지막 거래일이 그 시장의 오늘보다 앞서면 '휴장 추정'", () => {
+  it("개장 시간인데 마지막 거래일이 그 시장의 오늘보다 앞서면 '휴장 추정'", () => {
     badge("2026-10-16 거래일 기준 (TradingView · 장 밖)");
     expect(screen.getByText("휴장 추정")).toBeTruthy();
   });

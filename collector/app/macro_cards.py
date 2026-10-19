@@ -5,6 +5,8 @@ app/macro_cards.py
 [무엇을 하나]
 - apply_bond_override: 미국채 카드를 TradingView Scanner의 실제 수익률로 바꿉니다.
   전일 종가가 없으면 FRED 공식 확정치로 보완합니다.
+- apply_realtime_quotes: 같은 종목의 TradingView 실시간 시세가 있으면 Yahoo 지연 카드를 그 값으로
+  바꿉니다(QA-138).
 - inject_scraped_indices: yfinance가 비운 아시아 선물 카드를 스크래핑한 지수 값으로
   채웁니다(이름에 대체 사실을 적습니다).
 - summarize_notes: 카테고리 부제(데이터 지연)를 종목 배지로 요약합니다(QA-137).
@@ -17,6 +19,7 @@ tasks.py에 있던 코드를 그대로 옮겼습니다(CODE-05). 동작은 같�
 from __future__ import annotations
 
 import logging
+import math
 
 from . import catalog, indicators, kst, store
 from .services import (
@@ -131,6 +134,89 @@ def apply_bond_override(payload: dict) -> dict:
             }
 
     return _fail_unconverted_price_cards(payload, overridden)
+
+
+# 실시간 대체에 쓸 참고 시세 저장본의 나이 상한. 같은 fast 라운드(5분)에서 방금 받은 것만 씁니다 — 그보다 오래된 값을
+# '실시간'으로 적느니 Yahoo 지연 값과 그 배지를 둡니다.
+REALTIME_MAX_AGE_SECONDS = 300
+
+
+def apply_realtime_quotes(payload: dict) -> dict:
+    """
+    같은 종목의 TradingView 실시간 시세로 Yahoo 지연 카드를 바꿉니다(QA-138, 대상은 indicators.REALTIME_QUOTES).
+
+    [왜] 2026-10-19 20:22 KST 화면의 달러 인덱스 카드가 '실시간' 배지에 20:11 값이었습니다 — Yahoo DX-Y.NYB는 ICE 선물
+    시세라 10분 늦고, 코스피·닛케이는 20분, 항셍은 15분 늦습니다. TradingView 공개 시세는 같은 종목을 실시간으로 줍니다.
+
+    방금 받은 참고 시세 저장본(services/scraper.py)만 읽고 외부를 새로 부르지 않습니다. 실시간 값이 아니면(저장본이 없거나
+    오래됨, 조회 실패, 이어받은 옛 값, TradingView도 지연) 카드를 건드리지 않습니다 — Yahoo 값과 그 지연 배지가 남습니다.
+
+    카드 시각: 장이 열려 있으면 수집 시각(값이 그 시각의 시세), 닫혀 있으면 그 값의 거래일입니다. 장 밖에 수집 시각을 적으면
+    홍콩 휴장일(10-19)에 금요일 종가가 오늘 20:35 값처럼 보입니다.
+    """
+    snapshot = store.read_snapshot(catalog.SNAP_SCRAPER_MARKETS)
+    if not snapshot or not snapshot.payload or not snapshot.is_fresh(REALTIME_MAX_AGE_SECONDS):
+        return payload
+    scraped = {
+        item["key"]: item
+        for item in (snapshot.payload.get("items") or [])
+        if isinstance(item, dict) and item.get("key")
+    }
+
+    for category in payload["categories"]:
+        for item in category["items"]:
+            source = scraped.get(indicators.REALTIME_QUOTES.get(item.get("key")))
+            if not _usable(source) or source.get("isStale") or source.get("delayMinutes") != 0:
+                continue
+            item.update(_realtime_card(item["key"], source))
+    return payload
+
+
+def _realtime_card(key: str, source: dict) -> dict:
+    """참고 시세 한 항목 → 카드에 덮어쓸 값. 엔/원 배율(1엔당 → 100엔당)은 Yahoo 카드와 같은 함수로 정합니다."""
+    raw = float(source["price"])
+    scale = market_service.quote_scale(key, raw)
+    price = raw * scale
+    digits = _display_digits(source.get("pricescale"), scale)
+
+    if source.get("session") == "market" or not source.get("tradeDate"):
+        last_ts = f"{source.get('collectedAt')} (TradingView 수집 시각)"
+    else:
+        last_ts = f"{source['tradeDate']} 거래일 기준 (TradingView · 장 밖)"
+
+    card = {
+        "status": "ok",
+        "price": price,
+        "priceStr": f"{price:,.{digits}f}",
+        "note": indicators.delay_label(0),
+        "source": f"TradingView ({source.get('symbol')})",
+        "lastTs": last_ts,
+        "delta": None, "pct": None, "deltaStr": "N/A", "prevStr": "N/A", "prevValue": None,
+        "prevSource": None,
+    }
+    previous = source.get("previousClose")
+    if previous:
+        previous = float(previous) * scale
+        delta = price - previous
+        pct = delta / previous * 100.0
+        card.update({
+            "delta": delta, "pct": pct,
+            "deltaStr": f"{delta:+,.{digits}f} ({pct:+.2f}%)",
+            "prevStr": f"{previous:,.{digits}f}", "prevValue": previous,
+            "prevSource": "TradingView 직전 거래일 종가",
+        })
+    return card
+
+
+def _display_digits(pricescale: object, scale: float) -> int:
+    """
+    표시 소수 자리 — 카드는 둘째 자리까지지만, 원본이 그보다 거칠면 원본 자리까지만 적습니다. 엔/원은 1엔당 소수 셋째
+    자리(pricescale 1000)로 와서 100엔당으로 바꾸면 첫째 자리까지만 의미가 있습니다 — 838.70처럼 적으면 없는 자리를 만듭니다.
+    """
+    if not isinstance(pricescale, (int, float)) or pricescale <= 0:
+        return 2
+    source_digits = round(math.log10(pricescale)) - round(math.log10(scale))
+    return max(0, min(2, source_digits))
 
 
 def _fail_unconverted_price_cards(payload: dict, overridden: set[str]) -> dict:

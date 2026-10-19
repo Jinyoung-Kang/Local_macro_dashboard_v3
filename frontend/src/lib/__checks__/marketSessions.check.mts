@@ -7,7 +7,7 @@
  * 주말, KRX·미국 휴장일, 그리고 "개장 시간인데 체결이 멈춘" 휴장 추정.
  * 시각은 모두 UTC로 적고 옆에 현지 시각을 달았습니다.
  */
-import { kstYear, sessionStatus, tradeTimeFrom } from "../marketSessions.ts";
+import { kstYear, sessionStatus, tradeDayFrom, tradeTimeFrom } from "../marketSessions.ts";
 
 let failed = 0;
 
@@ -78,6 +78,20 @@ check("개장 직후에는 휴장 추정하지 않음", justOpened?.state, "open
 check("수집 시각 표기는 체결 시각이 아님", tradeTimeFrom("2026-09-26 03:43 KST (TradingView 수집 시각)"), null);
 check("일봉 표기는 체결 시각이 아님", tradeTimeFrom("2026-09-23 일봉 기준"), null);
 check("모르는 시장은 배지 없음", sessionStatus("unknown", at("2026-09-23T00:00:00Z")), null);
+
+console.log("\n휴장 추정 — 체결 시각 없이 거래일만 있는 카드 (QA-138)");
+check("장 밖 TradingView 표기의 거래일", tradeDayFrom("2026-10-16 거래일 기준 (TradingView · 장 밖)"), "2026-10-16");
+check("일봉 표기의 거래일", tradeDayFrom("2026-09-23 일봉 기준"), "2026-09-23");
+check("수집 시각 표기는 거래일이 아님", tradeDayFrom("2026-10-19 20:35 KST (TradingView 수집 시각)"), null);
+// 홍콩 중양절 대체 휴장 10/19(월) 11:00 — 값의 거래일이 10/16(금)
+const hkHoliday = sessionStatus("hkex", at("2026-10-19T03:00:00Z"), null, null, at("2026-10-19T02:55:00Z"), "2026-10-16");
+check("홍콩 휴장일: 거래일이 오늘보다 앞 → 휴장 추정", hkHoliday?.state, "idle");
+// 개장 30분 뒤(10:00)에는 아직 판정하지 않음 — 첫 수집이 개장 전 값을 들고 있을 수 있습니다
+const hkEarly = sessionStatus("hkex", at("2026-10-19T02:00:00Z"), null, null, at("2026-10-19T02:00:00Z"), "2026-10-16");
+check("개장 한 시간 안에는 거래일로 휴장 추정하지 않음", hkEarly?.state, "open");
+// 밤을 넘기는 시장(외환)은 세션 거래일이 다음 날이라 달력 날짜와 비교하지 않음
+const fxEvening = sessionStatus("fx", at("2026-10-19T23:00:00Z"), null, null, at("2026-10-19T23:00:00Z"), "2026-10-16");
+check("밤을 넘기는 시장은 거래일로 판정하지 않음", fxEvening?.state, "open");
 
 if (failed > 0) {
   console.error(`\n${failed}건 실패`);

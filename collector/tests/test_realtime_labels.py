@@ -198,7 +198,6 @@ def _streaming(key: str, symbol: str, price: float, previous: float, session: st
                pricescale=pricescale, **extra)
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: TradingView 실시간 시세가 있는데도 Yahoo 지연 시세(DXY 10분·코스피 20분)를 씀")
 def test_QA138_실시간_시세가_있으면_TradingView_값으로_바꾼다(fake_store):
     snapshots, _saved = fake_store
     snapshots[catalog.SNAP_SCRAPER_MARKETS] = _snapshot(catalog.SNAP_SCRAPER_MARKETS, _scraped(
@@ -230,7 +229,6 @@ def _old(name: str, payload: dict) -> store.Snapshot:
     return store.Snapshot(name, payload, "json", "ok", None, datetime.now(timezone.utc) - timedelta(minutes=20))
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 실시간 대체 경로가 없음")
 @pytest.mark.parametrize("case", ["저장본 없음", "20분 지난 저장본", "조회 실패", "이어받은 옛 값", "TradingView도 지연"])
 def test_QA138_실시간_값을_못_받으면_Yahoo_카드와_그_지연_배지를_둔다(fake_store, case):
     snapshots, _saved = fake_store
@@ -252,7 +250,6 @@ def test_QA138_실시간_값을_못_받으면_Yahoo_카드와_그_지연_배지�
     assert card["note"] == _label(10)
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 거래일·장 상태를 버려 장 밖 값도 수집 시각으로 적을 수밖에 없음")
 @pytest.mark.parametrize("key, bar_time, session, trade_date", [
     # 일봉이 열린 시각(UTC) → 그 시장 시간대의 거래일. 2026-10-16 01:30 UTC = 홍콩 금요일 09:30 (10-19 월요일은 중양절 대체 휴장)
     ("hang_seng", 1792114200, "out_of_session", "2026-10-16"),
@@ -272,7 +269,6 @@ def test_QA138_TradingView_거래일과_장_상태를_남긴다(monkeypatch, key
     assert (item["session"], item["tradeDate"], item["symbol"]) == (session, trade_date, config["symbol"])
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 실시간 대체 목록이 없음")
 def test_QA138_실시간_대체는_같은_종목의_TradingView_시세만_가리킨다():
     scraped = {config["key"]: config for config in scraper.SCRAPER_MARKETS}
     macro = {spec["key"]: spec for category in indicators.MACRO_CATEGORIES for spec in category["items"]}

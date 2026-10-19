@@ -1,6 +1,6 @@
 "use client";
 
-import { sessionStatus, tradeTimeFrom, type SessionState } from "@/lib/marketSessions";
+import { sessionStatus, tradeDayFrom, tradeTimeFrom, type SessionState } from "@/lib/marketSessions";
 
 /**
  * 지표 카드의 "개장/마감" 배지.
@@ -34,13 +34,15 @@ export function SessionBadge({
   market?: string | null;
   now: Date | null;
   krOfficial: string[] | null;
-  /** 카드의 lastTs. 체결 시각 형식일 때만 휴장 추정에 씁니다 */
+  /** 카드의 lastTs. 체결 시각이거나 거래일("… 거래일 기준"·"… 일봉 기준")일 때 휴장 추정에 씁니다 */
   lastTs?: string | null;
   /** 이 카드를 받은 수집 시각 ("YYYY-MM-DD HH:mm KST") */
   collectedAt?: string | null;
 }) {
   if (!now) return null;
-  const status = sessionStatus(market, now, krOfficial, tradeTimeFrom(lastTs), tradeTimeFrom(collectedAt));
+  const status = sessionStatus(
+    market, now, krOfficial, tradeTimeFrom(lastTs), tradeTimeFrom(collectedAt), tradeDayFrom(lastTs),
+  );
   if (!status) return null;
   return (
     <span

@@ -15,6 +15,7 @@ from .. import kst
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import requests
@@ -41,7 +42,17 @@ TREASURY_KEYS = ("us03m", "us02y", "us10y", "us30y")
 # kind: tradingview_symbol(=Symbol Scanner JSON) | yahoo_chart(=chart JSON)
 # delay: yahoo_chart 항목의 시세 지연(분) — Yahoo가 밝힌 값(exchangeDataDelayedBy, 2026-10-19 확인).
 #        TradingView 항목은 응답의 update_mode로 그때그때 받습니다(QA-137).
+# tz: 그 시장의 시간대. TradingView 일봉이 열린 시각을 그 시장의 거래일로 옮길 때 씁니다 — 매크로 카드를 이 값으로
+#     바꾸는 항목(indicators.REALTIME_QUOTES)은 장이 닫혔을 때 카드에 거래일을 적어야 합니다(QA-138).
 SCRAPER_MARKETS = [
+    # 달러 인덱스·엔/원 — 매크로 카드의 실시간 출처입니다(Yahoo DX-Y.NYB는 ICE 10분 지연, JPYKRW=X는 호가가 드묾).
+    # FX_IDC:JPYKRW는 1엔당(약 8.4원)으로 옵니다. 카드는 100엔당으로 바꿉니다(market.quote_scale).
+    {"key": "dxy", "name": "달러 인덱스", "kind": "tradingview_symbol",
+     "symbol": "TVC:DXY", "provider": "TradingView Scanner", "unit": "pt", "tz": "America/New_York",
+     "url": "https://www.tradingview.com/symbols/TVC-DXY/"},
+    {"key": "jpykrw", "name": "엔/원 (1엔당)", "kind": "tradingview_symbol",
+     "symbol": "FX_IDC:JPYKRW", "provider": "TradingView Scanner", "unit": "원", "tz": "America/New_York",
+     "url": "https://www.tradingview.com/symbols/JPYKRW/"},
     {"key": "us03m", "name": "미국채 3개월물", "kind": "tradingview_symbol",
      "symbol": "TVC:US03MY", "provider": "TradingView Scanner", "unit": "%",
      "url": "https://www.tradingview.com/symbols/TVC-US03MY/"},
@@ -64,10 +75,10 @@ SCRAPER_MARKETS = [
      "symbol": "OANDA:XAUUSD", "provider": "TradingView Scanner", "unit": "USD/oz",
      "url": "https://www.tradingview.com/symbols/XAUUSD/"},
     {"key": "kospi", "name": "코스피", "kind": "tradingview_symbol",
-     "symbol": "KRX:KOSPI", "provider": "TradingView Scanner", "unit": "pt",
+     "symbol": "KRX:KOSPI", "provider": "TradingView Scanner", "unit": "pt", "tz": "Asia/Seoul",
      "url": "https://www.tradingview.com/symbols/KRX-KOSPI/"},
     {"key": "nikkei", "name": "닛케이225", "kind": "tradingview_symbol",
-     "symbol": "TVC:NI225", "provider": "TradingView Scanner", "unit": "pt",
+     "symbol": "TVC:NI225", "provider": "TradingView Scanner", "unit": "pt", "tz": "Asia/Tokyo",
      "url": "https://www.tradingview.com/symbols/TVC-NI225/"},
     {"key": "shanghai", "name": "상해종합", "kind": "yahoo_chart",
      "symbol": "000001.SS", "provider": "Yahoo Finance", "delay": 15, "unit": "pt",
@@ -82,7 +93,7 @@ SCRAPER_MARKETS = [
      "fallback": "kodex_proxy",
      "url": "https://kr.tradingview.com/symbols/KRX-K2I1!/"},
     {"key": "hang_seng", "name": "항셍", "kind": "tradingview_symbol",
-     "symbol": "TVC:HSI", "provider": "TradingView Scanner", "unit": "pt",
+     "symbol": "TVC:HSI", "provider": "TradingView Scanner", "unit": "pt", "tz": "Asia/Hong_Kong",
      "url": "https://www.tradingview.com/symbols/TVC-HSI/"},
     # 닛케이225·항셍 **선물**(최근월 연결). 예전에는 "선물" 카드가 위의 지수
     # 심볼(TVC:NI225·TVC:HSI)을 그대로 썼습니다 — 이름은 선물인데 값은 지수였고,
@@ -171,6 +182,7 @@ def _collect_one(config: dict) -> dict:
     reason: str | None = None
     price = previous = change = change_pct = None
     delay = config.get("delay")
+    session = trade_day = pricescale = None
 
     try:
         if config["kind"] == "tradingview_symbol":
@@ -178,6 +190,8 @@ def _collect_one(config: dict) -> dict:
             price, previous = quote["price"], quote["previous"]
             change, change_pct = quote["change"], quote["changePct"]
             delay = quote["delayMinutes"]
+            session, pricescale = quote.get("session"), quote.get("pricescale")
+            trade_day = trade_date(quote.get("barTime"), config.get("tz"))
         else:
             price, previous = fetch_yahoo_chart(config["symbol"])
             change = (price - previous) if (price is not None and previous) else None
@@ -209,6 +223,7 @@ def _collect_one(config: dict) -> dict:
         "name": config["name"],
         "url": config["url"],
         "provider": config["provider"],
+        "symbol": config["symbol"],
         "unit": config["unit"],
         "status": "ok",
         "price": price,
@@ -217,6 +232,11 @@ def _collect_one(config: dict) -> dict:
         "changePct": change_pct,
         # 시세 지연(분). 0이면 실시간, 모르면 None — 카드 배지가 이 값으로 적힙니다(QA-137).
         "delayMinutes": delay,
+        # 받은 때의 장 상태("market"·"out_of_session" 등)와 값의 거래일, 호가 자릿수(100 → 소수 둘째 자리).
+        # 장이 닫혔으면 카드에 수집 시각 대신 거래일을 적습니다(QA-138). Yahoo 항목은 모두 None입니다.
+        "session": session,
+        "tradeDate": trade_day,
+        "pricescale": pricescale,
         "error": None,
     }
 
@@ -281,7 +301,8 @@ def fetch_symbol_snapshot(symbol: str) -> dict:
     """
     TradingView Symbol Scanner에서 현재가·등락·시세 지연을 JSON으로 읽습니다.
 
-    반환: {"price", "previous", "change", "changePct", "delayMinutes"} — 모르는 값은 None
+    반환: {"price", "previous", "change", "changePct", "delayMinutes", "session", "barTime", "pricescale"}
+          — 모르는 값은 None. barTime은 마지막 일봉이 열린 시각(Unix 초), session은 받은 때의 장 상태입니다.
     전일 종가는 change_abs(절대 변화)에서 역산합니다. change_abs가 없으면
     change(%)로 역산하고, 둘 다 없으면 None으로 둡니다 — 0으로 메우지 않습니다.
 
@@ -291,7 +312,7 @@ def fetch_symbol_snapshot(symbol: str) -> dict:
     """
     params = {
         "symbol": symbol,
-        "fields": "close,change,change_abs,update_mode",
+        "fields": "close,change,change_abs,update_mode,current_session,time,pricescale",
         "no_404": "true",
         "label-product": "symbols-performance",
     }
@@ -304,8 +325,13 @@ def fetch_symbol_snapshot(symbol: str) -> dict:
     price = to_float(payload.get("close"))
     change_pct = to_float(payload.get("change"))
     change = to_float(payload.get("change_abs"))
+    bar_time, scale = to_float(payload.get("time")), to_float(payload.get("pricescale"))
+    session = payload.get("current_session")
     quote = {"price": price, "previous": None, "change": None, "changePct": None,
-             "delayMinutes": delay_minutes(payload.get("update_mode"))}
+             "delayMinutes": delay_minutes(payload.get("update_mode")),
+             "session": session if isinstance(session, str) else None,
+             "barTime": int(bar_time) if bar_time is not None else None,
+             "pricescale": int(scale) if scale and scale > 0 else None}
 
     if price is None:
         logger.warning("Symbol Scanner 현재가 파싱 실패: symbol=%s", symbol)
@@ -319,6 +345,19 @@ def fetch_symbol_snapshot(symbol: str) -> dict:
         change = price - previous
 
     return {**quote, "previous": previous, "change": change, "changePct": change_pct}
+
+
+def trade_date(bar_time: int | None, tz: str | None) -> str | None:
+    """
+    TradingView 일봉이 열린 시각 → 그 시장의 거래일("YYYY-MM-DD"). 시간대를 모르면 None.
+
+    일봉 시각은 세션이 열린 때입니다 — 코스피는 KST 09:00, 항셍은 HKT 09:30, 달러 인덱스는 전날 뉴욕 17:00
+    (2026-10-19 응답으로 확인). 저녁에 여는 세션은 다음 날 거래일이므로, 연 시각에 12시간을 더한 현지 날짜로 셉니다.
+    """
+    if bar_time is None or not tz:
+        return None
+    opened = datetime.fromtimestamp(bar_time, timezone.utc).astimezone(ZoneInfo(tz))
+    return (opened + timedelta(hours=12)).date().isoformat()
 
 
 def delay_minutes(update_mode: object) -> int | None:

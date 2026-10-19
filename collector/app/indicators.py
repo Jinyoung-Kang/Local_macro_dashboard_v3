@@ -86,6 +86,20 @@ MACRO_CATEGORIES = [
     },
 ]
 
+# 같은 종목의 TradingView 실시간 시세로 먼저 채울 카드 → 참고 시세(services/scraper.py SCRAPER_MARKETS)의 key.
+# 2026-10-19 공개 응답의 update_mode가 "streaming"(실시간)인 것만 둡니다(QA-138). 실시간 값을 못 받으면 Yahoo 카드가
+# 그대로 남고 배지는 그 지연입니다(macro_cards.apply_realtime_quotes).
+# 넣지 않은 것과 이유 — 원/달러·달러/엔·S&P 500·나스닥 100 지수는 Yahoo가 이미 실시간. 상하이 종합(TradingView도 15분),
+# CME·NYMEX·COMEX 선물(TradingView도 10분)은 실시간 공개 시세가 없습니다. 금 현물(OANDA:XAUUSD)·원유 CFD는 실시간이지만
+# 선물과 다른 상품이라 넣지 않습니다.
+REALTIME_QUOTES = {
+    "dxy": "dxy",              # TVC:DXY      (Yahoo DX-Y.NYB 10분 지연)
+    "jpykrw": "jpykrw",        # FX_IDC:JPYKRW (Yahoo JPYKRW=X는 지연은 없지만 호가가 드물어 마지막 분봉이 몇 분씩 지남)
+    "kospi": "kospi",          # KRX:KOSPI    (Yahoo ^KS11 20분 지연, 분봉이 장 마감 30분 전에 끊김)
+    "nikkei": "nikkei",        # TVC:NI225    (Yahoo ^N225 20분 지연)
+    "hsi": "hang_seng",        # TVC:HSI      (Yahoo ^HSI 15분 지연)
+}
+
 # 한 카테고리 안에서 종목마다 지연이 다를 때의 부제. 하나로 뭉뚱그려 적으면 어느 카드에도 맞지 않는 말이 됩니다.
 MIXED_DELAY_NOTE = "종목마다 다름 — 카드 배지 참고"
 

@@ -77,7 +77,8 @@ export function FxCompareSection() {
   return (
     <Card
       title="환율·달러인덱스 비교"
-      source={`${SOURCES.yahoo} — 매크로 카드와 같은 티커`}
+      // 카드의 Yahoo 티커로 그립니다. 달러 인덱스·엔/원 카드는 TradingView 실시간 값이 먼저라(QA-138) 끝값이 조금 다를 수 있습니다.
+      source={`${SOURCES.yahoo} — 매크로 카드의 Yahoo 티커(달러 인덱스·엔/원 카드는 TradingView 실시간 우선)`}
       subtitle={
         mode === "index"
           ? "기준일을 100으로 맞춰 겹칩니다 — 단위가 달라도 '무엇이 더 움직였는지'를 비교할 수 있습니다."
