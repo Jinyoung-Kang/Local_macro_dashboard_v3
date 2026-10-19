@@ -8,6 +8,7 @@
 #   bash scripts/qa/qa-stack.sh api /api/…    QA 백엔드에 로그인해 한 번 호출(비밀번호는 출력하지 않음)
 #   bash scripts/qa/qa-stack.sh proxy [mode]  차단 프록시 모드 조회·변경 (block | hang | slow:N)
 #   bash scripts/qa/qa-stack.sh down          컨테이너·볼륨 삭제 (운영 볼륨 local_macro_dashboard_v3_*는 그대로)
+#   QA_NO_LOGIN=1 bash scripts/qa/qa-stack.sh up   로그인 없는 로컬 실행을 시험(기본은 로그인, ADR 0016)
 #
 # compose 프로젝트 이름은 macrodash_qa, 포트는 13000(화면)·18080(API)·18000(수집기)·15432(DB)·18888(프록시).
 set -euo pipefail
@@ -16,6 +17,10 @@ cd "$ROOT"
 
 export COMPOSE_PROJECT_NAME="${QA_PROJECT:-macrodash_qa}"
 export COMPOSE_FILE="docker-compose.yml:scripts/qa/docker-compose.qa.yml"
+# QA_NO_LOGIN=1이면 로그인 없는 로컬 실행(ADR 0016)을 시험합니다 — 기본은 로그인 경로(auth-probe.sh가 401을 기대).
+if [ "${QA_NO_LOGIN:-}" = "1" ]; then
+  COMPOSE_FILE="$COMPOSE_FILE:scripts/qa/docker-compose.qa-nologin.yml"
+fi
 export COMPOSE_ENV_FILES="$ROOT/.env.qa"
 export ENV_FILE="$ROOT/.env.qa"          # scripts/db-*.sh가 DB 이름·계정을 여기서 읽습니다
 export BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups/qa}"

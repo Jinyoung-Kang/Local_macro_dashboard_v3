@@ -119,6 +119,31 @@ check_addresses() {
     fail "FRONTEND_ORIGIN($origin)이 FRONTEND_PORT($FRONTEND_PORT)와 다릅니다 — 화면의 API 요청(CORS·로그인)이 막힐 수 있습니다"
     note ".env에서 FRONTEND_ORIGIN 줄을 지우면 FRONTEND_PORT를 따라갑니다"
   fi
+  check_no_login_conflicts
+}
+
+# 로컬 무로그인(LOCAL_NO_LOGIN, 비우면 켜짐 — ADR 0016)과 웹 배포용 값이 함께 있으면 백엔드가 기동을 거부합니다
+# (LocalNoLogin.check). 빌드에 몇 분 쓴 뒤 백엔드만 뜨지 않는 대신, 여기서 먼저 알려 줍니다. 백엔드 검사와 같은 조건입니다.
+check_no_login_conflicts() {
+  local no_login secure origins origin bad=""
+  no_login=$(get_env LOCAL_NO_LOGIN | tr '[:upper:]' '[:lower:]')
+  [ "$no_login" = "false" ] && return 0
+  secure=$(get_env COOKIE_SECURE | tr '[:upper:]' '[:lower:]')
+  if [ "$secure" = "true" ]; then
+    bad="COOKIE_SECURE=true"
+  fi
+  origins=$(get_env FRONTEND_ORIGIN)
+  for origin in $(printf '%s' "$origins" | tr ',' ' '); do
+    if ! printf '%s' "$origin" | grep -Eq '^http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?/?$'; then
+      bad="${bad:+$bad, }FRONTEND_ORIGIN에 이 맥의 http 주소가 아닌 값"
+      break
+    fi
+  done
+  if [ -n "$bad" ]; then
+    CONFLICT=1
+    fail "로컬은 로그인 없이 운영자로 여는데(LOCAL_NO_LOGIN) 웹 배포용 값이 있습니다 — $bad"
+    note "이 맥에서만 쓰면 그 줄을 지우고, 리버스 프록시·HTTPS로 열려면 .env에 LOCAL_NO_LOGIN=false(로그인 화면)를 넣으세요(ADR 0016)"
+  fi
 }
 
 cmd_check() {
