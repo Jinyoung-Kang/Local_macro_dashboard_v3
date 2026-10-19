@@ -178,6 +178,24 @@ def collect_scraped_markets() -> dict:
     }
 
 
+def collect_quotes(keys: set[str]) -> dict[str, dict]:
+    """
+    참고 시세 가운데 몇 항목만 바로 받습니다 — {key: 항목}. 항목 모양은 collect_scraped_markets와 같습니다.
+
+    매크로 카드의 실시간 대체가 1분보다 오래된 참고 시세 저장본을 들고 있을 때 씁니다(QA-138, macro_cards).
+    """
+    configs = [config for config in SCRAPER_MARKETS if config["key"] in keys]
+    if not configs:
+        return {}
+    with ThreadPoolExecutor(max_workers=len(configs)) as pool:
+        items = list(pool.map(_collect_one, configs))
+    stamp = kst.stamp()
+    for item in items:
+        if item.get("status") == "ok":
+            item["collectedAt"] = stamp
+    return {item["key"]: item for item in items}
+
+
 def _collect_one(config: dict) -> dict:
     reason: str | None = None
     price = previous = change = change_pct = None

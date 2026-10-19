@@ -240,7 +240,7 @@ def test_QA138_실시간_값을_못_받으면_Yahoo_카드와_그_지연_배지�
     if case == "20분 지난 저장본":
         snapshots[catalog.SNAP_SCRAPER_MARKETS] = _old(catalog.SNAP_SCRAPER_MARKETS, _scraped(dxy))
         # 오래된 저장본이면 실시간 대상만 바로 받아 봅니다 — 그것도 실패한 경우입니다.
-        monkeypatch.setattr(macro_cards.scraper_service, "collect_quotes", _blocked, raising=False)
+        monkeypatch.setattr(macro_cards.scraper_service, "collect_quotes", _blocked)
     elif case != "저장본 없음":
         dxy.update({
             "조회 실패": {"status": "fail", "price": None},
@@ -338,7 +338,6 @@ def test_QA138_거래일을_모르는_장_밖_값은_수집_시각에_장_밖을
     assert futures["hsi_fut_scraped"]["lastTs"] == "2026-10-19 20:35 KST (TradingView 수집 시각 · 장 밖)"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 라이브 갱신(매크로만 1분마다)에서 최대 5분 묵은 TradingView 값을 '실시간'으로 씀")
 def test_QA138_라이브_갱신에서는_묵은_참고_시세_대신_실시간_대상만_바로_받는다(fake_store, monkeypatch):
     """
     화면이 1분 이하 자동 갱신을 고르면 백엔드는 매크로 카드(macro_collected)만 1분마다 맡기고(MAX_AGE_LIVE), 참고 시세는
@@ -359,7 +358,7 @@ def test_QA138_라이브_갱신에서는_묵은_참고_시세_대신_실시간_�
         return {"dxy": _streaming("dxy", "TVC:DXY", 101.83, 101.779, "market", None, pricescale=1000,
                                   collectedAt="2026-10-19 21:04 KST")}
 
-    monkeypatch.setattr(macro_cards.scraper_service, "collect_quotes", quotes, raising=False)
+    monkeypatch.setattr(macro_cards.scraper_service, "collect_quotes", quotes)
 
     card = _by_key(macro_cards.apply_realtime_quotes(_yahoo_cards("dxy")))["dxy"]
 

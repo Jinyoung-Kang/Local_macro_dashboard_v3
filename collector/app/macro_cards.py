@@ -137,9 +137,10 @@ def apply_bond_override(payload: dict) -> dict:
     return _fail_unconverted_price_cards(payload, overridden)
 
 
-# 실시간 대체에 쓸 참고 시세 저장본의 나이 상한. 같은 fast 라운드(5분)에서 방금 받은 것만 씁니다 — 그보다 오래된 값을
-# '실시간'으로 적느니 Yahoo 지연 값과 그 배지를 둡니다.
-REALTIME_MAX_AGE_SECONDS = 300
+# 실시간 대체에 그대로 쓸 참고 시세 저장본의 나이 상한. 5분 스케줄에서는 참고 시세가 매크로 바로 앞에 돌아 몇 초 전
+# 값입니다. 화면이 1분 이하 자동 갱신을 고르면 백엔드가 매크로만 1분마다 맡겨(MAX_AGE_LIVE) 참고 시세가 최대 5분
+# 묵으므로, 그때는 실시간 대상 다섯 개만 바로 받습니다(외부 요청 다섯 건).
+REALTIME_REUSE_SECONDS = 60
 
 
 def apply_realtime_quotes(payload: dict) -> dict:
@@ -149,21 +150,14 @@ def apply_realtime_quotes(payload: dict) -> dict:
     [왜] 2026-10-19 20:22 KST 화면의 달러 인덱스 카드가 '실시간' 배지에 20:11 값이었습니다 — Yahoo DX-Y.NYB는 ICE 선물
     시세라 10분 늦고, 코스피·닛케이는 20분, 항셍은 15분 늦습니다. TradingView 공개 시세는 같은 종목을 실시간으로 줍니다.
 
-    방금 받은 참고 시세 저장본(services/scraper.py)만 읽고 외부를 새로 부르지 않습니다. 실시간 값이 아니면(저장본이 없거나
-    오래됨, 조회 실패, 이어받은 옛 값, TradingView도 지연) 카드를 건드리지 않습니다 — Yahoo 값과 그 지연 배지가 남습니다.
+    참고 시세 저장본(services/scraper.py)이 1분 안의 것이면 그대로 쓰고, 그보다 오래됐으면 실시간 대상만 바로 받습니다.
+    실시간 값이 아니면(저장본이 아예 없음, 바로 받기도 실패, 이어받은 옛 값, TradingView도 지연) 카드를 건드리지
+    않습니다 — Yahoo 값과 그 지연 배지가 남습니다. 묵은 값을 '실시간'으로 적지 않습니다.
 
     카드 시각: 장이 열려 있으면 수집 시각(값이 그 시각의 시세), 닫혀 있으면 그 값의 거래일입니다(_tradingview_last_ts). 장 밖에 수집 시각을 적으면
     홍콩 휴장일(10-19)에 금요일 종가가 오늘 20:35 값처럼 보입니다.
     """
-    snapshot = store.read_snapshot(catalog.SNAP_SCRAPER_MARKETS)
-    if not snapshot or not snapshot.payload or not snapshot.is_fresh(REALTIME_MAX_AGE_SECONDS):
-        return payload
-    scraped = {
-        item["key"]: item
-        for item in (snapshot.payload.get("items") or [])
-        if isinstance(item, dict) and item.get("key")
-    }
-
+    scraped = _realtime_sources()
     for category in payload["categories"]:
         for item in category["items"]:
             source = scraped.get(indicators.REALTIME_QUOTES.get(item.get("key")))
@@ -171,6 +165,24 @@ def apply_realtime_quotes(payload: dict) -> dict:
                 continue
             item.update(_realtime_card(item["key"], source))
     return payload
+
+
+def _realtime_sources() -> dict[str, dict]:
+    """실시간 대체에 쓸 참고 시세 {key: 항목}. 저장본이 아예 없으면(첫 기동) 비워 둡니다 — 다음 5분 라운드가 채웁니다."""
+    snapshot = store.read_snapshot(catalog.SNAP_SCRAPER_MARKETS)
+    if not snapshot or not snapshot.payload:
+        return {}
+    if snapshot.is_fresh(REALTIME_REUSE_SECONDS):
+        return {
+            item["key"]: item
+            for item in (snapshot.payload.get("items") or [])
+            if isinstance(item, dict) and item.get("key")
+        }
+    try:
+        return scraper_service.collect_quotes(set(indicators.REALTIME_QUOTES.values()))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("실시간 대체용 참고 시세를 바로 받지 못했습니다(Yahoo 카드 유지): %s", exc)
+        return {}
 
 
 def _realtime_card(key: str, source: dict) -> dict:
