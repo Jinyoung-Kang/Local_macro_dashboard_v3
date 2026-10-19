@@ -466,6 +466,7 @@ class SessionFilterTest {
                 assertThat(outcome.body()).contains("bad_origin");
                 assertThat(outcome.reached()).isFalse();
             }
+            verify(users, never()).firstOwner();   // 쿠키가 없으면 운영자를 조회하기 전에 끊음
         }
 
         @Test
@@ -481,6 +482,27 @@ class SessionFilterTest {
                     assertThat(outcome.reached()).isFalse();
                 }
             }
+            verify(users, never()).firstOwner();   // 쿠키가 없으면 운영자를 조회하기 전에 끊음
+        }
+
+        @Test
+        @DisplayName("무효한 쿠키(만료·위조)는 로컬 운영자로 넘어가도 다른 사이트 검사를 그대로 받는다 — 쓰기·다른 출처·cross-site 403")
+        void invalidCookieStillGetsCrossSiteChecks() throws Exception {
+            // 쿠키가 있으면 운영자 조회 전 차단은 건너뜁니다(유효한 세션일 수 있음). 그 쿠키가 무효라 로컬 운영자로 풀리면
+            // 인증 뒤 검사가 유일한 방어입니다 — 이 시험이 없으면 그 줄을 지워도 모든 시험이 통과했습니다(통합 검토 지적).
+            WebConfig.SessionFilter on = filter(true);
+            Outcome write = send(on, "POST", "/api/alerts/rules", "junk-cookie");
+            Outcome foreign = send(on, "GET", "/api/macro/overview", "junk-cookie", "Origin", "https://evil.example");
+            Outcome crossSite = send(on, "GET", "/api/status", "junk-cookie", "Sec-Fetch-Site", "cross-site");
+            for (Outcome outcome : new Outcome[]{write, foreign, crossSite}) {
+                assertThat(outcome.status()).isEqualTo(403);
+                assertThat(outcome.body()).contains("bad_origin");
+                assertThat(outcome.reached()).isFalse();
+            }
+
+            Outcome sameScreen = send(on, "GET", "/api/macro/overview", "junk-cookie", "Origin", "http://localhost:3000");
+            assertThat(sameScreen.reached()).as("이 맥 화면에서 온 요청은 무효 쿠키여도 로컬 운영자로").isTrue();
+            assertThat(sameScreen.user().isLocalOwner()).isTrue();
         }
 
         @Test
