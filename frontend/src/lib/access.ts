@@ -5,7 +5,7 @@
  * 처음부터 보이지 않게 할 뿐입니다. 백엔드 정책과 어긋나면 "버튼은 보이는데 403"이 되므로, 운영 메뉴는
  * 백엔드에서 운영자 전용인 경로만 부르는 화면만 적습니다.
  */
-import type { SessionUser } from "./types";
+import type { SessionResponse, SessionUser } from "./types";
 
 /** 운영자만 보는 메뉴 — 수집 실행·내부 상태(/api/status*)와 키 설정 진단·유료 AI 시험 호출을 부르는 화면. */
 export const OWNER_ONLY_MENUS = ["/status", "/connections", "/admin/users"] as const;
@@ -36,6 +36,22 @@ export function isDemo(user: SessionUser | null | undefined): boolean {
 
 /** 데모 열람에서 쓰기 버튼 옆에 적는 안내. 백엔드의 403 문구와 같은 뜻입니다. */
 export const DEMO_READ_ONLY = "데모에서는 조회만 가능합니다";
+
+/**
+ * 로그인 없이 여는 로컬 실행인가(ADR 0016). 세션 응답의 noLogin이 정확히 true일 때만입니다 — 값이 없는
+ * 이전 백엔드나 false인 AWS 웹 데모·QA 스택은 지금처럼 로그인 화면을 씁니다.
+ */
+export function isNoLogin(session: SessionResponse | null | undefined): boolean {
+  return session?.noLogin === true;
+}
+
+/** 로그인 없이 운영자로 연 로컬 사용자인가 — 세션(쿠키)이 없어 로그아웃·기기 목록을 보이지 않습니다. */
+export function isLocalOwner(user: SessionUser | null | undefined): boolean {
+  return user?.local === true;
+}
+
+/** 로그인 없이 연 로컬 운영자를 사이드바·내 계정에 적는 이름. */
+export const LOCAL_NO_LOGIN = "로컬 · 로그인 없음";
 
 /** 사이드바에 적을 역할·등급 이름. */
 export function roleLabel(user: SessionUser | null | undefined): string {

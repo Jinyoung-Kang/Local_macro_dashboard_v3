@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { useRefreshSignal } from "@/hooks/useRefreshSignal";
-import { DEMO_READ_ONLY, isDemo, isOwner, lockedFor, roleLabel, visibleMenus } from "@/lib/access";
+import { DEMO_READ_ONLY, LOCAL_NO_LOGIN, isDemo, isLocalOwner, isOwner, lockedFor, roleLabel, visibleMenus } from "@/lib/access";
 import { unreadBadge } from "@/lib/alerts";
 import type { SessionUser } from "@/lib/types";
 
@@ -159,6 +159,15 @@ export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: 
             {roleLabel(user)}
             <span className="ml-1 text-muted">· {DEMO_READ_ONLY}</span>
           </p>
+        ) : isLocalOwner(user) ? (
+          // 로그인 없이 연 로컬 운영자(ADR 0016)는 세션이 없어 로그아웃할 것이 없습니다. 비밀번호 변경은 내 계정에서.
+          <Link
+            href="/account"
+            className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] text-body hover:border-accent/30"
+          >
+            {LOCAL_NO_LOGIN}
+            <span className="ml-1 text-muted">· {roleLabel(user)}</span>
+          </Link>
         ) : (
           <>
             {user && (

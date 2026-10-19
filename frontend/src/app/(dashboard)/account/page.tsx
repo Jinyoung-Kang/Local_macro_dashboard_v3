@@ -6,7 +6,7 @@ import { Banner, Button, Card, ErrorState, Loading, Table } from "@/components/u
 import { useApi } from "@/hooks/useApi";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useSessionUser } from "@/hooks/useSessionUser";
-import { isDemo, roleLabel } from "@/lib/access";
+import { LOCAL_NO_LOGIN, isDemo, isLocalOwner, roleLabel } from "@/lib/access";
 import { auth } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
 import { formatKst } from "@/lib/format";
@@ -17,13 +17,18 @@ import type { LoginSession, SessionResponse } from "@/lib/types";
  *
  * 비밀번호를 바꾸면 백엔드가 다른 기기의 세션을 끊습니다(지금 기기는 남김, ADR 0010).
  * 데모 열람(ADR 0013)은 계정이 없으므로 대시보드 첫 화면으로 보냅니다.
+ * 로그인 없이 연 로컬 운영자(ADR 0016)는 세션(쿠키)이 없어 로그인한 기기 목록·다른 기기 로그아웃을 숨기고,
+ * 비밀번호 변경만 둡니다 — 그 비밀번호는 웹·QA 스택이나 이 DB를 복원한 백업에서 로그인할 때 씁니다.
  */
 export default function AccountPage() {
   const router = useRouter();
-  const demo = isDemo(useSessionUser());
+  const sessionUser = useSessionUser();
+  const demo = isDemo(sessionUser);
   const session = useApi<SessionResponse>(demo ? null : endpoints.auth.session, 0, { followRefresh: false });
-  const sessions = useApi<{ sessions: LoginSession[] }>(demo ? null : endpoints.auth.sessions, 0);
   const user = session.data?.user;
+  // 레이아웃이 내려 준 사용자로 먼저 압니다. 세션 응답을 기다리면 그 사이 기기 목록을 한 번 부릅니다.
+  const local = isLocalOwner(sessionUser) || isLocalOwner(user);
+  const sessions = useApi<{ sessions: LoginSession[] }>(demo || local ? null : endpoints.auth.sessions, 0);
 
   useEffect(() => {
     if (demo) router.replace("/");
@@ -64,7 +69,21 @@ export default function AccountPage() {
         </p>
       </header>
 
-      <Card title="비밀번호 변경" subtitle="10자 이상, 흔한 비밀번호·이메일을 담은 비밀번호는 쓸 수 없습니다. 바꾸면 다른 기기의 로그인은 끊깁니다.">
+      {local && (
+        <Banner tone="info">
+          {LOCAL_NO_LOGIN} — 이 컴퓨터(localhost)에서 연 로컬 실행이라 로그인 없이 이 운영자 계정으로 열렸습니다.
+          로그인 세션이 없어 로그아웃·로그인한 기기 목록이 없습니다.
+        </Banner>
+      )}
+
+      <Card
+        title="비밀번호 변경"
+        subtitle={
+          local
+            ? "로컬은 로그인 없이 열리지만, 이 비밀번호는 웹·QA 스택에서 로그인하거나 이 DB의 백업을 복원했을 때 씁니다. 10자 이상, 흔한 비밀번호·이메일을 담은 비밀번호는 쓸 수 없습니다."
+            : "10자 이상, 흔한 비밀번호·이메일을 담은 비밀번호는 쓸 수 없습니다. 바꾸면 다른 기기의 로그인은 끊깁니다."
+        }
+      >
         <form onSubmit={submit} className="flex max-w-sm flex-col gap-3">
           {[
             { label: "지금 비밀번호", value: current, set: setCurrent, auto: "current-password" },
@@ -126,40 +145,43 @@ export default function AccountPage() {
         </Card>
       )}
 
-      <Card
-        title="로그인한 기기"
-        subtitle="이 계정으로 로그인돼 있는 세션입니다. 모르는 기기가 있으면 다른 기기를 모두 로그아웃하고 비밀번호를 바꾸세요."
-        actions={
-          <Button
-            onClick={async () => {
-              await others.run();
-              void sessions.reload();
-            }}
-            disabled={others.busy}
-          >
-            {others.busy ? "처리 중…" : "다른 기기 모두 로그아웃"}
-          </Button>
-        }
-      >
-        {others.result && <Banner tone="info">다른 기기 {others.result.revoked}곳의 로그인을 끊었습니다.</Banner>}
-        {others.error && <Banner tone="warn">{others.error}</Banner>}
-        {sessions.error && <ErrorState message={sessions.error} onRetry={sessions.reload} />}
-        {sessions.loading && !sessions.data && <Loading />}
-        {/* 목록을 받기 전에는 '로그인한 기기가 없습니다'가 아닙니다(QA-050). */}
-        {sessions.data && (
-          <Table<LoginSession>
-            rows={sessions.data?.sessions ?? []}
-            rowKey={(row) => row.id}
-            emptyMessage="로그인한 기기가 없습니다."
-            columns={[
-              { key: "device", header: "기기", render: (row) => (row.current ? "🟢 지금 이 기기" : row.userAgent ?? "알 수 없음") },
-              { key: "lastSeen", header: "마지막 사용", render: (row) => formatKst(row.lastSeenAt) },
-              { key: "created", header: "로그인", render: (row) => formatKst(row.createdAt) },
-              { key: "expires", header: "만료", render: (row) => formatKst(row.expiresAt) },
-            ]}
-          />
-        )}
-      </Card>
+      {/* 세션(쿠키)이 없는 로컬 운영자는 목록이 늘 비고, 다른 기기 로그아웃도 뜻이 없습니다. */}
+      {!local && (
+        <Card
+          title="로그인한 기기"
+          subtitle="이 계정으로 로그인돼 있는 세션입니다. 모르는 기기가 있으면 다른 기기를 모두 로그아웃하고 비밀번호를 바꾸세요."
+          actions={
+            <Button
+              onClick={async () => {
+                await others.run();
+                void sessions.reload();
+              }}
+              disabled={others.busy}
+            >
+              {others.busy ? "처리 중…" : "다른 기기 모두 로그아웃"}
+            </Button>
+          }
+        >
+          {others.result && <Banner tone="info">다른 기기 {others.result.revoked}곳의 로그인을 끊었습니다.</Banner>}
+          {others.error && <Banner tone="warn">{others.error}</Banner>}
+          {sessions.error && <ErrorState message={sessions.error} onRetry={sessions.reload} />}
+          {sessions.loading && !sessions.data && <Loading />}
+          {/* 목록을 받기 전에는 '로그인한 기기가 없습니다'가 아닙니다(QA-050). */}
+          {sessions.data && (
+            <Table<LoginSession>
+              rows={sessions.data?.sessions ?? []}
+              rowKey={(row) => row.id}
+              emptyMessage="로그인한 기기가 없습니다."
+              columns={[
+                { key: "device", header: "기기", render: (row) => (row.current ? "🟢 지금 이 기기" : row.userAgent ?? "알 수 없음") },
+                { key: "lastSeen", header: "마지막 사용", render: (row) => formatKst(row.lastSeenAt) },
+                { key: "created", header: "로그인", render: (row) => formatKst(row.createdAt) },
+                { key: "expires", header: "만료", render: (row) => formatKst(row.expiresAt) },
+              ]}
+            />
+          )}
+        </Card>
+      )}
     </div>
   );
 }

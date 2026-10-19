@@ -11,12 +11,20 @@ import { SessionUserProvider } from "@/hooks/useSessionUser";
 import { endpoints } from "@/lib/endpoints";
 import type { SessionResponse } from "@/lib/types";
 import { ALERTS_READ_EVENT, titleWithUnread } from "@/lib/alerts";
+import { isNoLogin } from "@/lib/access";
 
 /**
  * 대시보드 공통 레이아웃 — 사이드바 + 거래소 시계.
  *
  * 세션이 없으면 로그인 화면으로 보냅니다. 구버전의 "비밀번호 잠금"과 같은
  * 역할이며, 실제 접근 차단은 백엔드가 합니다(프런트 검사는 UX용입니다).
+ *
+ * 로컬 Docker 실행은 로그인 없이 엽니다(ADR 0016). 세션 응답의 noLogin이 true면 백엔드가 localhost
+ * 요청을 첫 운영자 계정으로 풀어 authenticated를 주므로, 로그인 화면으로 보내지 않습니다 — 화면의
+ * 401(sessionLost)도 로그인으로 보내지 않고 세션을 한 번 다시 확인합니다. 운영자 계정이 아직 없으면
+ * (ownerMissing) 만드는 방법을 안내하고 5초마다 다시 확인합니다. localhost가 아닌 주소로 열어 운영자로
+ * 풀리지 않았으면 지금처럼 로그인 화면으로 보냅니다. noLogin이 없거나 false인 응답(AWS 웹 데모·QA 스택·
+ * 이전 백엔드)은 지금과 같습니다.
  */
 export default function DashboardLayout({
   children,
@@ -86,12 +94,25 @@ function DashboardShell({
   const { sessionLost } = useRefreshSignal();
 
   const authenticated = data?.authenticated ?? false;
+  const noLogin = isNoLogin(data);
+  // 로그인 없이 열려는데 운영자 계정이 없음 — 로그인 화면도 쓸 수 없으니 계정을 만드는 방법을 안내합니다.
+  const waitingForOwner = noLogin && !authenticated && data?.ownerMissing === true;
 
   useEffect(() => {
-    if (sessionLost || (!loading && (unauthorized || (data && !authenticated)))) {
-      router.replace("/login");
-    }
-  }, [sessionLost, loading, unauthorized, data, authenticated, router]);
+    // 세션 확인이 끝나기 전에는 보내지 않습니다. 사이드바 알림 수 같은 다른 요청의 401이 먼저 오면
+    // 로그인 없이 열리는 로컬인지 모르는 채로 로그인 화면에 갔습니다(운영자 계정이 없을 때).
+    if (loading) return;
+    const toLogin = noLogin
+      ? !authenticated && !waitingForOwner   // 로컬 주소가 아니라 운영자로 풀리지 않은 요청
+      : sessionLost || unauthorized || (data && !authenticated);
+    if (toLogin) router.replace("/login");
+  }, [noLogin, waitingForOwner, sessionLost, loading, unauthorized, data, authenticated, router]);
+
+  // 로그인 없이 연 화면에서 401이 오면 로그인으로 보내지 않고 세션을 한 번 다시 확인합니다. 백엔드가 그 사이
+  // 로그인 모드로 바뀌었으면(noLogin: false) 위 effect가 지금처럼 로그인 화면으로 보냅니다.
+  useEffect(() => {
+    if (noLogin && sessionLost) void reload();
+  }, [noLogin, sessionLost, reload]);
 
   // 백엔드에 닿지 못한 이유를 기억해 둡니다. 다시 확인하는 동안(loading) 안내 화면이
   // "세션을 확인하는 중…"으로 깜빡이지 않게, 성공하거나 401을 받을 때만 지웁니다.
@@ -107,11 +128,23 @@ function DashboardShell({
     return () => clearTimeout(timer);
   }, [error, reload]);
 
+  // 운영자 계정을 기다리는 동안에도 같은 간격으로 다시 확인합니다 — .env를 고치고 make up 하면 새로고침 없이
+  // 넘어갑니다. 응답은 매번 같은 "계정 없음"이라 응답에 맞춰 다음 확인을 걸면 한 번으로 멈출 수 있어 주기로 겁니다.
+  useEffect(() => {
+    if (!waitingForOwner) return;
+    const timer = setInterval(() => void reload(), SESSION_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [waitingForOwner, reload]);
+
   // 예전에는 여기가 `loading || !authenticated`뿐이었습니다. 백엔드가 꺼져 있으면
   // 요청이 실패해 loading=false·data=null이 되는데, 로그인으로 보내는 조건(401 또는
   // authenticated=false 응답)에도 걸리지 않아 "세션을 확인하는 중…"에 영원히 멈췄습니다.
   if (failure && !authenticated) {
     return <BackendUnavailable reason={failure} retrying={loading} onRetry={() => void reload()} />;
+  }
+
+  if (waitingForOwner) {
+    return <OwnerMissing retrying={loading} onRetry={() => void reload()} />;
   }
 
   // 이미 로그인이 확인됐으면, 다시 확인하는 동안(loading)에도 화면을 그대로 둡니다.
@@ -172,6 +205,41 @@ make logs S=backend  # 기동 실패 원인`}
         </pre>
         <p className="mt-3 text-xs text-muted">
           화면이 찾는 주소: <code className="text-body">{apiBase() || "같은 출처 /api"}</code> ·{" "}
+          {retrying ? "다시 확인하는 중…" : `${SESSION_RETRY_MS / 1000}초마다 자동으로 다시 확인합니다`}
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="mt-4 rounded-md border border-accent/60 bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/25 disabled:opacity-50"
+        >
+          지금 다시 확인
+        </button>
+      </div>
+    </main>
+  );
+}
+
+/**
+ * 로그인 없이 여는 로컬 실행(ADR 0016)인데 운영자 계정이 아직 없을 때의 안내.
+ *
+ * <p>로그인 없이 열면 백엔드가 첫 운영자 계정으로 화면을 엽니다. 그 계정은 백엔드가 처음 기동할 때 .env의
+ * OWNER_EMAIL·APP_PASSWORD로 만들므로, 둘이 비어 있으면 열 계정이 없습니다. 로그인 화면으로 보내도
+ * 들어갈 계정이 없어 여기서 안내하고, 5초마다 다시 확인해 계정이 생기면 새로고침 없이 넘어갑니다.
+ */
+function OwnerMissing({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <div className="w-full max-w-lg rounded-xl border border-warn/40 bg-surface p-6 text-sm">
+        <h1 className="text-base font-bold text-bright">⚠️ 운영자 계정이 아직 없습니다</h1>
+        <p className="mt-2 text-warn">
+          로컬 실행은 로그인 없이 운영자 계정으로 열립니다. .env에 OWNER_EMAIL·APP_PASSWORD를 넣고 make up 하세요.
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-canvas px-3 py-2 text-xs text-body">
+{`make up              # .env를 고친 뒤 — 백엔드가 기동하며 운영자 계정을 만듦
+make logs S=backend  # 그래도 이 화면이면 원인 확인`}
+        </pre>
+        <p className="mt-3 text-xs text-muted">
           {retrying ? "다시 확인하는 중…" : `${SESSION_RETRY_MS / 1000}초마다 자동으로 다시 확인합니다`}
         </p>
         <button

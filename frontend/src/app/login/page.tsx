@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { isDemo, isLocalOwner } from "@/lib/access";
 import { auth } from "@/lib/api";
 
 /**
@@ -12,7 +13,8 @@ import { auth } from "@/lib/api";
  * (토큰을 브라우저 저장소에 두지 않습니다 — XSS로 새어 나갈 수 있습니다.)
  * 처음 쓰는 경우 운영자 계정은 .env의 OWNER_EMAIL·APP_PASSWORD로 만들어집니다.
  *
- * 데모 열람(ADR 0013 — AWS 공개 데모에서 접근 코드를 통과한 방문자)은 로그인하지 않으므로 대시보드 첫 화면으로 보냅니다.
+ * 데모 열람(ADR 0013 — AWS 공개 데모에서 접근 코드를 통과한 방문자)과 로그인 없이 연 로컬 운영자(ADR 0016 —
+ * 로컬 Docker 실행에서 localhost로 연 경우)는 로그인하지 않으므로 대시보드 첫 화면으로 보냅니다.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -22,14 +24,14 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   // 가입·재설정은 백엔드에 메일 발송이 설정됐을 때만 보여 줍니다.
   const [mailAvailable, setMailAvailable] = useState(false);
-  const [demo, setDemo] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     auth
       .session()
       .then((s) => {
-        if (s.authenticated && s.user?.demo) {
-          setDemo(true);
+        if (s.authenticated && (isDemo(s.user) || isLocalOwner(s.user))) {
+          setLeaving(true);
           router.replace("/");
           return;
         }
@@ -52,8 +54,8 @@ export default function LoginPage() {
     }
   };
 
-  // 데모 열람이면 첫 화면으로 가는 동안 로그인 칸을 보이지 않습니다.
-  if (demo) {
+  // 로그인할 필요가 없으면 첫 화면으로 가는 동안 로그인 칸을 보이지 않습니다.
+  if (leaving) {
     return (
       <main className="flex min-h-screen items-center justify-center text-sm text-muted">
         대시보드로 이동하는 중…

@@ -9,6 +9,11 @@ export interface SessionUser {
    * 로그아웃·내 계정·쓰기 버튼을 숨기거나 막습니다(백엔드도 GET 밖은 403).
    */
   demo?: boolean;
+  /**
+   * 로그인 없이 연 로컬 운영자(ADR 0016) — 로컬 실행에서 세션 쿠키 없이 localhost로 들어와 첫 운영자 계정으로
+   * 풀린 사용자. 세션이 없어 로그아웃·로그인한 기기 목록이 없습니다. 없으면(AWS·이전 백엔드) 계정 세션입니다.
+   */
+  local?: boolean;
 }
 
 export interface SessionResponse {
@@ -17,6 +22,13 @@ export interface SessionResponse {
   mailAvailable?: boolean;
   readMode?: string;
   user?: SessionUser;
+  /**
+   * 로그인 없이 여는 로컬 실행인가(ADR 0016). true일 때만 로그인 화면으로 보내지 않습니다 — 없거나 false면
+   * 지금처럼 로그인(AWS 웹 데모·QA 스택은 false, 이전 백엔드는 보내지 않음).
+   */
+  noLogin?: boolean;
+  /** 로그인 없이 열려는데 운영자 계정이 아직 없음 — noLogin이고 localhost 요청일 때만 true. */
+  ownerMissing?: boolean;
 }
 
 export interface LoginSession {
