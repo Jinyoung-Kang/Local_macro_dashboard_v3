@@ -124,15 +124,17 @@ check_addresses() {
 
 # 로컬 무로그인(LOCAL_NO_LOGIN, 비우면 켜짐 — ADR 0016)과 웹 배포용 값이 함께 있으면 백엔드가 기동을 거부합니다
 # (LocalNoLogin.check). 빌드에 몇 분 쓴 뒤 백엔드만 뜨지 않는 대신, 여기서 먼저 알려 줍니다. 백엔드 검사와 같은 조건입니다.
+# .env 값에서 줄 끝 주석(공백 + #)과 앞뒤 공백을 뗍니다 — compose가 읽는 값과 맞춥니다(LOCAL_SETUP '.env 형식').
+env_value() { get_env "$1" | sed -E 's/[[:space:]]+#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//'; }
+
 check_no_login_conflicts() {
   local no_login secure origins origin bad=""
-  no_login=$(get_env LOCAL_NO_LOGIN | tr '[:upper:]' '[:lower:]')
-  [ "$no_login" = "false" ] && return 0
-  secure=$(get_env COOKIE_SECURE | tr '[:upper:]' '[:lower:]')
-  if [ "$secure" = "true" ]; then
-    bad="COOKIE_SECURE=true"
-  fi
-  origins=$(get_env FRONTEND_ORIGIN)
+  no_login=$(env_value LOCAL_NO_LOGIN | tr '[:upper:]' '[:lower:]')
+  # 스프링이 끔으로 읽는 값(false·0·no·off)이면 로그인 모드 — 검사할 것이 없습니다.
+  case "$no_login" in false|0|no|off) return 0 ;; esac
+  secure=$(env_value COOKIE_SECURE | tr '[:upper:]' '[:lower:]')
+  case "$secure" in true|1|yes|on) bad="COOKIE_SECURE=$secure" ;; esac
+  origins=$(env_value FRONTEND_ORIGIN)
   for origin in $(printf '%s' "$origins" | tr ',' ' '); do
     if ! printf '%s' "$origin" | grep -Eq '^http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?/?$'; then
       bad="${bad:+$bad, }FRONTEND_ORIGIN에 이 맥의 http 주소가 아닌 값"
