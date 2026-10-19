@@ -36,6 +36,8 @@ interface RefreshState {
   reloadAll: () => void;
   /** 어떤 요청이든 401을 받으면 올라갑니다. 레이아웃이 이것을 보고 로그인으로 보냅니다. */
   sessionLost: boolean;
+  /** 401을 받은 횟수 — 한 번 켜지면 내려가지 않는 sessionLost와 달리 401마다 바뀌어, 레이아웃이 그때마다 세션을 다시 확인합니다. */
+  unauthorizedCount: number;
   notifyUnauthorized: () => void;
 }
 
@@ -46,6 +48,7 @@ const FALLBACK: RefreshState = {
   requestRefresh: async () => {},
   reloadAll: () => {},
   sessionLost: false,
+  unauthorizedCount: 0,
   notifyUnauthorized: () => {},
 };
 
@@ -72,10 +75,14 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
   const [collecting, setCollecting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [sessionLost, setSessionLost] = useState(false);
+  const [unauthorizedCount, setUnauthorizedCount] = useState(0);
   const inFlight = useRef(false);
 
   const reloadAll = useCallback(() => setToken((n) => n + 1), []);
-  const notifyUnauthorized = useCallback(() => setSessionLost(true), []);
+  const notifyUnauthorized = useCallback(() => {
+    setSessionLost(true);
+    setUnauthorizedCount((n) => n + 1);
+  }, []);
 
   const requestRefresh = useCallback(async () => {
     // 연타해도 수집 요청이 겹치지 않게 합니다.
@@ -115,8 +122,8 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
   }, [reloadAll]);
 
   const value = useMemo(
-    () => ({ token, collecting, message, requestRefresh, reloadAll, sessionLost, notifyUnauthorized }),
-    [token, collecting, message, requestRefresh, reloadAll, sessionLost, notifyUnauthorized],
+    () => ({ token, collecting, message, requestRefresh, reloadAll, sessionLost, unauthorizedCount, notifyUnauthorized }),
+    [token, collecting, message, requestRefresh, reloadAll, sessionLost, unauthorizedCount, notifyUnauthorized],
   );
 
   return (

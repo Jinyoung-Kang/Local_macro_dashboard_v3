@@ -191,6 +191,32 @@ describe("로그인 없는 로컬 실행(noLogin: true)", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  it("운영자를 기다리던 때 401을 이미 받았어도, 그 뒤의 401마다 세션을 다시 확인해 로그인 모드로 바뀌었으면 로그인 화면으로 보낸다", async () => {
+    // 401 신호(sessionLost)는 한 번 켜지면 내려가지 않습니다. 예전에는 그것만 보고 다시 확인해, 운영자 계정을 기다리던 때의
+    // 401(알림 수) 뒤로는 화면 요청이 401이어도 세션을 다시 묻지 않고 '로그인이 필요합니다' 오류에 머물렀습니다.
+    vi.useFakeTimers();
+    let phase: "missing" | "local" | "login" = "missing";
+    reads[SESSION] = () => {
+      if (phase === "local") {
+        phase = "login";   // 운영자로 연 바로 다음 확인부터는 로그인 모드(LOCAL_NO_LOGIN=false로 make up 한 경우)
+        return LOCAL_OWNER;
+      }
+      return phase === "missing" ? OWNER_MISSING : LOGIN_NONE;
+    };
+    reads[UNREAD] = new api.UnauthorizedError("로그인이 필요합니다");
+    reads[PAGE] = new api.UnauthorizedError("로그인이 필요합니다");
+    renderLayout();
+    await act(async () => {});
+    expect(screen.getByText("⚠️ 운영자 계정이 아직 없습니다")).toBeTruthy();
+
+    phase = "local";
+    await act(async () => vi.advanceTimersByTime(5_000));   // 운영자 계정이 생김 → 화면이 열리고 화면 요청이 401
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(router.replace).toHaveBeenCalledWith("/login");
+  });
+
   it("localhost가 아닌 주소로 열어 운영자로 풀리지 않았으면(ownerMissing 아님) 지금처럼 로그인 화면으로 보낸다", async () => {
     reads[SESSION] = NOT_LOCAL;
     renderLayout();

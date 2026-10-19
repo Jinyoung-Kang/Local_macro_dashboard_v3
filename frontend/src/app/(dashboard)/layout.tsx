@@ -91,7 +91,7 @@ function DashboardShell({
   const { data, loading, unauthorized, error, reload } = session;
   // 세션은 처음 한 번만 확인합니다. 그 뒤 만료(12시간, 다른 탭 로그아웃)는 화면의 어떤 요청이든
   // 401을 받았을 때 올라오는 이 신호로 압니다.
-  const { sessionLost } = useRefreshSignal();
+  const { sessionLost, unauthorizedCount } = useRefreshSignal();
 
   const authenticated = data?.authenticated ?? false;
   const noLogin = isNoLogin(data);
@@ -108,11 +108,12 @@ function DashboardShell({
     if (toLogin) router.replace("/login");
   }, [noLogin, waitingForOwner, sessionLost, loading, unauthorized, data, authenticated, router]);
 
-  // 로그인 없이 연 화면에서 401이 오면 로그인으로 보내지 않고 세션을 한 번 다시 확인합니다. 백엔드가 그 사이
-  // 로그인 모드로 바뀌었으면(noLogin: false) 위 effect가 지금처럼 로그인 화면으로 보냅니다.
+  // 로그인 없이 연 화면에서 401이 오면 로그인으로 보내지 않고 세션을 다시 확인합니다. 백엔드가 그 사이
+  // 로그인 모드로 바뀌었으면(noLogin: false) 위 effect가 지금처럼 로그인 화면으로 보냅니다. 401마다 확인합니다 —
+  // sessionLost는 한 번 켜지면 내려가지 않아, 그것만 보면 운영자 계정을 기다리던 때의 401 뒤로는 다시 확인하지 않았습니다.
   useEffect(() => {
-    if (noLogin && sessionLost) void reload();
-  }, [noLogin, sessionLost, reload]);
+    if (noLogin && unauthorizedCount > 0) void reload();
+  }, [noLogin, unauthorizedCount, reload]);
 
   // 백엔드에 닿지 못한 이유를 기억해 둡니다. 다시 확인하는 동안(loading) 안내 화면이
   // "세션을 확인하는 중…"으로 깜빡이지 않게, 성공하거나 401을 받을 때만 지웁니다.
@@ -130,9 +131,12 @@ function DashboardShell({
 
   // 운영자 계정을 기다리는 동안에도 같은 간격으로 다시 확인합니다 — .env를 고치고 make up 하면 새로고침 없이
   // 넘어갑니다. 응답은 매번 같은 "계정 없음"이라 응답에 맞춰 다음 확인을 걸면 한 번으로 멈출 수 있어 주기로 겁니다.
+  // 숨은 탭에서는 묻지 않습니다(열어 둔 탭마다 백엔드를 5초마다 깨우지 않게).
   useEffect(() => {
     if (!waitingForOwner) return;
-    const timer = setInterval(() => void reload(), SESSION_RETRY_MS);
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "hidden") void reload();
+    }, SESSION_RETRY_MS);
     return () => clearInterval(timer);
   }, [waitingForOwner, reload]);
 
@@ -235,6 +239,11 @@ function OwnerMissing({ retrying, onRetry }: { retrying: boolean; onRetry: () =>
         <p className="mt-2 text-warn">
           로컬 실행은 로그인 없이 운영자 계정으로 열립니다. .env에 OWNER_EMAIL·APP_PASSWORD를 넣고 make up 하세요.
         </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted">
+          <li>.env의 OWNER_EMAIL·APP_PASSWORD가 비어 있음 — 계정이 하나도 없을 때만 그 값으로 운영자를 만듭니다</li>
+          <li>스키마가 아직 적용되지 않음(docker compose up을 직접 쓴 경우) — make migrate 또는 make doctor</li>
+          <li>복원한 백업에 운영자 없이 회원만 있음 — 계정이 하나라도 있으면 새로 만들지 않으니 운영자가 있는 백업인지 확인하세요</li>
+        </ul>
         <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-canvas px-3 py-2 text-xs text-body">
 {`make up              # .env를 고친 뒤 — 백엔드가 기동하며 운영자 계정을 만듦
 make logs S=backend  # 그래도 이 화면이면 원인 확인`}
