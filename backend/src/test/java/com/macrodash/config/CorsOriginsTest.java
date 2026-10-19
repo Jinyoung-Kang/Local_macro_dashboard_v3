@@ -1,6 +1,5 @@
 package com.macrodash.config;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -49,7 +48,6 @@ class CorsOriginsTest {
     }
 
     @Test
-    @Disabled("QA-136: 고치기 전 재현 — AWS 허용 출처에 관리자 터널 주소가 없음")
     @DisplayName("QA-136: AWS 배포(compose.aws.yml)의 허용 출처가 관리자 터널(SSM 포트 포워딩, localhost:8201) 화면의 POST를 받는다")
     void awsDeploymentAcceptsTheAdminTunnel() throws Exception {
         Path compose = Path.of("../compose.aws.yml");

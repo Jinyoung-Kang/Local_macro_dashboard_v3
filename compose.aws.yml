@@ -45,7 +45,9 @@ services:
     environment:
       DATABASE_URL: jdbc:postgresql://${RDS_HOST:?RDS_HOST 필요}:${RDS_PORT:-5432}/${DATABASE_NAME:-macrodash}?sslmode=verify-full&sslrootcert=/etc/rds-ca.pem
       SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "4"
-      FRONTEND_ORIGIN: ${PUBLIC_ORIGIN:?PUBLIC_ORIGIN 필요 (예 https://dxxxx.cloudfront.net)}
+      # 허용 출처: 공개 주소(CloudFront)와 관리자 터널(SSM 포트 포워딩, ADR 0012). 터널 화면은 http://localhost:8201로 열려,
+      # 이 둘이 없으면 그 화면의 로그인·쓰기 POST가 '다른 출처'(403)로 막힙니다(QA-136). 메일 링크(PUBLIC_URL)는 공개 주소만.
+      FRONTEND_ORIGIN: ${PUBLIC_ORIGIN:?PUBLIC_ORIGIN 필요 (예 https://dxxxx.cloudfront.net)},http://localhost:8201,http://127.0.0.1:8201
       PUBLIC_URL: ${PUBLIC_ORIGIN}
       COOKIE_SECURE: "${COOKIE_SECURE:-true}"
       DASHBOARD_READ_MODE: store_only

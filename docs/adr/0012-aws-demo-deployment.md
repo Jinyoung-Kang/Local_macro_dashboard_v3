@@ -29,6 +29,7 @@
 2. **`NEXT_PUBLIC_API_BASE=/`를 "같은 출처"로 정의한다.** `apiBase()`가 빈 문자열을 돌려줘 `/api/...` 상대 경로가 된다.
    - 앞단 Caddy가 `/api/*`는 backend로, 나머지는 frontend로 보낸다.
    - 이미지에 공개 주소를 박지 않으므로, 같은 이미지가 공개 주소와 관리자 터널(SSM 포트 포워딩, `localhost:8201`) 양쪽에서 돈다.
+   - 그래서 허용 출처(`FRONTEND_ORIGIN`)에도 공개 주소와 터널 주소(`http://localhost:8201`·`http://127.0.0.1:8201`)를 함께 둔다. 처음에는 공개 주소만 있어 터널 화면의 로그인·쓰기 POST가 403이었다(QA-136, 2026-10-19 확인).
 3. **Tomcat이 프록시의 `X-Forwarded-For`를 믿게 한다**(`SERVER_FORWARDHEADERSSTRATEGY=native`).
    - Tomcat RemoteIpValve의 기본 내부 대역(10/8 · 172.16/12 · 192.168/16 · 127/8)에서 온 요청만 헤더를 믿는다.
    - 화면·API 포트는 `127.0.0.1`에만 연다. 그래서 그 대역으로 닿을 수 있는 것은 같은 호스트의 Caddy뿐이다.
