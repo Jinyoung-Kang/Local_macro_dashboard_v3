@@ -112,3 +112,15 @@
 - 확인: 기동 로그 '비싼 계산 동시 실행 상한 1개(자동, 코어 2개, …)', `-XX:+ExitOnOutOfMemoryError`, 세 컨테이너 healthy, health 200,
   판정 기록 시각 17, 화면 번들 `main@7e0a225`, 백엔드 경고·오류 0, pykrx import 정상, 13F 저장본에 QA-127 표시(블랙록 비보통주 50·채권 28),
   공개 잠금 화면 200. 디스크 여유는 8.8GB(빌드 캐시 16.8GB는 공용이라 정리하지 않음).
+
+## 10단계 — AWS 데모 3차 반영 (2026-10-19 19:21–19:22 KST, 끝)
+- 인스턴스 macro를 `7e0a225` → `f45661d`로 fast-forward하고 세 이미지를 다시 빌드했습니다(`build --pull`, `APP_VERSION=main@f45661d`).
+  들어간 것: QA-132·134·135와 테스트 흔들림(`e72ff73`), QA-133 상한(`a0ff32b`), 벤치·퍼저 수정과 긴 데이터 측정, 로컬 로그인 없음
+  (ADR 0016 — AWS에서는 `compose.aws.yml`이 `"false"`로 고정해 꺼진 채). 스키마 변경 없음(`init_schema` 확인), `.env`·앞단(aws-deploy) 변경 없음.
+- AWS 커넥터 연결이 끊겨 이 맥의 AWS CLI(`aws ssm send-command`)로 같은 SSM 명령을 보냈습니다.
+- 되돌릴 이미지: `local_macro_dashboard_v3-<서비스>:rollback-7e0a225`(그 전 `:rollback-488a63a`·`:rollback-097d98d`·`:prev`도 그대로).
+- 확인: 세 컨테이너 healthy(교체 45초), health 200, 화면 번들 `main@f45661d`, 백엔드 경고·오류 0, 계산 상한 기동 줄 있음.
+  **로그인 유지**: 백엔드 `DASHBOARD_LOCAL_NO_LOGIN=false`, '로그인 없이 운영자로' 기동 줄 0, 쿠키 없는 세션 응답 `noLogin: false`·
+  `authenticated: false`, 쿠키 없는 `/api/admin/users`·`/api/macro/overview` 401. 포트는 3000·8000·8080 모두 127.0.0.1.
+  공개 주소는 잠금 화면('Local Macro Dashboard · 잠금')을 401로, 잠금 화면 경로 `/__gate`는 200(지난 기록의 '잠금 화면 200'은 이 경로).
+- 디스크 여유 7.8GB. 되돌릴 이미지 네 벌이 쌓여 이미지 중 7.2GB를 비울 수 있고 빌드 캐시는 14GB(공용) — 정리는 사용자에게 먼저 묻습니다.
