@@ -140,11 +140,28 @@ case "$HEALTH_CODE" in
     problem "백엔드 기동 실패 — make logs S=backend" ;;
 esac
 
-# 로그인 계정 — 처음 기동할 때 계정이 없으면 OWNER_EMAIL·APP_PASSWORD로 운영자 계정을 만듭니다(ADR 0010).
-if [ -z "$(get_env OWNER_EMAIL)" ]; then
-  warn "OWNER_EMAIL이 .env에 없습니다 — 계정이 아직 없다면 로그인할 수 없습니다(이미 계정이 있으면 무시해도 됩니다)"
-  note ".env에 OWNER_EMAIL=로그인용 이메일 을 넣고 make up"
-fi
+# 운영자 계정 — 처음 기동할 때 계정이 없으면 OWNER_EMAIL·APP_PASSWORD로 만듭니다(ADR 0010). 로컬 화면은 로그인 없이
+# 이 계정으로 열리므로(ADR 0016) 계정이 없으면 화면을 쓸 수 없습니다. 백엔드가 /api/auth/session에 알려 주는
+# noLogin·ownerMissing을 먼저 보고, 답이 없거나(꺼져 있음·옛 백엔드) 로그인 화면 모드면 .env를 봅니다.
+LOGIN_MODE=$(curl -fsS --max-time 5 "http://localhost:$BACKEND_PORT/api/auth/session" 2>/dev/null | "$PY" -c '
+import json, sys
+d = json.load(sys.stdin)
+print("missing" if d.get("ownerMissing") is True else {True: "on", False: "off"}.get(d.get("noLogin"), ""))
+' 2>/dev/null)
+case "$LOGIN_MODE" in
+  missing)
+    fail "운영자 계정이 없어 로그인 없이 열 수 없습니다"
+    note ".env에 OWNER_EMAIL(이메일)과 APP_PASSWORD를 넣고 make up — 'make setup'이 APP_PASSWORD를 만들어 줍니다"
+    problem "운영자 계정 만들기 — .env의 OWNER_EMAIL·APP_PASSWORD를 채우고 make up" ;;
+  on)
+    ok "로그인 없이 운영자 계정으로 열립니다 (LOCAL_NO_LOGIN)" ;;
+  *)
+    [ "$LOGIN_MODE" = "off" ] && note "로그인 화면을 거칩니다 (.env의 LOCAL_NO_LOGIN=false)"
+    if [ -z "$(get_env OWNER_EMAIL)" ]; then
+      warn "OWNER_EMAIL이 .env에 없습니다 — 계정이 아직 없다면 화면을 쓸 수 없습니다(이미 계정이 있으면 무시해도 됩니다)"
+      note ".env에 OWNER_EMAIL=운영자 계정 이메일 을 넣고 make up"
+    fi ;;
+esac
 
 # ==============================================================================
 title "5. 화면 (Next.js)"
@@ -163,8 +180,8 @@ title "결론"
 # ==============================================================================
 if [ -z "$FIRST_PROBLEM" ]; then
   printf '  %s모든 단계가 정상입니다.%s\n' "$GREEN" "$RESET"
-  note "그래도 화면이 비어 있으면: 브라우저에서 로그인했는지, 그리고"
-  note "make status 의 '누락 데이터셋' 목록을 확인하세요."
+  note "그래도 화면이 비어 있으면: make status 의 '누락 데이터셋' 목록을 확인하세요."
+  note "(LOCAL_NO_LOGIN=false로 로그인 화면을 켰다면 브라우저에서 로그인했는지도)"
 else
   printf '  가장 먼저 할 일: %s%s%s\n' "$BOLD" "$FIRST_PROBLEM" "$RESET"
   note "앞 단계가 막히면 뒤 단계는 반드시 비어 있습니다. 하나씩 고치세요."

@@ -58,13 +58,22 @@ if [ -n "$bad_lines" ]; then
   note "KEY=VALUE 형식으로, 줄 맨 앞에서 시작해야 합니다 (export·들여쓰기 금지)"
 fi
 
+# --- 더 쓰지 않는 값 --------------------------------------------------------
+# 화면·API는 이제 늘 127.0.0.1에만 열립니다(로컬은 로그인 없이 운영자로 열려 밖에 열지 않음, ADR 0016).
+# 예전 .env의 WEB_BIND_HOST=0.0.0.0은 조용히 무시되므로, 휴대폰 접속이 되리라 기대하지 않게 알려 줍니다.
+if grep -Eq '^WEB_BIND_HOST=' .env 2>/dev/null && ! grep -Eq '^WEB_BIND_HOST=127\.0\.0\.1[[:space:]]*$' .env; then
+  warn "WEB_BIND_HOST는 더 쓰지 않습니다 — 화면·API는 이 맥(127.0.0.1)에서만 열립니다"
+  note "휴대폰 등 다른 기기에서는 접속할 수 없습니다. .env에서 이 줄을 지워도 됩니다"
+fi
+
 # --- 운영자 계정 이메일 -----------------------------------------------------
 # 처음 기동할 때 계정이 없으면 OWNER_EMAIL·APP_PASSWORD로 운영자 계정을 만듭니다(ADR 0010).
+# 로컬 화면은 로그인 없이 이 계정으로 열리므로(ADR 0016) 계정이 없으면 화면을 쓸 수 없습니다.
 # 로그인 아이디라 자리표시 값을 대신 넣지 않습니다 — 비어 있으면 알려만 줍니다.
 if ! grep -q '^OWNER_EMAIL=.\+' .env 2>/dev/null; then
   grep -q '^OWNER_EMAIL=' .env 2>/dev/null || printf '\nOWNER_EMAIL=\n' >> .env
-  warn "OWNER_EMAIL이 비어 있습니다. .env에 로그인 아이디로 쓸 이메일을 넣으세요 (예: OWNER_EMAIL=본인이메일)"
-  note "넣은 뒤 make up — 그 전에는 로그인할 수 없습니다"
+  warn "OWNER_EMAIL이 비어 있습니다. .env에 운영자 계정 이메일(로그인 아이디)을 넣으세요 (예: OWNER_EMAIL=본인이메일)"
+  note "넣은 뒤 make up — 그 전에는 운영자 계정이 없어 화면을 열 수 없습니다"
 else
   ok "OWNER_EMAIL이 설정돼 있습니다"
 fi
@@ -92,10 +101,9 @@ else
   ok "COLLECTOR_API_TOKEN이 설정돼 있습니다"
 fi
 
-# --- 접속 비밀번호 --------------------------------------------------------
-# 비었거나 옛 공개 기본값(admin1234@)이면 무작위로 만듭니다. 이 값 하나가 대시보드 전체의
-# 접근 통제이고, 화면은 기본으로 같은 와이파이에 열립니다. 백엔드도 이 두 경우에는 로그인을
-# 받지 않습니다(실행마다 임시 비밀번호를 만들어 로그에 남김).
+# --- 운영자 계정 비밀번호 -------------------------------------------------
+# 비었거나 옛 공개 기본값(admin1234@)이면 무작위로 만듭니다. 백엔드는 이 두 경우에 운영자 계정을 만들지 않아,
+# 로그인 없는 로컬 화면도 열리지 않습니다. 비밀번호 자체는 로그인 화면(LOCAL_NO_LOGIN=false)에서 씁니다.
 if ! grep -q '^APP_PASSWORD=.' .env 2>/dev/null || grep -Eq '^APP_PASSWORD=admin1234@[[:space:]]*(#.*)?$' .env; then
   if command -v openssl >/dev/null 2>&1; then
     # 헷갈리는 문자(0 O 1 l I)와 기호를 빼 손으로 옮겨 적기 쉽게 합니다.
@@ -108,11 +116,12 @@ if ! grep -q '^APP_PASSWORD=.' .env 2>/dev/null || grep -Eq '^APP_PASSWORD=admin
     else
       printf 'APP_PASSWORD=%s\n' "$PASSWORD" >> .env
     fi
-    ok "APP_PASSWORD(화면 접속 비밀번호)를 무작위 값으로 만들었습니다: $PASSWORD"
-    note "화면 로그인에 씁니다. 원하는 값으로 바꾸려면 .env의 APP_PASSWORD를 고치고 'make up' 하세요."
+    ok "APP_PASSWORD(운영자 계정 비밀번호)를 무작위 값으로 만들었습니다: $PASSWORD"
+    note "처음 기동할 때 운영자 계정을 만드는 데 씁니다. 로컬 화면은 로그인 없이 그 계정으로 열리고,"
+    note "로그인 화면을 켜면(LOCAL_NO_LOGIN=false) 이 비밀번호로 들어갑니다. 원하는 값으로 바꾸려면 .env의 APP_PASSWORD를 고치고 'make up' 하세요."
   else
     warn "openssl이 없어 APP_PASSWORD를 만들지 못했습니다. .env의 APP_PASSWORD에 직접 넣으세요"
-    note "비었거나 admin1234@면 로그인이 되지 않습니다(백엔드 로그의 임시 비밀번호로만 들어갈 수 있음)."
+    note "비었거나 admin1234@면 운영자 계정이 만들어지지 않아 화면을 열 수 없습니다."
   fi
 else
   ok "APP_PASSWORD가 설정돼 있습니다 (기본값 아님)"

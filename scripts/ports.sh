@@ -116,7 +116,7 @@ check_addresses() {
   fi
   if [ -n "$origin_port" ] && [ "$origin_port" != "$FRONTEND_PORT" ]; then
     CONFLICT=1
-    fail "FRONTEND_ORIGIN($origin)이 FRONTEND_PORT($FRONTEND_PORT)와 다릅니다 — 로그인이 막힙니다"
+    fail "FRONTEND_ORIGIN($origin)이 FRONTEND_PORT($FRONTEND_PORT)와 다릅니다 — 화면의 API 요청(CORS·로그인)이 막힐 수 있습니다"
     note ".env에서 FRONTEND_ORIGIN 줄을 지우면 FRONTEND_PORT를 따라갑니다"
   fi
 }
