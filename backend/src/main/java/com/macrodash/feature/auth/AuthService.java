@@ -30,6 +30,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 /**
@@ -387,12 +389,28 @@ public class AuthService {
      */
     private Optional<CurrentUser> localOwner() {
         Optional<UserStore.User> owner = firstOwner();
-        if (owner.isEmpty()) {
+        if (owner.isEmpty() && claimLocalOwnerRetry()) {
             retryOwner();
             owner = firstOwner();
         }
         return owner.map(user -> new CurrentUser(user.id(), user.email(), user.role(), user.tier(), null, false));
     }
+
+    /** 요청 경로에서 운영자 계정 만들기를 다시 확인한 시각(나노초, 아직 없으면 MIN_VALUE). */
+    private final AtomicLong lastLocalOwnerRetry = new AtomicLong(Long.MIN_VALUE);
+
+    /**
+     * 요청 경로의 재확인은 1분에 한 번만(정기 재확인과 같은 간격) — 운영자가 없는 동안 화면이 세션을 5초마다 다시 묻는데,
+     * 그때마다 {@link #ensureOwner}의 잠금과 경고 한 줄이 쌓이지 않게 합니다.
+     */
+    private boolean claimLocalOwnerRetry() {
+        long now = System.nanoTime();
+        long last = lastLocalOwnerRetry.get();
+        boolean due = last == Long.MIN_VALUE || now - last >= LOCAL_OWNER_RETRY_NANOS;
+        return due && lastLocalOwnerRetry.compareAndSet(last, now);
+    }
+
+    private static final long LOCAL_OWNER_RETRY_NANOS = TimeUnit.MINUTES.toNanos(1);
 
     private Optional<UserStore.User> firstOwner() {
         return users.ready() ? users.firstOwner() : Optional.empty();

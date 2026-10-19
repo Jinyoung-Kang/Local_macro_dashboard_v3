@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.cloud.CloudPlatform;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
@@ -39,8 +40,13 @@ public class LocalNoLogin {
     /** 이 맥을 가리키는 이름. 서블릿의 serverName은 IPv6를 대괄호와 함께 줄 수 있어 둘 다 둡니다. */
     static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1", "[::1]");
 
-    /** 앞단 프록시(Caddy 등)를 거쳤다는 표시 — 하나라도 있으면 이 맥에서 바로 온 요청이 아닙니다. */
+    /**
+     * 앞단 프록시(Caddy·nginx·터널 등)를 거쳤다는 표시 — 하나라도 있으면 이 맥에서 바로 온 요청이 아닙니다. 이 맥의 브라우저는
+     * 이 헤더들을 보내지 않습니다. 다만 Host를 127.0.0.1로 바꾸고 아무 표시도 붙이지 않는 프록시는 가를 수 없어, 무로그인
+     * 스택 앞에 프록시·터널을 두지 않는 것이 전제입니다(ADR 0016).
+     */
     static final List<String> PROXY_HEADERS = List.of("X-Forwarded-For", "Forwarded", "X-Forwarded-Host",
+            "X-Forwarded-Proto", "X-Forwarded-Port", "X-Real-IP", "Via", "CF-Connecting-IP", "True-Client-IP",
             DemoViewer.HEADER);
 
     private final boolean enabled;
@@ -129,9 +135,14 @@ public class LocalNoLogin {
 
     /**
      * {@code server.forward-headers-strategy} — 스프링 부트가 웹 서버 설정을 읽는 것과 같은 방식(Binder)으로 읽어,
-     * 환경 변수 {@code SERVER_FORWARDHEADERSSTRATEGY}처럼 이름을 느슨하게 쓴 값도 잡습니다. 없으면 none.
+     * 환경 변수 {@code SERVER_FORWARDHEADERSSTRATEGY}처럼 이름을 느슨하게 쓴 값도 잡습니다. 값이 없으면 부트처럼 클라우드
+     * 플랫폼(Kubernetes·Cloud Foundry 등)을 보고 스스로 native를 켜는 경우까지 따릅니다 — 그때는 앞단 헤더가 Host를 바꿔
+     * 이 맥 판정을 흉내 낼 수 있습니다. 둘 다 아니면 none.
      */
     static String forwardHeadersStrategy(Environment environment) {
-        return Binder.get(environment).bind("server.forward-headers-strategy", String.class).orElse("none");
+        return Binder.get(environment).bind("server.forward-headers-strategy", String.class).orElseGet(() -> {
+            CloudPlatform platform = CloudPlatform.getActive(environment);
+            return platform != null && platform.isUsingForwardHeaders() ? "native" : "none";
+        });
     }
 }

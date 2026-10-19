@@ -254,8 +254,15 @@ public class WebConfig implements WebMvcConfigurer {
 
             // 세션이 먼저, 없으면 데모 열람 헤더(ADR 0013 — 기능이 꺼져 있거나 값이 틀리면 헤더는 없는 것과 같음),
             // 그다음 로컬 무로그인 운영자(ADR 0016 — 켜져 있고 이 맥에서 바로 온 요청만).
-            Optional<CurrentUser> user = authService.resolve(AuthController.readToken(request),
-                    request.getHeader(DemoViewer.HEADER), localNoLogin && LocalNoLogin.isLocalRequest(request));
+            String token = AuthController.readToken(request);
+            boolean localRequest = localNoLogin && LocalNoLogin.isLocalRequest(request);
+            // 쿠키 없는 이 맥 요청이 받을 사용자는 로컬 운영자뿐이라, 다른 사이트에서 온 것이면 DB를 읽기 전에 끊습니다
+            // (다른 사이트가 <img>로 되풀이해 불러도 운영자 조회가 돌지 않게). 쿠키가 있으면 아래에서 판정합니다.
+            if (localRequest && token == null && localOwnerCrossSite(request)) {
+                writeBadOrigin(response);
+                return;
+            }
+            Optional<CurrentUser> user = authService.resolve(token, request.getHeader(DemoViewer.HEADER), localRequest);
             if (user.isEmpty()) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json;charset=UTF-8");

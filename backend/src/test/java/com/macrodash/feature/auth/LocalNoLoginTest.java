@@ -115,6 +115,11 @@ class LocalNoLoginTest {
         MockEnvironment unset = new MockEnvironment();
         assertThat(LocalNoLogin.forwardHeadersStrategy(unset)).isEqualTo("none");
         assertThat(new LocalNoLogin(local(), unset).enabled()).isTrue();
+
+        // 값이 없어도 부트는 클라우드 플랫폼(Kubernetes 등)에서 스스로 native를 켭니다 — 그 경우도 기동하지 않습니다.
+        MockEnvironment kubernetes = new MockEnvironment().withProperty("spring.main.cloud-platform", "kubernetes");
+        assertThat(LocalNoLogin.forwardHeadersStrategy(kubernetes)).isEqualTo("native");
+        assertThatThrownBy(() -> new LocalNoLogin(local(), kubernetes)).isInstanceOf(IllegalStateException.class);
     }
 
     private static MockHttpServletRequest request(String serverName) {
@@ -136,10 +141,11 @@ class LocalNoLoginTest {
     }
 
     @Test
-    @DisplayName("앞단 프록시 헤더(X-Forwarded-For·Forwarded·X-Forwarded-Host)나 데모 열람 헤더가 있으면 이 맥 요청이 아니다 — 빈 값이어도")
+    @DisplayName("앞단 프록시 헤더(X-Forwarded-*·Forwarded·X-Real-IP·Via 등)나 데모 열람 헤더가 있으면 이 맥 요청이 아니다 — 빈 값이어도")
     void proxyHeadersMakeItNonLocal() {
         for (String header : new String[]{"X-Forwarded-For", "Forwarded", "X-Forwarded-Host", DemoViewer.HEADER,
-                "x-forwarded-for"}) {
+                "x-forwarded-for", "X-Forwarded-Proto", "X-Forwarded-Port", "X-Real-IP", "Via", "CF-Connecting-IP",
+                "True-Client-IP"}) {
             for (String value : new String[]{"127.0.0.1", ""}) {
                 MockHttpServletRequest request = request("localhost");
                 request.addHeader(header, value);

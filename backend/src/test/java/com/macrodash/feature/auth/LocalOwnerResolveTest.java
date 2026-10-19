@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -99,6 +100,27 @@ class LocalOwnerResolveTest {
             isolated.users.insert("authlocal-member@test.local", "x", "MEMBER", "PRO", true);
             assertThat(isolated.users.firstOwner()).as("회원만 있으면 운영자 없음").isEmpty();
             assertThat(auth.resolve(null, null, true)).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("운영자가 없는 동안 요청 경로의 계정 만들기 재확인은 1분에 한 번만 — 화면이 5초마다 물어도 잠금·경고가 쌓이지 않는다")
+    void missingOwnerRetryIsRateLimited() {
+        try (Isolated isolated = new Isolated()) {
+            AtomicInteger retries = new AtomicInteger();
+            AuthService auth = new AuthService(noLogin(true), isolated.users,
+                    org.mockito.Mockito.mock(com.macrodash.store.SessionStore.class),
+                    org.mockito.Mockito.mock(com.macrodash.store.AuditLogStore.class), new PasswordHasher()) {
+                @Override
+                public void retryOwner() {
+                    retries.incrementAndGet();
+                    super.retryOwner();
+                }
+            };
+            for (int i = 0; i < 5; i++) {
+                assertThat(auth.resolve(null, null, true)).isEmpty();
+            }
+            assertThat(retries.get()).as("요청 다섯 번에 재확인 한 번").isEqualTo(1);
         }
     }
 

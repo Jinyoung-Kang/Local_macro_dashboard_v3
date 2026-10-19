@@ -25,6 +25,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SessionFilterTest {
@@ -371,10 +373,14 @@ class SessionFilterTest {
         record Outcome(int status, String body, boolean reached, CurrentUser user) {
         }
 
+        /** 마지막으로 만든 필터의 계정 저장소 — 운영자 조회가 일어났는지 확인합니다. */
+        private UserStore users;
+
         private WebConfig.SessionFilter filter(boolean on) {
             AppProperties properties = new AppProperties();
             properties.setLocalNoLogin(on);
             UserStore users = mock(UserStore.class);
+            this.users = users;
             when(users.ready()).thenReturn(true);
             when(users.firstOwner()).thenReturn(Optional.of(new UserStore.User(OWNER_ID, "owner@test.local", "hash",
                     "OWNER", "PRO", Instant.now(), Instant.now())));
@@ -485,6 +491,8 @@ class SessionFilterTest {
             assertThat(outcome.status()).isEqualTo(403);
             assertThat(outcome.body()).contains("bad_origin");
             assertThat(outcome.reached()).isFalse();
+            // 쿠키가 없으면 받을 사용자는 로컬 운영자뿐이라, 운영자를 조회하기 전에 끊습니다(되풀이 호출이 DB에 닿지 않게).
+            verify(users, never()).firstOwner();
         }
 
         @Test
