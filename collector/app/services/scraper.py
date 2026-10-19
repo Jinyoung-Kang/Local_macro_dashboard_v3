@@ -54,16 +54,16 @@ SCRAPER_MARKETS = [
      "symbol": "FX_IDC:JPYKRW", "provider": "TradingView Scanner", "unit": "원", "tz": "America/New_York",
      "url": "https://www.tradingview.com/symbols/JPYKRW/"},
     {"key": "us03m", "name": "미국채 3개월물", "kind": "tradingview_symbol",
-     "symbol": "TVC:US03MY", "provider": "TradingView Scanner", "unit": "%",
+     "symbol": "TVC:US03MY", "provider": "TradingView Scanner", "unit": "%", "tz": "America/New_York",
      "url": "https://www.tradingview.com/symbols/TVC-US03MY/"},
     {"key": "us02y", "name": "미국채 2년물", "kind": "tradingview_symbol",
-     "symbol": "TVC:US02Y", "provider": "TradingView Scanner", "unit": "%",
+     "symbol": "TVC:US02Y", "provider": "TradingView Scanner", "unit": "%", "tz": "America/New_York",
      "url": "https://www.tradingview.com/symbols/TVC-US02Y/"},
     {"key": "us10y", "name": "미국채 10년물", "kind": "tradingview_symbol",
-     "symbol": "TVC:US10Y", "provider": "TradingView Scanner", "unit": "%",
+     "symbol": "TVC:US10Y", "provider": "TradingView Scanner", "unit": "%", "tz": "America/New_York",
      "url": "https://www.tradingview.com/symbols/TVC-US10Y/"},
     {"key": "us30y", "name": "미국채 30년물", "kind": "tradingview_symbol",
-     "symbol": "TVC:US30Y", "provider": "TradingView Scanner", "unit": "%",
+     "symbol": "TVC:US30Y", "provider": "TradingView Scanner", "unit": "%", "tz": "America/New_York",
      "url": "https://www.tradingview.com/symbols/TVC-US30Y/"},
     {"key": "wti", "name": "WTI 원유", "kind": "yahoo_chart",
      "symbol": "CL=F", "provider": "Yahoo Finance", "delay": 10, "unit": "USD/bbl",
@@ -89,7 +89,7 @@ SCRAPER_MARKETS = [
     # 같은 KODEX 200 프록시로 내려갑니다(반드시 추정치로 표시).
     {"key": "kospi200_night", "name": "코스피200 야간선물",
      "kind": "tradingview_symbol", "symbol": "KRX:K2I1!",
-     "provider": "TradingView Scanner", "unit": "pt",
+     "provider": "TradingView Scanner", "unit": "pt", "tz": "Asia/Seoul",
      "fallback": "kodex_proxy",
      "url": "https://kr.tradingview.com/symbols/KRX-K2I1!/"},
     {"key": "hang_seng", "name": "항셍", "kind": "tradingview_symbol",
@@ -100,10 +100,10 @@ SCRAPER_MARKETS = [
     # 지수 카드와 소수점까지 같은 값이 나란히 떴습니다. 선물 조회에 실패하면
     # 카드가 지수 값으로 내려가되 이름에 그 사실을 적습니다(macro_cards.inject_scraped_indices).
     {"key": "nikkei_fut", "name": "닛케이225 선물", "kind": "tradingview_symbol",
-     "symbol": "OSE:NK2251!", "provider": "TradingView Scanner", "unit": "pt",
+     "symbol": "OSE:NK2251!", "provider": "TradingView Scanner", "unit": "pt", "tz": "Asia/Tokyo",
      "url": "https://www.tradingview.com/symbols/OSE-NK2251!/"},
     {"key": "hsi_fut", "name": "항셍 선물", "kind": "tradingview_symbol",
-     "symbol": "HKEX:HSI1!", "provider": "TradingView Scanner", "unit": "pt",
+     "symbol": "HKEX:HSI1!", "provider": "TradingView Scanner", "unit": "pt", "tz": "Asia/Hong_Kong",
      "url": "https://www.tradingview.com/symbols/HKEX-HSI1!/"},
 ]
 

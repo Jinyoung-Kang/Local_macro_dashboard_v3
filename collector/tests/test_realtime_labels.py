@@ -279,7 +279,6 @@ def test_QA138_실시간_대체는_같은_종목의_TradingView_시세만_가리
         assert scraped[source_key].get("tz"), f"{source_key}: 거래일을 계산할 시간대가 없음"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 미국채·아시아 선물 카드는 장이 닫혀도 '수집 시각'을 적어 지난 거래일 값이 지금 값처럼 보임")
 def test_QA138_TradingView_값을_쓰는_다른_카드도_장_밖이면_거래일을_적는다(fake_store, monkeypatch):
     # 2026-10-19 20:56 KST — 홍콩 휴장일이라 항셍 선물은 장 밖(값은 10-16 금요일), 코스피200 야간선물은 장중
     snapshots, _saved = fake_store
@@ -304,7 +303,6 @@ def test_QA138_TradingView_값을_쓰는_다른_카드도_장_밖이면_거래�
     assert {card["lastTs"] for card in bonds.values()} == {"2026-10-16 거래일 기준 (TradingView · 장 밖)"}
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 미국채·아시아 선물 항목에 시간대가 없어 거래일을 계산하지 못함")
 def test_QA138_카드에_쓰는_TradingView_항목은_모두_시간대가_있다():
     used = set(indicators.REALTIME_QUOTES.values()) | set(indicators.BOND_SCANNER_KEYS) | {
         spec["key"] for spec in indicators.SCRAPED_FUTURES

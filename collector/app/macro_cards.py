@@ -89,8 +89,9 @@ def apply_bond_override(payload: dict) -> dict:
                 "priceStr": f"{price:,.3f}",
                 "status": "ok",
                 "source": source.get("provider", "TradingView Scanner"),
-                # Scanner 응답에는 체결 시각이 없으므로 "수집 시각"임을 밝힙니다. 이어받은 값이면 그 값을 받은 시각입니다.
-                "lastTs": f"{source.get('collectedAt') or now_text} (TradingView 수집 시각)",
+                # Scanner 응답에는 체결 시각이 없으므로 "수집 시각"임을 밝힙니다. 이어받은 값이면 그 값을 받은 시각,
+                # 장이 닫혔으면 그 값의 거래일입니다(QA-138).
+                "lastTs": _tradingview_last_ts(source, source.get("collectedAt") or now_text),
                 # 배지는 실제로 쓴 출처(TradingView)의 지연입니다. 보정이 안 된 카드는 Yahoo 지연 배지 그대로입니다(QA-137).
                 "note": _with_delay(source, "TradingView 참고"),
                 **_stale_fields(source),
@@ -179,18 +180,13 @@ def _realtime_card(key: str, source: dict) -> dict:
     price = raw * scale
     digits = _display_digits(source.get("pricescale"), scale)
 
-    if source.get("session") == "market" or not source.get("tradeDate"):
-        last_ts = f"{source.get('collectedAt')} (TradingView 수집 시각)"
-    else:
-        last_ts = f"{source['tradeDate']} 거래일 기준 (TradingView · 장 밖)"
-
     card = {
         "status": "ok",
         "price": price,
         "priceStr": f"{price:,.{digits}f}",
         "note": indicators.delay_label(0),
         "source": f"TradingView ({source.get('symbol')})",
-        "lastTs": last_ts,
+        "lastTs": _tradingview_last_ts(source, source.get("collectedAt")),
         "delta": None, "pct": None, "deltaStr": "N/A", "prevStr": "N/A", "prevValue": None,
         "prevSource": None,
     }
@@ -206,6 +202,17 @@ def _realtime_card(key: str, source: dict) -> dict:
             "prevSource": "TradingView 직전 거래일 종가",
         })
     return card
+
+
+def _tradingview_last_ts(source: dict, taken: str | None) -> str | None:
+    """
+    TradingView 값의 카드 시각(QA-138). 응답에 체결 시각이 없어, 장이 열려 있으면 수집 시각(그 시각의 시세)을 적고
+    장 밖이면 그 값의 거래일을 적습니다 — 장 밖에 수집 시각을 적으면 홍콩 휴장일의 항셍 선물·주말의 미국채처럼 지난
+    거래일 값이 지금 값처럼 보입니다. 장 상태나 거래일을 모르면 예전처럼 수집 시각입니다.
+    """
+    if source.get("session") not in (None, "market") and source.get("tradeDate"):
+        return f"{source['tradeDate']} 거래일 기준 (TradingView · 장 밖)"
+    return f"{taken} (TradingView 수집 시각)" if taken else None
 
 
 def _display_digits(pricescale: object, scale: float) -> int:
@@ -286,7 +293,8 @@ def inject_scraped_indices(payload: dict) -> dict:
     주의사항
       - ``lastTs``는 **수집 시각**입니다. Scanner 응답에는 체결 시각이 없습니다.
         시각이 없으면 카드만 보고는 몇 시 값인지 알 수 없어서, 미국채 카드와
-        같은 방식으로 "(TradingView 수집 시각)"을 붙입니다.
+        같은 방식으로 "(TradingView 수집 시각)"을 붙입니다. 장이 닫혔으면 그 값의
+        거래일입니다(QA-138). 배지에는 TradingView가 알려 준 지연을 적습니다(QA-137).
       - 선물 조회가 실패하면 같은 거래소의 지수 값으로 내려가되, 이름과
         ``market``을 지수로 바꿉니다. 지수를 선물이라고 부르면 안 됩니다.
     """
@@ -344,7 +352,7 @@ def inject_scraped_indices(payload: dict) -> dict:
             "price": price,
             "priceStr": f"{price:,.2f}",
             "source": source.get("provider"),
-            "lastTs": f"{taken} (TradingView 수집 시각)" if taken else None,
+            "lastTs": _tradingview_last_ts(source, taken),
             "isReference": True,
             # 추정치를 확정치처럼 보여 주면 교차 검증이 무의미해집니다.
             "isEstimated": bool(source.get("isEstimated")),
