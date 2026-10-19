@@ -65,6 +65,10 @@ dashboard:
   # 데모 열람(ADR 0013) — 비면 꺼짐(기본·로컬). AWS 배포에서만 앞단 프록시가 접근 코드를 확인한 요청에
   # X-Demo-Viewer 헤더로 이 값을 실어 보내면 로그인 없이 읽기 전용으로 엽니다. 쓰면 32자 이상이어야 기동합니다.
   demo-viewer-token: ${DASHBOARD_DEMO_VIEWER_TOKEN:}
+  # 로컬 무로그인(ADR 0016) — 켜면 이 맥(localhost·127.0.0.1·[::1])에서 온 쿠키 없는 요청을 첫 운영자 계정으로 엽니다.
+  # 기본은 끔. 로컬 docker-compose.yml만 켜고(LOCAL_NO_LOGIN), AWS·QA 오버레이는 false로 고정합니다. 켜면 화면·API 포트는
+  # 127.0.0.1에만 열립니다. 데모 열람 토큰·Secure 쿠키·앞단 헤더 신뢰·이 맥 밖의 화면 주소 중 하나라도 있으면 기동하지 않습니다.
+  local-no-login: ${DASHBOARD_LOCAL_NO_LOGIN:false}
 
   # auto | store_only | live_only
   #   auto       저장본이 신선하면 사용, 오래되면 수집기에 수집 요청

@@ -60,8 +60,19 @@ public class AppProperties {
 
     /** 프런트엔드 오리진 (CORS 허용). */
     private String frontendOrigin = "http://localhost:3000";
-    /** 화면 포트. 어느 호스트에서 열든 이 포트의 origin은 허용합니다(휴대폰에서 LAN IP로 접속). */
+    /**
+     * 화면 포트. 로그인 모드에서는 어느 호스트에서 열든 이 포트의 origin을 허용합니다(LAN IP로 접속).
+     * 로컬 무로그인 모드({@link #localNoLogin})에서는 이 맥의 주소(localhost·127.0.0.1·[::1])의 이 포트만 허용합니다.
+     */
     private int frontendPort = 3000;
+
+    /**
+     * 로컬 무로그인 모드(DASHBOARD_LOCAL_NO_LOGIN, ADR 0016). 켜면 이 맥(localhost·127.0.0.1·[::1])에서 온 쿠키 없는 요청을
+     * 첫 운영자 계정으로 엽니다. 기본은 끔 — 로컬 docker-compose.yml만 켜고, AWS·QA 오버레이는 끔을 고정합니다.
+     * 켜면 화면·API 포트는 127.0.0.1에만 열립니다. 웹 배포 설정과 함께 켜져 있으면 기동하지 않습니다
+     * ({@code feature.auth.LocalNoLogin}).
+     */
+    private boolean localNoLogin = false;
 
     /**
      * 데모 열람 토큰(DASHBOARD_DEMO_VIEWER_TOKEN, ADR 0013). 비면 기능이 꺼집니다(기본·로컬).
@@ -190,6 +201,14 @@ public class AppProperties {
 
     public void setFrontendOrigin(String frontendOrigin) {
         this.frontendOrigin = frontendOrigin;
+    }
+
+    public boolean isLocalNoLogin() {
+        return localNoLogin;
+    }
+
+    public void setLocalNoLogin(boolean localNoLogin) {
+        this.localNoLogin = localNoLogin;
     }
 
     public String getDemoViewerToken() {
