@@ -42,7 +42,7 @@ DEFAULTS = {  # 다른 파라미터는 이 값으로 둡니다(정상 요청이 
     "reportDate": "", "minHolders": "2", "q": "NVIDIA", "benchmark": "SPY", "name": "", "percentile": "95",
     "lookbackWeeks": "52", "days": "60", "minutes": "30", "market": "KOSPI", "investor": "외국인", "tradeType": "순매수",
     "intervalType": "TODAY", "targetDate": "", "latest": "true", "obsDate": "", "codes": "005930,000660", "task": "",
-    "limit": "40", "runFast": "false", "taskName": "kr_holidays", "x": "DGS10", "y": "DGS2", "window": "60",
+    "limit": "40", "runFast": "false", "taskName": "kr_holidays", "x": "fred:DGS10", "y": "fred:DGS2", "window": "60",
     "engineId": "", "prompt": "", "reportType": "", "base": "USD", "quote": "KRW", "symbols": "KOSPI,KOSDAQ", "live": "false",
     "asset": "SPY",
 }

@@ -59,7 +59,7 @@ ENDPOINTS=(
   "/api/kr/investor-flows"
   "/api/kr/stock-flows?codes=005930,000660"
   "/api/analytics/regime?years=5"
-  "/api/analytics/correlation?x=DGS10&y=DGS2&window=60&years=3&mode=change"
+  "/api/analytics/correlation?x=fred:DGS10&y=fred:DGS2&window=60&years=3&mode=change"
   "/api/status"
   "/api/status/issues"
   "/api/snapshot/text"
