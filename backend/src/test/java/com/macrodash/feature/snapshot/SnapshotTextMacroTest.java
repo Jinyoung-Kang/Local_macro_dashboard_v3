@@ -8,6 +8,7 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -130,5 +131,28 @@ class SnapshotTextMacroTest {
 
         assertThat(text).contains("미국채 10년물 수익률(%): 4.110").contains("이전 값").contains("HTTP 429")
                 .contains("2026-10-11 09:00");
+    }
+
+    @Test
+    @Disabled("QA-137 재현: 매크로 줄에 카드의 지연 배지가 없어 '[실시간 참고]' 머리말 아래 10~20분 늦은 값이 실시간처럼 읽힘")
+    @DisplayName("QA-137 매크로 카드 줄 끝에 카드의 지연 배지(실시간·N분 지연)를 붙인다")
+    void macroLinesCarryTheDelayBadge() throws Exception {
+        MacroService macro = mock(MacroService.class);
+        Map<String, Object> overview = new LinkedHashMap<>();
+        overview.put("available", true);
+        overview.put("collectedAtKst", "2026-10-19 20:35 KST");
+        overview.put("categories", MAPPER.readTree("""
+                [{"title":"💵 통화 및 환율","items":[
+                  {"name":"달러 인덱스 (DXY)","status":"ok","priceStr":"101.82","deltaStr":"+0.04 (+0.04%)",
+                   "prevStr":"101.78","note":"10분 지연"},
+                  {"name":"원/달러 (USD/KRW)","status":"ok","priceStr":"1,328.44","deltaStr":"-5.76 (-0.43%)",
+                   "prevStr":"1,334.20","note":"실시간"}]}]
+                """));
+        when(macro.overview()).thenReturn(overview);
+
+        String text = service(macro, mock(LiquidityService.class)).fullText();
+
+        assertThat(text).contains("- 달러 인덱스 (DXY): 101.82 | +0.04 (+0.04%) | 전일: 101.78 [10분 지연]");
+        assertThat(text).contains("- 원/달러 (USD/KRW): 1,328.44 | -5.76 (-0.43%) | 전일: 1,334.20 [실시간]");
     }
 }

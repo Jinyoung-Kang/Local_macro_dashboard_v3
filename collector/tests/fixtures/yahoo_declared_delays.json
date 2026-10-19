@@ -1,0 +1,23 @@
+{
+  "_comment": "Yahoo가 종목마다 밝힌 시세 지연(분). yfinance Ticker.get_info()의 exchangeDataDelayedBy·fullExchangeName을 2026-10-19 20:34 KST에 한 번 조회해 고정했습니다(QA-137). 매크로 카드의 Yahoo 티커 전부입니다.",
+  "delays": {
+    "DX-Y.NYB": {"minutes": 10, "exchange": "ICE Futures"},
+    "KRW=X": {"minutes": 0, "exchange": "CCY"},
+    "JPY=X": {"minutes": 0, "exchange": "CCY"},
+    "JPYKRW=X": {"minutes": 0, "exchange": "CCY"},
+    "ZT=F": {"minutes": 10, "exchange": "CBOT"},
+    "^TNX": {"minutes": 15, "exchange": "Cboe Indices"},
+    "^TYX": {"minutes": 15, "exchange": "Cboe Indices"},
+    "CL=F": {"minutes": 10, "exchange": "NY Mercantile"},
+    "BZ=F": {"minutes": 10, "exchange": "NY Mercantile"},
+    "GC=F": {"minutes": 10, "exchange": "COMEX"},
+    "^GSPC": {"minutes": 0, "exchange": "SNP"},
+    "ES=F": {"minutes": 10, "exchange": "CME"},
+    "^NDX": {"minutes": 0, "exchange": "Nasdaq GIDS"},
+    "NQ=F": {"minutes": 10, "exchange": "CME"},
+    "^KS11": {"minutes": 20, "exchange": "KSE"},
+    "^N225": {"minutes": 20, "exchange": "Osaka"},
+    "000001.SS": {"minutes": 15, "exchange": "Shanghai"},
+    "^HSI": {"minutes": 15, "exchange": "HKSE"}
+  }
+}
