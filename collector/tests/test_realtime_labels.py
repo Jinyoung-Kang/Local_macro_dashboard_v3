@@ -312,3 +312,23 @@ def test_QA138_카드에_쓰는_TradingView_항목은_모두_시간대가_있다
         if config["key"] in used and config["kind"] == "tradingview_symbol" and not config.get("tz")
     )
     assert missing == []
+
+
+@pytest.mark.xfail(strict=True, reason="QA-138 재현: 저녁에 여는 선물 세션(금 17:15 HKT)의 거래일을 토요일(10-17)로 계산")
+def test_QA138_저녁에_여는_세션은_달력_날짜로_거래일을_지어내지_않는다():
+    # 2026-10-19 20:59 KST 실측 — HKEX:HSI1!의 마지막 일봉은 금요일 17:15 HKT(야간 세션)에 열렸습니다.
+    # 그 세션의 거래일은 다음 영업일이고 휴장일까지 겹쳐 달력만으로는 정할 수 없습니다. 모르면 비웁니다.
+    assert scraper.trade_date(1792142100, "Asia/Hong_Kong") is None
+    # 아침에 여는 일봉(지수)은 그날이 거래일입니다.
+    assert scraper.trade_date(1792114200, "Asia/Hong_Kong") == "2026-10-16"   # 항셍 지수 금 09:30 HKT
+    assert scraper.trade_date(1792368000, "Asia/Seoul") == "2026-10-19"       # 코스피 월 09:00 KST
+
+
+@pytest.mark.xfail(strict=True, reason="QA-138 재현: 거래일을 모르는 장 밖 값에 '수집 시각'만 적어 지금 값처럼 보임")
+def test_QA138_거래일을_모르는_장_밖_값은_수집_시각에_장_밖을_붙인다(fake_store):
+    snapshots, _saved = fake_store
+    snapshots[catalog.SNAP_SCRAPER_MARKETS] = _snapshot(catalog.SNAP_SCRAPER_MARKETS, _scraped(
+        _tv("hsi_fut", 24112.0, 24149.0, delayMinutes=15, session="out_of_session", tradeDate=None),
+    ))
+    futures = _by_key(macro_cards.inject_scraped_indices({"categories": [{"id": "asia_equity", "items": []}]}))
+    assert futures["hsi_fut_scraped"]["lastTs"] == "2026-10-19 20:35 KST (TradingView 수집 시각 · 장 밖)"
