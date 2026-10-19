@@ -3,6 +3,7 @@ package com.macrodash.config;
 import com.macrodash.feature.auth.AccessPolicy;
 import com.macrodash.feature.auth.AuthService;
 import com.macrodash.feature.auth.DemoViewer;
+import com.macrodash.feature.auth.LocalNoLogin;
 import com.macrodash.support.CurrentUser;
 import com.macrodash.feature.auth.AuthController;
 import jakarta.servlet.FilterChain;
@@ -36,7 +37,8 @@ import java.util.Set;
  *
  * <p>인증은 단순합니다 — 로그인·헬스체크를 제외한 모든 {@code /api/**} 요청에
  * 유효한 세션 쿠키가 있어야 하고, 경로마다 필요한 역할·등급을 {@link AccessPolicy}가 정합니다(ADR 0010).
- * 예외는 AWS 공개 데모의 데모 열람 하나입니다(기본은 꺼짐, ADR 0013) — {@link DemoViewer}.
+ * 예외는 둘입니다(둘 다 기본은 꺼짐) — AWS 공개 데모의 데모 열람(ADR 0013, {@link DemoViewer})과,
+ * 이 맥에서 온 쿠키 없는 요청을 첫 운영자로 여는 로컬 무로그인(ADR 0016, {@link LocalNoLogin}).
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -52,18 +54,27 @@ public class WebConfig implements WebMvcConfigurer {
         // 쿠키를 주고받아야 하므로 allowCredentials가 필요하고,
         // 그 경우 오리진에 와일드카드를 쓸 수 없습니다.
         registry.addMapping("/api/**")
-                // 패턴에는 정확한 origin도 들어갑니다. 화면 포트의 origin은 호스트와 무관하게
+                // 패턴에는 정확한 origin도 들어갑니다. 로그인 모드에서는 화면 포트의 origin을 호스트와 무관하게
                 // 허용합니다 — 휴대폰이 http://192.168.x.x:3000으로 열면 API도 같은 호스트의
                 // 백엔드 포트를 부르므로(lib/api.ts) origin이 LAN IP가 됩니다. 쿠키는 SameSite=Strict라
                 // 다른 사이트의 요청에는 애초에 실리지 않아, 패턴을 넓혀도 인증이 새지 않습니다.
+                // 로컬 무로그인(ADR 0016)은 쿠키 없이 운영자가 되므로 이 맥의 화면 주소만 받습니다.
                 .allowedOriginPatterns(allowedOriginPatterns(properties).toArray(String[]::new))
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowCredentials(true)
                 .maxAge(3600);
     }
 
-    /** FRONTEND_ORIGIN의 명시 목록 + 화면 포트의 모든 호스트(http://*:포트). */
+    /**
+     * 로그인 모드: FRONTEND_ORIGIN의 명시 목록 + 화면 포트의 모든 호스트(http://*:포트).
+     * 로컬 무로그인(ADR 0016): 이 맥의 화면 주소 셋(localhost·127.0.0.1·[::1]의 화면 포트)뿐 — 와일드카드 없음.
+     * FRONTEND_ORIGIN은 기동 때 이 맥의 http 주소인지만 확인합니다({@link LocalNoLogin}).
+     */
     static List<String> allowedOriginPatterns(AppProperties properties) {
+        if (properties.isLocalNoLogin()) {
+            int port = properties.getFrontendPort();
+            return List.of("http://localhost:" + port, "http://127.0.0.1:" + port, "http://[::1]:" + port);
+        }
         List<String> patterns = new java.util.ArrayList<>(Arrays.stream(properties.getFrontendOrigin().split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isBlank())
@@ -75,10 +86,11 @@ public class WebConfig implements WebMvcConfigurer {
         return patterns;
     }
 
+    /** {@code localNoLogin}을 받는 것은 기동 검사(웹 배포 설정과 섞였으면 기동 중단)가 필터보다 먼저 돌게 하려는 것이기도 합니다. */
     @Bean
-    public FilterRegistrationBean<SessionFilter> sessionFilter(AuthService authService) {
+    public FilterRegistrationBean<SessionFilter> sessionFilter(AuthService authService, LocalNoLogin localNoLogin) {
         FilterRegistrationBean<SessionFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new SessionFilter(authService, allowedOriginPatterns(properties)));
+        registration.setFilter(new SessionFilter(authService, allowedOriginPatterns(properties), localNoLogin.enabled()));
         registration.addUrlPatterns("/api/*");
         registration.setOrder(1);
         return registration;
@@ -119,10 +131,17 @@ public class WebConfig implements WebMvcConfigurer {
         private final AuthService authService;
         /** 상태를 바꾸는 요청(POST·PUT·DELETE)의 Origin이 이 목록(CORS와 같음)에 맞아야 합니다. */
         private final org.springframework.web.cors.CorsConfiguration origins = new org.springframework.web.cors.CorsConfiguration();
+        /** 로컬 무로그인 모드(ADR 0016) — 이 맥에서 온 쿠키 없는 요청을 첫 운영자로 엽니다. */
+        private final boolean localNoLogin;
 
         public SessionFilter(AuthService authService, List<String> allowedOriginPatterns) {
+            this(authService, allowedOriginPatterns, false);
+        }
+
+        public SessionFilter(AuthService authService, List<String> allowedOriginPatterns, boolean localNoLogin) {
             this.authService = authService;
             this.origins.setAllowedOriginPatterns(allowedOriginPatterns);
+            this.localNoLogin = localNoLogin;
         }
 
         /**
@@ -138,6 +157,29 @@ public class WebConfig implements WebMvcConfigurer {
             }
             String origin = request.getHeader("Origin");
             return origin != null && origins.checkOrigin(origin) == null;
+        }
+
+        /**
+         * 로컬 무로그인 운영자(쿠키 없이 연 요청, ADR 0016)에게 다른 사이트의 요청인가. 쿠키가 없으니 SameSite가 지켜 주지
+         * 않습니다 — 이 맥의 브라우저로 연 다른 사이트가 localhost의 API를 부르면 그대로 운영자 요청이 됩니다.
+         * <ul>
+         *   <li>Origin이 있으면 허용 목록(이 맥의 화면 주소)에 맞아야 합니다 — 메서드와 상관없이.</li>
+         *   <li>쓰기(POST·PUT·PATCH·DELETE)는 Origin이 꼭 있어야 합니다. 화면은 다른 포트(:3000 → :8080)라 브라우저가 늘
+         *       붙이고, 스크립트·curl은 Origin을 붙이거나 로그인 쿠키를 쓰면 됩니다.</li>
+         *   <li>Origin 없는 읽기는 {@code Sec-Fetch-Site: cross-site}면 막습니다(다른 사이트의 링크·이미지로 부르는 GET).
+         *       주소창에 직접 친 요청({@code none})·같은 사이트는 통과합니다.</li>
+         * </ul>
+         * 로그인 쿠키로 온 요청과 로그인 모드는 이 검사를 받지 않습니다(평소의 {@link #foreignOrigin}만).
+         */
+        boolean localOwnerCrossSite(HttpServletRequest request) {
+            String origin = request.getHeader("Origin");
+            if (origin != null) {
+                return origins.checkOrigin(origin) == null;
+            }
+            if (hasBody(request)) {
+                return true;
+            }
+            return "cross-site".equalsIgnoreCase(request.getHeader("Sec-Fetch-Site"));
         }
 
         /**
@@ -185,10 +227,7 @@ public class WebConfig implements WebMvcConfigurer {
             }
 
             if (foreignOrigin(request)) {
-                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                response.setContentType("application/json;charset=UTF-8");
-                response.getWriter().write(
-                        "{\"error\":\"bad_origin\",\"message\":\"다른 출처에서 온 요청은 받지 않습니다.\"}");
+                writeBadOrigin(response);
                 return;
             }
 
@@ -213,14 +252,19 @@ public class WebConfig implements WebMvcConfigurer {
                 return;
             }
 
-            // 세션이 먼저, 없으면 데모 열람 헤더(ADR 0013 — 기능이 꺼져 있거나 값이 틀리면 헤더는 없는 것과 같음).
+            // 세션이 먼저, 없으면 데모 열람 헤더(ADR 0013 — 기능이 꺼져 있거나 값이 틀리면 헤더는 없는 것과 같음),
+            // 그다음 로컬 무로그인 운영자(ADR 0016 — 켜져 있고 이 맥에서 바로 온 요청만).
             Optional<CurrentUser> user = authService.resolve(AuthController.readToken(request),
-                    request.getHeader(DemoViewer.HEADER));
+                    request.getHeader(DemoViewer.HEADER), localNoLogin && LocalNoLogin.isLocalRequest(request));
             if (user.isEmpty()) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json;charset=UTF-8");
                 response.getWriter().write(
                         "{\"error\":\"unauthorized\",\"message\":\"로그인이 필요합니다.\"}");
+                return;
+            }
+            if (localNoLogin && user.get().isLocalOwner() && localOwnerCrossSite(request)) {
+                writeBadOrigin(response);
                 return;
             }
             AccessPolicy.Access required = AccessPolicy.required(request.getMethod(), pathOf(request));
@@ -242,6 +286,13 @@ public class WebConfig implements WebMvcConfigurer {
                 return;
             }
             chain.doFilter(request, response);
+        }
+
+        private static void writeBadOrigin(HttpServletResponse response) throws IOException {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write(
+                    "{\"error\":\"bad_origin\",\"message\":\"다른 출처에서 온 요청은 받지 않습니다.\"}");
         }
 
         /** 본문을 받는 메서드(POST·PUT·PATCH·DELETE). */

@@ -123,14 +123,23 @@ public class AuthController {
      *
      * <p>세션이 없어도 데모 열람 헤더가 맞으면(ADR 0013) {@code authenticated: true}와 {@code user.demo: true}
      * (일반 회원·유료 등급, 이메일 없음)를 줍니다. 화면은 이 값으로 로그아웃·계정 메뉴와 쓰기 버튼을 숨깁니다.
+     *
+     * <p>로컬 무로그인 모드(ADR 0016)면 {@code noLogin: true}이고, 이 맥에서 온 쿠키 없는 요청은 첫 운영자로
+     * {@code user.local: true}가 됩니다. 운영자 계정이 없으면 {@code ownerMissing: true}(화면은 계정 설정 안내).
+     * 화면은 {@code noLogin}이 정확히 true일 때만 로그인 화면을 건너뜁니다 — 없거나 false면 로그인 모드(AWS·옛 백엔드).
      */
     @GetMapping("/session")
     public Map<String, Object> session(HttpServletRequest request) {
-        Optional<CurrentUser> user = authService.resolve(readToken(request), request.getHeader(DemoViewer.HEADER));
+        boolean noLogin = authService.localNoLogin();
+        boolean local = noLogin && LocalNoLogin.isLocalRequest(request);
+        Optional<CurrentUser> user = authService.resolve(readToken(request), request.getHeader(DemoViewer.HEADER), local);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("authenticated", user.isPresent());
         // 로그인 화면이 가입·재설정 링크를 보여 줄지 정합니다(메일 발송이 설정됐을 때만).
         out.put("mailAvailable", accounts.mailConfigured());
+        out.put("noLogin", noLogin);
+        // 이 맥에서 왔는데 사용자가 없음 = 유효한 쿠키도, 운영자 계정도 없음(데모 헤더가 붙은 요청은 이 맥 요청이 아님).
+        out.put("ownerMissing", local && user.isEmpty());
         user.ifPresent(current -> {
             out.put("readMode", properties.resolvedReadMode().name().toLowerCase(Locale.ROOT));
             out.put("user", userMap(current));
@@ -262,6 +271,7 @@ public class AuthController {
         out.put("role", user.role());
         out.put("tier", user.tier());
         out.put("demo", user.demo());
+        out.put("local", user.isLocalOwner());
         return out;
     }
 

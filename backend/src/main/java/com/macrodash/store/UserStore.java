@@ -72,6 +72,15 @@ public class UserStore {
         return jdbc.query("SELECT " + COLUMNS + " FROM users WHERE id = ?", mapper(), id).stream().findFirst();
     }
 
+    /**
+     * 가장 먼저 만든 운영자 계정 — 로컬 무로그인 모드(ADR 0016)가 쿠키 없는 요청을 이 계정으로 엽니다. 요청마다 읽어
+     * 역할을 바꾸면(운영자 → 회원) 다음 요청부터 그다음 운영자가 됩니다.
+     */
+    public Optional<User> firstOwner() {
+        return jdbc.query("SELECT " + COLUMNS + " FROM users WHERE role = 'OWNER' ORDER BY id LIMIT 1", mapper())
+                .stream().findFirst();
+    }
+
     public List<User> all() {
         return jdbc.query("SELECT " + COLUMNS + " FROM users ORDER BY id", mapper());
     }

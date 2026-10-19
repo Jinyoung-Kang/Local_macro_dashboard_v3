@@ -12,6 +12,8 @@ import java.util.UUID;
  *
  * @param role {@code OWNER} 또는 {@code MEMBER}
  * @param tier {@code FREE} 또는 {@code PRO}
+ * @param sessionId 로그인 세션. 로컬 무로그인 모드(ADR 0016)에서 쿠키 없이 연 운영자는 실제 계정이지만 세션이 없어 null입니다
+ *                  ({@link #isLocalOwner}).
  * @param demo 데모 열람(ADR 0013) — 계정·세션이 없는 읽기 전용 방문자. {@code id}는 실제 계정과 겹치지 않는 음수,
  *             {@code email}·{@code sessionId}는 null입니다. 이 사용자로 DB에 쓰면 안 됩니다(사용자 FK가 막음).
  */
@@ -22,6 +24,11 @@ public record CurrentUser(long id, String email, String role, String tier, UUID 
     /** 계정으로 로그인한 사용자(데모 열람이 아님). */
     public CurrentUser(long id, String email, String role, String tier, UUID sessionId) {
         this(id, email, role, tier, sessionId, false);
+    }
+
+    /** 로컬 무로그인 모드(ADR 0016)가 쿠키 없이 연 운영자인가 — 계정은 있고 세션만 없습니다(데모 열람은 아님). */
+    public boolean isLocalOwner() {
+        return sessionId == null && !demo;
     }
 
     public boolean isOwner() {

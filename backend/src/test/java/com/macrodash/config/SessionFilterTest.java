@@ -357,6 +357,182 @@ class SessionFilterTest {
         }
     }
 
+    /**
+     * 로컬 무로그인(ADR 0016) — 켜져 있으면 이 맥(Host가 localhost 등)에서 쿠키 없이 온 요청을 첫 운영자로 엽니다.
+     * 계정 저장소는 흉내(첫 운영자 7번, 쿠키 {@code member-cookie}만 유효)이고, 필터·AuthService는 실제 코드입니다.
+     */
+    @Nested
+    @DisplayName("로컬 무로그인")
+    class LocalNoLoginMode {
+
+        static final long OWNER_ID = 7;
+        static final UUID MEMBER_SESSION = UUID.randomUUID();
+
+        record Outcome(int status, String body, boolean reached, CurrentUser user) {
+        }
+
+        private WebConfig.SessionFilter filter(boolean on) {
+            AppProperties properties = new AppProperties();
+            properties.setLocalNoLogin(on);
+            UserStore users = mock(UserStore.class);
+            when(users.ready()).thenReturn(true);
+            when(users.firstOwner()).thenReturn(Optional.of(new UserStore.User(OWNER_ID, "owner@test.local", "hash",
+                    "OWNER", "PRO", Instant.now(), Instant.now())));
+            SessionStore sessions = mock(SessionStore.class);
+            when(sessions.findActive(any())).thenAnswer(invocation -> {
+                byte[] hash = invocation.getArgument(0);
+                if (Arrays.equals(hash, sha256("member-cookie"))) {
+                    return Optional.of(new SessionStore.Active(MEMBER_SESSION, 2, "member@test.local", "MEMBER", "FREE",
+                            Instant.now(), Instant.now().plusSeconds(3600)));
+                }
+                return Optional.empty();
+            });
+            AuthService auth = new AuthService(properties, users, sessions, mock(AuditLogStore.class), new PasswordHasher());
+            return new WebConfig.SessionFilter(auth, WebConfig.allowedOriginPatterns(properties), on);
+        }
+
+        /** {@code headers}는 이름·값 쌍("Host"는 서버 이름으로). 서버 이름 기본값은 localhost(MockHttpServletRequest). */
+        private Outcome send(WebConfig.SessionFilter filter, String method, String path, String cookie,
+                             String... headers) throws Exception {
+            MockHttpServletRequest request = new MockHttpServletRequest(method, path);
+            request.setServletPath(path);
+            for (int i = 0; i < headers.length; i += 2) {
+                if ("Host".equals(headers[i])) {
+                    request.setServerName(headers[i + 1]);
+                } else {
+                    request.addHeader(headers[i], headers[i + 1]);
+                }
+            }
+            if (cookie != null) {
+                request.setCookies(new Cookie(AuthService.COOKIE_NAME, cookie));
+            }
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            CurrentUser[] seen = {null};
+            boolean[] reached = {false};
+            filter.doFilter(request, response, (req, res) -> {
+                reached[0] = true;
+                seen[0] = CurrentUser.of((jakarta.servlet.http.HttpServletRequest) req);
+            });
+            return new Outcome(response.getStatus(), response.getContentAsString(StandardCharsets.UTF_8), reached[0],
+                    seen[0]);
+        }
+
+        @Test
+        @DisplayName("쿠키 없는 이 맥 GET은 첫 운영자로 컨트롤러까지 간다 — 회원·운영자 경로 모두, 세션 없음")
+        void cookieLessLocalGetIsOwner() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            for (String host : new String[]{"localhost", "127.0.0.1", "[::1]"}) {
+                for (String path : new String[]{"/api/macro/overview", "/api/admin/users", "/api/status"}) {
+                    Outcome outcome = send(on, "GET", path, null, "Host", host);
+                    assertThat(outcome.reached()).as(host + " " + path).isTrue();
+                    assertThat(outcome.user().id()).isEqualTo(OWNER_ID);
+                    assertThat(outcome.user().role()).isEqualTo("OWNER");
+                    assertThat(outcome.user().sessionId()).isNull();
+                    assertThat(outcome.user().demo()).isFalse();
+                    assertThat(outcome.user().isLocalOwner()).isTrue();
+                }
+            }
+            Outcome typed = send(on, "GET", "/api/macro/overview", null, "Sec-Fetch-Site", "none");
+            assertThat(typed.reached()).as("주소창에 직접 친 요청").isTrue();
+            Outcome sameSite = send(on, "GET", "/api/macro/overview", null, "Sec-Fetch-Site", "same-site",
+                    "Origin", "http://localhost:3000");
+            assertThat(sameSite.reached()).as("화면(:3000)이 부른 GET").isTrue();
+        }
+
+        @Test
+        @DisplayName("쓰기는 이 맥의 화면 Origin이 있을 때만 — localhost·127.0.0.1·[::1]의 화면 포트")
+        void writesNeedLocalOrigin() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            for (String origin : new String[]{"http://localhost:3000", "http://127.0.0.1:3000", "http://[::1]:3000"}) {
+                Outcome outcome = send(on, "POST", "/api/alerts/rules", null, "Origin", origin);
+                assertThat(outcome.reached()).as(origin).isTrue();
+                assertThat(outcome.user().id()).isEqualTo(OWNER_ID);
+            }
+        }
+
+        @Test
+        @DisplayName("Origin 없는 쓰기는 403 bad_origin — 쿠키가 없어 SameSite가 막아 주지 않는다(스크립트·다른 사이트의 폼)")
+        void originLessWriteIsRejected() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            for (String method : new String[]{"POST", "PUT", "PATCH", "DELETE"}) {
+                Outcome outcome = send(on, method, "/api/alerts/rules/1", null);
+                assertThat(outcome.status()).as(method).isEqualTo(403);
+                assertThat(outcome.body()).contains("bad_origin");
+                assertThat(outcome.reached()).isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("다른 출처의 Origin은 메서드와 상관없이 403 — LAN 주소의 화면도(무로그인은 이 맥 전용)")
+        void foreignOriginIsRejectedForAnyMethod() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            for (String origin : new String[]{"https://evil.example", "http://192.168.0.10:3000", "http://localhost:4000",
+                    "null"}) {
+                for (String method : new String[]{"GET", "HEAD", "POST", "DELETE"}) {
+                    Outcome outcome = send(on, method, "/api/macro/overview", null, "Origin", origin);
+                    assertThat(outcome.status()).as(method + " " + origin).isEqualTo(403);
+                    assertThat(outcome.body()).contains("bad_origin");
+                    assertThat(outcome.reached()).isFalse();
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("Origin 없이 Sec-Fetch-Site: cross-site인 GET은 403 — 다른 사이트의 링크·이미지가 운영자로 부르지 못하게")
+        void crossSiteGetWithoutOriginIsRejected() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            Outcome outcome = send(on, "GET", "/api/status", null, "Sec-Fetch-Site", "cross-site");
+            assertThat(outcome.status()).isEqualTo(403);
+            assertThat(outcome.body()).contains("bad_origin");
+            assertThat(outcome.reached()).isFalse();
+        }
+
+        @Test
+        @DisplayName("이 맥이 아닌 Host(LAN IP·다른 이름)는 평소처럼 401")
+        void nonLocalHostIsUnauthorized() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            for (String host : new String[]{"192.168.0.10", "evil.example", "localhost.evil.example"}) {
+                Outcome outcome = send(on, "GET", "/api/macro/overview", null, "Host", host);
+                assertThat(outcome.status()).as(host).isEqualTo(401);
+                assertThat(outcome.reached()).isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("앞단 프록시 헤더(X-Forwarded-For·Forwarded·X-Forwarded-Host)가 있으면 이 맥 요청이 아니다 — 401")
+        void forwardedRequestIsUnauthorized() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            for (String header : new String[]{"X-Forwarded-For", "Forwarded", "X-Forwarded-Host"}) {
+                Outcome outcome = send(on, "GET", "/api/macro/overview", null, header, "127.0.0.1");
+                assertThat(outcome.status()).as(header).isEqualTo(401);
+                assertThat(outcome.reached()).isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("로그인 쿠키로 온 요청은 지금 규칙 그대로 — Origin 없는 쓰기·cross-site 읽기도 통과(SameSite가 지킴)")
+        void cookieSessionsKeepTodaysRules() throws Exception {
+            WebConfig.SessionFilter on = filter(true);
+            Outcome write = send(on, "POST", "/api/alerts/rules", "member-cookie");
+            assertThat(write.reached()).isTrue();
+            assertThat(write.user().id()).isEqualTo(2);
+            assertThat(write.user().sessionId()).isEqualTo(MEMBER_SESSION);
+            assertThat(send(on, "GET", "/api/macro/overview", "member-cookie", "Sec-Fetch-Site", "cross-site").reached())
+                    .isTrue();
+            assertThat(send(on, "GET", "/api/admin/users", "member-cookie").status())
+                    .as("쿠키가 회원이면 이 맥에서도 회원 — 운영자 경로 403").isEqualTo(403);
+        }
+
+        @Test
+        @DisplayName("꺼져 있으면(기본) 이 맥에서 쿠키 없이 와도 401 — 로그인 모드 그대로")
+        void offRequiresLogin() throws Exception {
+            WebConfig.SessionFilter off = filter(false);
+            assertThat(send(off, "GET", "/api/macro/overview", null).status()).isEqualTo(401);
+            assertThat(send(off, "POST", "/api/alerts/rules", null, "Origin", "http://localhost:3000").status())
+                    .isEqualTo(401);
+        }
+    }
+
     private static byte[] sha256(String value) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));

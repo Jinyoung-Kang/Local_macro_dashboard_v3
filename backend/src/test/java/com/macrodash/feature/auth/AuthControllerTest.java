@@ -1,6 +1,7 @@
 package com.macrodash.feature.auth;
 
 import com.macrodash.config.AppProperties;
+import com.macrodash.store.UserStore;
 import com.macrodash.support.CurrentUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -266,6 +267,84 @@ class AuthControllerTest {
         assertThat(ownerUser.get("demo")).as("세션이 이김").isEqualTo(false);
         assertThat(ownerUser.get("role")).isEqualTo("OWNER");
         assertThat(ownerUser.get("email")).isEqualTo(db.email("owner"));
+    }
+
+    private AuthController controller(AuthService auth, AppProperties props) {
+        return new AuthController(auth, accounts, new LoginThrottle(java.time.Clock.systemUTC(), millis -> { }), props);
+    }
+
+    private static AppProperties localNoLogin() {
+        AppProperties props = new AppProperties();
+        props.setLocalNoLogin(true);
+        return props;
+    }
+
+    @Test
+    @DisplayName("로그인 모드(기본): noLogin·ownerMissing은 false로 늘 있고, 로그인한 사용자의 user.local은 false")
+    void sessionReportsLoginMode() {
+        assertThat(controller.session(new MockHttpServletRequest()))
+                .containsEntry("authenticated", false).containsEntry("noLogin", false).containsEntry("ownerMissing", false);
+
+        ResponseEntity<Map<String, Object>> login = login(db.email("owner"), "right-password-1", "10.0.0.12");
+        assertThat(((Map<?, ?>) login.getBody().get("user")).get("local")).as("로그인 응답의 사용자").isEqualTo(false);
+        MockHttpServletRequest signedIn = new MockHttpServletRequest();
+        signedIn.setCookies(new jakarta.servlet.http.Cookie(AuthService.COOKIE_NAME, token(login)));
+        Map<String, Object> session = controller.session(signedIn);
+        assertThat(session).containsEntry("noLogin", false).containsEntry("ownerMissing", false);
+        assertThat(((Map<?, ?>) session.get("user")).get("local")).isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("로컬 무로그인(ADR 0016): 이 맥 요청은 쿠키 없이 첫 운영자(user.local), 쿠키가 있으면 그 계정, 이 맥이 아니면 로그인 필요")
+    void sessionReportsLocalNoLogin() {
+        AppProperties props = localNoLogin();
+        props.setReadMode("store_only");
+        AuthController on = controller(db.service(props), props);
+        UserStore.User first = db.users.firstOwner().orElseThrow();   // 이 테스트가 만든 운영자보다 먼저인 운영자일 수 있음
+
+        Map<String, Object> session = on.session(new MockHttpServletRequest());   // Host: localhost
+        assertThat(session).containsEntry("authenticated", true).containsEntry("noLogin", true)
+                .containsEntry("ownerMissing", false).containsEntry("readMode", "store_only");
+        Map<?, ?> user = (Map<?, ?>) session.get("user");
+        assertThat(user.get("local")).isEqualTo(true);
+        assertThat(user.get("demo")).isEqualTo(false);
+        assertThat(user.get("role")).isEqualTo("OWNER");
+        assertThat(user.get("email")).isEqualTo(first.email());
+
+        MockHttpServletRequest signedIn = new MockHttpServletRequest();
+        signedIn.setCookies(new jakarta.servlet.http.Cookie(AuthService.COOKIE_NAME,
+                token(login(db.email("owner"), "right-password-1", "10.0.0.13"))));
+        Map<?, ?> cookieUser = (Map<?, ?>) on.session(signedIn).get("user");
+        assertThat(cookieUser.get("local")).as("쿠키 세션이 먼저").isEqualTo(false);
+        assertThat(cookieUser.get("email")).isEqualTo(db.email("owner"));
+
+        MockHttpServletRequest lan = new MockHttpServletRequest();
+        lan.setServerName("192.168.0.10");
+        MockHttpServletRequest forwarded = new MockHttpServletRequest();
+        forwarded.addHeader("X-Forwarded-For", "203.0.113.5");
+        for (MockHttpServletRequest away : List.of(lan, forwarded)) {
+            assertThat(on.session(away)).containsEntry("authenticated", false).containsEntry("noLogin", true)
+                    .containsEntry("ownerMissing", false).doesNotContainKey("user");
+        }
+    }
+
+    @Test
+    @DisplayName("로컬 무로그인인데 운영자 계정이 없으면 이 맥 요청에만 ownerMissing — 화면은 로그인 대신 계정 설정 안내")
+    void sessionReportsMissingOwner() {
+        UserStore users = org.mockito.Mockito.mock(UserStore.class);
+        org.mockito.Mockito.when(users.ready()).thenReturn(true);
+        org.mockito.Mockito.when(users.count()).thenReturn(0L);
+        org.mockito.Mockito.when(users.firstOwner()).thenReturn(java.util.Optional.empty());
+        AppProperties props = localNoLogin();
+        AuthController on = controller(new AuthService(props, users,
+                org.mockito.Mockito.mock(com.macrodash.store.SessionStore.class),
+                org.mockito.Mockito.mock(com.macrodash.store.AuditLogStore.class), db.hasher), props);
+
+        assertThat(on.session(new MockHttpServletRequest())).containsEntry("authenticated", false)
+                .containsEntry("noLogin", true).containsEntry("ownerMissing", true).doesNotContainKey("user");
+        MockHttpServletRequest lan = new MockHttpServletRequest();
+        lan.setServerName("192.168.0.10");
+        assertThat(on.session(lan)).as("이 맥이 아니면 그냥 로그인 필요").containsEntry("ownerMissing", false);
     }
 
     @Test

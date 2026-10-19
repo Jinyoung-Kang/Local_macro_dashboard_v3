@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
  *   <li>쿠키에는 32바이트 무작위 토큰, DB에는 그 SHA-256만 둡니다. DB가 새어도 쿠키를 만들 수 없습니다.</li>
  *   <li>처음 기동할 때 계정이 없으면 {@code OWNER_EMAIL}·{@code APP_PASSWORD}로 운영자 계정을 만듭니다 —
  *       지금까지의 사용 흐름이 이어집니다. 둘 중 하나라도 없으면 만들지 않고 무엇을 넣을지 로그로 알립니다.</li>
+ *   <li>로컬 무로그인 모드(ADR 0016)가 켜져 있으면 이 맥에서 온 쿠키 없는 요청을 첫 운영자로 엽니다({@link #resolve}).</li>
  * </ul>
  */
 @Service
@@ -74,6 +75,8 @@ public class AuthService {
     private final DemoViewer demo;
     /** 로그인 실패 중 감사 기록에 남길 표본(QA-125). 메모리에만 있습니다. */
     private final LoginFailureAudit loginAudit;
+    /** 로컬 무로그인 모드(ADR 0016). 켜져도 되는 설정인지는 {@link LocalNoLogin}이 기동 때 확인합니다. */
+    private final boolean localNoLogin;
 
     @Autowired
     public AuthService(AppProperties properties, UserStore users, SessionStore sessions, AuditLogStore audit,
@@ -91,6 +94,7 @@ public class AuthService {
         this.hasher = hasher;
         this.loginAudit = new LoginFailureAudit(clock);
         this.demo = DemoViewer.from(properties.getDemoViewerToken());
+        this.localNoLogin = properties.isLocalNoLogin();
         if (demo.enabled()) {
             log.info("데모 열람이 켜져 있습니다(DASHBOARD_DEMO_VIEWER_TOKEN) — 앞단 프록시가 붙인 {} 헤더의 요청은 "
                     + "로그인 없이 읽기 전용으로 엽니다(ADR 0013).", DemoViewer.HEADER);
@@ -349,16 +353,49 @@ public class AuthService {
     }
 
     /**
-     * 요청의 사용자 — 세션 쿠키가 먼저입니다. 유효한 세션이 없고 데모 열람 헤더가 맞을 때만 데모 열람 사용자(ADR 0013).
+     * 요청의 사용자 — 세션 쿠키가 먼저, 다음이 데모 열람 헤더(ADR 0013), 마지막이 로컬 무로그인 운영자(ADR 0016)입니다.
      *
-     * @param demoHeader {@link DemoViewer#HEADER} 값(없으면 null). 기능이 꺼져 있으면 보지 않습니다.
+     * @param demoHeader   {@link DemoViewer#HEADER} 값(없으면 null). 기능이 꺼져 있으면 보지 않습니다.
+     * @param localRequest 이 맥에서 앞단 없이 바로 온 요청인가({@link LocalNoLogin#isLocalRequest}). 로컬 무로그인이
+     *                     꺼져 있으면 보지 않습니다.
      */
-    public Optional<CurrentUser> resolve(String token, String demoHeader) {
+    public Optional<CurrentUser> resolve(String token, String demoHeader, boolean localRequest) {
         Optional<CurrentUser> session = authenticate(token);
-        if (session.isPresent() || !demo.matches(demoHeader)) {
+        if (session.isPresent()) {
             return session;
         }
-        return Optional.of(DemoViewer.user());
+        if (demo.matches(demoHeader)) {
+            return Optional.of(DemoViewer.user());
+        }
+        if (localNoLogin && localRequest) {
+            return localOwner();
+        }
+        return Optional.empty();
+    }
+
+    /** 로컬 무로그인 모드가 켜져 있는가(ADR 0016). */
+    public boolean localNoLogin() {
+        return localNoLogin;
+    }
+
+    /**
+     * 로컬 무로그인 운영자 — 첫 운영자 계정에 세션 없이({@code sessionId} null) 엽니다. 요청마다 읽으므로 역할·등급
+     * 변경이 다음 요청에 바로 반영됩니다. 세션·감사 기록은 만들지 않습니다(요청마다 행이 쌓이지 않게).
+     *
+     * <p>운영자가 없으면 기동 때와 같은 확인({@link #retryOwner})을 한 번 하고 다시 봅니다 — 백엔드가 스키마 적용보다
+     * 먼저 떠 아직 계정을 못 만든 경우. 그래도 없으면 비어 있음(평소처럼 401, 화면은 계정 설정 안내).
+     */
+    private Optional<CurrentUser> localOwner() {
+        Optional<UserStore.User> owner = firstOwner();
+        if (owner.isEmpty()) {
+            retryOwner();
+            owner = firstOwner();
+        }
+        return owner.map(user -> new CurrentUser(user.id(), user.email(), user.role(), user.tier(), null, false));
+    }
+
+    private Optional<UserStore.User> firstOwner() {
+        return users.ready() ? users.firstOwner() : Optional.empty();
     }
 
     /** 이 헤더 값이 데모 열람 토큰인가(기능이 꺼져 있으면 늘 false). 세션은 보지 않습니다. */
