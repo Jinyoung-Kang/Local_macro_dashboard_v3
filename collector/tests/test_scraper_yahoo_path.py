@@ -152,10 +152,16 @@ def test_야간선물_항목이_존재한다():
     assert config["fallback"] == "kodex_proxy"
 
 
+def _quote(price, previous, change, change_pct, delay=0):
+    """fetch_symbol_snapshot의 반환 모양(QA-137부터 사전 — 시세 지연을 함께 줍니다)."""
+    return {"price": price, "previous": previous, "change": change, "changePct": change_pct,
+            "delayMinutes": delay}
+
+
 def test_스캐너가_되면_프록시를_쓰지_않는다(monkeypatch):
     monkeypatch.setattr(
         scraper, "fetch_symbol_snapshot",
-        lambda symbol: (412.5, 410.0, 2.5, 0.61),
+        lambda symbol: _quote(412.5, 410.0, 2.5, 0.61),
     )
     monkeypatch.setattr(
         market, "last_two_closes",
@@ -290,7 +296,7 @@ def test_성공하면_사유가_남지_않는다(monkeypatch):
 def _stub_all_markets(monkeypatch, price=4.5):
     monkeypatch.setattr(
         scraper, "fetch_symbol_snapshot",
-        lambda symbol: (price, price - 0.1, 0.1, 2.2),
+        lambda symbol: _quote(price, price - 0.1, 0.1, 2.2),
     )
     monkeypatch.setattr(
         scraper, "fetch_yahoo_chart", lambda symbol: (price, price - 0.1)
@@ -317,7 +323,7 @@ def test_국채가_비면_bonds_scanner로_보강한다(monkeypatch):
     def only_non_treasury(symbol):
         if symbol.startswith("TVC:US"):
             raise RuntimeError("국채 심볼 실패")
-        return (100.0, 99.0, 1.0, 1.0)
+        return _quote(100.0, 99.0, 1.0, 1.0)
 
     monkeypatch.setattr(scraper, "fetch_symbol_snapshot", only_non_treasury)
     monkeypatch.setattr(scraper, "fetch_yahoo_chart", lambda s: (100.0, 99.0))

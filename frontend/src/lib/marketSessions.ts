@@ -264,7 +264,7 @@ function scheduleState(
   return before && after ? "break" : "closed";
 }
 
-/** 개장 중인데 체결이 이만큼 멈춰 있으면 휴장으로 추정합니다 (15분 지연 + 수집 5분 + 여유). */
+/** 개장 중인데 체결이 이만큼 멈춰 있으면 휴장으로 추정합니다 (Yahoo 최대 20분 지연 + 수집 5분 + 여유). */
 export const IDLE_MINUTES = 60;
 
 const LABELS: Record<SessionState, string> = {

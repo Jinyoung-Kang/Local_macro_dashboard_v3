@@ -106,6 +106,8 @@ def task_macro_collected() -> str:
         if isinstance(previous_rates.get(key), dict):
             payload.setdefault("rates", {})[key] = {**previous_rates[key], "isStale": True}
 
+    # 부제는 보정·주입·이어받기가 끝난 카드의 배지로 요약합니다(QA-137).
+    macro_cards.summarize_notes(payload)
     payload["updatedAt"] = market_service.now_kst_text()
     store.put_snapshot(catalog.SNAP_MACRO_COLLECTED, payload)
     return f"{usable}/{len(items)} 지표 수집" + (f" (이전 값 유지 {len(carried)})" if carried else "")

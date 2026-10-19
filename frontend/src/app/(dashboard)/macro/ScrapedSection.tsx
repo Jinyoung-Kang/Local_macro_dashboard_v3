@@ -10,6 +10,7 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/hooks/useApi";
 import {
+  delayLabel,
   deltaColor,
   EMPTY,
   formatKst,
@@ -32,6 +33,8 @@ export function ScrapedSection() {
       previousClose: number | null;
       changePct: number | null;
       error: string | null;
+      /** 시세 지연(분). 0이면 실시간, 없으면 모름 — 선물은 15~20분 늦습니다 (QA-137) */
+      delayMinutes?: number | null;
       /** 이번 수집이 실패해 직전 저장본의 값을 그대로 보여 주는 행 (QA-001) */
       isStale?: boolean;
       staleReason?: string | null;
@@ -59,7 +62,19 @@ export function ScrapedSection() {
           rowKey={(row) => row.key}
           columns={[
             { key: "name", header: "항목", render: (row) => row.name },
-            { key: "provider", header: "출처", render: (row) => <SourceBadge>{row.provider}</SourceBadge> },
+            {
+              key: "provider",
+              header: "출처",
+              // 머리의 수집 시각만 보면 모든 행이 그 시각 값으로 읽힙니다. 늦게 오는 시세는 행마다 지연을 적습니다(QA-137).
+              render: (row) => (
+                <span className="flex flex-wrap items-center gap-1">
+                  <SourceBadge>{row.provider}</SourceBadge>
+                  {row.status === "ok" && delayLabel(row.delayMinutes) && (
+                    <span className="text-[11px] text-muted">{delayLabel(row.delayMinutes)}</span>
+                  )}
+                </span>
+              ),
+            },
             {
               key: "price",
               header: "현재가",

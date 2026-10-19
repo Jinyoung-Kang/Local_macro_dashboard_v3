@@ -39,6 +39,8 @@ TRADINGVIEW_US_TREASURY_SYMBOLS = {
 TREASURY_KEYS = ("us03m", "us02y", "us10y", "us30y")
 
 # kind: tradingview_symbol(=Symbol Scanner JSON) | yahoo_chart(=chart JSON)
+# delay: yahoo_chart 항목의 시세 지연(분) — Yahoo가 밝힌 값(exchangeDataDelayedBy, 2026-10-19 확인).
+#        TradingView 항목은 응답의 update_mode로 그때그때 받습니다(QA-137).
 SCRAPER_MARKETS = [
     {"key": "us03m", "name": "미국채 3개월물", "kind": "tradingview_symbol",
      "symbol": "TVC:US03MY", "provider": "TradingView Scanner", "unit": "%",
@@ -53,10 +55,10 @@ SCRAPER_MARKETS = [
      "symbol": "TVC:US30Y", "provider": "TradingView Scanner", "unit": "%",
      "url": "https://www.tradingview.com/symbols/TVC-US30Y/"},
     {"key": "wti", "name": "WTI 원유", "kind": "yahoo_chart",
-     "symbol": "CL=F", "provider": "Yahoo Finance", "unit": "USD/bbl",
+     "symbol": "CL=F", "provider": "Yahoo Finance", "delay": 10, "unit": "USD/bbl",
      "url": "https://finance.yahoo.com/quote/CL=F/"},
     {"key": "brent", "name": "브렌트유", "kind": "yahoo_chart",
-     "symbol": "BZ=F", "provider": "Yahoo Finance", "unit": "USD/bbl",
+     "symbol": "BZ=F", "provider": "Yahoo Finance", "delay": 10, "unit": "USD/bbl",
      "url": "https://finance.yahoo.com/quote/BZ=F/"},
     {"key": "gold_spot", "name": "금 현물", "kind": "tradingview_symbol",
      "symbol": "OANDA:XAUUSD", "provider": "TradingView Scanner", "unit": "USD/oz",
@@ -68,7 +70,7 @@ SCRAPER_MARKETS = [
      "symbol": "TVC:NI225", "provider": "TradingView Scanner", "unit": "pt",
      "url": "https://www.tradingview.com/symbols/TVC-NI225/"},
     {"key": "shanghai", "name": "상해종합", "kind": "yahoo_chart",
-     "symbol": "000001.SS", "provider": "Yahoo Finance", "unit": "pt",
+     "symbol": "000001.SS", "provider": "Yahoo Finance", "delay": 15, "unit": "pt",
      "url": "https://finance.yahoo.com/quote/000001.SS/"},
     # 코스피200 야간선물(KRX 야간 파생시장 18:00~06:00). 구버전은 TradingView HTML을 정규식으로 긁고
     # Investing.com으로 폴백했는데, 둘 다 페이지 구조가 바뀌면 조용히 깨집니다.
@@ -168,10 +170,14 @@ def collect_scraped_markets() -> dict:
 def _collect_one(config: dict) -> dict:
     reason: str | None = None
     price = previous = change = change_pct = None
+    delay = config.get("delay")
 
     try:
         if config["kind"] == "tradingview_symbol":
-            price, previous, change, change_pct = fetch_symbol_snapshot(config["symbol"])
+            quote = fetch_symbol_snapshot(config["symbol"])
+            price, previous = quote["price"], quote["previous"]
+            change, change_pct = quote["change"], quote["changePct"]
+            delay = quote["delayMinutes"]
         else:
             price, previous = fetch_yahoo_chart(config["symbol"])
             change = (price - previous) if (price is not None and previous) else None
@@ -209,6 +215,8 @@ def _collect_one(config: dict) -> dict:
         "previousClose": previous,
         "change": change,
         "changePct": change_pct,
+        # 시세 지연(분). 0이면 실시간, 모르면 None — 카드 배지가 이 값으로 적힙니다(QA-137).
+        "delayMinutes": delay,
         "error": None,
     }
 
@@ -269,19 +277,21 @@ def _fail(config: dict, error: str) -> dict:
 # ==============================================================================
 # 개별 출처
 # ==============================================================================
-def fetch_symbol_snapshot(
-    symbol: str,
-) -> tuple[float | None, float | None, float | None, float | None]:
+def fetch_symbol_snapshot(symbol: str) -> dict:
     """
-    TradingView Symbol Scanner에서 현재가·등락을 JSON으로 읽습니다.
+    TradingView Symbol Scanner에서 현재가·등락·시세 지연을 JSON으로 읽습니다.
 
-    반환: (현재가, 전일 종가, 변화량, 변화율%)
+    반환: {"price", "previous", "change", "changePct", "delayMinutes"} — 모르는 값은 None
     전일 종가는 change_abs(절대 변화)에서 역산합니다. change_abs가 없으면
     change(%)로 역산하고, 둘 다 없으면 None으로 둡니다 — 0으로 메우지 않습니다.
+
+    지연은 update_mode에서 읽습니다: "streaming"은 실시간, "delayed_streaming_1200"은 1200초(20분) 지연.
+    로그인하지 않은 공개 응답이라 거래소 라이선스에 따라 종목마다 다릅니다(2026-10-19: 코스피200 야간선물 20분,
+    닛케이·항셍 선물 15분, 지수·환율·미국채 실시간).
     """
     params = {
         "symbol": symbol,
-        "fields": "close,change,change_abs",
+        "fields": "close,change,change_abs,update_mode",
         "no_404": "true",
         "label-product": "symbols-performance",
     }
@@ -294,10 +304,12 @@ def fetch_symbol_snapshot(
     price = to_float(payload.get("close"))
     change_pct = to_float(payload.get("change"))
     change = to_float(payload.get("change_abs"))
+    quote = {"price": price, "previous": None, "change": None, "changePct": None,
+             "delayMinutes": delay_minutes(payload.get("update_mode"))}
 
     if price is None:
         logger.warning("Symbol Scanner 현재가 파싱 실패: symbol=%s", symbol)
-        return None, None, None, None
+        return quote
 
     previous = None
     if change is not None:
@@ -306,7 +318,17 @@ def fetch_symbol_snapshot(
         previous = price / (1 + change_pct / 100.0)
         change = price - previous
 
-    return price, previous, change, change_pct
+    return {**quote, "previous": previous, "change": change, "changePct": change_pct}
+
+
+def delay_minutes(update_mode: object) -> int | None:
+    """TradingView update_mode → 지연(분). "streaming"은 0, "delayed_streaming_900"은 15, 그 밖은 모름(None)."""
+    if update_mode == "streaming":
+        return 0
+    if isinstance(update_mode, str) and update_mode.startswith("delayed_streaming_"):
+        seconds = to_float(update_mode.removeprefix("delayed_streaming_"))
+        return round(seconds / 60) if seconds is not None and seconds >= 0 else None
+    return None
 
 
 def fetch_yahoo_chart(symbol: str) -> tuple[float | None, float | None]:

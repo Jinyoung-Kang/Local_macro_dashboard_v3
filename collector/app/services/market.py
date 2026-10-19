@@ -283,12 +283,14 @@ def collect_macro_cards(categories: list[dict]) -> dict:
     반환 계약(JSON):
     {
       "categories": [
-        {"id","title","note","items":[{key,name,note,ticker,status,price,delta,pct,
-                                       priceStr,deltaStr,prevStr,lastTs,prevSource?}]}
+        {"id","title","items":[{key,name,note,ticker,status,price,delta,pct,
+                                priceStr,deltaStr,prevStr,lastTs,prevSource?}]}
       ],
       "rates": {"us02y": {...}, "us10y": {...}, "us30y": {...}}  # 스프레드 계산용
     }
     status: ok(전일 대비 있음) | single(현재가만) | fail(수집 실패)
+    note: 이 카드 출처의 지연 배지(indicators.delay_label). 카테고리 부제(note)는 보정·주입이 끝난 뒤
+          macro_cards.summarize_notes가 종목 배지를 요약해 붙입니다.
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -323,7 +325,6 @@ def collect_macro_cards(categories: list[dict]) -> dict:
         out_categories.append({
             "id": category["id"],
             "title": category["title"],
-            "note": category.get("note"),
             "items": items,
         })
 
@@ -349,7 +350,8 @@ def _build_card(spec: dict, payload: dict | None) -> dict:
     base = {
         "key": spec["key"],
         "name": spec["name"],
-        "note": spec.get("note"),
+        # Yahoo가 밝힌 이 티커의 지연. 다른 출처로 바꾸는 보정 단계는 배지도 그 출처의 지연으로 바꿉니다(QA-137).
+        "note": indicators.delay_label(spec.get("delay")),
         "market": spec.get("market"),
         "ticker": spec["ticker"],
         # 모든 카드에 출처를 붙입니다. 미국채처럼 다른 출처로 덮어쓰는 카드는

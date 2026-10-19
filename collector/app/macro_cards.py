@@ -7,6 +7,7 @@ app/macro_cards.py
   전일 종가가 없으면 FRED 공식 확정치로 보완합니다.
 - inject_scraped_indices: yfinance가 비운 아시아 선물 카드를 스크래핑한 지수 값으로
   채웁니다(이름에 대체 사실을 적습니다).
+- summarize_notes: 카테고리 부제(데이터 지연)를 종목 배지로 요약합니다(QA-137).
 
 [왜 수집 시점인가] 화면만 따로 고치면 AI 텍스트·스프레드 계산은 고치기 전 값을
 씁니다. 저장 직전에 한 번 고쳐 두면 모든 소비자가 같은 값을 봅니다.
@@ -87,6 +88,8 @@ def apply_bond_override(payload: dict) -> dict:
                 "source": source.get("provider", "TradingView Scanner"),
                 # Scanner 응답에는 체결 시각이 없으므로 "수집 시각"임을 밝힙니다. 이어받은 값이면 그 값을 받은 시각입니다.
                 "lastTs": f"{source.get('collectedAt') or now_text} (TradingView 수집 시각)",
+                # 배지는 실제로 쓴 출처(TradingView)의 지연입니다. 보정이 안 된 카드는 Yahoo 지연 배지 그대로입니다(QA-137).
+                "note": _with_delay(source, "TradingView 참고"),
                 **_stale_fields(source),
             })
 
@@ -248,7 +251,8 @@ def inject_scraped_indices(payload: dict) -> dict:
         card = {
             "key": card_key,
             "name": label,
-            "note": note or source.get("note") or "참고 시세",
+            # 선물은 TradingView 공개 시세가 15~20분 늦습니다. '수집 시각' 옆에 지연을 적지 않으면 그 시각의 값으로 읽힙니다(QA-137).
+            "note": note or source.get("note") or _with_delay(source, "참고 시세"),
             "market": market,
             "status": "ok",
             "price": price,
@@ -277,6 +281,33 @@ def inject_scraped_indices(payload: dict) -> dict:
         target["items"].append(card)
 
     return payload
+
+
+def summarize_notes(payload: dict) -> dict:
+    """
+    카테고리 부제(화면의 "데이터 지연: …")를 종목 배지로 요약합니다(QA-137).
+
+    종목 배지가 모두 같으면 그 배지, 다르면 "종목마다 다름"입니다. 예전에는 카테고리마다 문구를 손으로 적어,
+    지연 없는 S&P 500 지수와 10분 늦은 ES 선물이 함께 있는 카테고리가 '15분 지연'이었습니다.
+    수집 실패·이전 값(isStale) 카드는 지금 받은 값의 지연이 아니므로 요약에서 뺍니다.
+    """
+    for category in payload.get("categories") or []:
+        notes = {
+            item.get("note")
+            for item in category.get("items") or []
+            if item.get("status") in ("ok", "single") and not item.get("isStale")
+        }
+        if len(notes) > 1:
+            category["note"] = indicators.MIXED_DELAY_NOTE
+        else:
+            category["note"] = notes.pop() if notes else None
+    return payload
+
+
+def _with_delay(source: dict, nature: str) -> str:
+    """'실시간 · TradingView 참고'처럼 출처가 알려 준 지연을 앞에 붙입니다. 지연을 모르면 성격만 적습니다."""
+    label = indicators.delay_label(source.get("delayMinutes"))
+    return f"{label} · {nature}" if label else nature
 
 
 def _stale_fields(source: dict) -> dict:

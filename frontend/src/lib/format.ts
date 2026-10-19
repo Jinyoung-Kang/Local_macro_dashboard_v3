@@ -71,6 +71,16 @@ export function formatPercent(
 }
 
 /**
+ * 시세 지연(분) → 배지 문구. 0이면 "실시간", 모르면 null(표시하지 않음) — 수집기 indicators.delay_label과 같은 규칙(QA-137).
+ */
+export function delayLabel(minutes: number | null | undefined): string | null {
+  if (missing(minutes)) {
+    return null;
+  }
+  return minutes === 0 ? "실시간" : `${minutes}분 지연`;
+}
+
+/**
  * 등락 색상 클래스. 한국 시장 관행대로 상승은 빨강, 하락은 파랑입니다.
  *
  * @param value  등락 값

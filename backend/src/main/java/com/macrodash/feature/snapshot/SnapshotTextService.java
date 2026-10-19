@@ -147,7 +147,7 @@ public class SnapshotTextService {
         // FRED 확정치는 아래 "공식 일별 10Y-2Y" 줄과 "심화 매크로 지표" 구간에만 있습니다.
         sectionHeader(lines, "거시경제 매크로 지표",
                 "[실시간 참고] 환율·지수·원자재·미국채 금리는 Yahoo·TradingView 공개 시세 스크래핑"
-                        + "(미국채 금리는 TradingView 참고 시세) · [공식 확정치] FRED 값은 '공식 일별' 줄과 심화 지표 구간",
+                        + "(미국채 금리는 TradingView 참고 시세, 종목별 지연은 줄 끝 [ ]) · [공식 확정치] FRED 값은 '공식 일별' 줄과 심화 지표 구간",
                 overview.get("collectedAtKst"));
 
         if (!Boolean.TRUE.equals(overview.get("available"))) {
@@ -164,13 +164,14 @@ public class SnapshotTextService {
                     String status = Json.asText(item, "status");
                     String name = Json.asText(item, "name");
                     if ("ok".equals(status) || "single".equals(status)) {
-                        lines.add("- %s: %s | %s | 전일: %s%s%s".formatted(
+                        lines.add("- %s: %s | %s | 전일: %s%s%s%s".formatted(
                                 name,
                                 orNa(Json.asText(item, "priceStr")),
                                 orNa(Json.asText(item, "deltaStr")),
                                 orNa(Json.asText(item, "prevStr")),
                                 Json.asText(item, "prevSource") == null
                                         ? "" : " (" + Json.asText(item, "prevSource") + ")",
+                                delayBadge(item),
                                 staleNote(item)));
                     } else {
                         lines.add("- " + name + ": 데이터 수집 실패");
@@ -707,6 +708,19 @@ public class SnapshotTextService {
      * 수집 실패로 직전 값을 이어받은 카드(isStale)면 그 사실과 사유·시각을 붙입니다(QA-030). 붙이지 않으면 AI가 몇 시간
      * 지난 값을 지금 값으로 읽습니다.
      */
+    /**
+     * 카드의 지연 배지("실시간"·"10분 지연"). 머리말의 [실시간 참고]는 '공개 시세 스크래핑'이라는 성격이고, 값마다
+     * 실제 지연은 10~20분까지 다릅니다 — 줄마다 붙이지 않으면 늦은 값이 실시간으로 읽힙니다(QA-137).
+     * 이어받은 값은 staleNote가 사유와 시각을 적으므로 붙이지 않습니다.
+     */
+    private static String delayBadge(JsonNode item) {
+        String note = Json.asText(item, "note");
+        if (note == null || note.isBlank() || Json.asBoolean(item, "isStale")) {
+            return "";
+        }
+        return " [" + note + "]";
+    }
+
     private static String staleNote(JsonNode item) {
         if (!Json.asBoolean(item, "isStale")) {
             return "";

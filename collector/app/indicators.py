@@ -14,7 +14,7 @@ app/indicators.py
 또 국채 보정은 **표시 이름 문자열**을 키로 삼았습니다(BOND_SCRAPER_KEY_MAP).
 이름을 한 글자만 고쳐도 보정이 조용히 끊깁니다.
 
-여기서는 지표마다 변하지 않는 `key`를 두고, 표시 이름과 지연 표기(note)를
+여기서는 지표마다 변하지 않는 `key`를 두고, 표시 이름과 지연(delay)을
 필드로 분리합니다. 화면은 태그를 벗길 필요가 없고, 보정은 key로 연결됩니다.
 """
 from __future__ import annotations
@@ -22,7 +22,10 @@ from __future__ import annotations
 # ==============================================================================
 # 1. 거시경제 매크로 지표 카테고리
 # ==============================================================================
-# note: 화면이 배지로 표시하는 데이터 지연 수준. 값 자체의 성격이라 여기 둡니다.
+# delay: Yahoo가 밝힌 이 티커의 시세 지연(분, 응답의 exchangeDataDelayedBy — 2026-10-19 확인). 화면 배지 문구
+#        ("실시간"·"10분 지연")는 delay_label이 이 값으로 만듭니다. 예전에는 배지 문구를 손으로 적어 실제와
+#        달랐습니다(QA-137) — DXY(ICE 선물, 10분)를 '실시간', 코스피·닛케이(20분)와 S&P 500·나스닥 100 지수(지연
+#        없음)를 '15분 지연'으로 표기. 카테고리 부제는 수집할 때 종목 배지를 요약합니다(macro_cards.summarize_notes).
 # market: 이 값이 거래되는 시장(거래 시간표 id). 화면이 "개장/마감" 배지를 계산합니다
 #         (frontend/src/lib/marketSessions.ts — id와 거래 시간·출처가 거기 있습니다).
 #         개장 여부는 "보는 시각"에 따라 바뀌므로 수집 시점에 계산해 저장하지 않습니다.
@@ -30,61 +33,69 @@ MACRO_CATEGORIES = [
     {
         "id": "fx",
         "title": "💵 통화 및 환율",
-        "note": "실시간",
         "items": [
-            {"key": "dxy", "market": "fx", "name": "달러 인덱스 (DXY)", "ticker": "DX-Y.NYB", "note": "실시간",
+            {"key": "dxy", "market": "fx", "name": "달러 인덱스 (DXY)", "ticker": "DX-Y.NYB", "delay": 10,
              "unit": "pt"},
-            {"key": "usdkrw", "market": "fx", "name": "원/달러 (USD/KRW)", "ticker": "KRW=X", "note": "실시간",
+            {"key": "usdkrw", "market": "fx", "name": "원/달러 (USD/KRW)", "ticker": "KRW=X", "delay": 0,
              "unit": "원"},
-            {"key": "usdjpy", "market": "fx", "name": "달러/엔 (USD/JPY)", "ticker": "JPY=X", "note": "실시간",
+            {"key": "usdjpy", "market": "fx", "name": "달러/엔 (USD/JPY)", "ticker": "JPY=X", "delay": 0,
              "unit": "엔"},
             {"key": "jpykrw", "market": "fx", "name": "엔/원 100엔당 (JPY/KRW)", "ticker": "JPYKRW=X",
-             "note": "실시간", "unit": "원"},
+             "delay": 0, "unit": "원"},
         ],
     },
     {
+        # 카드는 보정 단계(macro_cards.apply_bond_override)가 TradingView 수익률로 바꿉니다. 아래 delay는 보정이
+        # 실패해 Yahoo 원본이 남을 때의 지연입니다(ZT=F는 선물 가격이라 그때 '수집 실패').
         "id": "ust",
         "title": "🏛️ 미국 국채 수익률",
-        "note": "TradingView 참고 시세",
         "items": [
-            {"key": "us02y", "market": "ust", "name": "미국채 2년물 수익률(%)", "ticker": "ZT=F", "note": "TradingView 참고"},
-            {"key": "us10y", "market": "ust", "name": "미국채 10년물 수익률(%)", "ticker": "^TNX", "note": "TradingView 참고"},
-            {"key": "us30y", "market": "ust", "name": "미국채 30년물 수익률(%)", "ticker": "^TYX", "note": "TradingView 참고"},
+            {"key": "us02y", "market": "ust", "name": "미국채 2년물 수익률(%)", "ticker": "ZT=F", "delay": 10},
+            {"key": "us10y", "market": "ust", "name": "미국채 10년물 수익률(%)", "ticker": "^TNX", "delay": 15},
+            {"key": "us30y", "market": "ust", "name": "미국채 30년물 수익률(%)", "ticker": "^TYX", "delay": 15},
         ],
     },
     {
         "id": "commodity",
         "title": "🛢️ 원자재",
-        "note": "15분 지연",
         "items": [
-            {"key": "wti", "market": "cme", "name": "WTI 원유 ($)", "ticker": "CL=F", "note": "15분 지연"},
-            {"key": "brent", "market": "ice_brent", "name": "브렌트유 ($)", "ticker": "BZ=F", "note": "15분 지연"},
-            {"key": "gold", "market": "cme", "name": "금 선물 ($)", "ticker": "GC=F", "note": "15분 지연"},
+            {"key": "wti", "market": "cme", "name": "WTI 원유 ($)", "ticker": "CL=F", "delay": 10},
+            {"key": "brent", "market": "ice_brent", "name": "브렌트유 ($)", "ticker": "BZ=F", "delay": 10},
+            {"key": "gold", "market": "cme", "name": "금 선물 ($)", "ticker": "GC=F", "delay": 10},
         ],
     },
     {
         "id": "us_equity",
         "title": "🇺🇸 미국 주가지수 및 선물",
-        "note": "15분 지연",
         "items": [
-            {"key": "sp500", "market": "nyse", "name": "S&P 500", "ticker": "^GSPC", "note": "15분 지연"},
-            {"key": "sp500_fut", "market": "cme", "name": "S&P 500 선물 (ES)", "ticker": "ES=F", "note": "15분 지연"},
-            {"key": "ndx", "market": "nyse", "name": "나스닥 100", "ticker": "^NDX", "note": "15분 지연"},
-            {"key": "ndx_fut", "market": "cme", "name": "나스닥 선물 (NQ)", "ticker": "NQ=F", "note": "15분 지연"},
+            {"key": "sp500", "market": "nyse", "name": "S&P 500", "ticker": "^GSPC", "delay": 0},
+            {"key": "sp500_fut", "market": "cme", "name": "S&P 500 선물 (ES)", "ticker": "ES=F", "delay": 10},
+            {"key": "ndx", "market": "nyse", "name": "나스닥 100", "ticker": "^NDX", "delay": 0},
+            {"key": "ndx_fut", "market": "cme", "name": "나스닥 선물 (NQ)", "ticker": "NQ=F", "delay": 10},
         ],
     },
     {
         "id": "asia_equity",
         "title": "🌏 아시아 주요 주가지수",
-        "note": "15분 지연",
         "items": [
-            {"key": "kospi", "market": "krx", "name": "코스피 (KOSPI)", "ticker": "^KS11", "note": "15분 지연"},
-            {"key": "nikkei", "market": "tse", "name": "닛케이 225 (Nikkei)", "ticker": "^N225", "note": "15분 지연"},
-            {"key": "shanghai", "market": "sse", "name": "상하이 종합 (SSE)", "ticker": "000001.SS", "note": "15분 지연"},
-            {"key": "hsi", "market": "hkex", "name": "항셍 지수 (HSI)", "ticker": "^HSI", "note": "15분 지연"},
+            {"key": "kospi", "market": "krx", "name": "코스피 (KOSPI)", "ticker": "^KS11", "delay": 20},
+            {"key": "nikkei", "market": "tse", "name": "닛케이 225 (Nikkei)", "ticker": "^N225", "delay": 20},
+            {"key": "shanghai", "market": "sse", "name": "상하이 종합 (SSE)", "ticker": "000001.SS", "delay": 15},
+            {"key": "hsi", "market": "hkex", "name": "항셍 지수 (HSI)", "ticker": "^HSI", "delay": 15},
         ],
     },
 ]
+
+# 한 카테고리 안에서 종목마다 지연이 다를 때의 부제. 하나로 뭉뚱그려 적으면 어느 카드에도 맞지 않는 말이 됩니다.
+MIXED_DELAY_NOTE = "종목마다 다름 — 카드 배지 참고"
+
+
+def delay_label(minutes: int | None) -> str | None:
+    """지연(분) → 화면 배지 문구. 모르면 None(배지 없음) — 모르는 지연을 '실시간'으로 적지 않습니다."""
+    if minutes is None:
+        return None
+    return "실시간" if minutes == 0 else f"{minutes}분 지연"
+
 
 # 야간선물/해외 지수선물 스크래핑 결과가 주입되는 카테고리
 SCRAPED_INJECT_CATEGORY = "asia_equity"

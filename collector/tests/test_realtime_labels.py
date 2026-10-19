@@ -86,7 +86,6 @@ def _tv(key: str, price: float, previous: float, **extra) -> dict:
 # ==============================================================================
 # QA-137 — 배지가 출처의 실제 지연과 같아야 한다
 # ==============================================================================
-@pytest.mark.xfail(strict=True, reason="QA-137 재현: 카탈로그에 손으로 적은 배지가 Yahoo가 밝힌 지연과 다름")
 def test_QA137_Yahoo_카드의_지연_배지는_Yahoo가_밝힌_지연과_같다():
     wrong = {}
     for category in indicators.MACRO_CATEGORIES:
@@ -98,7 +97,6 @@ def test_QA137_Yahoo_카드의_지연_배지는_Yahoo가_밝힌_지연과_같다
     assert wrong == {}
 
 
-@pytest.mark.xfail(strict=True, reason="QA-137 재현: 카테고리 부제('데이터 지연: …')가 종목 배지와 따로 놀아 고정 문구로 남음")
 def test_QA137_카테고리_부제는_종목_배지를_요약한다(fake_store, monkeypatch):
     """
     한 카테고리 안에서도 지연이 다릅니다(S&P 500 지수는 지연 없음, ES 선물은 10분). 부제를 고정 문구로 두면
@@ -125,7 +123,6 @@ def test_QA137_카테고리_부제는_종목_배지를_요약한다(fake_store, 
     }
 
 
-@pytest.mark.xfail(strict=True, reason="QA-137 재현: TradingView가 알려 주는 지연(update_mode)을 버림")
 def test_QA137_TradingView가_알려_준_지연_분을_남긴다(monkeypatch):
     # 2026-10-19 20:34 KST 응답 그대로 — 코스피200 야간선물은 20분 지연 시세입니다.
     monkeypatch.setattr(scraper, "get_session", lambda: _Session({
@@ -140,7 +137,6 @@ def test_QA137_TradingView가_알려_준_지연_분을_남긴다(monkeypatch):
     assert item["delayMinutes"] == 20
 
 
-@pytest.mark.xfail(strict=True, reason="QA-137 재현: 15~20분 늦은 선물 값에 '수집 시각'만 찍고 지연을 적지 않음")
 def test_QA137_선물_카드_배지에_지연을_적는다(fake_store):
     snapshots, _saved = fake_store
     snapshots[catalog.SNAP_SCRAPER_MARKETS] = _snapshot(catalog.SNAP_SCRAPER_MARKETS, _scraped(
@@ -159,7 +155,6 @@ def test_QA137_선물_카드_배지에_지연을_적는다(fake_store):
     }
 
 
-@pytest.mark.xfail(strict=True, reason="QA-137 재현: 국채 보정이 실패한 10년물(Yahoo ^TNX, 15분 지연)에도 'TradingView 참고' 배지")
 def test_QA137_국채_카드_배지는_실제로_쓴_출처의_지연을_적는다(monkeypatch):
     monkeypatch.setattr(market, "collect_ticker", _daily)
     monkeypatch.setattr(macro_cards.store, "read_snapshot", lambda name: None)

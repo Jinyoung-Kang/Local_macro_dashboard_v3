@@ -13,7 +13,8 @@ import type { RiskEntry, RiskIndicators } from "@/lib/types";
 
 const RISK_TABLE = [
   {
-    name: "CBOE VIX [15분 지연]",
+    // 값은 변동성 시계열(일봉, Yahoo ^VIX 15분 지연)의 마지막 봉이고, 그 시계열은 1시간마다 받습니다(QA-137).
+    name: "CBOE VIX [15분 지연 일봉 · 1시간마다 수집]",
     normal: "15 ~ 20 (15 미만: 과도한 낙관)",
     danger: "30 이상 (패닉 / 급락 / 투매)",
     note: "주식 시장의 단기 공포 측정기. 급등 시 주가 급락·투매 신호.",

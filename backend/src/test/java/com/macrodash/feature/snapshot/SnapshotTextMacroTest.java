@@ -8,7 +8,6 @@ import com.macrodash.feature.positioning.CotService;
 import com.macrodash.feature.positioning.KrFlowsService;
 import com.macrodash.feature.positioning.KrxService;
 import com.macrodash.feature.positioning.RadarService;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -134,7 +133,6 @@ class SnapshotTextMacroTest {
     }
 
     @Test
-    @Disabled("QA-137 재현: 매크로 줄에 카드의 지연 배지가 없어 '[실시간 참고]' 머리말 아래 10~20분 늦은 값이 실시간처럼 읽힘")
     @DisplayName("QA-137 매크로 카드 줄 끝에 카드의 지연 배지(실시간·N분 지연)를 붙인다")
     void macroLinesCarryTheDelayBadge() throws Exception {
         MacroService macro = mock(MacroService.class);
