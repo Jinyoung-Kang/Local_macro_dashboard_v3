@@ -253,8 +253,8 @@ def test_QA138_실시간_값을_못_받으면_Yahoo_카드와_그_지연_배지�
 @pytest.mark.parametrize("key, bar_time, session, trade_date", [
     # 일봉이 열린 시각(UTC) → 그 시장 시간대의 거래일. 2026-10-16 01:30 UTC = 홍콩 금요일 09:30 (10-19 월요일은 중양절 대체 휴장)
     ("hang_seng", 1792114200, "out_of_session", "2026-10-16"),
-    # 2026-10-18 21:00 UTC = 뉴욕 일요일 17:00에 연 월요일 세션
-    ("dxy", 1792357200, "market", "2026-10-19"),
+    # 2026-10-18 21:00 UTC = 뉴욕 일요일 17:00에 연 월요일 세션 — 저녁에 여는 세션은 거래일을 정하지 않습니다
+    ("dxy", 1792357200, "market", None),
     ("kospi", 1792368000, "out_of_session", "2026-10-19"),
 ])
 def test_QA138_TradingView_거래일과_장_상태를_남긴다(monkeypatch, key, bar_time, session, trade_date):
@@ -314,7 +314,6 @@ def test_QA138_카드에_쓰는_TradingView_항목은_모두_시간대가_있다
     assert missing == []
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 저녁에 여는 선물 세션(금 17:15 HKT)의 거래일을 토요일(10-17)로 계산")
 def test_QA138_저녁에_여는_세션은_달력_날짜로_거래일을_지어내지_않는다():
     # 2026-10-19 20:59 KST 실측 — HKEX:HSI1!의 마지막 일봉은 금요일 17:15 HKT(야간 세션)에 열렸습니다.
     # 그 세션의 거래일은 다음 영업일이고 휴장일까지 겹쳐 달력만으로는 정할 수 없습니다. 모르면 비웁니다.
@@ -324,7 +323,6 @@ def test_QA138_저녁에_여는_세션은_달력_날짜로_거래일을_지어�
     assert scraper.trade_date(1792368000, "Asia/Seoul") == "2026-10-19"       # 코스피 월 09:00 KST
 
 
-@pytest.mark.xfail(strict=True, reason="QA-138 재현: 거래일을 모르는 장 밖 값에 '수집 시각'만 적어 지금 값처럼 보임")
 def test_QA138_거래일을_모르는_장_밖_값은_수집_시각에_장_밖을_붙인다(fake_store):
     snapshots, _saved = fake_store
     snapshots[catalog.SNAP_SCRAPER_MARKETS] = _snapshot(catalog.SNAP_SCRAPER_MARKETS, _scraped(

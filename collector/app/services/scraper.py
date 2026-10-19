@@ -15,7 +15,7 @@ from .. import kst
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import requests
@@ -349,15 +349,16 @@ def fetch_symbol_snapshot(symbol: str) -> dict:
 
 def trade_date(bar_time: int | None, tz: str | None) -> str | None:
     """
-    TradingView 일봉이 열린 시각 → 그 시장의 거래일("YYYY-MM-DD"). 시간대를 모르면 None.
+    TradingView 일봉이 열린 시각 → 그 시장의 거래일("YYYY-MM-DD"). 모르면 None.
 
-    일봉 시각은 세션이 열린 때입니다 — 코스피는 KST 09:00, 항셍은 HKT 09:30, 달러 인덱스는 전날 뉴욕 17:00
-    (2026-10-19 응답으로 확인). 저녁에 여는 세션은 다음 날 거래일이므로, 연 시각에 12시간을 더한 현지 날짜로 셉니다.
+    아침~낮(현지 04:00~15:59)에 여는 일봉(지수 — 코스피 KST 09:00, 항셍 HKT 09:30)만 그날을 거래일로 봅니다.
+    저녁에 여는 세션(선물 야간장·외환·달러 인덱스는 전날 뉴욕 17:00)의 거래일은 다음 영업일이고 휴장일까지 겹쳐 달력만으로
+    정할 수 없습니다 — 2026-10-19 항셍 선물의 금요일 17:15 HKT 세션에 12시간을 더하니 토요일이 나왔습니다(QA-138).
     """
     if bar_time is None or not tz:
         return None
     opened = datetime.fromtimestamp(bar_time, timezone.utc).astimezone(ZoneInfo(tz))
-    return (opened + timedelta(hours=12)).date().isoformat()
+    return opened.date().isoformat() if 4 <= opened.hour < 16 else None
 
 
 def delay_minutes(update_mode: object) -> int | None:

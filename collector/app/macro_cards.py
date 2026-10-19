@@ -152,7 +152,7 @@ def apply_realtime_quotes(payload: dict) -> dict:
     방금 받은 참고 시세 저장본(services/scraper.py)만 읽고 외부를 새로 부르지 않습니다. 실시간 값이 아니면(저장본이 없거나
     오래됨, 조회 실패, 이어받은 옛 값, TradingView도 지연) 카드를 건드리지 않습니다 — Yahoo 값과 그 지연 배지가 남습니다.
 
-    카드 시각: 장이 열려 있으면 수집 시각(값이 그 시각의 시세), 닫혀 있으면 그 값의 거래일입니다. 장 밖에 수집 시각을 적으면
+    카드 시각: 장이 열려 있으면 수집 시각(값이 그 시각의 시세), 닫혀 있으면 그 값의 거래일입니다(_tradingview_last_ts). 장 밖에 수집 시각을 적으면
     홍콩 휴장일(10-19)에 금요일 종가가 오늘 20:35 값처럼 보입니다.
     """
     snapshot = store.read_snapshot(catalog.SNAP_SCRAPER_MARKETS)
@@ -207,11 +207,14 @@ def _realtime_card(key: str, source: dict) -> dict:
 def _tradingview_last_ts(source: dict, taken: str | None) -> str | None:
     """
     TradingView 값의 카드 시각(QA-138). 응답에 체결 시각이 없어, 장이 열려 있으면 수집 시각(그 시각의 시세)을 적고
-    장 밖이면 그 값의 거래일을 적습니다 — 장 밖에 수집 시각을 적으면 홍콩 휴장일의 항셍 선물·주말의 미국채처럼 지난
-    거래일 값이 지금 값처럼 보입니다. 장 상태나 거래일을 모르면 예전처럼 수집 시각입니다.
+    장 밖이면 그 값의 거래일(모르면 '수집 시각 · 장 밖')을 적습니다 — 장 밖에 수집 시각만 적으면 홍콩 휴장일의 항셍
+    선물·주말의 미국채처럼 지난 거래일 값이 지금 값처럼 보입니다. 장 상태를 모르면 예전처럼 수집 시각입니다.
     """
-    if source.get("session") not in (None, "market") and source.get("tradeDate"):
-        return f"{source['tradeDate']} 거래일 기준 (TradingView · 장 밖)"
+    if source.get("session") not in (None, "market"):
+        if source.get("tradeDate"):
+            return f"{source['tradeDate']} 거래일 기준 (TradingView · 장 밖)"
+        # 저녁에 여는 세션(선물 야간장·외환)은 거래일을 정할 수 없어 수집 시각에 장 밖임을 붙입니다.
+        return f"{taken} (TradingView 수집 시각 · 장 밖)" if taken else None
     return f"{taken} (TradingView 수집 시각)" if taken else None
 
 
