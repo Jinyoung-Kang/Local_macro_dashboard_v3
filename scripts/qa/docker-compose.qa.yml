@@ -23,6 +23,9 @@ services:
 
   backend:
     environment:
+      # QA 스택은 로그인 경로를 그대로 시험합니다(auth-probe.sh가 쿠키 없는 요청에 401을 기대, ADR 0016).
+      # 보간 없는 값이라 .env.qa·셸의 LOCAL_NO_LOGIN이 끼어들지 못합니다.
+      DASHBOARD_LOCAL_NO_LOGIN: "false"
       ANTHROPIC_API_KEY: ""
       NVIDIA_API_KEY: ""
       CEREBRAS_API_KEY: ""

@@ -15,6 +15,8 @@
 #     CA는 AWS 공개 신뢰 저장소의 서울 리전 묶음(certs/rds-ap-northeast-2-bundle.pem, truststore.pki.rds.amazonaws.com).
 #     RDS_HOST는 RDS 기본 엔드포인트(*.rds.amazonaws.com)여야 함 — IP·별칭이면 호스트 이름 검증에 실패
 #   · 화면·API는 127.0.0.1에만 열고, 앞단(Caddy)이 둘을 한 주소(같은 출처)로 묶음 → 프론트는 NEXT_PUBLIC_API_BASE=/
+#   · 로그인은 그대로(ADR 0016): 로컬의 '로그인 없이 운영자로 열기'(DASHBOARD_LOCAL_NO_LOGIN)를 "false"로 고정 — 서버 .env에
+#     LOCAL_NO_LOGIN이 섞여 들어와도 켜지지 않음
 #   · 앞단이 넘긴 X-Forwarded-For를 Tomcat이 믿음(내부 대역에서 온 것만) → 로그인 제한이 방문자 IP별로 동작
 #   · 공개 데모라 끄는 것: 메일(가입·재설정), 화면 조회가 수집을 일으키는 것(store_only),
 #     무료 AI 엔진 키(NVIDIA·Cerebras·Cloudflare는 비움)
@@ -56,6 +58,8 @@ services:
       SERVER_FORWARDHEADERSSTRATEGY: native
       # 데모 열람 토큰 — 비면 꺼짐, 32자보다 짧으면 백엔드가 기동하지 않음(약한 토큰으로 켜지 않게).
       DASHBOARD_DEMO_VIEWER_TOKEN: ${DEMO_VIEWER_TOKEN:-}
+      # 웹 데모는 늘 로그인(또는 데모 열람)을 거침 — 보간 없는 값이라 .env의 LOCAL_NO_LOGIN이 끼어들 자리가 없다(ADR 0016)
+      DASHBOARD_LOCAL_NO_LOGIN: "false"
       MAIL_HOST: ""
       # AI 리포트(ADR 0014) — 운영자의 Anthropic 계정으로 Haiku 하나만. 다른 엔진은 키를 비우고 허용 목록에서도 뺌.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
