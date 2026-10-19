@@ -1,5 +1,6 @@
 /**
  * 사이드바 아래쪽 계정 영역 — 데모 열람(ADR 0013)이면 로그아웃·내 계정 링크 대신 "데모 열람" 표시.
+ * 로그인 없이 연 로컬 운영자(ADR 0016)면 로그아웃 대신 "로컬 · 로그인 없음"을 내 계정 링크로 보인다.
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,5 +49,34 @@ describe("사이드바 계정 영역", () => {
     expect(account?.textContent).toContain("member@test.local");
     expect(account?.textContent).toContain("무료 회원");
     expect(screen.queryByText("데모 열람")).toBeNull();
+  });
+
+  it("로그인 없이 연 로컬 운영자는 로그아웃 없이 '로컬 · 로그인 없음'·역할을 내 계정 링크로 보이고, 운영 메뉴를 본다", () => {
+    render(<Sidebar readMode="auto" user={{ email: "owner@test.local", role: "OWNER", tier: "PRO", local: true }} unread={0} />);
+
+    expect(screen.queryByRole("button", { name: "로그아웃" })).toBeNull();
+    const account = document.querySelector('a[href="/account"]');
+    expect(account?.textContent).toContain("로컬 · 로그인 없음");
+    expect(account?.textContent).toContain("운영자");
+    expect(screen.getByRole("link", { name: "데이터 저장소 상태" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "사용자 관리" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /수동 새로고침/ }).length).toBeGreaterThan(0);
+  });
+
+  it("쿠키 세션으로 로그인한 운영자(local 아님)는 지금처럼 로그아웃을 보인다", () => {
+    render(<Sidebar readMode="auto" user={{ email: "owner@test.local", role: "OWNER", tier: "PRO", local: false }} unread={0} />);
+
+    expect(screen.getByRole("button", { name: "로그아웃" })).toBeTruthy();
+    expect(document.querySelector('a[href="/account"]')?.textContent).toContain("owner@test.local");
+    expect(screen.queryByText(/로컬 · 로그인 없음/)).toBeNull();
+  });
+
+  it("데모 열람 표시가 앞선다 — local이 함께 와도 '데모 열람'만 보이고 로그아웃·내 계정 링크가 없다", () => {
+    render(<Sidebar readMode="store_only" user={{ email: null, role: "MEMBER", tier: "PRO", demo: true, local: true }} unread={0} />);
+
+    expect(screen.getByText("데모 열람")).toBeTruthy();
+    expect(screen.queryByText(/로컬 · 로그인 없음/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "로그아웃" })).toBeNull();
+    expect(document.querySelector('a[href="/account"]')).toBeNull();
   });
 });
