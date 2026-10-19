@@ -12,7 +12,7 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | POST | `/api/auth/login` | `{"email": "...", "password": "..."}` → 세션 쿠키(HttpOnly·SameSite=Strict, DB 세션 — ADR 0010)와 `{ok, user:{email, role, tier, demo:false}}`. 없는 이메일과 틀린 비밀번호는 같은 401. (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 느리게(전역 1초에 1건) 처리하며 틀리면 **429 + `Retry-After`**(안내값 30초부터 2배씩, 최대 15분) — 맞는 비밀번호는 그래도 통과. 다른 느린 시도가 진행 중이면 즉시 429(1초). 본문은 4KB까지(초과 413). 다른 출처(Origin)에서 온 POST는 403 |
-| GET | `/api/auth/session` | `{"authenticated": bool, "mailAvailable": bool, "readMode": …, "user": {email, role(OWNER·MEMBER), tier(FREE·PRO), demo(bool)}}`. `mailAvailable`은 가입·재설정을 쓸 수 있는지(메일 발송 설정). `readMode`·`user`는 로그인한 경우에만 옵니다. 데모 열람(ADR 0013)이면 세션 없이도 `authenticated: true`, `user`는 `{email: null, role: "MEMBER", tier: "PRO", demo: true}`입니다. 화면은 이 값으로 메뉴를 고르고, 막는 것은 백엔드의 경로별 접근 정책입니다 |
+| GET | `/api/auth/session` | `{"authenticated": bool, "mailAvailable": bool, "readMode": …, "user": {email, role(OWNER·MEMBER), tier(FREE·PRO), demo(bool)}}`. `mailAvailable`은 가입·재설정을 쓸 수 있는지(메일 발송 설정). `readMode`·`user`는 로그인한 경우에만 옵니다. 데모 열람(ADR 0013)이면 세션 없이도 `authenticated: true`, `user`는 `{email: null, role: "MEMBER", tier: "PRO", demo: true}`입니다. 늘 `noLogin`(로컬 무로그인이 켜져 있는가, ADR 0016)과 `ownerMissing`(켜져 있고 이 맥 요청인데 운영자 계정이 없음)이 오고, `user.local`은 쿠키 없이 첫 운영자로 연 경우 true입니다. 로컬 무로그인 운영자의 쓰기는 이 맥 화면의 `Origin`(`http://localhost:<화면 포트>` 등)이 있어야 하고, 없거나 다른 출처·다른 사이트(`Sec-Fetch-Site: cross-site`)면 403 `bad_origin`입니다. 화면은 이 값으로 메뉴를 고르고, 막는 것은 백엔드의 경로별 접근 정책입니다 |
 | POST | `/api/auth/logout` | 쿠키 만료 + 그 세션을 DB에서 끊음(재시작 후에도 유지) |
 | POST | `/api/auth/logout-all` | 다른 기기의 내 세션을 모두 끊음(지금 기기는 남김) → `{ok, revoked}` |
 | GET | `/api/auth/sessions` | 내 로그인 세션 목록 `{sessions:[{id, current, createdAt, lastSeenAt, expiresAt, userAgent}]}` |

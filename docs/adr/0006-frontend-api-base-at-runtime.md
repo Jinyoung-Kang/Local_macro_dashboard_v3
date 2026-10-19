@@ -1,6 +1,7 @@
 # 0006. 화면이 백엔드 주소를 실행 시점에 정한다 (휴대폰·LAN 접속)
 
-- 상태: 채택 (2026-10)
+- 상태: 채택 (2026-10). 로컬의 휴대폰·LAN 접속은 2026-10-19 [ADR 0016](0016-local-no-login.md)이 없앰(포트는 127.0.0.1, 로그인 없는 모드에서는
+  화면 포트 와일드카드 CORS도 쓰지 않음). 실행 시점에 주소를 정하는 방식 자체는 그대로입니다.
 - 지키는 방법: `frontend/src/lib/__tests__/api.test.ts`, `backend/src/test/java/com/macrodash/config/CorsOriginsTest.java`
 
 ## 배경

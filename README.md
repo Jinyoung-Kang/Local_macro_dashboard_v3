@@ -47,10 +47,11 @@ make collect   # 첫 수집 — 이걸 해야 화면에 숫자가 찹니다
 open http://localhost:3000
 ```
 
-로그인은 이메일 + 비밀번호입니다. 처음 기동할 때 계정이 없으면 `.env`의 `OWNER_EMAIL`(로그인 아이디로 쓸
-이메일)과 `APP_PASSWORD`로 운영자 계정을 만듭니다. `APP_PASSWORD`가 비어 있으면 `make setup`이 무작위 값을
-만들어 넣고 한 번 보여 주고, `OWNER_EMAIL`은 직접 넣어야 합니다(기본값 없음). 계정이 생긴 뒤에는 이 두 값을
-읽지 않으며, 비밀번호는 화면의 👤 내 계정에서 바꿉니다.
+로컬 실행은 **로그인 없이 이 맥에서만** 열립니다 — 화면·API는 `127.0.0.1`에만 열리고, 이 맥의 브라우저는 운영자 계정으로
+바로 들어갑니다(휴대폰 등 다른 기기에서는 열리지 않음, [ADR 0016](docs/adr/0016-local-no-login.md)). 잠금 화면(접근 코드)과
+로그인은 웹(AWS) 버전에만 있습니다. 운영자 계정은 처음 기동할 때 계정이 없으면 `.env`의 `OWNER_EMAIL`과 `APP_PASSWORD`로
+만듭니다. `APP_PASSWORD`가 비어 있으면 `make setup`이 무작위 값을 만들어 넣고 한 번 보여 주고, `OWNER_EMAIL`은 직접 넣어야
+합니다(기본값 없음). 이 비밀번호는 로그인 모드(`LOCAL_NO_LOGIN=false`)·QA 스택·이 DB를 복원한 곳에서 씁니다.
 
 | 주소 | 용도 |
 |---|---|
@@ -261,7 +262,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 
 | 키 | 없으면 |
 |---|---|
-| `OWNER_EMAIL` | 처음 운영자 계정의 로그인 이메일. 없으면 계정을 만들지 않아 로그인 불가(`make doctor`가 알림) |
+| `OWNER_EMAIL` | 처음 운영자 계정의 이메일. 없으면 계정을 만들지 않아 로컬 화면이 '운영자 계정이 없음' 안내를 띄움(`make doctor`가 알림) |
 | `APP_PASSWORD` | 처음 운영자 계정의 비밀번호. `make setup`이 무작위로 만듭니다. 비었거나 `admin1234@`면 계정을 만들지 않음 |
 | `MAIL_HOST`·`MAIL_PORT`·`MAIL_USERNAME`·`MAIL_PASSWORD` | 계정 메일(가입 인증·비밀번호 재설정). 없으면 가입·재설정만 꺼짐(운영자 로그인·나머지는 정상) |
 | `AI_DAILY_LIMIT` | 유료 회원의 하루 AI 리포트 한도(기본 20). 운영자는 한도 없음, 무료 회원은 쓸 수 없음 |
@@ -276,8 +277,8 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 | `TOSS_*` | 토스 연결 테스트 + 레이더의 "시장 전체·수급 지속성", 국내 파생의 "현물·선물 수급 동조" 카드가 비활성화 (나머지는 그대로) |
 | `DATA_GO_KR_SERVICE_KEY` | 공공데이터포털 **일반 인증키 하나**로 특일정보·주식시세를 씁니다(서비스별 활용신청 필요). 없으면 시계는 내장 휴일 표(2025~2028)로, 공식 시세·PER·PBR은 비어 있음 |
 | `DART_API_KEY` | 수급 레이더의 재무 체크만 비어 있음 |
-| `WEB_BIND_HOST` | `0.0.0.0`(기본)이면 같은 와이파이의 다른 기기에서도 접속 가능. 이 맥에서만 쓰려면 `127.0.0.1` |
-| `COOKIE_SECURE` | HTTPS로만 접속할 때 `true` (http://에서 켜면 로그인이 안 됨) |
+| `LOCAL_NO_LOGIN` | 비우면 `true` — 로컬은 로그인 없이 이 맥에서 운영자로 열림. `false`면 로그인 화면(웹·QA 덧붙임은 늘 `false`로 고정, [ADR 0016](docs/adr/0016-local-no-login.md)) |
+| `COOKIE_SECURE` | HTTPS로만 접속할 때 `true` (http://에서 켜면 로그인이 안 됨). `LOCAL_NO_LOGIN=false`와 함께 — 로그인 없는 로컬과 함께 켜면 백엔드가 기동하지 않음 |
 | `AI_TIMEOUT_SECONDS` | 엔진을 직접 고른 경우의 대기 한도 (기본 240초) |
 | `AI_AUTO_ATTEMPT_SECONDS` / `AI_AUTO_BUDGET_SECONDS` | `⚡ 자동 탐색`의 엔진별·전체 시간 예산 (기본 60초 / 180초) |
 | `COMPUTE_MAX_CONCURRENT` | 캐시에 없는 비싼 계산(스코어카드·기관 위험·13F 조합 등)의 동시 실행 상한. 비우거나 0이면 자동(코어 수의 절반, 최소 1). 넘친 요청은 2초 기다린 뒤 429 |
@@ -295,9 +296,9 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 > **`.env`에 따옴표를 쓰지 마세요.** docker compose는 `KEY=VALUE`를 그대로
 > 읽습니다. `KEY="값"`이면 따옴표까지 값이 됩니다.
 
-**DB·수집기는 이 맥에서만 열립니다.** 로그인이 없는 경로이기 때문입니다.
-화면·API만 `WEB_BIND_HOST`로 다른 기기에 열 수 있고, 그때는 계정 비밀번호를
-추측하기 어려운 값으로 두세요.
+**모든 포트(화면·API·DB·수집기)는 이 맥(127.0.0.1)에서만 열립니다.** 로컬 화면은 로그인 없이 운영자로 열리기 때문입니다
+(예전 `WEB_BIND_HOST`로 다른 기기에 여는 방법은 없앴습니다). 이 맥의 다른 웹사이트가 로컬 API를 부르지 못하게, 로그인 없는
+요청은 이 맥의 화면 주소에서 온 것만 받습니다 — 쿠키 없이 curl로 쓰기 요청을 보낼 때는 `Origin: http://localhost:3000`이 필요합니다.
 
 ### AWS 데모 배포
 
@@ -320,7 +321,7 @@ ok=; for i in 1 2 3 4 5 6 7 8 9 10; do docker compose -f docker-compose.yml -f c
 - 추가로 필요한 값은 [.env.aws.example](.env.aws.example)에 이름만 있습니다(`RDS_HOST`·`PUBLIC_ORIGIN` 등).
 - 공개 데모에서는 메일 가입·무료 AI 엔진·화면 조회가 일으키는 수집을 끕니다. 운영자 경로와 계정 변경은 앞단에서 막습니다.
 - 방문자는 앞단의 접근 코드만 통과하면 로그인 없이 읽기 전용으로 봅니다(데모 열람, `DEMO_VIEWER_TOKEN` 32자 이상,
-  [ADR 0013](docs/adr/0013-demo-viewer-mode.md)). 값을 비우면 꺼지고, 로컬 실행은 지금처럼 로그인이 필요합니다.
+  [ADR 0013](docs/adr/0013-demo-viewer-mode.md)). 값을 비우면 꺼집니다. AWS는 `compose.aws.yml`이 로그인 없는 로컬 모드를 늘 끕니다(`DASHBOARD_LOCAL_NO_LOGIN: "false"`).
 - AI 리포트는 Claude Haiku 5.5 하나로만 만들고(`AI_ENGINES=anthropic_haiku`, 키는 `.env`의 `ANTHROPIC_API_KEY`), 데모 방문자
   전체가 하루 `AI_DEMO_DAILY_LIMIT`건(기본 20)을 함께 씁니다. 데모 열람의 쓰기는 이 요청 하나만 열려 있습니다
   ([ADR 0014](docs/adr/0014-aws-demo-ai-report.md)). 앞단 Caddy 공개 쪽도 `POST /api/ai/report`를 통과시켜야 합니다.

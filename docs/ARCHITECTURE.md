@@ -236,7 +236,7 @@ k6가 고정된 주소를 반복하므로 "후" 값은 대부분 캐시 적중�
 | 위협 | 대응 | 위치 |
 |---|---|---|
 | XSS로 토큰 탈취 | 쿠키 `HttpOnly` (스크립트가 읽지 못함) | `AuthController` |
-| CSRF | 쿠키 `SameSite=Strict`. 화면(:3000)과 API(:8080)는 포트만 달라 같은 사이트 | `AuthController` |
+| CSRF | 쿠키 `SameSite=Strict`. 화면(:3000)과 API(:8080)는 포트만 달라 같은 사이트. 쿠키가 없는 로컬 무로그인은 아래 'Origin·Sec-Fetch-Site' 검사(ADR 0016) | `AuthController`, `SessionFilter` |
 | 비밀번호 대입 | (접속 주소, 이메일)마다 연속 5회 실패 뒤에는 시도를 **느리게**(전역 1초에 1건, 겹치면 즉시 429) 처리. 잠금이 아니라 지연이라 맞는 비밀번호가 **잠기지는 않지만**, 공격자가 느린 차선을 계속 차지하는 순간에는 주인도 429를 받을 수 있고 1초 뒤 다시 시도하면 통과(Docker에서는 모든 접속이 같은 주소라 잠금은 주인까지 영구히 막았음). 429 + `Retry-After`는 안내. 15분 조용하면 기록 삭제. 기억하는 기록은 1만 건까지(꽉 찬 동안 처음 보는 키는 기록하지 않고 바로 느린 차선 — 맵을 채워 지연을 끄지 못하게). 비밀번호 변경·탈퇴의 '지금 비밀번호' 재확인도 사용자마다 같은 지연(느린 차선은 로그인과 따로) | `LoginThrottle`, `AuthController` |
 | 인증 없이 감사 기록 채우기 | 로그인 실패는 표본만 남김(QA-125). 메일 인증을 마친 계정은 사용자 번호마다(주소를 바꿔도 한 묶음, 하루 조용해야 끝 — 15분씩 끊어 시도해도 이어짐) 연속 실패의 1·5·2^k번째와 한 시간에 한 번을 누적 실패 수와 함께, 성공 기록에 직전 실패 수. 없는 계정과 메일 인증 전 계정(가입으로 누구나 만듦)은 합쳐 한 시간에 30건 + 넘친 개수 요약 한 줄(종료 때는 웹 서버가 멈춘 뒤 씀) — 쓰레기 요청이 인증을 마친 계정의 몫을 쓰지 못하고, 만든 계정 수만큼 행이 늘지 않음 | `LoginFailureAudit`, `AuthService.recordFailure` |
 | 컨테이너 안 코드가 뚫림 | 앱 컨테이너 셋(수집기·백엔드·화면)은 root가 아닌 사용자로 돌고, 커널 권한을 모두 버리며(`cap_drop: ALL`) 권한 상승을 막음(`no-new-privileges`). postgres는 기동 때 사용자 전환이 필요해 제외 | `docker-compose.yml`의 `x-hardening` |
@@ -250,6 +250,7 @@ k6가 고정된 주소를 반복하므로 "후" 값은 대부분 캐시 적중�
 | 권한 밖 기능 호출 | 경로별 접근 정책(공개·회원·유료·운영자). 미분류 경로는 빌드 실패 | `AccessPolicy`, `AccessPolicyTest` |
 | 다른 출처의 상태 변경 요청 | POST·PUT·DELETE의 `Origin`이 CORS 허용 목록에 없으면 403 | `SessionFilter.foreignOrigin` |
 | 인증 우회 경로 | 공개 경로는 정규화된 경로와 **정확히 일치**할 때만 (`/api/healthx`, `/api/health/../x` 차단). 정규화가 필요한 경로(`.`·`..` 조각, 인코딩된 점·슬래시, `//`, `;`)는 정책 검사 전에 400 — 정책(정규화 경로)과 처리기 매칭(날것 경로)이 다른 경로를 보지 않게 | `WebConfig.SessionFilter` |
+| 로그인 없는 로컬(ADR 0016) | 백엔드 기본 꺼짐, 로컬 compose만 켬(AWS·QA 덧붙임은 `"false"` 고정 + CI 확인). 화면·API는 127.0.0.1에만. 켜졌는데 데모 토큰·`COOKIE_SECURE`·앞단 헤더 신뢰(클라우드 자동 포함)·외부 `FRONTEND_ORIGIN`이 있으면 기동 실패. 쿠키 없는 요청은 Host가 localhost·127.0.0.1·[::1]이고 프록시·데모 헤더가 없을 때만 첫 운영자(DNS 리바인딩·앞단 차단). SameSite가 없는 대신 허용 출처를 이 맥 화면으로 좁히고(와일드카드 제거), 목록 밖 Origin·Origin 없는 쓰기·다른 사이트 요청은 운영자 조회 전에 403. 이 맥의 다른 프로세스는 막지 못함(ADR 0016 남은 위험) | `LocalNoLogin`, `AuthService.resolve`, `SessionFilter`, `WebConfig.allowedOriginPatterns` |
 | 헤더로 로그인 건너뛰기(데모 열람, AWS만) | 기본 꺼짐. 켜려면 32자 이상 토큰(짧으면 기동 실패), 해시를 상수 시간 비교, 세션이 먼저, GET만(쓰기·HEAD 403 — AI 리포트 생성 POST 하나만 예외, ADR 0014), 운영 경로 403. 백엔드는 루프백에만 열고 앞단이 헤더를 붙이거나 지움(ADR 0013) | `DemoViewer`, `SessionFilter.demoForbidden` |
 | 응답 가로채기·끼워 넣기 | `nosniff`, `no-store`, `X-Frame-Options: DENY`, `frame-ancestors 'none'` | `SessionFilter`, `next.config.mjs` |
 | 유료 AI API 비용 폭주 | 사용자 입력 2,000자 상한(400). 하루 한도(유료 회원은 사용자별 DB, 데모 방문자는 공용 메모리). 배포별 엔진 허용 목록(AWS 데모는 Haiku 하나, ADR 0014). 못 쓰는 엔진(AI 꺼짐·모르는 ID·허용 목록 밖·키 없음)은 한도를 쓰기 전·원본 텍스트를 만들기 전에 끝(QA-133). 그 밖의 실패는 모델에 닿지 않았을 때만 한도를 되돌림(거절·빈 응답·대기 시간 초과는 과금됐을 수 있어 그대로) | `AiController`, `UsageService`, `AiService`, `AiReportService` |

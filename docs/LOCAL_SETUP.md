@@ -237,7 +237,7 @@ make up
 
 | 주소 | 용도 |
 |---|---|
-| <http://localhost:3000> | 화면 (로그인 → `.env`의 `OWNER_EMAIL` + `APP_PASSWORD`, 이후 바꾼 비밀번호) |
+| <http://localhost:3000> | 화면 — 로그인 없이 운영자로 열림(이 맥에서만, ADR 0016). 운영자 계정은 `.env`의 `OWNER_EMAIL` + `APP_PASSWORD`로 처음 기동 때 만듦 |
 | <http://localhost:8080/api/health> | 백엔드 상태 |
 | <http://localhost:8000/docs> | 수집기 API 문서 (FastAPI 자동 생성) |
 
@@ -477,7 +477,9 @@ make db-test           # 테스트 전용 DB 준비 (위 명령들이 자동으�
 | 수집은 성공인데 숫자가 이상함 | `🗄️ 데이터 저장소 상태 → 교차 검증`을 돌려 보세요. 비공식 소스(Daum·Naver·TradingView)의 구조 변경을 먼저 의심합니다 |
 | 포트를 바꿨는데 화면이 API를 못 찾음 | 화면은 "열린 호스트 + `BACKEND_PORT`"로 백엔드를 찾고, 포트는 **빌드 시점**에 번들에 들어갑니다. 바꾼 뒤 `make up`(재빌드)이 필요합니다. `.env`에 `NEXT_PUBLIC_API_BASE`(전체 주소 고정, 프록시용)를 적어 두었다면 지우거나 `BACKEND_PORT`와 맞추세요 — `make up`이 기동 전에 검사합니다 |
 | `make setup`이 포트 4개를 전부 "사용 중"이라고 함 | **이미 `make up`으로 이 프로젝트가 떠 있는 상태입니다.** 정상입니다. 최신 버전은 "이 프로젝트의 컨테이너가 사용 중 (정상)"으로 구분해 표시합니다 |
-| 휴대폰 등 다른 기기에서 화면이 안 열림 | `.env`의 `WEB_BIND_HOST`가 `127.0.0.1`이면 이 맥에서만 열립니다. `0.0.0.0`으로 바꾸고 `make up`. 맥의 LAN IP(`ipconfig getifaddr en0`)로 `http://<IP>:3000`을 여세요 — 화면이 같은 IP의 백엔드를 알아서 찾습니다(ADR 0006). `APP_PASSWORD`는 반드시 기본값이 아니어야 합니다 |
+| 휴대폰 등 다른 기기에서 화면이 안 열림 | 의도한 동작입니다 — 로컬은 로그인 없이 운영자로 열리므로 화면·API를 이 맥(127.0.0.1)에만 엽니다(ADR 0016). 다른 기기에서 보려면 웹(AWS) 버전을 쓰세요 |
+| '운영자 계정이 아직 없습니다' 화면 | `.env`의 `OWNER_EMAIL`·`APP_PASSWORD`를 넣고 `make up`. 그래도면 `make migrate`(스키마 미적용)·`make logs S=backend` |
+| `make up`이 'LOCAL_NO_LOGIN … 웹 배포용 값' 오류로 멈춤 | 로그인 없는 로컬과 `COOKIE_SECURE=true`·외부 `FRONTEND_ORIGIN`은 함께 쓸 수 없습니다. 그 줄을 지우거나 `LOCAL_NO_LOGIN=false`(로그인 화면) |
 | 다른 기기에서 DB(5432)·수집기(8000)에 붙지 못함 | 의도된 제한입니다. 이 둘은 로그인이 없어 `127.0.0.1`에만 열립니다 ([PRINCIPLES.md](PRINCIPLES.md)) |
 | `command not found: psql` / `mvn` | Docker로 실행 중이라면 **설치할 필요가 없습니다.** DB 셸은 `make db`를 쓰세요 |
 | `No module named pytest` / `apscheduler` | conda·pyenv의 다른 파이썬이 잡혔습니다. `collector/.venv`를 만들고 `make dev-collector` / `make test-collector`를 쓰세요 (§6) |

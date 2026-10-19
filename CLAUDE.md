@@ -31,6 +31,7 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
   추정치는 `isEstimated`/`isProxy`를 함께 내려보낸다.
 - **새 API 경로는 `AccessPolicy` 표에 넣는다**(공개·회원·유료·운영자, ADR 0010) — 빠지면 `AccessPolicyTest`가 막는다. 사용자 정보는 `support.CurrentUser`.
   로그인은 이메일+비밀번호(DB 세션). 운영자 계정은 처음 기동 때 `.env`의 `OWNER_EMAIL`·`APP_PASSWORD`로 만든다.
+  로컬 compose는 로그인 없이 이 맥에서 첫 운영자로 연다(`LOCAL_NO_LOGIN`, ADR 0016). AWS·QA 덧붙임은 `"false"` 고정.
 - 날짜는 `Kst.today()`(Java)·KST 기준. `LocalDate.now()`를 쓰지 않는다(서버 TZ는 UTC).
 - **테이블마다 쓰는 프로세스는 하나**(ADR 0008). 수집기 테이블은 백엔드가 읽기만, 백엔드 테이블(`regime_log` 등)은 백엔드만 쓴다.
   스키마 파일은 `db/migrations/` 한 곳(수집기가 기동 시 적용). 백엔드 DB 접근은 `store`에서만. 정기 작업은 `StoreReader.quietly`로 읽는다(수집 유발 금지).
@@ -69,5 +70,5 @@ PostgreSQL ← 수집기(FastAPI, `collector/`). Docker Compose 네 컨테이너
 - 이 맥의 `mvn`은 Homebrew JDK 27로 돈다(`java -version`은 21이어도). CI는 Temurin 21이라 JDK 27에서만 나는 컴파일 오류는 CI에서
   안 보인다(`80db4ae` — 익명 `LinkedHashMap` 안의 `Entry`가 `Map.Entry`로 풀린 이름 충돌). CI와 같은 판으로 재려면
   `JAVA_HOME=$(/usr/libexec/java_home -v 21) make test-backend`. 코드는 두 판 모두에서 컴파일되게 쓴다.
-- 화면(3000)·API(8080)는 `${WEB_BIND_HOST:-0.0.0.0}`으로 열린다 — 휴대폰 접속용으로 **의도한 예외**(로그인 필요, `.env`에
-  `WEB_BIND_HOST=127.0.0.1`이면 닫힘). postgres·collector와 새 서비스는 127.0.0.1에만 연다.
+- 모든 포트(화면·API·postgres·collector·새 서비스)는 127.0.0.1에만 연다 — 로컬 화면은 로그인 없이 운영자로 열린다(ADR 0016,
+  휴대폰 접속 없음). 로그인 경로를 시험하려면 QA 스택(기본 로그인), 로그인 없는 모드는 `QA_NO_LOGIN=1 bash scripts/qa/qa-stack.sh up`.
