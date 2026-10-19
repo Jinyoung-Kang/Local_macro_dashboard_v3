@@ -277,3 +277,40 @@ def test_QA138_실시간_대체는_같은_종목의_TradingView_시세만_가리
         assert card_key in macro
         assert scraped[source_key]["kind"] == "tradingview_symbol"
         assert scraped[source_key].get("tz"), f"{source_key}: 거래일을 계산할 시간대가 없음"
+
+
+@pytest.mark.xfail(strict=True, reason="QA-138 재현: 미국채·아시아 선물 카드는 장이 닫혀도 '수집 시각'을 적어 지난 거래일 값이 지금 값처럼 보임")
+def test_QA138_TradingView_값을_쓰는_다른_카드도_장_밖이면_거래일을_적는다(fake_store, monkeypatch):
+    # 2026-10-19 20:56 KST — 홍콩 휴장일이라 항셍 선물은 장 밖(값은 10-16 금요일), 코스피200 야간선물은 장중
+    snapshots, _saved = fake_store
+    snapshots[catalog.SNAP_SCRAPER_MARKETS] = _snapshot(catalog.SNAP_SCRAPER_MARKETS, _scraped(
+        _tv("kospi200_night", 893.7, 893.25, delayMinutes=20, session="market", tradeDate="2026-10-20"),
+        _tv("nikkei_fut", 64700.0, 64980.0, delayMinutes=15, session="market", tradeDate="2026-10-20"),
+        _tv("hsi_fut", 24112.0, 24149.0, delayMinutes=15, session="out_of_session", tradeDate="2026-10-16"),
+    ))
+    futures = _by_key(macro_cards.inject_scraped_indices({"categories": [{"id": "asia_equity", "items": []}]}))
+    assert futures["kospi200_night_scraped"]["lastTs"] == "2026-10-19 20:35 KST (TradingView 수집 시각)"
+    assert futures["hsi_fut_scraped"]["lastTs"] == "2026-10-16 거래일 기준 (TradingView · 장 밖)"
+
+    # 미국채 — 주말에 받은 금요일 수익률
+    monkeypatch.setattr(market, "collect_ticker", _daily)
+    monkeypatch.setattr(macro_cards.scraper_service, "collect_scraped_markets", lambda: _scraped(
+        *(_tv(key, 4.7, 4.7, delayMinutes=0, session="out_of_session", tradeDate="2026-10-16")
+          for key in ("us02y", "us10y", "us30y")),
+    ))
+    snapshots.pop(catalog.SNAP_SCRAPER_MARKETS)
+    ust = next(c for c in indicators.MACRO_CATEGORIES if c["id"] == "ust")
+    bonds = _by_key(macro_cards.apply_bond_override(market.collect_macro_cards([ust])))
+    assert {card["lastTs"] for card in bonds.values()} == {"2026-10-16 거래일 기준 (TradingView · 장 밖)"}
+
+
+@pytest.mark.xfail(strict=True, reason="QA-138 재현: 미국채·아시아 선물 항목에 시간대가 없어 거래일을 계산하지 못함")
+def test_QA138_카드에_쓰는_TradingView_항목은_모두_시간대가_있다():
+    used = set(indicators.REALTIME_QUOTES.values()) | set(indicators.BOND_SCANNER_KEYS) | {
+        spec["key"] for spec in indicators.SCRAPED_FUTURES
+    }
+    missing = sorted(
+        config["key"] for config in scraper.SCRAPER_MARKETS
+        if config["key"] in used and config["kind"] == "tradingview_symbol" and not config.get("tz")
+    )
+    assert missing == []
