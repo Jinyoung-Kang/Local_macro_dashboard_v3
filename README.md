@@ -381,8 +381,8 @@ ok=; for i in 1 2 3 4 5 6 7 8 9 10; do docker compose -f docker-compose.yml -f c
 | 구분 | 출처 | 신뢰도 |
 |---|---|---|
 | 금리·신용 스프레드·유동성·심화 지표 | FRED 공식 API | 공식 (일별/주간 확정치) |
-| 환율·원자재·지수·종목 종가 | yfinance | 15분 지연 |
-| 미국채 3M/2Y/10Y/30Y | TradingView 공개 Scanner | **비공식 참고** |
+| 환율·원자재·지수·종목 종가 | yfinance | 종목마다 0~20분 지연 (카드 배지) |
+| 미국채 3M/2Y/10Y/30Y, 달러 인덱스·엔/원·코스피·닛케이·항셍 실시간 | TradingView 공개 Scanner | **비공식 참고** (못 받으면 Yahoo 값과 그 지연) |
 | 국내 수급·파생 | KRX Open API · KIS · LS · pykrx · Daum | 공식 + 비공식 혼합 |
 | 13F 포트폴리오 | SEC EDGAR | 공식 (분기 공시, 45일 지연) |
 | CFTC COT | CFTC 공개 API | 공식 (주 1회, 화요일 기준) |
