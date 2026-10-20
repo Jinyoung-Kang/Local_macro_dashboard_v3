@@ -67,14 +67,18 @@ export default function LiquidityPage() {
             WALCL − TGA − ON RRP · 출처: FRED 공식 시계열 (주간 갱신)
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        {/* 선택 상자는 위에 이름표가 있어, 가운데 정렬이면 수집 시각 배지가 상자보다 위로 뜹니다(이름표+상자의 가운데).
+            아래 끝을 맞춘 뒤 배지를 상자(33px)와 배지(22.5px) 높이 차의 절반만큼 올려 두 가운데를 한 줄에 둡니다. */}
+        <div className="flex flex-wrap items-end gap-3">
           <Select label="조회 기간" value={years} onChange={setYears} options={PERIODS} />
-          <Freshness
-            collectedAt={data?.collectedAtKst}
-            ageSeconds={data?.ageSeconds}
-            stale={data?.stale}
-            refreshError={refreshError}
-          />
+          <div className="pb-[5px]">
+            <Freshness
+              collectedAt={data?.collectedAtKst}
+              ageSeconds={data?.ageSeconds}
+              stale={data?.stale}
+              refreshError={refreshError}
+            />
+          </div>
         </div>
       </header>
 
