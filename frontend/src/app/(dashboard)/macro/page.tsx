@@ -20,6 +20,7 @@ import {
 import { useApi } from "@/hooks/useApi";
 import { SOURCES, uniqueSources } from "@/lib/sources";
 import { EMPTY, formatKst } from "@/lib/format";
+import { cardNotices, categoryDelay } from "@/lib/macroCards";
 import type {
   AdvancedIndicators,
   MacroItem,
@@ -138,7 +139,7 @@ export default function MacroPage() {
           <Card
             key={category.id}
             title={category.title}
-            subtitle={category.note ? `데이터 지연: ${category.note}` : undefined}
+            subtitle={categoryDelay(category)}
             source={uniqueSources(category.items.map((item) => itemSource(item))) || undefined}
           >
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -152,14 +153,21 @@ export default function MacroPage() {
                     <span className="flex flex-col gap-1">
                       <span>{item.name}</span>
                       <span className="flex min-h-5 flex-wrap items-center gap-1">
-                        {item.note && <SourceBadge>{item.note}</SourceBadge>}
+                        {/* 개장 상태와 시세 지연은 배지 하나("개장 · 10분 지연")로, 지연이 아닌 알림만 따로 둡니다.
+                            예전 저장본(delayMinutes 없음)은 예전처럼 note 배지를 씁니다. */}
+                        {item.delayMinutes === undefined && item.note && <SourceBadge>{item.note}</SourceBadge>}
                         <SessionBadge
                           market={item.market}
                           now={now}
                           krOfficial={krOfficial}
                           lastTs={item.lastTs}
                           collectedAt={data?.collectedAtKst}
+                          delayMinutes={item.delayMinutes}
+                          stale={item.isStale}
                         />
+                        {item.delayMinutes !== undefined && cardNotices(item).map((notice) => (
+                          <NoticeBadge key={notice.text} title={notice.title}>{notice.text}</NoticeBadge>
+                        ))}
                       </span>
                     </span>
                   }
@@ -231,8 +239,20 @@ export default function MacroPage() {
   );
 }
 
-/** 카드 한 장의 출처. 수집기가 붙인 값이 우선이고, 예전 저장본(출처 필드 없음)은 티커로 채웁니다. */
+/**
+ * 카드 한 장의 출처. 수집기가 붙인 값이 우선이고, 예전 저장본(출처 필드 없음)은 티커로 채웁니다.
+ * 비공식 참고 시세(TradingView)는 출처 줄에 그 성격을 적습니다 — 예전에는 지연 배지에 섞여 있었습니다.
+ */
 function itemSource(item: MacroItem): string | undefined {
-  if (item.source) return item.source;
-  return item.ticker ? `Yahoo Finance (${item.ticker})` : undefined;
+  const source = item.source ?? (item.ticker ? `Yahoo Finance (${item.ticker})` : undefined);
+  return source && item.isReference ? `${source} · 참고 시세` : source;
+}
+
+/** 지연이 아닌 알림 배지 — 이 화면의 빨강·파랑은 상승·하락 전용이라 경고는 노랑입니다. */
+function NoticeBadge({ children, title }: { children: string; title?: string }) {
+  return (
+    <span className="rounded-sm border border-warn/40 bg-warn/10 px-2 py-0.5 text-[11px] text-warn" title={title}>
+      {children}
+    </span>
+  );
 }

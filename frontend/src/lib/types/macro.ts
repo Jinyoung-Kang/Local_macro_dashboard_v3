@@ -22,6 +22,14 @@ export interface MacroItem {
   prevSource?: string | null;
   lastTs?: string | null;
   source?: string | null;
+  /**
+   * 이 카드 출처의 시세 지연(분). 0이면 실시간, null이면 모름. 화면은 개장 상태와 한 배지로 합칩니다
+   * ("개장 · 10분 지연" — 장이 닫혀 있으면 지연은 툴팁에만). 없는 응답(예전 저장본)은 note 배지를 그대로 씁니다.
+   */
+  delayMinutes?: number | null;
+  /** 지연이 아닌 알림(선물 대신 지수 값·추정치·보정 실패) — 경고 배지로 따로 보입니다 */
+  warning?: string | null;
+  /** 비공식 참고 시세(TradingView) — 출처 줄에 '참고 시세'로 적습니다 */
   isReference?: boolean;
   /** 이번 수집이 실패해 직전 저장본의 값·시각을 그대로 이어받은 카드 (note가 "⚠️ 이전 값") */
   isStale?: boolean;

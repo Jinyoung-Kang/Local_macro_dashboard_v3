@@ -35,3 +35,28 @@ describe("QA-138 장 밖 거래일로 본 휴장 추정", () => {
     expect(screen.getByText("개장")).toBeTruthy();
   });
 });
+
+describe("개장 상태와 시세 지연을 배지 하나로", () => {
+  const TUE_1954_KST = new Date("2026-10-20T10:54:00Z");   // 뉴욕 06:54 — CME 개장, 뉴욕 증시 마감(장 전)
+
+  it("개장이면 '개장 · 10분 지연'", () => {
+    render(<SessionBadge market="cme" now={TUE_1954_KST} krOfficial={null} delayMinutes={10} />);
+    expect(screen.getByText("개장 · 10분 지연")).toBeTruthy();
+  });
+
+  it("마감이면 지연은 배지에 적지 않고 툴팁에만", () => {
+    render(<SessionBadge market="nyse" now={TUE_1954_KST} krOfficial={null} delayMinutes={0} />);
+    const badge = screen.getByText("마감");
+    expect(badge.getAttribute("title")).toContain("시세 실시간(출처 기준)");
+  });
+
+  it("이어받은 예전 값이면 지연을 적지 않는다", () => {
+    render(<SessionBadge market="cme" now={TUE_1954_KST} krOfficial={null} delayMinutes={0} stale />);
+    expect(screen.getByText("개장")).toBeTruthy();
+  });
+
+  it("시간표를 모르는 시장이면 지연만", () => {
+    render(<SessionBadge market="unknown" now={TUE_1954_KST} krOfficial={null} delayMinutes={15} />);
+    expect(screen.getByText("15분 지연")).toBeTruthy();
+  });
+});
