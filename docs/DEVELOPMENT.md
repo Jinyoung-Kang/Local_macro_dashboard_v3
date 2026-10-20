@@ -83,7 +83,7 @@ cd collector && TEST_DATABASE_URL=postgresql://macro:macro@localhost:5432/macrod
 | `test_equities.py` | 모르는 종목 이름에 엉뚱한 티커가 붙는 것 |
 | `marketCalendar.check.mts` | 공휴일과 거래소 휴장일을 혼동하는 것 |
 | `useApi.test.ts` | 자동 갱신 한 번 실패로 화면이 비는 것, 수동 새로고침이 세션 확인까지 다시 돌려 화면 상태가 초기화되는 것, 늦게 온 이전 응답이 화면을 되돌리는 것 |
-| `ArchitectureRulesTest` | 계산 패키지가 스프링·JSON을 알게 되는 것, 컨트롤러가 저장소·수집기를 직접 부르는 것, 기능 사이 순환([ADR 0001](adr/0001-feature-modules-and-dependency-rules.md)) |
+| `ArchitectureRulesTest` | 계산 패키지가 스프링·JSON을 알게 되는 것, 컨트롤러가 저장소·수집기를 직접 부르는 것, 패키지 사이 순환(기반 패키지 포함, [ADR 0001](adr/0001-feature-modules-and-dependency-rules.md)) |
 | `test_db_scripts.py` | 백업·복원이 실패를 성공으로 알리는 것, 복원이 반만 되는 것([ADR 0003](adr/0003-backup-and-restore.md)) |
 | `endpoints.test.ts` | 화면이 만든 API 주소가 깨지거나(인코딩) 문서에 없는 경로를 부르는 것 |
 | `chartData.test.ts`·`SpreadSection.test.tsx` | 모르는 값을 0으로 채워 막대·변화량을 만드는 것 |

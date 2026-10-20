@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *                └──▶ support
  * </pre>
  *
- * <p>설정 값({@code config.AppProperties})은 store·analytics 밖 어디서나 읽고, config는 우리 패키지를 쓰지 않습니다.
+ * <p>설정 값({@code config.AppProperties})은 기능·read·collector·web이 읽고, config는 우리 패키지를 쓰지 않습니다.
  *
  * <p>소스의 {@code import}와 본문에 적힌 전체 이름({@code com.macrodash.x.Y})을 읽어 검사합니다
  * (새 라이브러리 없이). 규칙을 어기면 어느 파일이 무엇을 가져다 쓰는지 목록으로 알려 줍니다.

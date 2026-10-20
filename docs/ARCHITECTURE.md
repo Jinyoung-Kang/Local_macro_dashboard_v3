@@ -120,12 +120,13 @@ read/            읽기 정책(StoreReader) — 저장본이 오래됐으면 읽
 store/           저장소 접근 · 데이터셋 이름 · 신선도 (외부 호출 없음)
 collector/       수집기 호출
 support/         공통 도구(저장본 JSON 읽기, 파라미터 해석, 비밀값 가림, 공통 예외)
-config/ · web/   설정 · 인증 필터 · 공통 오류 응답
+web/             인증 필터 · CORS(WebConfig) · 공통 오류 응답 — 가장 바깥, 기능까지 씀
+config/          설정 값(AppProperties) · 정기 작업 켜기 — 여러 패키지가 읽고, 우리 패키지는 아무것도 쓰지 않음
 ```
 
 한 기능을 고칠 때 볼 파일이 한 폴더에 모이고, 기능 사이 의존이 import로 드러납니다.
 의존 규칙(바깥 → 안쪽)과 그 이유는 [ADR 0001](adr/0001-feature-modules-and-dependency-rules.md)에 있고,
-`ArchitectureRulesTest`가 빌드마다 확인합니다. 화면 쪽 층 나누기는 [ADR 0004](adr/0004-frontend-layering.md)입니다.
+`ArchitectureRulesTest`가 빌드마다 확인합니다(기반 패키지까지 포함한 패키지 순환 0). 화면 쪽 층 나누기는 [ADR 0004](adr/0004-frontend-layering.md)입니다.
 
 | 클래스 | 계산 |
 |---|---|
