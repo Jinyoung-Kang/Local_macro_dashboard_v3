@@ -13,7 +13,9 @@
     - 대체 목록은 시간대가 있는 같은 종목의 TradingView 심볼만
   - `SnapshotTextMacroTest.macroLinesCarryTheDelayBadge`: AI 원본 텍스트의 매크로 줄 끝 배지
   - 화면
-    - `components/__tests__/SessionBadge.test.tsx`: 장 밖 값의 거래일로도 휴장 추정
+    - `components/__tests__/SessionBadge.test.tsx`: 장 밖 값의 거래일로도 휴장 추정, 개장 상태와 지연을 배지 하나로
+    - `__tests__/macroBadges.test.tsx`·`lib/__tests__/macroCards.test.ts`: '실시간' 배지가 따로 뜨지 않음, 참고 시세는 출처 줄, 알림은 노란 배지, 부제 요약
+    - `lib/__tests__/marketSessionsUst.test.ts`: 미국 국채는 전자거래 시간(QA-141)
     - `marketSessions.check.mts`: 밤을 넘기는 시장은 제외
     - `format.check.mts`: `delayLabel`
 
@@ -50,6 +52,13 @@
    - 저녁에 여는 세션(선물 야간장·외환)은 '수집 시각 · 장 밖'입니다.
    - 화면은 거래일로도 휴장을 추정합니다. 밤을 넘기지 않는 시장만입니다.
 5. 엔/원은 원본 자릿수까지만 적습니다. 1엔당 소수 셋째 자리로 오므로, 100엔당으로 바꾸면 첫째 자리까지입니다.
+6. **화면은 카드마다 배지 하나입니다**(2026-10-20 사용자 보고 — '실시간'과 '마감'이 나란히 떠 헷갈림).
+   - 장이 열려 있으면 "개장 · 실시간", "개장 · 10분 지연". 지연은 장이 열려 있을 때만 뜻이 있어, 닫혀 있으면 "마감"·"휴장"만
+     적고 지연은 툴팁에 둡니다(값이 언제 것인지는 카드의 시각 줄이 말합니다). 이어받은 예전 값이면 지연을 적지 않습니다.
+   - 'TradingView 참고'·'참고 시세'는 출처 줄로("TradingView Scanner · 참고 시세"). 지연이 아닌 알림(⚠️ 이전 값, 선물 대신 지수 값,
+     KODEX 추정, 2년물 보정 실패)만 노란 배지로 따로 둡니다.
+   - 수집기는 이를 위해 카드에 `delayMinutes`·`isReference`·`warning`을 문구(`note`, AI 원본 텍스트용)와 따로 싣습니다.
+   - 미국 국채 시간표는 전자거래 시간(일 19:30 ~ 금 17:30 ET, CME BrokerTec)입니다 — 미국 장중만 보면 움직이는 값에 '마감'이 붙었습니다(QA-141).
 
 ## 이유
 
