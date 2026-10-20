@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
 
 from app import catalog
 
@@ -381,3 +382,25 @@ def test_timeseries_same_value_does_not_create_a_new_row_version(store):
     assert store.read_timeseries("demo", "S")[1]["value"] == 2.5
     assert store.latest_timeseries_date("demo", "S") == "2026-01-03"
     assert store.latest_timeseries_date("demo", "none") is None
+
+
+@pytest.mark.xfail(strict=True, reason="QA-139 재현: 좀비가 도는 동안의 ⚠️ 안내 행이 최근 결과가 되어 시간 초과가 '현재 오류'에서 빠짐")
+def test_QA139_좀비가_도는_동안에도_태스크_요약의_최근_결과는_시간_초과다(store):
+    """
+    시간 상한을 넘긴 실행이 뒤에서 계속 도는 동안의 호출은 ⚠️ '이전 수집이 아직 진행 중' 한 줄을 남깁니다(QA-117 — 수동
+    '다시 실행'이 15분 기다리지 않게). 그런데 태스크별 요약이 그 행을 최근 결과로 골라, 실제로는 멈춰 있는 태스크가 상태
+    화면의 '현재 오류'에서 빠졌습니다. 요약은 그 안내 행 대신 앞선 실행(❌ 시간 초과)을 씁니다. 실행 기록에는 남습니다.
+    """
+    from app.tasks import runner
+    from app.tasks.base import Task
+
+    run_id = store.start_run("fast")
+    store.record_task_run(
+        run_id, "macro_collected", speed="fast", status="error",
+        started_at=datetime.now(timezone.utc), duration_ms=120_000,
+        detail="시간 초과: 120초 안에 끝나지 않았습니다 — 외부 응답 없음 의심.",
+    )
+    runner._still_running(Task("macro_collected", "fast", lambda: "", "매크로 카드"), run_id)
+
+    latest = {row["task"]: row for row in store.read_task_summary()}["macro_collected"]
+    assert (latest["status"], latest["detail"][:5]) == ("error", "시간 초과")

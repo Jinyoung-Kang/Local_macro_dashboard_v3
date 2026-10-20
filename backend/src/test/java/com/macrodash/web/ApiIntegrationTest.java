@@ -769,6 +769,31 @@ class ApiIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("QA-139 재현: 좀비가 도는 동안의 ⚠️ 안내 행이 최근 결과가 되어 시간 초과가 '현재 오류'에서 빠짐")
+    @DisplayName("QA-139 태스크별 최근 실행: 좀비가 도는 동안의 ⚠️ '이전 수집이 아직 진행 중' 행 대신 앞선 시간 초과를 준다")
+    void taskSummarySkipsStillRunningNotice() {
+        String prefix = "it_zombie_";
+        jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+        try {
+            jdbc.update("INSERT INTO collector_task_runs (task, speed, status, started_at, duration_ms, detail) "
+                    + "VALUES (?, 'fast', 'error', '2026-10-20T00:00:00Z', 120000, '시간 초과: 120초 안에 끝나지 않았습니다')",
+                    prefix + "macro");
+            jdbc.update("INSERT INTO collector_task_runs (task, speed, status, started_at, duration_ms, detail) "
+                    + "VALUES (?, 'fast', 'empty', '2026-10-20T00:05:00Z', 0, "
+                    + "'이전 수집이 아직 진행 중 — 시간 상한을 넘긴 앞선 실행이 끝나지 않아 새로 시작하지 않았습니다')",
+                    prefix + "macro");
+
+            List<Map<String, Object>> mine = repository.readTaskSummary().stream()
+                    .filter(row -> String.valueOf(row.get("task")).startsWith(prefix))
+                    .toList();
+            assertThat(mine).extracting(row -> row.get("status") + " " + String.valueOf(row.get("detail")).substring(0, 5))
+                    .containsExactly("error 시간 초과");
+        } finally {
+            jdbc.update("DELETE FROM collector_task_runs WHERE task LIKE ?", prefix + "%");
+        }
+    }
+
+    @Test
     @DisplayName("수집기가 꺼져 DB에서 읽어도 상태 화면은 수집기와 같은 모양(camelCase)으로 받는다")
     void statusFallbackUsesTheCollectorShape() {
         // 예전에는 DB 행을 그대로 내보내(started_at·ok_count …) 화면이 "기록 없음 · 0 / 0 · NaNs"를
