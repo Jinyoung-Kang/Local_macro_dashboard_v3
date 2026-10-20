@@ -182,8 +182,12 @@ INSTITUTIONS = [
      "desc": "대규모 글로벌 전략적 투자, 공격적 성장 베팅"},
     {"key": "blackrock", "name": "🇺🇸 블랙록 (BlackRock)", "cik": "0002012383",
      "desc": "세계 최대 자산운용사, 광범위한 글로벌 자산군"},
+    # 그룹은 2026-03-31 분기부터 13F-NT(신고 위임)만 내고, 보유는 자회사 둘이 나눠 신고합니다(2026-10-20 EDGAR 확인 —
+    # 둘의 합 $6.90조가 그룹의 2025-12-31 공시와 같음). 그룹 이후 분기는 둘을 증권별로 합칩니다(QA-140,
+    # services/sec13f.merge_filers). 저장 이름은 그룹 CIK 그대로라 백엔드·화면은 바뀌지 않습니다.
     {"key": "vanguard", "name": "🇺🇸 뱅가드 (Vanguard Group)", "cik": "0000102909",
-     "desc": "글로벌 인덱스 펀드의 거두, 시장 전체를 아우르는 포트폴리오"},
+     "merge_ciks": ("0002100119", "0002100121"),   # Vanguard Capital Management · Vanguard Portfolio Management
+     "desc": "글로벌 인덱스 펀드의 거두, 시장 전체를 아우르는 포트폴리오 (2026년부터 자회사 둘의 공시 합산)"},
     {"key": "berkshire", "name": "🇺🇸 버크셔 해서웨이 (Berkshire Hathaway)", "cik": "0001067983",
      "desc": "가치투자 포트폴리오, 핵심 우량주 집중"},
     {"key": "duquesne", "name": "🇺🇸 듀케인 패밀리 오피스 (Duquesne Family Office)", "cik": "0001536411",

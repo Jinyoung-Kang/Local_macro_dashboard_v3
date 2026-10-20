@@ -68,7 +68,7 @@ public final class Institutions {
         list.add(inst("blackrock", "🇺🇸 블랙록 (BlackRock)", "0002012383",
                 "세계 최대 자산운용사, 광범위한 글로벌 자산군"));
         list.add(inst("vanguard", "🇺🇸 뱅가드 (Vanguard Group)", "0000102909",
-                "글로벌 인덱스 펀드의 거두, 시장 전체를 아우르는 포트폴리오"));
+                "글로벌 인덱스 펀드의 거두, 시장 전체를 아우르는 포트폴리오 (2026년부터 자회사 둘의 공시 합산)"));
         list.add(inst("berkshire", "🇺🇸 버크셔 해서웨이 (Berkshire Hathaway)", "0001067983",
                 "가치투자 포트폴리오, 핵심 우량주 집중"));
         list.add(inst("duquesne", "🇺🇸 듀케인 패밀리 오피스 (Duquesne Family Office)", "0001536411",

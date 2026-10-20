@@ -50,7 +50,6 @@ def _ok(cik: str, *quarters: dict) -> dict:
     return {"cik": cik, "error": None, "quarters": list(quarters)}
 
 
-@pytest.mark.xfail(strict=True, reason="QA-140 재현: 뱅가드가 그룹 CIK만 받아 2025-12-31에 멈춤")
 def test_QA140_그룹_이후_분기는_두_자회사_보유를_증권별로_합친다(store, monkeypatch):
     asked = _vanguard_only(monkeypatch, {
         GROUP: _ok(GROUP, GROUP_Q4),
@@ -80,7 +79,6 @@ def test_QA140_그룹_이후_분기는_두_자회사_보유를_증권별로_합�
     assert store.read_snapshot(catalog.snap_sec_13f(GROUP, 1)).payload["quarters"][0]["reportDate"] == "2026-06-30"
 
 
-@pytest.mark.xfail(strict=True, reason="QA-140 재현: 합산이 없음")
 def test_QA140_한_자회사에만_있는_분기는_합치지_않는다(store, monkeypatch):
     # 2026-09-30 분기를 Capital만 냈습니다 — 그 분기를 합치면 뱅가드 전체가 아니라 일부입니다.
     _vanguard_only(monkeypatch, {
@@ -97,7 +95,6 @@ def test_QA140_한_자회사에만_있는_분기는_합치지_않는다(store, m
     assert [q["reportDate"] for q in quarters] == ["2026-06-30", "2025-12-31"]
 
 
-@pytest.mark.xfail(strict=True, reason="QA-140 재현: 합산이 없어 자회사가 실패해도 그룹만으로 저장본을 덮음")
 def test_QA140_자회사_수집이_실패하면_직전_저장본을_유지한다(store, monkeypatch):
     kept = {"cik": GROUP, "error": None, "quarters": [
         _quarter("2026-06-30", "2026-08-13", _holding("037833100", "APPLE INC", 400.0)), GROUP_Q4]}

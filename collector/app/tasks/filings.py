@@ -40,18 +40,28 @@ def task_sec_13f() -> str:
         raise EmptyResult(f"0/{len(indicators.INSTITUTIONS)} 기관 — {exc}") from exc
 
     quarters = catalog.MAX_TRACKED_QUARTERS
-    targets = [(inst["name"], inst["cik"]) for inst in indicators.INSTITUTIONS]
+    targets = [(inst["name"], inst["cik"], tuple(inst.get("merge_ciks") or ())) for inst in indicators.INSTITUTIONS]
 
     ok = 0
     saved = 0
     errors: list[str] = []
 
     def collect(item):
-        name, cik = item
+        name, cik, merge_ciks = item
         # 받지 못한 공시는 직전 저장본의 같은 공시로 잇습니다(QA-031).
         previous = store.read_snapshot(catalog.snap_sec_13f(cik, quarters))
         previous_quarters = (previous.payload or {}).get("quarters") if previous else None
-        return name, cik, sec_service.collect_13f(cik, quarters, previous_quarters=previous_quarters)
+        payload = sec_service.collect_13f(cik, quarters, previous_quarters=previous_quarters)
+        if merge_ciks and payload.get("quarters"):
+            # 그룹이 13F-NT로 바꾼 뒤의 분기는 자회사들의 공시를 합칩니다(QA-140, 뱅가드). 한 곳이라도 실패하면 이번에는
+            # 저장하지 않습니다 — 그룹 공시만으로 덮으면 이미 합쳐 둔 최근 분기가 사라집니다.
+            filers = [{**sec_service.collect_13f(sub, quarters), "cik": sub} for sub in merge_ciks]
+            failed = next((filer for filer in filers if not filer.get("quarters")), None)
+            if failed is not None:
+                return name, cik, {"cik": cik, "quarters": None,
+                                   "error": f"자회사 {failed['cik']} 13F 수집 실패({failed.get('error')}) — 합산하지 않고 저장본 유지"}
+            payload = {**payload, "quarters": sec_service.merge_filers(payload["quarters"], filers, quarters)}
+        return name, cik, payload
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         for name, cik, payload in pool.map(collect, targets):

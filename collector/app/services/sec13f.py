@@ -122,6 +122,59 @@ def collect_13f(cik: str, max_quarters: int = 8, previous_quarters: list[dict] |
     return {"cik": str(cik), "error": None, "quarters": quarters}
 
 
+def merge_filers(group_quarters: list[dict], filers: list[dict], max_quarters: int) -> list[dict]:
+    """
+    그룹이 13F-NT(신고 위임)로 바꾸고 자회사들이 보유를 나눠 신고하는 기관의 분기 목록(최신순, 최대 max_quarters).
+
+    :param group_quarters: 그룹 자신의 13F-HR 분기(collect_13f 결과)
+    :param filers: 자회사별 collect_13f 결과 [{"cik", "quarters"}] — 모두 성공한 것만 넘깁니다
+    그룹이 직접 낸 마지막 분기보다 뒤이고 **모든 자회사에 있는** 분기만 합칩니다. 한 곳만 낸 분기를 합치면 기관 전체가
+    아니라 일부가 그 기관의 보유로 보입니다(QA-140). 보유는 증권(CUSIP·클래스)별로 평가액·수량을 더하고 비중을 다시
+    계산합니다 — 같은 증권을 자회사마다 다른 이름('NVIDIA CORP'·'NVIDIA CORPORATION')으로 적습니다. 수량을 모르는(채권
+    원금) 쪽이 있으면 합친 수량도 모름입니다. 합친 분기의 ``filers``에 어느 공시를 합쳤는지 남깁니다.
+    """
+    last_group = max((q.get("reportDate") or "" for q in group_quarters), default="")
+    common = set.intersection(*(
+        {q.get("reportDate") for q in filer.get("quarters") or []} for filer in filers
+    )) if filers else set()
+
+    merged: list[dict] = []
+    for report_date in sorted(d for d in common if d and d > last_group):
+        parts = [
+            (filer["cik"], next(q for q in filer["quarters"] if q.get("reportDate") == report_date))
+            for filer in filers
+        ]
+        holdings: dict[tuple, dict] = {}
+        for _cik, quarter in parts:
+            for holding in quarter.get("holdings") or []:
+                key = (holding.get("cusip") or holding.get("name"), holding.get("class"))
+                entry = holdings.get(key)
+                if entry is None:
+                    holdings[key] = {**holding, "value": float(holding.get("value") or 0.0)}
+                    continue
+                entry["value"] += float(holding.get("value") or 0.0)
+                shares = holding.get("shares")
+                entry["shares"] = None if entry.get("shares") is None or shares is None else entry["shares"] + shares
+        rows = sorted(holdings.values(), key=lambda h: h["value"], reverse=True)
+        total = sum(h["value"] for h in rows)
+        for row in rows:
+            row["weight"] = (row["value"] / total * 100.0) if total > 0 else 0.0
+        quarter = {
+            "filingDate": max(q.get("filingDate") or "" for _cik, q in parts),
+            "reportDate": report_date,
+            "totalValue": total,
+            "holdings": rows,
+            "filers": [{"cik": cik, "filingDate": q.get("filingDate")} for cik, q in parts],
+        }
+        if any(q.get("isStale") for _cik, q in parts):
+            quarter["isStale"] = True
+        merged.append(quarter)
+
+    combined = list(group_quarters) + merged
+    combined.sort(key=lambda q: q.get("reportDate") or "", reverse=True)
+    return combined[:max_quarters]
+
+
 def _parse_filing_links(html: str, max_quarters: int) -> list[tuple[str, str]]:
     """
     공시 목록에서 (제출일, 문서 목록 URL)을 최신순으로 max_quarters개 고릅니다.
