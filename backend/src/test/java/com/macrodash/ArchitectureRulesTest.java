@@ -241,6 +241,37 @@ class ArchitectureRulesTest {
         }
     }
 
+    /**
+     * 기능만 보면 기반 패키지를 거쳐 도는 순환을 놓칩니다 — 설정 값(AppProperties)과 인증 필터 배선(WebConfig)이
+     * 한 패키지(config)에 있어 config ↔ feature.auth, config → web → read → collector → config가 돌았습니다
+     * (2026-10, jdeps 패키지 그래프로 발견).
+     */
+    @Test
+    @org.junit.jupiter.api.Disabled("재현: config가 설정 값과 인증 필터 배선을 같이 들고 있어 config·feature.auth·web·read·collector가 돎")
+    @DisplayName("패키지 사이 의존에 순환이 없다 — 기반 패키지(config·web·read·collector 등) 포함")
+    void noCyclesBetweenPackages() {
+        Map<String, Set<String>> graph = new TreeMap<>();
+        SOURCES.values().forEach(source -> {
+            Set<String> edges = graph.computeIfAbsent(source.pkg(), key -> new TreeSet<>());
+            for (String ref : source.refs()) {
+                if (isOurs(ref)) {
+                    String target = packageOf(ref);
+                    if (!target.equals(source.pkg())) {
+                        edges.add(target);
+                    }
+                }
+            }
+        });
+        List<List<String>> cycles = new ArrayList<>();
+        for (String start : graph.keySet()) {
+            List<String> cycle = cycleFrom(start, graph, new ArrayList<>(), new HashSet<>());
+            if (cycle != null) {
+                cycles.add(cycle);
+            }
+        }
+        assertThat(cycles).as("패키지 순환").isEmpty();
+    }
+
     // ------------------------------------------------------------------ 보조
 
     /** 패키지(하위 포함) 안의 파일 중 {@code bad}에 걸리는 참조 목록. */
