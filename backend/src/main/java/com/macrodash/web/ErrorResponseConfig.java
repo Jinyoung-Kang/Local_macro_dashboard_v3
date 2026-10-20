@@ -1,6 +1,5 @@
-package com.macrodash.config;
+package com.macrodash.web;
 
-import com.macrodash.web.ApiExceptionHandler;
 import org.springframework.boot.web.error.ErrorAttributeOptions;
 import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
 import org.springframework.boot.webmvc.error.ErrorAttributes;

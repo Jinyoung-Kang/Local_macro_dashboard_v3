@@ -1,5 +1,6 @@
-package com.macrodash.config;
+package com.macrodash.web;
 
+import com.macrodash.config.AppProperties;
 import com.macrodash.feature.auth.AuthService;
 import com.macrodash.feature.auth.DemoViewer;
 import com.macrodash.feature.auth.PasswordHasher;

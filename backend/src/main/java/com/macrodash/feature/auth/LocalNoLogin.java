@@ -27,7 +27,7 @@ import java.util.Set;
  *       맥과 LAN을 가를 수 없습니다. 포트는 compose가 127.0.0.1에만 열고, 다른 이름으로 온 요청(DNS 리바인딩 등)은
  *       Host가 달라 평소처럼 로그인이 필요합니다.</li>
  *   <li>쿠키가 없으니 SameSite가 막아 주지 않습니다 — 다른 사이트에서 온 요청은 세션 필터가 Origin·Sec-Fetch-Site로
- *       막습니다({@code config.WebConfig.SessionFilter}).</li>
+ *       막습니다({@code web.WebConfig.SessionFilter}).</li>
  *   <li>켜져 있는데 웹 배포의 신호가 하나라도 있으면 기동하지 않습니다({@link #check}). AWS·QA 오버레이는 끔을 고정하지만,
  *       설정을 잘못 섞어 공개 배포에서 로그인이 빠지는 일을 한 겹 더 막습니다.</li>
  * </ul>
