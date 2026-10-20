@@ -88,8 +88,8 @@ make down            # 정지
 > "고쳤다는 기능이 화면에 없는" 상황이 여기서 나옵니다. `make update`는 다른
 > 브랜치에 새 작업이 있는지까지 확인해 알려 줍니다.
 >
-> 지금 화면이 어느 코드인지는 **화면 왼쪽 아래**(`main@1e4d3be`)와
-> `make version`에서 확인합니다.
+> 지금 화면이 어느 코드인지는 **화면 왼쪽 아래**(`main@1e4d3be`, 그 아래 줄은 그 커밋의 날짜인
+> '최종 수정 2026-10-20')와 `make version`에서 확인합니다.
 
 맥을 재부팅해도 Docker Desktop이 뜨면 컨테이너가 자동 복구됩니다
 (`restart: unless-stopped`).
@@ -306,6 +306,7 @@ make test-frontend     # 자가검증 + 훅 테스트(vitest) + 린트 + 빌드(
 덧붙임 파일 [compose.aws.yml](compose.aws.yml) 하나에 있고, 이유는 [ADR 0012](docs/adr/0012-aws-demo-deployment.md)에 있습니다.
 
 ```bash
+export APP_VERSION="main@$(git rev-parse --short HEAD)" APP_UPDATED="$(TZ=Asia/Seoul git log -1 --format=%cd --date=format-local:%Y-%m-%d)"   # 화면 왼쪽 아래 버전·최종 수정일
 docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env build --pull   # 베이스 이미지 보안 패치까지
 docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env up -d
 ok=; for i in 1 2 3 4 5 6 7 8 9 10; do docker compose -f docker-compose.yml -f compose.aws.yml --env-file .env \

@@ -195,6 +195,8 @@ services:
         # 'make up'이 현재 브랜치@커밋을 넣어 줍니다. 직접 docker compose로
         # 띄우면 비어 있고, 그때는 화면에 버전이 표시되지 않습니다.
         NEXT_PUBLIC_APP_VERSION: "${APP_VERSION:-}"
+        # 그 커밋의 날짜(KST, YYYY-MM-DD). 화면 왼쪽 아래 '최종 수정'에 쓰입니다. 비어 있으면 표시하지 않습니다.
+        NEXT_PUBLIC_APP_UPDATED: "${APP_UPDATED:-}"
     depends_on:
       backend:
         condition: service_healthy

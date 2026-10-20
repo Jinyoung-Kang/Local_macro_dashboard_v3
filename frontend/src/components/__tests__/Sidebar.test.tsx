@@ -80,3 +80,23 @@ describe("사이드바 계정 영역", () => {
     expect(document.querySelector('a[href="/account"]')).toBeNull();
   });
 });
+
+describe("사이드바 아래 빌드 정보", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("빌드한 커밋 옆에 그 커밋의 날짜를 '최종 수정'으로 보인다", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "main@1ccad1c");
+    vi.stubEnv("NEXT_PUBLIC_APP_UPDATED", "2026-10-20");
+    render(<Sidebar readMode="store_only" user={{ email: null, role: "MEMBER", tier: "PRO", demo: true }} unread={0} />);
+
+    expect(screen.getByText(/main@1ccad1c/)).toBeTruthy();
+    expect(screen.getByText("최종 수정 2026-10-20")).toBeTruthy();
+  });
+
+  it("날짜가 없거나 날짜 형식이 아니면 '최종 수정'을 표시하지 않는다", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_UPDATED", "unknown");
+    render(<Sidebar readMode="store_only" user={{ email: null, role: "MEMBER", tier: "PRO", demo: true }} unread={0} />);
+
+    expect(screen.queryByText(/최종 수정/)).toBeNull();
+  });
+});

@@ -78,7 +78,9 @@ cmd="${1:-}"; shift || true
 case "$cmd" in
   up)
     make_env
-    APP_VERSION="qa@$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" docker compose up -d --build "$@"
+    APP_VERSION="qa@$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+      APP_UPDATED="$(TZ=Asia/Seoul git log -1 --format=%cd --date=format-local:%Y-%m-%d 2>/dev/null)" \
+      docker compose up -d --build "$@"
     # 수집기는 기동할 때만 스키마를 적용합니다 — 백엔드만 바뀐 배포에서도 새 테이블이 생기게 지금 적용(QA-016).
     # 10번 모두 실패하면 ⚠️를 찍고 0이 아닌 값으로 끝냅니다(QA-126, make migrate·README와 같은 모양 — QA-118).
     ok=; for i in 1 2 3 4 5 6 7 8 9 10; do

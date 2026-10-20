@@ -11,12 +11,18 @@ import { unreadBadge } from "@/lib/alerts";
 import type { SessionUser } from "@/lib/types";
 
 /**
- * 실행 중인 코드의 버전(브랜치@커밋).
+ * 실행 중인 코드의 버전(브랜치@커밋)과 그 커밋의 날짜(KST, 최종 수정일).
  *
  * 빌드 시점에 번들에 들어갑니다. NEXT_PUBLIC_ 값은 런타임에 바뀌지 않으므로
- * 여기 적힌 값이 곧 "이 화면을 만든 코드"입니다.
+ * 여기 적힌 값이 곧 "이 화면을 만든 코드"입니다. 날짜 형식이 아니면 표시하지 않습니다.
  */
-const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
+function buildInfo(): { version?: string; updated?: string } {
+  const updated = process.env.NEXT_PUBLIC_APP_UPDATED;
+  return {
+    version: process.env.NEXT_PUBLIC_APP_VERSION || undefined,
+    updated: updated && /^\d{4}-\d{2}-\d{2}$/.test(updated) ? updated : undefined,
+  };
+}
 
 /**
  * 좌측 메뉴 — 분석 메뉴 → AI → 알림 → 데이터 상태 → 연결 진단 → 운영 순서입니다.
@@ -44,6 +50,7 @@ export const MENUS = [
 export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: SessionUser; unread?: number }) {
   const pathname = usePathname();
   const router = useRouter();
+  const build = buildInfo();
 
   /*
     모바일에서는 메뉴를 접어 둡니다.
@@ -191,9 +198,14 @@ export function Sidebar({ readMode, user, unread }: { readMode?: string; user?: 
         */}
         <p className="text-[11px] text-muted">
           © 2026 Local Macro Dashboard v3
-          {APP_VERSION && (
+          {build.version && (
             <span className="ml-1 tabular-nums" title="실행 중인 코드의 브랜치@커밋">
-              · {APP_VERSION}
+              · {build.version}
+            </span>
+          )}
+          {build.updated && (
+            <span className="block tabular-nums" title="실행 중인 코드의 마지막 커밋 날짜(KST)">
+              최종 수정 {build.updated}
             </span>
           )}
         </p>

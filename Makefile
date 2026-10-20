@@ -48,6 +48,8 @@ PY := $(shell test -x $(VENV_PY) && echo $(VENV_PY) || echo python3)
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null)
 export APP_VERSION := $(if $(GIT_BRANCH),$(GIT_BRANCH)@$(GIT_COMMIT),)
+# 그 커밋의 날짜(KST) — 화면 왼쪽 아래에 '최종 수정'으로 함께 새깁니다.
+export APP_UPDATED := $(shell TZ=Asia/Seoul git log -1 --format=%cd --date=format-local:%Y-%m-%d 2>/dev/null)
 
 help: ## 사용 가능한 명령 목록
 	@echo ""
@@ -84,7 +86,7 @@ up: ## 전체 스택 기동 (최초 빌드는 5~10분)
 	@echo "  API     : http://localhost:$(BACKEND_PORT)/api/health"
 	@echo "  수집기  : http://localhost:$(COLLECTOR_PORT)/status"
 	@echo ""
-	@echo "  빌드한 코드 : $(if $(APP_VERSION),$(APP_VERSION),알 수 없음 (git 저장소가 아님))"
+	@echo "  빌드한 코드 : $(if $(APP_VERSION),$(APP_VERSION)$(if $(APP_UPDATED), (최종 수정 $(APP_UPDATED)),),알 수 없음 (git 저장소가 아님))"
 	@echo "                (화면 왼쪽 아래에도 같은 값이 표시됩니다)"
 	@echo ""
 	@bash scripts/version.sh --brief
