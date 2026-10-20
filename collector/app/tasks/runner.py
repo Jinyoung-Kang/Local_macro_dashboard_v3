@@ -118,7 +118,8 @@ def _still_running(task: Task, run_id: int | None) -> tuple[bool, str]:
     것은 아무것도 받지 않았는데 정상으로 보이기 때문입니다(QA-117).
     """
     logger.info("%s: 시간 상한을 넘긴 이전 실행이 아직 끝나지 않아 새로 시작하지 않습니다.", task.name)
-    detail = ("이전 수집이 아직 진행 중 — 시간 상한을 넘긴 앞선 실행이 끝나지 않아 새로 시작하지 않았습니다"
+    # 앞머리(store.STILL_RUNNING_PREFIX)로 태스크별 요약이 이 행을 건너뜁니다 — 요약은 앞선 ❌ 시간 초과를 계속 보입니다(QA-139).
+    detail = (f"{store.STILL_RUNNING_PREFIX} — 시간 상한을 넘긴 앞선 실행이 끝나지 않아 새로 시작하지 않았습니다"
               "(그 실행이 끝나면 결과가 저장본에 반영됩니다)")
     store.record_task_run(
         run_id,

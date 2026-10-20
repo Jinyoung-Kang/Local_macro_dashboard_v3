@@ -699,6 +699,12 @@ def read_last_run() -> dict | None:
     return dict(row) if row else None
 
 
+# 시간 상한을 넘긴 실행이 뒤에서 계속 도는 동안의 호출이 남기는 ⚠️ 안내 행의 앞머리(tasks/runner._still_running, QA-117).
+# 태스크별 요약은 이 행을 최근 결과로 고르지 않습니다(QA-139). 백엔드 StoreRepository가 같은 글자를 씁니다
+# (StillRunningNoticeParityTest가 대조).
+STILL_RUNNING_PREFIX = "이전 수집이 아직 진행 중"
+
+
 def read_task_summary(task_names: Sequence[str] | None = None) -> list[dict]:
     """
     태스크별 '가장 최근 실행 결과'.
@@ -709,6 +715,9 @@ def read_task_summary(task_names: Sequence[str] | None = None) -> list[dict]:
 
     태스크마다 (task, id DESC) 인덱스의 첫 행만 읽습니다. 예전 DISTINCT ON은 실행 기록
     전체를 정렬해, 1년치(43만 행)에서 125ms가 걸렸습니다(지금 0.14ms).
+
+    좀비가 도는 동안의 ⚠️ 안내 행(STILL_RUNNING_PREFIX)은 건너뛰고 그 앞 실행(❌ 시간 초과)을 씁니다 — 그 행을
+    고르면 실제로는 멈춰 있는 태스크가 상태 화면의 '현재 오류'에서 빠졌습니다(QA-139). 실행 기록에는 그대로 남습니다.
     """
     params: list[Any] = []
     if task_names is None:
@@ -732,10 +741,12 @@ def read_task_summary(task_names: Sequence[str] | None = None) -> list[dict]:
             SELECT task, speed, status, started_at, duration_ms, detail, run_id
             FROM collector_task_runs r
             WHERE r.task = t.task
+              AND NOT (r.status = 'empty' AND r.detail IS NOT NULL AND r.detail LIKE %s)
             ORDER BY r.id DESC LIMIT 1
         ) latest
         ORDER BY latest.task
     """
+    params.append(STILL_RUNNING_PREFIX + "%")
     with connection() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]

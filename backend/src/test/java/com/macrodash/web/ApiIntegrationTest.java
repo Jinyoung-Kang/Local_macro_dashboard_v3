@@ -769,7 +769,6 @@ class ApiIntegrationTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("QA-139 재현: 좀비가 도는 동안의 ⚠️ 안내 행이 최근 결과가 되어 시간 초과가 '현재 오류'에서 빠짐")
     @DisplayName("QA-139 태스크별 최근 실행: 좀비가 도는 동안의 ⚠️ '이전 수집이 아직 진행 중' 행 대신 앞선 시간 초과를 준다")
     void taskSummarySkipsStillRunningNotice() {
         String prefix = "it_zombie_";

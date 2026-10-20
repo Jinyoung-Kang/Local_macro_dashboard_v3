@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app import catalog
 
@@ -384,7 +383,6 @@ def test_timeseries_same_value_does_not_create_a_new_row_version(store):
     assert store.latest_timeseries_date("demo", "none") is None
 
 
-@pytest.mark.xfail(strict=True, reason="QA-139 재현: 좀비가 도는 동안의 ⚠️ 안내 행이 최근 결과가 되어 시간 초과가 '현재 오류'에서 빠짐")
 def test_QA139_좀비가_도는_동안에도_태스크_요약의_최근_결과는_시간_초과다(store):
     """
     시간 상한을 넘긴 실행이 뒤에서 계속 도는 동안의 호출은 ⚠️ '이전 수집이 아직 진행 중' 한 줄을 남깁니다(QA-117 — 수동

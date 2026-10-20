@@ -351,11 +351,20 @@ public class StoreRepository {
     }
 
     /**
+     * 시간 상한을 넘긴 실행이 뒤에서 계속 도는 동안의 호출이 남기는 ⚠️ 안내 행의 앞머리(수집기 {@code store.STILL_RUNNING_PREFIX},
+     * {@code StillRunningNoticeParityTest}가 대조). 태스크별 요약은 이 행을 건너뜁니다(QA-139).
+     */
+    public static final String STILL_RUNNING_PREFIX = "이전 수집이 아직 진행 중";
+
+    /**
      * 태스크별 가장 최근 실행 1건, 태스크 이름 순.
      *
      * <p>기록에 있는 태스크 이름을 (task, id DESC) 인덱스에서 하나씩 건너뛰며 찾고, 태스크마다
      * 첫 행만 읽습니다. 예전 {@code DISTINCT ON}은 실행 기록 전체를 정렬해 1년치(43만 행)에서
      * 116ms가 걸렸습니다(지금 0.3ms). 결과는 같습니다.
+     *
+     * <p>좀비가 도는 동안의 ⚠️ 안내 행({@link #STILL_RUNNING_PREFIX})은 건너뛰고 그 앞 실행(❌ 시간 초과)을 씁니다 — 그 행을
+     * 고르면 실제로는 멈춰 있는 태스크가 상태 화면의 '현재 오류'에서 빠졌습니다(QA-139). 실행 기록에는 그대로 남습니다.
      */
     public List<Map<String, Object>> readTaskSummary() {
         return jdbc.queryForList(
@@ -370,9 +379,10 @@ public class StoreRepository {
                         + "CROSS JOIN LATERAL ("
                         + " SELECT task, speed, status, started_at, duration_ms, detail, run_id"
                         + " FROM collector_task_runs r WHERE r.task = n.task"
+                        + " AND NOT (r.status = 'empty' AND r.detail IS NOT NULL AND r.detail LIKE ?)"
                         + " ORDER BY r.id DESC LIMIT 1"
                         + ") latest "
-                        + "ORDER BY latest.task");
+                        + "ORDER BY latest.task", STILL_RUNNING_PREFIX + "%");
     }
 
     public List<Map<String, Object>> readTaskHistory(String task, int limit) {
