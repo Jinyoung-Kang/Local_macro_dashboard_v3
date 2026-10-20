@@ -29,7 +29,7 @@
  *   - CME Globex(ES·NQ·CL·GC) 일 18:00 ~ 금 17:00 ET, 매일 17:00~18:00 정비 — CME Group
  *   - ICE 브렌트 01:00~23:00 런던(월요일은 일 23:00 개장) — ICE Brent Crude Futures
  *   - 외환(DXY·환율) 일 17:00 ~ 금 17:00 ET
- *   - 미국 국채 08:00~17:00 ET — SIFMA 권장 거래 시간
+ *   - 미국 국채 전자거래 일 19:30 ~ 금 17:30 ET(겨울 18:30 개장) — CME BrokerTec Stream Appendix A, 휴장일은 SIFMA
  *
  * 주의사항 — 조기 폐장·임시 휴장·악천후 휴장(홍콩 태풍 등)은 다루지 않습니다.
  */
@@ -50,8 +50,11 @@ interface Window {
   days: readonly number[];
   start: number;
   end: number;
-  /** 이 창이 속한 거래일이 전날이면 -1 (자정을 넘긴 야간장의 뒷부분). 휴장일 판정용. */
-  tradeDayOffset?: -1;
+  /**
+   * 이 창이 속한 거래일이 전날이면 -1(자정을 넘긴 야간장의 뒷부분), 다음 날이면 1(저녁에 여는 다음 거래일 세션 —
+   * 미국 국채 전자거래). 휴장일 판정용.
+   */
+  tradeDayOffset?: -1 | 1;
 }
 
 interface MarketDef {
@@ -169,12 +172,19 @@ export const MARKETS: Record<string, MarketDef> = {
     ],
     hours: "일 17:00 ~ 금 17:00 ET (24시간)",
   },
+  // 카드 값은 TradingView 수익률이고, 미국 국채는 전자거래(BrokerTec)로 일요일 저녁부터 금요일 17:30 ET까지 거의 24시간
+  // 거래됩니다. 예전에는 SIFMA 미국 장중(08:00~17:00)만 개장으로 봐, 아시아·유럽 시간에 5분마다 바뀌는 값에 '마감'이
+  // 붙었습니다(QA-141). 개장은 서머타임 19:30·겨울 18:30 ET인데, 닫혀 있는데 '개장'으로 보이지 않게 19:30으로 둡니다
+  // (겨울 18:30~19:30은 '휴식'). 저녁에 여는 세션은 다음 날 거래일이라 휴장일은 그날로 셉니다.
   ust: {
     name: "미국 국채",
     timeZone: "America/New_York",
-    windows: [{ days: WEEKDAYS, start: h(8), end: h(17) }],
+    windows: [
+      { days: [0, 1, 2, 3, 4], start: h(19, 30), end: h(24), tradeDayOffset: 1 },
+      { days: WEEKDAYS, start: 0, end: h(17, 30) },
+    ],
     holidays: "us_bond",
-    hours: "평일 08:00~17:00 ET (SIFMA 권장 시간)",
+    hours: "전자거래 일 19:30 ~ 금 17:30 ET (매일 17:30~19:30 쉼, 겨울 18:30 개장)",
   },
 };
 
@@ -211,6 +221,12 @@ function previousDate(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   const prev = new Date(Date.UTC(y, m - 1, d - 1));
   return prev.toISOString().slice(0, 10);
+}
+
+/** YYYY-MM-DD의 다음 날. */
+function nextDate(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
 }
 
 /** 미국 채권시장 휴장: 증시 휴장일 + 컬럼버스데이·재향군인의 날 (증시는 열림). */
@@ -250,7 +266,8 @@ function scheduleState(
 
   for (const window of todays) {
     if (local.minutes >= window.start && local.minutes < window.end) {
-      const tradeDate = window.tradeDayOffset === -1 ? previousDate(local.date) : local.date;
+      const tradeDate = window.tradeDayOffset === -1 ? previousDate(local.date)
+        : window.tradeDayOffset === 1 ? nextDate(local.date) : local.date;
       return isHoliday(def, tradeDate, krOfficial) ? "holiday" : "open";
     }
   }

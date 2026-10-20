@@ -11,17 +11,18 @@ import { sessionStatus } from "@/lib/marketSessions";
 
 const state = (iso: string) => sessionStatus("ust", new Date(iso))?.state;
 
-describe("QA-141 미국 국채 시간표는 전자거래 시간(일 18:00 ~ 금 17:00 ET)", () => {
-  it.fails("화요일 뉴욕 06:54(한국 19:54)는 개장 — 아시아·유럽 시간에도 거래됨", () => {
+describe("QA-141 미국 국채 시간표는 전자거래 시간(일 19:30 ~ 금 17:30 ET, CME BrokerTec)", () => {
+  it("화요일 뉴욕 06:54(한국 19:54)는 개장 — 아시아·유럽 시간에도 거래됨", () => {
     expect(state("2026-10-20T10:54:00Z")).toBe("open");
   });
 
-  it.fails("일요일 뉴욕 19:00은 개장 — 월요일 거래일 세션", () => {
-    expect(state("2026-10-18T23:00:00Z")).toBe("open");
+  it("일요일 뉴욕 20:00은 개장 — 월요일 거래일 세션", () => {
+    expect(state("2026-10-19T00:00:00Z")).toBe("open");
   });
 
-  it.fails("평일 뉴욕 17:30은 휴식(17:00~18:00 쉼)", () => {
+  it("평일 뉴욕 17:30~19:30은 휴식", () => {
     expect(state("2026-10-20T21:30:00Z")).toBe("break");
+    expect(state("2026-10-20T23:00:00Z")).toBe("break");     // 19:00 ET
   });
 
   it("금요일 뉴욕 17:30은 마감, 토요일은 휴장", () => {
@@ -29,8 +30,8 @@ describe("QA-141 미국 국채 시간표는 전자거래 시간(일 18:00 ~ 금 
     expect(state("2026-10-24T15:00:00Z")).toBe("holiday");
   });
 
-  it.fails("컬럼버스데이(10-12 월) 전날 일요일 저녁 세션은 월요일 거래일이라 휴장, 월요일 저녁 세션은 화요일이라 개장", () => {
-    expect(state("2026-10-11T23:00:00Z")).toBe("holiday");   // 일 19:00 ET
-    expect(state("2026-10-12T23:00:00Z")).toBe("open");      // 월 19:00 ET
+  it("컬럼버스데이(10-12 월) 전날 일요일 저녁 세션은 월요일 거래일이라 휴장, 월요일 저녁 세션은 화요일이라 개장", () => {
+    expect(state("2026-10-12T00:00:00Z")).toBe("holiday");   // 일 20:00 ET — 월요일 거래일
+    expect(state("2026-10-13T00:00:00Z")).toBe("open");      // 월 20:00 ET — 화요일 거래일
   });
 });
