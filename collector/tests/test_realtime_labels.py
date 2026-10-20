@@ -365,3 +365,40 @@ def test_QA138_라이브_갱신에서는_묵은_참고_시세_대신_실시간_�
     assert asked == [set(indicators.REALTIME_QUOTES.values())]
     assert card["price"] == pytest.approx(101.83)
     assert card["lastTs"] == "2026-10-19 21:04 KST (TradingView 수집 시각)"
+
+
+# ==============================================================================
+# 화면이 개장 상태와 한 배지로 합치도록 — 지연(분)·참고 여부·경고를 문구와 따로 싣는다
+# ==============================================================================
+def test_카드는_시세_지연_분과_참고_여부와_경고를_따로_싣는다(fake_store, monkeypatch):
+    snapshots, _saved = fake_store
+    snapshots[catalog.SNAP_SCRAPER_MARKETS] = _snapshot(catalog.SNAP_SCRAPER_MARKETS, _scraped(
+        _streaming("dxy", "TVC:DXY", 101.8, 101.7, "market", None, pricescale=1000),
+        _tv("kospi200_night", 893.7, 893.25, delayMinutes=20, session="market"),
+        {"key": "nikkei_fut", "status": "fail", "price": None, "provider": "TradingView Scanner"},
+        _tv("nikkei", 64916.0, 65323.0, delayMinutes=0, session="out_of_session", tradeDate="2026-10-19"),
+    ))
+    payload = _yahoo_cards("dxy", "wti", "sp500")
+    payload = macro_cards.apply_realtime_quotes(payload)
+    payload["categories"].append({"id": "asia_equity", "items": []})
+    payload = macro_cards.inject_scraped_indices(payload)
+
+    cards = _by_key(payload)
+    assert (cards["dxy"]["delayMinutes"], cards["wti"]["delayMinutes"], cards["sp500"]["delayMinutes"]) == (0, 10, 0)
+    night = cards["kospi200_night_scraped"]
+    assert (night["delayMinutes"], night["isReference"], night.get("warning")) == (20, True, None)
+    fallback = cards["nikkei_fut_scraped"]
+    assert fallback["warning"] == "선물 조회 실패 · 지수 값"
+    assert fallback["delayMinutes"] == 0
+
+    monkeypatch.setattr(market, "collect_ticker", _daily)
+    snapshots.pop(catalog.SNAP_SCRAPER_MARKETS)
+    monkeypatch.setattr(macro_cards.scraper_service, "collect_scraped_markets", lambda: _scraped(
+        _tv("us02y", 4.7, 4.7, delayMinutes=0),
+        {"key": "us10y", "status": "fail", "price": None, "provider": "TradingView Scanner"},
+        _tv("us30y", 5.4, 5.4, delayMinutes=0),
+    ))
+    ust = next(c for c in indicators.MACRO_CATEGORIES if c["id"] == "ust")
+    bonds = _by_key(macro_cards.apply_bond_override(market.collect_macro_cards([ust])))
+    assert (bonds["us02y"]["delayMinutes"], bonds["us02y"]["isReference"]) == (0, True)
+    assert (bonds["us10y"]["delayMinutes"], bonds["us10y"].get("isReference")) == (15, None)   # Yahoo ^TNX 그대로

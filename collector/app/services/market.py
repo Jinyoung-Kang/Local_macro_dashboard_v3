@@ -352,6 +352,8 @@ def _build_card(spec: dict, payload: dict | None) -> dict:
         "name": spec["name"],
         # Yahoo가 밝힌 이 티커의 지연. 다른 출처로 바꾸는 보정 단계는 배지도 그 출처의 지연으로 바꿉니다(QA-137).
         "note": indicators.delay_label(spec.get("delay")),
+        # 화면은 이 분(0=실시간)과 개장 상태를 한 배지로 합칩니다 — note 문구를 쪼개 읽지 않게 따로 싣습니다.
+        "delayMinutes": spec.get("delay"),
         "market": spec.get("market"),
         "ticker": spec["ticker"],
         # 모든 카드에 출처를 붙입니다. 미국채처럼 다른 출처로 덮어쓰는 카드는

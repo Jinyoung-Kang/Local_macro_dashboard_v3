@@ -94,6 +94,8 @@ def apply_bond_override(payload: dict) -> dict:
                 "lastTs": _tradingview_last_ts(source, source.get("collectedAt") or now_text),
                 # 배지는 실제로 쓴 출처(TradingView)의 지연입니다. 보정이 안 된 카드는 Yahoo 지연 배지 그대로입니다(QA-137).
                 "note": _with_delay(source, "TradingView 참고"),
+                "delayMinutes": source.get("delayMinutes"),
+                "isReference": True,       # 비공식 참고 시세 — 화면은 출처 줄에 적습니다
                 **_stale_fields(source),
             })
 
@@ -197,6 +199,7 @@ def _realtime_card(key: str, source: dict) -> dict:
         "price": price,
         "priceStr": f"{price:,.{digits}f}",
         "note": indicators.delay_label(0),
+        "delayMinutes": 0,
         "source": f"TradingView ({source.get('symbol')})",
         "lastTs": _tradingview_last_ts(source, source.get("collectedAt")),
         "delta": None, "pct": None, "deltaStr": "N/A", "prevStr": "N/A", "prevValue": None,
@@ -264,6 +267,7 @@ def _fail_unconverted_price_cards(payload: dict, overridden: set[str]) -> dict:
                     "price": None, "priceStr": "N/A",
                     "delta": None, "pct": None, "prevStr": "N/A", "prevValue": None, "deltaStr": "N/A",
                     "note": "수익률 보정 실패 — 원본(ZT=F)은 선물 가격이라 수익률로 쓰지 않습니다",
+                    "warning": "수익률 보정 실패 — 원본(ZT=F)은 선물 가격이라 수익률로 쓰지 않습니다",
                 })
     if isinstance(rates, dict):
         for key in indicators.BOND_PRICE_ONLY_KEYS:
@@ -362,6 +366,9 @@ def inject_scraped_indices(payload: dict) -> dict:
             "name": label,
             # 선물은 TradingView 공개 시세가 15~20분 늦습니다. '수집 시각' 옆에 지연을 적지 않으면 그 시각의 값으로 읽힙니다(QA-137).
             "note": note or source.get("note") or _with_delay(source, "참고 시세"),
+            "delayMinutes": source.get("delayMinutes"),
+            # 지연이 아닌 알림(선물 대신 지수 값·KODEX 추정)은 화면이 경고 배지로 따로 보입니다.
+            **({"warning": note or source.get("note")} if (note or source.get("note")) else {}),
             "market": market,
             "status": "ok",
             "price": price,
