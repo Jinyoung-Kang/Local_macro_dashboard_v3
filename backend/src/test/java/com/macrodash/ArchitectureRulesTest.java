@@ -25,11 +25,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 패키지 의존 규칙 — 바깥(HTTP·설정)에서 안쪽(비즈니스 규칙)으로만 향하게.
  *
  * <pre>
- *   config · web ─▶ feature/&lt;기능&gt; ─▶ read ─▶ store
- *                         │            └──▶ collector
- *                         ├──▶ analytics (java.*만)
- *                         └──▶ support
+ *   web ─▶ feature/&lt;기능&gt; ─▶ read ─▶ store
+ *                │            └──▶ collector
+ *                ├──▶ analytics (java.*만)
+ *                └──▶ support
  * </pre>
+ *
+ * <p>설정 값({@code config.AppProperties})은 store·analytics 밖 어디서나 읽고, config는 우리 패키지를 쓰지 않습니다.
  *
  * <p>소스의 {@code import}와 본문에 적힌 전체 이름({@code com.macrodash.x.Y})을 읽어 검사합니다
  * (새 라이브러리 없이). 규칙을 어기면 어느 파일이 무엇을 가져다 쓰는지 목록으로 알려 줍니다.
@@ -91,6 +93,7 @@ class ArchitectureRulesTest {
      * 기반 패키지가 쓸 수 있는 우리 패키지(ADR 0001의 표). 자기 패키지와 최상위(Kst 등)는 늘 허용합니다.
      */
     private static final Map<String, List<String>> INFRASTRUCTURE_ALLOWED = Map.of(
+            "com.macrodash.config", List.of(),
             "com.macrodash.store", List.of(),
             "com.macrodash.collector", List.of("com.macrodash.config."),
             "com.macrodash.support", List.of("com.macrodash.analytics."),
@@ -105,7 +108,7 @@ class ArchitectureRulesTest {
     }
 
     @Test
-    @DisplayName("기반 패키지(store·collector·support·read)는 ADR 0001 표에 적힌 패키지만 쓴다")
+    @DisplayName("기반 패키지(config·store·collector·support·read)는 ADR 0001 표에 적힌 패키지만 쓴다")
     void infrastructureUsesOnlyWhatTheTableAllows() {
         INFRASTRUCTURE_ALLOWED.forEach((pkg, allowed) -> assertThat(violations(pkg, ref -> isOurs(ref)
                 && !ref.startsWith(pkg + ".") && !isRootClass(ref)
@@ -247,7 +250,6 @@ class ArchitectureRulesTest {
      * (2026-10, jdeps 패키지 그래프로 발견).
      */
     @Test
-    @org.junit.jupiter.api.Disabled("재현: config가 설정 값과 인증 필터 배선을 같이 들고 있어 config·feature.auth·web·read·collector가 돎")
     @DisplayName("패키지 사이 의존에 순환이 없다 — 기반 패키지(config·web·read·collector 등) 포함")
     void noCyclesBetweenPackages() {
         Map<String, Set<String>> graph = new TreeMap<>();
