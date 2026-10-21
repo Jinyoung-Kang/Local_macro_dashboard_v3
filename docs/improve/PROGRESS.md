@@ -164,3 +164,9 @@
   `config·feature.auth·web·read·collector`가 도는 것을 발견 — `config`가 설정 값(`AppProperties`)과 배선(`WebConfig`·`ErrorResponseConfig`)을
   같이 들고 있었음. 패키지 순환 시험(`7151232`, 켜면 같은 묶음으로 실패) → 배선을 `web`으로 옮김(`ea15924`) → 시험 켜고 `config`를 잎으로 고정
   (`ab67848`). jdeps 다시 확인: 19개·간선 71·순환 0. 동작 변경 없음(백엔드 612 통과, 경로·필터 그대로). ADR 0001 규칙 6.
+- 반영(2026-10-21 15:15): 로컬 `make up`(`main@8dcb353`, `make doctor` 정상), AWS `8dcb353`(사용자 승인) — 실행 중 이미지 ID로
+  되돌릴 이미지 `:rollback-aeab896`을 먼저 남김(백엔드는 직전 반영 때 다시 만들지 않아 `:rollback-65f90b1`과 같은 이미지). 체크아웃 fast-forward →
+  `build --pull`(`APP_VERSION=main@8dcb353`) → `up -d` → 스키마. 세 컨테이너 healthy(44초), health 200, 로그인 유지(`noLogin: false`,
+  쿠키 없는 회원·운영자 경로 401), 데모 열람 세션 MEMBER·PRO·`store_only`·13F 교집합 200, 틀린 토큰 401, 백엔드 경고·오류 0,
+  계산 상한 1개, 포트 127.0.0.1만, 화면 번들에 `main@8dcb353`, 공개 주소 잠금 화면 401·`/__gate` 200. 반영 직후 수집에서 작업 20개 모두 ok.
+  AWS 디스크 여유 9.1GB → 빌드 중 6.7GB → 반영 뒤 8.3GB. 되돌릴 이미지는 `:rollback-65f90b1`·`:rollback-aeab896` 두 벌(정리는 사용자에게 묻기).
