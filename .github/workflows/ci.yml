@@ -18,7 +18,9 @@ permissions:
 jobs:
   collector:
     name: 수집기 (Python)
-    runs-on: ubuntu-latest
+    # ubuntu-latest가 26.04로 옮겨 가는 중이고(2026-10) 26.04 저장소에는 postgresql-client-16이 없습니다 — 아래 '16판' 단계가
+    # 서버와 같은 판을 쓰도록 24.04에 고정합니다(24.04 이미지에는 PostgreSQL 16이 깔려 있음).
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
